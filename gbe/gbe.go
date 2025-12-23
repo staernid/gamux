@@ -80,9 +80,13 @@ func ApplyGBE(platform, appID string) error {
 		if platformCfg.Additional != "" {
 			additionalSource := filepath.Join(gbePath, platformCfg.Additional)
 			additionalDest := filepath.Join(filepath.Dir(file), platformCfg.Additional)
-			if _, err := os.Stat(additionalSource); err == nil {
-				if err := util.BackupAndReplace(additionalSource, additionalDest); err != nil {
-					log.Printf("WARN: Failed to replace additional file '%s': %v", additionalDest, err)
+			if _, err := os.Stat(additionalSource); err == nil { // Check if source exists
+				if _, err := os.Stat(additionalDest); err == nil { // Check if destination exists
+					if err := util.BackupAndReplace(additionalSource, additionalDest); err != nil {
+						log.Printf("WARN: Failed to replace additional file '%s': %v", additionalDest, err)
+					}
+				} else {
+					log.Printf("INFO: Additional file '%s' does not exist in destination, skipping replacement.", additionalDest)
 				}
 			}
 		}
