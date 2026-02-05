@@ -16,11 +16,7 @@ Commands:
 
 ### Improve Platform Compatibility:
 
-        [ ] Abstract external commands (7z). Consider using native Go libraries for archive extraction to remove the dependency on a pre-installed 7z.
-
-### Implement DLC Configuration (steam_settings):
-
-        [ ] Create a new command (gbe_tool dlc configure <appid>) that uses fetchDLCs and allows the user to select and save which DLCs to enable.
+        [ ] Abstract external commands (7z) with native Go libraries for archive extraction
 
 ### User Interface
 
@@ -30,4 +26,4 @@ Commands:
 
         [ ] Build the UI components (buttons for "Update", "Apply", a list for DLCs, etc.).
 
-        [ ] Connect the UI buttons to call the functions in your refactored gbe, updater, and steam packages. The GUI should be a thin layer that orchestrates calls to your well-tested core logic.
+        [ ] Connect the UI buttons to call the functions in your refactored gbe, updater, and steam packages. Should be a thin layer.
