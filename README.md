@@ -2,28 +2,37 @@
 
 `gbe_fork_helper` is a utility tool designed to streamline the management of your `gbe_fork` (Goldberg Steam Emulator) installation. It helps in updating your `gbe_fork` directory and applying necessary configurations to your Steam API files.
 
-Usage:
-```
-Usage: gbe_fork_helper <command> [options]
+## Features
 
-Commands:
-            apply <platform> <appid> - Apply GBE to Steam API files and configure DLCs
-            update                   - Update the GBE fork repository
-            version                  - Display the application version
+- **Native Extraction**: Uses native Go libraries for `.7z` and `.tar.bz2` extraction, no external dependencies like `7z`.
+- **Concurrent DLC Fetching**: Fetches DLC names in parallel for significantly faster configuration.
+- **Structured Logging**: Uses `slog` for clean, professional output.
+- **Modern CLI**: Powered by `urfave/cli/v2`.
+
+## Usage
+
+```bash
+# Apply GBE to a game
+gbe_fork_helper apply linux 123456
+
+# Update GBE fork from GitHub
+gbe_fork_helper update
+
+# Display version
+gbe_fork_helper --version
 ```
 
 ## Roadmap
 
-### Improve Platform Compatibility:
-
-        [ ] Abstract external commands (7z) with native Go libraries for archive extraction
-
 ### User Interface
 
-        [ ] Research and select a Go GUI library (like Fyne, Wails, or Gio).
+- [ ] Build a TUI using `bubbletea`.
+- [ ] Research and select a Go GUI library (like Wails or Fyne).
+- [ ] Create a new application entry point for the GUI.
+- [ ] Connect the UI buttons to the core logic.
 
-        [ ] Create a new application entry point for the GUI (e.g., in cmd/gbe_gui/main.go).
+### Enhancements
 
-        [ ] Build the UI components (buttons for "Update", "Apply", a list for DLCs, etc.).
-
-        [ ] Connect the UI buttons to call the functions in your refactored gbe, updater, and steam packages. Should be a thin layer.
+- [ ] Add support for more Steam API variants.
+- [ ] Configuration file support for custom paths.
+- [ ] Dry-run mode for `apply`.

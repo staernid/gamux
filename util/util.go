@@ -6,15 +6,14 @@ import (
 	"compress/bzip2"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
-	"gbe_fork_helper/config"
-
+	"github.com/bodgit/sevenzip"
 	"golang.org/x/crypto/md4"
 )
 
@@ -54,7 +53,7 @@ func BackupAndReplace(src, dest string) error {
 		if err := os.Rename(dest, backupPath); err != nil {
 			return fmt.Errorf("failed to backup %s: %w", dest, err)
 		}
-		log.Printf("INFO: Backed up '%s' to '%s'", dest, backupPath)
+		slog.Info("Backed up file", "from", dest, "to", backupPath)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to stat destination file %s: %w", dest, err)
 	}
@@ -65,7 +64,7 @@ func BackupAndReplace(src, dest string) error {
 			return fmt.Errorf("failed to copy %s to %s: %w", src, dest, err)
 		}
 	}
-	log.Printf("INFO: Replaced with '%s'", src)
+	slog.Info("Replaced file", "src", src, "dest", dest)
 
 	return nil
 }
@@ -141,7 +140,7 @@ func DownloadAndExtract(url, destDir, format string) error {
 
 		if len(entries) == 1 && entries[0].IsDir() {
 			nestedDirPath := filepath.Join(destDir, entries[0].Name())
-			log.Printf("INFO: Found single nested directory '%s'. Moving contents up.", nestedDirPath)
+			slog.Info("Found single nested directory, moving contents up", "nestedDir", nestedDirPath)
 
 			nestedEntries, err := os.ReadDir(nestedDirPath)
 			if err != nil {
@@ -158,7 +157,6 @@ func DownloadAndExtract(url, destDir, format string) error {
 			if err := os.Remove(nestedDirPath); err != nil {
 				return fmt.Errorf("failed to remove empty nested directory '%s': %w", nestedDirPath, err)
 			}
-			log.Println("SUCCESS: Nested directory contents moved up.")
 		}
 
 	case "7z":
@@ -172,10 +170,45 @@ func DownloadAndExtract(url, destDir, format string) error {
 			return err
 		}
 		outFile.Close()
+		defer os.Remove(tempFile)
 
-		if _, err := RunCmd(config.SevenZCommand, "x", tempFile, fmt.Sprintf("-o%s", destDir), "-y"); err != nil {
-			os.Remove(tempFile)
-			return err
+		r, err := sevenzip.OpenReader(tempFile)
+		if err != nil {
+			return fmt.Errorf("failed to open 7z archive: %w", err)
+		}
+		defer r.Close()
+
+		for _, f := range r.File {
+			targetPath := filepath.Join(destDir, f.Name)
+			if f.FileInfo().IsDir() {
+				if err := os.MkdirAll(targetPath, f.Mode()); err != nil {
+					return err
+				}
+				continue
+			}
+
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return err
+			}
+
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+
+			dst, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				rc.Close()
+				return err
+			}
+
+			if _, err := io.Copy(dst, rc); err != nil {
+				dst.Close()
+				rc.Close()
+				return err
+			}
+			dst.Close()
+			rc.Close()
 		}
 
 		// Move contents of 'release' subdirectory up
@@ -194,8 +227,6 @@ func DownloadAndExtract(url, destDir, format string) error {
 				return err
 			}
 		}
-
-		os.Remove(tempFile)
 	default:
 		return fmt.Errorf("unsupported archive format: %s", format)
 	}

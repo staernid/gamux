@@ -5,7 +5,7 @@ import (
 	"gbe_fork_helper/config"
 	"gbe_fork_helper/steam"
 	"gbe_fork_helper/util"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,7 +45,7 @@ func ApplyGBE(platform, appID string) error {
 	}
 
 	if len(targetFiles) == 0 {
-		log.Printf("WARN: No target files found for platform '%s'.", platform)
+		slog.Warn("No target files found", "platform", platform)
 	}
 
 	sourceFile := filepath.Join(gbePath, platformCfg.Target)
@@ -59,21 +59,21 @@ func ApplyGBE(platform, appID string) error {
 	}
 
 	for _, file := range targetFiles {
-		log.Printf("INFO: Found potential target: '%s'", file)
+		slog.Info("Found potential target", "file", file)
 
 		targetHash, err := util.GetHash(file)
 		if err != nil {
-			log.Printf("ERROR: Failed to get hash of '%s': %v. Skipping.", file, err)
+			slog.Error("Failed to get hash", "file", file, "error", err)
 			continue
 		}
 
 		if targetHash == sourceHash {
-			log.Println("SUCCESS: File is already up-to-date. Skipping.")
+			slog.Info("File is already up-to-date", "file", file)
 			continue
 		}
 
 		if err := util.BackupAndReplace(sourceFile, file); err != nil {
-			log.Printf("ERROR: Failed to replace file '%s': %v. Skipping.", file, err)
+			slog.Error("Failed to replace file", "file", file, "error", err)
 			continue
 		}
 
@@ -83,10 +83,10 @@ func ApplyGBE(platform, appID string) error {
 			if _, err := os.Stat(additionalSource); err == nil { // Check if source exists
 				if _, err := os.Stat(additionalDest); err == nil { // Check if destination exists
 					if err := util.BackupAndReplace(additionalSource, additionalDest); err != nil {
-						log.Printf("WARN: Failed to replace additional file '%s': %v", additionalDest, err)
+						slog.Warn("Failed to replace additional file", "dest", additionalDest, "error", err)
 					}
 				} else {
-					log.Printf("INFO: Additional file '%s' does not exist in destination, skipping replacement.", additionalDest)
+					slog.Info("Additional file does not exist in destination, skipping replacement", "dest", additionalDest)
 				}
 			}
 		}
@@ -97,16 +97,16 @@ func ApplyGBE(platform, appID string) error {
 		}
 		generatorPath := filepath.Join(homeDir, config.GbeDir, platformCfg.Subdir, "tools", "generate_interfaces", platformCfg.Generator)
 		if _, err := os.Stat(generatorPath); err == nil {
-			log.Printf("INFO: Running generator '%s'...", platformCfg.Generator)
+			slog.Info("Running generator", "generator", platformCfg.Generator)
 			if runtime.GOOS != "windows" {
 				if err := os.Chmod(generatorPath, 0755); err != nil {
-					log.Printf("WARN: Failed to set executable permissions on '%s': %v", generatorPath, err)
+					slog.Warn("Failed to set executable permissions", "path", generatorPath, "error", err)
 				}
 			}
 			cmd := exec.Command(generatorPath, filepath.Base(file))
 			cmd.Dir = filepath.Dir(file)
 			if out, err := cmd.CombinedOutput(); err != nil {
-				log.Printf("ERROR: Generator failed: %v\nOutput: %s", err, string(out))
+				slog.Error("Generator failed", "error", err, "output", string(out))
 			}
 		}
 	}
@@ -115,10 +115,10 @@ func ApplyGBE(platform, appID string) error {
 	for _, file := range targetFiles {
 		libraryPath := filepath.Dir(file)
 		if err := steam.FetchDLCs(appID, libraryPath); err != nil {
-			log.Printf("WARN: Failed to fetch and configure DLCs for AppID %s in %s: %v", appID, libraryPath, err)
+			slog.Warn("Failed to fetch and configure DLCs", "appID", appID, "libraryPath", libraryPath, "error", err)
 		}
 	}
 
-	log.Println("SUCCESS: GBE application process completed.")
+	slog.Info("GBE application process completed")
 	return nil
 }

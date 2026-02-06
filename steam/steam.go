@@ -1,21 +1,29 @@
 package steam
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"gbe_fork_helper/config"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings" // Added for strings.Builder
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // fetchAppName gets the app name for a Steam AppID.
-func FetchAppName(appID string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/appdetails?appids=%s&filters=basic", config.SteamStoreAPI, appID))
+func FetchAppName(ctx context.Context, appID string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/appdetails?appids=%s&filters=basic", config.SteamStoreAPI, appID), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch app details: %w", err)
 	}
@@ -38,14 +46,14 @@ func FetchAppName(appID string) (string, error) {
 
 // fetchDLCs fetches DLCs for a given AppID.
 func FetchDLCs(appID, libraryPath string) error {
-	log.Printf("INFO: Fetching DLCs for AppID %s in library path %s...", appID, libraryPath)
+	slog.Info("Fetching DLCs", "appID", appID, "libraryPath", libraryPath)
 
 	// Write steam_appid.txt
 	appIDFilePath := filepath.Join(libraryPath, "steam_appid.txt")
 	if err := os.WriteFile(appIDFilePath, []byte(appID), 0644); err != nil {
 		return fmt.Errorf("failed to write steam_appid.txt: %w", err)
 	}
-	log.Printf("INFO: Wrote steam_appid.txt with AppID %s to %s", appID, appIDFilePath)
+	slog.Info("Wrote steam_appid.txt", "path", appIDFilePath)
 
 	// Prepare for configs.app.ini
 	steamSettingsDir := filepath.Join(libraryPath, "steam_settings")
@@ -54,11 +62,7 @@ func FetchDLCs(appID, libraryPath string) error {
 	}
 	configsAppIniPath := filepath.Join(steamSettingsDir, "configs.app.ini")
 
-	var dlcContent strings.Builder
-	dlcContent.WriteString("[app::dlcs]\nunlock_all=0\n")
-
 	// Fetch DLCs
-
 	dlcURL := fmt.Sprintf("https://store.steampowered.com/dlc/%s/random/ajaxgetfilteredrecommendations/?query&count=10000", appID)
 	resp, err := http.Get(dlcURL)
 	if err != nil {
@@ -75,7 +79,7 @@ func FetchDLCs(appID, libraryPath string) error {
 	matches := re.FindAllStringSubmatch(string(body), -1)
 
 	if len(matches) == 0 {
-		log.Printf("WARN: No DLCs found for AppID %s.", appID)
+		slog.Warn("No DLCs found", "appID", appID)
 		return nil
 	}
 
@@ -84,19 +88,43 @@ func FetchDLCs(appID, libraryPath string) error {
 		uniqueDLCs[m[1]] = struct{}{}
 	}
 
+	var mu sync.Mutex
+	dlcNames := make(map[string]string)
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(10) // Limit concurrency to 10 workers
+
 	for dlcID := range uniqueDLCs {
-		name, err := FetchAppName(dlcID)
-		if err != nil {
-			log.Printf("WARN: Failed to get name for DLC %s: %v", dlcID, err)
-			continue
-		}
-		dlcContent.WriteString(fmt.Sprintf("%s=%s\n", dlcID, name))
+		id := dlcID
+		g.Go(func() error {
+			name, err := FetchAppName(ctx, id)
+			if err != nil {
+				slog.Warn("Failed to get name for DLC", "dlcID", id, "error", err)
+				return nil // Don't fail the whole process if one DLC fails
+			}
+			mu.Lock()
+			dlcNames[id] = name
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	if err := os.WriteFile(configsAppIniPath, []byte(dlcContent.String()), 0644); err != nil {
-		return fmt.Errorf("failed to write configs.app.ini: %w", err)
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to fetch DLC names: %w", err)
 	}
-	log.Printf("INFO: Wrote DLC configuration to %s", configsAppIniPath)
+
+	file, err := os.Create(configsAppIniPath)
+	if err != nil {
+		return fmt.Errorf("failed to create configs.app.ini: %w", err)
+	}
+	defer file.Close()
+
+	fmt.Fprintln(file, "[app::dlcs]")
+	fmt.Fprintln(file, "unlock_all=0")
+	for id, name := range dlcNames {
+		fmt.Fprintf(file, "%s=%s\n", id, name)
+	}
+
+	slog.Info("Wrote DLC configuration", "path", configsAppIniPath, "count", len(dlcNames))
 
 	return nil
 }

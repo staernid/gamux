@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,7 +17,7 @@ import (
 
 // updateGBE fetches and extracts the latest GBE fork.
 func UpdateGBE() error {
-	log.Println("INFO: Fetching latest GBE fork from GitHub...")
+	slog.Info("Fetching latest GBE fork from GitHub")
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
@@ -39,7 +39,7 @@ func UpdateGBE() error {
 	if _, err := os.Stat(timestampFile); err == nil {
 		timestamp, err := os.ReadFile(timestampFile)
 		if err == nil && string(timestamp) == release.UpdatedAt.String() {
-			log.Println("SUCCESS: GBE fork is already up-to-date.")
+			slog.Info("GBE fork is already up-to-date")
 			return nil
 		}
 	}
@@ -52,7 +52,7 @@ func UpdateGBE() error {
 	// Render the markdown text
 	renderedText, err := renderer.Render(release.Body)
 	if err != nil {
-		fmt.Println("Error rendering markdown:", err)
+		slog.Error("Error rendering markdown", "error", err)
 		return nil
 	}
 
@@ -75,11 +75,11 @@ func UpdateGBE() error {
 		return fmt.Errorf("failed to find Linux download URL")
 	}
 
-	log.Println("INFO: Downloading Linux release...")
+	slog.Info("Downloading Linux release")
 	if err := util.DownloadAndExtract(linuxURL, filepath.Join(gbeHome, "linux_release"), "tar.bz2"); err != nil {
 		return fmt.Errorf("failed to update Linux release: %w", err)
 	}
-	log.Println("SUCCESS: Linux release extracted.")
+	slog.Info("Linux release extracted")
 
 	// Download and extract Windows release
 	winURL := ""
@@ -93,16 +93,16 @@ func UpdateGBE() error {
 		return fmt.Errorf("failed to find Windows download URL")
 	}
 
-	log.Println("INFO: Downloading Windows release...")
+	slog.Info("Downloading Windows release")
 	if err := util.DownloadAndExtract(winURL, filepath.Join(gbeHome, "win_release"), "7z"); err != nil {
 		return fmt.Errorf("failed to update Windows release: %w", err)
 	}
-	log.Println("SUCCESS: Windows release extracted.")
+	slog.Info("Windows release extracted")
 
 	if err := os.WriteFile(timestampFile, []byte(release.UpdatedAt.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write timestamp file: %w", err)
 	}
 
-	log.Println("SUCCESS: GBE fork updated successfully.")
+	slog.Info("GBE fork updated successfully")
 	return nil
 }
