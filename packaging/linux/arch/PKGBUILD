@@ -1,6 +1,6 @@
 # Maintainer: staernid <varpu@firemail.cc>
 # WIP!
-pkgname=gbe_fork_helper
+pkgname=gbe_manager
 pkgver=0.1.4
 pkgrel=1
 pkgdesc="A utility tool designed to streamline the management of your gbe_fork (Goldberg Steam Emulator) installation."
