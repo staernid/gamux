@@ -12,6 +12,8 @@ var (
 	GbeDir        = ".local/share/gbe_fork"
 	SteamStoreAPI = "https://store.steampowered.com/api"
 	GithubAPIURL  = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
+	LutrisDir     = ".config/lutris/games"
+	SteamUserdata = ".local/share/Steam/userdata"
 )
 
 // InitConfig initializes the configuration or loads it from a file.
@@ -38,7 +40,9 @@ func InitConfig(customPath string) error {
 	}
 
 	var conf struct {
-		GbeDir string `json:"gbe_dir"`
+		GbeDir        string `json:"gbe_dir"`
+		LutrisDir     string `json:"lutris_dir,omitempty"`
+		SteamUserdata string `json:"steam_userdata,omitempty"`
 	}
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return err
@@ -46,6 +50,12 @@ func InitConfig(customPath string) error {
 
 	if conf.GbeDir != "" {
 		GbeDir = conf.GbeDir
+	}
+	if conf.LutrisDir != "" {
+		LutrisDir = conf.LutrisDir
+	}
+	if conf.SteamUserdata != "" {
+		SteamUserdata = conf.SteamUserdata
 	}
 
 	return nil

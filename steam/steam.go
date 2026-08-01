@@ -16,36 +16,82 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// fetchAppName gets the app name for a Steam AppID.
-func FetchAppName(ctx context.Context, appID string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/appdetails?appids=%s&filters=basic", config.SteamStoreAPI, appID), nil)
+// AppDetails holds metadata returned from the Steam Store API.
+type AppDetails struct {
+	Name          string         `json:"name"`
+	Type          string         `json:"type"`
+	IsFree        bool           `json:"is_free"`
+	HeaderImage   string         `json:"header_image"`
+	RequiredAge   int            `json:"required_age"`
+	About         string         `json:"about_the_game"`
+	ShortDesc     string         `json:"short_description"`
+	ReleaseDate   string         `json:"release_date"`
+	Platforms     AppPlatforms   `json:"platforms"`
+	PriceOverview *PriceOverview `json:"price_overview,omitempty"`
+}
+
+// AppPlatforms holds platform availability flags.
+type AppPlatforms struct {
+	Windows bool `json:"windows"`
+	Mac     bool `json:"mac"`
+	Linux   bool `json:"linux"`
+}
+
+// PriceOverview holds pricing information.
+type PriceOverview struct {
+	Currency        string `json:"currency"`
+	Initial         int    `json:"initial"`
+	Final           int    `json:"final"`
+	DiscountPercent int    `json:"discount_percent"`
+	FormattedPrices struct {
+		Initial string `json:"initial"`
+		Final   string `json:"final"`
+	} `json:"formatted_prices,omitempty"`
+}
+
+// FetchAppDetails fetches full app details for a given AppID.
+func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/appdetails?appids=%s", config.SteamStoreAPI, appID), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch app details: %w", err)
+		return nil, fmt.Errorf("failed to fetch app details: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch app details: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch app details: HTTP %d", resp.StatusCode)
 	}
 
 	var result map[string]struct {
-		Data struct {
-			Name string `json:"name"`
-		} `json:"data"`
+		Success bool        `json:"success"`
+		Data    *AppDetails `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode JSON: %w", err)
+		return nil, fmt.Errorf("failed to decode JSON: %w", err)
 	}
-	if appData, ok := result[appID]; ok {
-		return appData.Data.Name, nil
+
+	appData, ok := result[appID]
+	if !ok || !appData.Success || appData.Data == nil {
+		return nil, fmt.Errorf("app details not found or unavailable for AppID %s", appID)
 	}
-	return "", fmt.Errorf("app details not found for AppID %s", appID)
+
+	return appData.Data, nil
+}
+
+// FetchAppName gets the app name for a Steam AppID.
+// It wraps FetchAppDetails for backward compatibility.
+func FetchAppName(ctx context.Context, appID string) (string, error) {
+	details, err := FetchAppDetails(ctx, appID)
+	if err != nil {
+		return "", err
+	}
+	return details.Name, nil
 }
 
 // FetchDLCs fetches DLCs for a given AppID.
