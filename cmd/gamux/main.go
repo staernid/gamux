@@ -22,7 +22,7 @@ import (
 )
 
 // Version of the gamux application
-const Version = "v0.1.4"
+const Version = "v1"
 
 func promptYesNo(promptText string, defaultYes bool) bool {
 	hint := " [Y/n]: "
