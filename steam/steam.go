@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gamux/config"
+	"github.com/staernid/gamux/config"
 	"io"
 	"log/slog"
 	"net/http"

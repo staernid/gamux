@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gamux/config"
-	"gamux/util"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/util"
 
 	"github.com/charmbracelet/glamour"
 	"golang.org/x/sync/errgroup"

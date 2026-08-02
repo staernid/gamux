@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"gamux/config"
+	"github.com/staernid/gamux/config"
 )
 
 func mustTempDir(t *testing.T) string {

@@ -3,9 +3,9 @@ package gbe
 import (
 	"context"
 	"fmt"
-	"gamux/config"
-	"gamux/steam"
-	"gamux/util"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util"
 	"log/slog"
 	"os"
 	"os/exec"

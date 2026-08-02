@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gamux/config"
-	"gamux/gbe"
-	"gamux/lutris"
-	"gamux/steam"
-	"gamux/steamshortcut"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/lutris"
+	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/steamshortcut"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

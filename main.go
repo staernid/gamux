@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gamux/config"
-	"gamux/detector"
-	"gamux/gbe"
-	"gamux/github"
-	"gamux/lutris"
-	"gamux/steam"
-	"gamux/steamshortcut"
-	"gamux/tui"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/detector"
+	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/github"
+	"github.com/staernid/gamux/lutris"
+	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/steamshortcut"
+	"github.com/staernid/gamux/tui"
 
 	"github.com/urfave/cli/v2"
 )

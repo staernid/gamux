@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gamux/config"
-	"gamux/steam"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/steam"
 )
 
 // ShortcutConfig holds parameters for a Steam non-Steam game shortcut.

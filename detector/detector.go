@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"gamux/config"
-	"gamux/steam"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/steam"
 )
 
 // GameInfo represents auto-detected metadata and paths for a game directory.

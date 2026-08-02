@@ -1,5 +1,5 @@
 // go.mod
-module gamux
+module github.com/staernid/gamux
 
 go 1.24.2
 
