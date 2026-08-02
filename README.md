@@ -12,11 +12,3 @@ make run     # Run binary directly
 make test    # Run unit tests
 make lint    # Run linter
 ```
-
-## Basic Usage
-
-```bash
-./gamux apply linux <appid>
-./gamux update
-./gamux tui
-```
