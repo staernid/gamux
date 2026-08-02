@@ -7,7 +7,6 @@ Essential guidelines for development on `gamux`.
 1. **Logging Strategy**:
    - Use `log/slog` structured logging (`slog.Info`, `slog.Warn`, `slog.Error`).
    - Do not use `fmt.Println` or standard `log` package in library modules.
-   - Note: In TUI mode, `slog` output is redirected to `gamux.log` or discarded.
 
 2. **Error Handling**:
    - Wrap errors with context: `fmt.Errorf("...: %w", err)`.

@@ -144,4 +144,16 @@ func TestConsolidateManifests(t *testing.T) {
 	if _, err := os.Stat(consolidatedACF); os.IsNotExist(err) {
 		t.Errorf("expected consolidated ACF at %s", consolidatedACF)
 	}
+
+	t.Run("no manifest path does not create [Steam] directory", func(t *testing.T) {
+		gameDir := t.TempDir()
+		emptyInfo := &GameInfo{GameDir: gameDir}
+		if err := ConsolidateManifests(emptyInfo, false); err != nil {
+			t.Fatalf("ConsolidateManifests failed: %v", err)
+		}
+		steamDir := filepath.Join(gameDir, "[Steam]")
+		if _, err := os.Stat(steamDir); !os.IsNotExist(err) {
+			t.Errorf("expected [Steam] directory to not exist, but found at %s", steamDir)
+		}
+	})
 }

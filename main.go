@@ -16,7 +16,6 @@ import (
 	"github.com/staernid/gamux/lutris"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/steamshortcut"
-	"github.com/staernid/gamux/tui"
 
 	"github.com/urfave/cli/v2"
 )
@@ -154,14 +153,16 @@ func main() {
 						}
 
 						if dryRun {
-							slog.Info("[DRY RUN] Would write Lutris YAML & fetch cover art", "name", info.Name)
+							slog.Info("[DRY RUN] Would write Lutris config & register in database", "name", info.Name)
 						} else {
 							home, err := os.UserHomeDir()
 							if err == nil {
 								targetDir := filepath.Join(home, config.LutrisDir)
 								if err := lutris.Write(lcfg, targetDir); err == nil {
-									slog.Info("Successfully wrote Lutris game config", "name", info.Name, "dir", targetDir)
+									slog.Info("Successfully wrote Lutris game config & updated database", "name", info.Name, "dir", targetDir)
 									_, _ = steam.FetchLutrisArtwork(c.Context, info.AppID, lutris.Slugify(info.Name), false)
+								} else {
+									slog.Warn("Failed to write Lutris game config", "error", err)
 								}
 							}
 						}
@@ -244,13 +245,6 @@ func main() {
 				},
 			},
 			{
-				Name:  "tui",
-				Usage: "Start the terminal user interface",
-				Action: func(c *cli.Context) error {
-					return tui.Run()
-				},
-			},
-			{
 				Name:      "lutris-add",
 				Usage:     "Add a game to Lutris",
 				ArgsUsage: "<path>",
@@ -317,7 +311,7 @@ func main() {
 					}
 
 					if dryRun {
-						slog.Info("[DRY RUN] Would write Lutris YAML", "name", name, "exe", info.ExePath, "runner", lcfg.Runner)
+						slog.Info("[DRY RUN] Would write Lutris config & register in database", "name", name)
 						_, _ = steam.FetchLutrisArtwork(c.Context, appID, lutris.Slugify(name), true)
 						return nil
 					}
@@ -330,7 +324,7 @@ func main() {
 					if err := lutris.Write(lcfg, targetDir); err != nil {
 						return fmt.Errorf("lutris install: %w", err)
 					}
-					slog.Info("Successfully wrote Lutris game config", "name", name, "dir", targetDir)
+					slog.Info("Successfully wrote Lutris game config & updated database", "name", name, "dir", targetDir)
 
 					// Fetch cover art & banners for Lutris
 					_, _ = steam.FetchLutrisArtwork(c.Context, appID, lutris.Slugify(name), false)

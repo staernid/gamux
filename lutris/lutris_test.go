@@ -348,3 +348,58 @@ func TestRoundTrip(t *testing.T) {
 		t.Errorf("round-trip mismatch:\n--- generate ---\n%s\n--- re-marshal ---\n%s", out1, out2)
 	}
 }
+
+func TestGenerateInstaller(t *testing.T) {
+	out, err := GenerateInstaller(Config{
+		Name:     "Blue Prince",
+		GamePath: "/home/user/Games/Blue Prince/BLUE PRINCE.exe",
+		Runner:   "wine",
+		Env: map[string]string{
+			"SteamClient64Dll": "/tmp/steamclient64.dll",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var inst installerDoc
+	if err := yaml.Unmarshal(out, &inst); err != nil {
+		t.Fatal(err)
+	}
+
+	if inst.Name != "Blue Prince" {
+		t.Errorf("name = %q, want Blue Prince", inst.Name)
+	}
+	if inst.GameSlug != "blue-prince" {
+		t.Errorf("game_slug = %q, want blue-prince", inst.GameSlug)
+	}
+	if inst.Slug != "blue-prince-installer" {
+		t.Errorf("slug = %q, want blue-prince-installer", inst.Slug)
+	}
+	if inst.Script.Game.Exe != "/home/user/Games/Blue Prince/BLUE PRINCE.exe" {
+		t.Errorf("script.game.exe = %q", inst.Script.Game.Exe)
+	}
+	if inst.Script.Game.WorkingDir != "/home/user/Games/Blue Prince" {
+		t.Errorf("script.game.working_dir = %q", inst.Script.Game.WorkingDir)
+	}
+	if inst.Script.System == nil || inst.Script.System.Env["SteamClient64Dll"] != "/tmp/steamclient64.dll" {
+		t.Errorf("env SteamClient64Dll missing or incorrect")
+	}
+}
+
+func TestWriteInstaller(t *testing.T) {
+	dir := mustTempDir(t)
+	path := filepath.Join(dir, "lutris-installer.yml")
+
+	err := WriteInstaller(Config{
+		Name:     "Blue Prince",
+		GamePath: "/home/user/Games/Blue Prince/BLUE PRINCE.exe",
+	}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Fatalf("expected installer file %s to exist", path)
+	}
+}

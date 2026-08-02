@@ -63,6 +63,25 @@ func TestFetchAppName(t *testing.T) {
 			t.Errorf("expected error message to contain 'HTTP 429', got: %v", err)
 		}
 	})
+
+	t.Run("release_date as object", func(t *testing.T) {
+		http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			jsonResp := `{"3711820": {"success": true, "data": {"name": "Blue Prince DLC", "release_date": {"coming_soon": false, "date": "1 Aug, 2026"}}}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		name, err := FetchAppName(context.Background(), "3711820")
+		if err != nil {
+			t.Fatalf("FetchAppName failed: %v", err)
+		}
+		if name != "Blue Prince DLC" {
+			t.Errorf("expected name 'Blue Prince DLC', got '%s'", name)
+		}
+	})
 }
 
 func TestFetchDLCs(t *testing.T) {

@@ -8,6 +8,7 @@ package lutris
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -94,12 +95,28 @@ type doc struct {
 	System   *systemSection `yaml:"system,omitempty"`
 }
 
+type installerDoc struct {
+	Name     string          `yaml:"name"`
+	GameSlug string          `yaml:"game_slug"`
+	Slug     string          `yaml:"slug"`
+	Version  string          `yaml:"version,omitempty"`
+	Runner   string          `yaml:"runner"`
+	Script   installerScript `yaml:"script"`
+}
+
+type installerScript struct {
+	Game   gameSection    `yaml:"game"`
+	Wine   *wineSection   `yaml:"wine,omitempty"`
+	System *systemSection `yaml:"system,omitempty"`
+}
+
 type gameSection struct {
-	Arch   string `yaml:"arch,omitempty"`
-	Args   string `yaml:"args,omitempty"`
-	Exe    string `yaml:"exe"`
-	Prefix string `yaml:"prefix,omitempty"`
-	GogID  string `yaml:"gogid,omitempty"`
+	Arch       string `yaml:"arch,omitempty"`
+	Args       string `yaml:"args,omitempty"`
+	Exe        string `yaml:"exe"`
+	WorkingDir string `yaml:"working_dir,omitempty"`
+	Prefix     string `yaml:"prefix,omitempty"`
+	GogID      string `yaml:"gogid,omitempty"`
 }
 
 type wineSection struct {
@@ -136,6 +153,21 @@ func Generate(cfg Config) ([]byte, error) {
 	return out, nil
 }
 
+// GenerateInstaller produces a Lutris installer YAML script suitable for `lutris -i`.
+func GenerateInstaller(cfg Config) ([]byte, error) {
+	if err := validate(cfg); err != nil {
+		return nil, err
+	}
+
+	d := buildInstallerDoc(cfg)
+
+	out, err := yaml.Marshal(d)
+	if err != nil {
+		return nil, fmt.Errorf("lutris: marshal installer YAML: %w", err)
+	}
+	return out, nil
+}
+
 // Write generates the YAML and writes it to the given directory (which
 // should be ~/.config/lutris/games/ or equivalent).  The filename is
 // derived from the slug and the output is created with 0644 permissions.
@@ -159,6 +191,38 @@ func Write(cfg Config, dir string) error {
 	path := filepath.Join(dir, fname)
 	if err := os.WriteFile(path, out, 0644); err != nil {
 		return fmt.Errorf("lutris: write file %s: %w", path, err)
+	}
+	return nil
+}
+
+// WriteInstaller generates the installer YAML and writes it to path.
+func WriteInstaller(cfg Config, path string) error {
+	out, err := GenerateInstaller(cfg)
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("lutris: create dir %s: %w", dir, err)
+	}
+
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		return fmt.Errorf("lutris: write installer file %s: %w", path, err)
+	}
+	return nil
+}
+
+// LaunchInstaller launches `lutris -i <path>` in the background.
+func LaunchInstaller(path string) error {
+	lutrisPath, err := exec.LookPath("lutris")
+	if err != nil {
+		return fmt.Errorf("lutris executable not found in PATH: %w", err)
+	}
+
+	cmd := exec.Command(lutrisPath, "-i", path)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start lutris -i: %w", err)
 	}
 	return nil
 }
@@ -293,5 +357,40 @@ func buildDoc(cfg Config) doc {
 		Year:     cfg.Year,
 		Wine:     w,
 		System:   ss,
+	}
+}
+
+func buildInstallerDoc(cfg Config) installerDoc {
+	runner := strings.ToLower(strings.TrimSpace(cfg.Runner))
+	if runner == "" {
+		runner = "wine"
+	}
+
+	slug := strings.TrimSpace(cfg.Slug)
+	if slug == "" {
+		slug = Slugify(cfg.Name)
+	}
+
+	version := cfg.Version
+	if version == "" {
+		version = "Gamux"
+	}
+
+	d := buildDoc(cfg)
+	if d.Game.WorkingDir == "" && d.Game.Exe != "" {
+		d.Game.WorkingDir = filepath.Dir(d.Game.Exe)
+	}
+
+	return installerDoc{
+		Name:     cfg.Name,
+		GameSlug: slug,
+		Slug:     slug + "-installer",
+		Version:  version,
+		Runner:   runner,
+		Script: installerScript{
+			Game:   d.Game,
+			Wine:   d.Wine,
+			System: d.System,
+		},
 	}
 }

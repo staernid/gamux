@@ -16,6 +16,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// ReleaseDate holds release date metadata returned from the Steam Store API.
+type ReleaseDate struct {
+	ComingSoon bool   `json:"coming_soon"`
+	Date       string `json:"date"`
+}
+
+func (r *ReleaseDate) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" || string(b) == `""` {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		r.Date = s
+		return nil
+	}
+	type Alias ReleaseDate
+	var raw Alias
+	if err := json.Unmarshal(b, &raw); err == nil {
+		*r = ReleaseDate(raw)
+		return nil
+	}
+	return nil
+}
+
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
 	Name          string         `json:"name"`
@@ -25,7 +49,7 @@ type AppDetails struct {
 	RequiredAge   int            `json:"required_age"`
 	About         string         `json:"about_the_game"`
 	ShortDesc     string         `json:"short_description"`
-	ReleaseDate   string         `json:"release_date"`
+	ReleaseDate   ReleaseDate    `json:"release_date"`
 	Platforms     AppPlatforms   `json:"platforms"`
 	PriceOverview *PriceOverview `json:"price_overview,omitempty"`
 }

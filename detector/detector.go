@@ -94,13 +94,13 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 // If promoteFolder is true and the game is inside a raw steamapps/common layout,
 // it moves the game folder up to the main parent directory and cleans up steamapps/depotcache.
 func ConsolidateManifests(info *GameInfo, promoteFolder bool) error {
-	steamDir := filepath.Join(info.GameDir, "[Steam]")
-	if err := os.MkdirAll(steamDir, 0755); err != nil {
-		return fmt.Errorf("create [Steam] dir: %w", err)
-	}
-
 	// Move/copy ACF file if found
 	if info.ManifestPath != "" {
+		steamDir := filepath.Join(info.GameDir, "[Steam]")
+		if err := os.MkdirAll(steamDir, 0755); err != nil {
+			return fmt.Errorf("create [Steam] dir: %w", err)
+		}
+
 		srcDir := filepath.Dir(info.ManifestPath)
 		destACF := filepath.Join(steamDir, filepath.Base(info.ManifestPath))
 		if info.ManifestPath != destACF {

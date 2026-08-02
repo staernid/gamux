@@ -363,39 +363,72 @@ func tryWriteVDF(cfg ShortcutConfig, exePath, startDir string) error {
 		return fmt.Errorf("shortcuts.vdf has unexpected structure")
 	}
 
-	// Find the next available AppID index
-	nextID := 0
-	for _, child := range shortcutsNode.Children {
-		if id, err := strconv.Atoi(child.Key); err == nil && id >= nextID {
-			nextID = id + 1
+	// Check if a shortcut with matching name already exists
+	var existingChild *vdfChild
+	for i := range shortcutsNode.Children {
+		child := &shortcutsNode.Children[i]
+		if child.Child == nil {
+			continue
+		}
+		for _, sub := range child.Child.Children {
+			if (sub.Key == "Name" || sub.Key == "appName") && sub.Value.Value == cfg.Name {
+				existingChild = child
+				break
+			}
+		}
+		if existingChild != nil {
+			break
 		}
 	}
 
-	// Create new shortcut node
-	sc := vdfChild{
-		Key: strconv.Itoa(nextID),
-		Child: &vdfNode{
-			NodeType: 1, // object
-			Children: []vdfChild{
-				{Key: "AppID", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
-				{Key: "Exe", Value: vdfValue{Type: vdfTypeString, Value: exePath}},
-				{Key: "StartDir", Value: vdfValue{Type: vdfTypeString, Value: startDir}},
-				{Key: "LaunchOptions", Value: vdfValue{Type: vdfTypeString, Value: cfg.LaunchOpt}},
-				{Key: "IsHidden", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
-				{Key: "IsFavorite", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
-				{Key: "Name", Value: vdfValue{Type: vdfTypeString, Value: cfg.Name}},
-			},
-		},
-	}
+	if existingChild != nil {
+		for j := range existingChild.Child.Children {
+			sub := &existingChild.Child.Children[j]
+			switch sub.Key {
+			case "Exe":
+				sub.Value.Value = exePath
+			case "StartDir":
+				sub.Value.Value = startDir
+			case "LaunchOptions":
+				sub.Value.Value = cfg.LaunchOpt
+			}
+		}
+		slog.Info("Updated existing shortcut in shortcuts.vdf", "name", cfg.Name, "path", vdfPath)
+	} else {
+		// Find the next available AppID index
+		nextID := 0
+		for _, child := range shortcutsNode.Children {
+			if id, err := strconv.Atoi(child.Key); err == nil && id >= nextID {
+				nextID = id + 1
+			}
+		}
 
-	shortcutsNode.Children = append(shortcutsNode.Children, sc)
+		// Create new shortcut node
+		sc := vdfChild{
+			Key: strconv.Itoa(nextID),
+			Child: &vdfNode{
+				NodeType: 1, // object
+				Children: []vdfChild{
+					{Key: "AppID", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
+					{Key: "Exe", Value: vdfValue{Type: vdfTypeString, Value: exePath}},
+					{Key: "StartDir", Value: vdfValue{Type: vdfTypeString, Value: startDir}},
+					{Key: "LaunchOptions", Value: vdfValue{Type: vdfTypeString, Value: cfg.LaunchOpt}},
+					{Key: "IsHidden", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
+					{Key: "IsFavorite", Value: vdfValue{Type: vdfTypeInt32, Int64: 0}},
+					{Key: "Name", Value: vdfValue{Type: vdfTypeString, Value: cfg.Name}},
+				},
+			},
+		}
+
+		shortcutsNode.Children = append(shortcutsNode.Children, sc)
+		slog.Info("Wrote new shortcut to shortcuts.vdf", "name", cfg.Name, "index", nextID)
+	}
 
 	// Write back
 	if err := writeVDF(vdfPath, root); err != nil {
 		return fmt.Errorf("write shortcuts.vdf: %w", err)
 	}
 
-	slog.Info("Wrote shortcut to shortcuts.vdf", "name", cfg.Name, "index", nextID)
 	return nil
 }
 
