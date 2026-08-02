@@ -1,7 +1,7 @@
 # Maintainer: staernid <varpu@firemail.cc>
 # WIP!
 pkgname=gamux
-pkgver=3
+pkgver=3.1
 pkgrel=1
 pkgdesc="Streamline post-download Steam game management on Linux."
 arch=('x86_64' 'aarch64')
