@@ -8,6 +8,7 @@
 *.so
 *.dylib
 /gbe_fork_helper
+/gamux
 
 # Test binary, built with `go test -c`
 *.test

@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gbe_fork_helper/config"
-	"gbe_fork_helper/util"
+	"gamux/config"
+	"gamux/util"
 
 	"github.com/charmbracelet/glamour"
 	"golang.org/x/sync/errgroup"

@@ -153,7 +153,7 @@ func Write(cfg Config, dir string) error {
 	// optional; any name printed by  slug.yml  is also recognised.
 	slug := strings.TrimSpace(cfg.Slug)
 	if slug == "" {
-		slug = slugify(cfg.Name)
+		slug = Slugify(cfg.Name)
 	}
 	fname := slug + ".yml"
 	path := filepath.Join(dir, fname)
@@ -165,7 +165,8 @@ func Write(cfg Config, dir string) error {
 
 // ── helpers ─────────────────────────────────────────────────────────
 
-func slugify(name string) string {
+// Slugify converts a game title into a clean Lutris-compatible slug.
+func Slugify(name string) string {
 	s := strings.ToLower(name)
 	s = strings.ReplaceAll(s, " ", "-")
 	s = strings.ReplaceAll(s, ":", "")
@@ -207,7 +208,7 @@ func buildDoc(cfg Config) doc {
 
 	slug := strings.TrimSpace(cfg.Slug)
 	if slug == "" {
-		slug = slugify(cfg.Name)
+		slug = Slugify(cfg.Name)
 	}
 
 	var w *wineSection

@@ -29,7 +29,7 @@ func TestFetchAppName(t *testing.T) {
 			if !strings.Contains(req.URL.Path, "appdetails") {
 				t.Errorf("unexpected URL path: %s", req.URL.Path)
 			}
-			jsonResp := `{"123": {"data": {"name": "Super Tux Run"}}}`
+			jsonResp := `{"123": {"success": true, "data": {"name": "Super Tux Run"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
@@ -89,9 +89,9 @@ func TestFetchDLCs(t *testing.T) {
 		if strings.Contains(req.URL.Path, "appdetails") {
 			var jsonResp string
 			if strings.Contains(req.URL.RawQuery, "appids=456") {
-				jsonResp = `{"456": {"data": {"name": "DLC Expansion Pack 1"}}}`
+				jsonResp = `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}}`
 			} else if strings.Contains(req.URL.RawQuery, "appids=789") {
-				jsonResp = `{"789": {"data": {"name": "DLC Expansion Pack 2"}}}`
+				jsonResp = `{"789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,

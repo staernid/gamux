@@ -3,9 +3,9 @@ package gbe
 import (
 	"context"
 	"fmt"
-	"gbe_fork_helper/config"
-	"gbe_fork_helper/steam"
-	"gbe_fork_helper/util"
+	"gamux/config"
+	"gamux/steam"
+	"gamux/util"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -14,8 +14,10 @@ import (
 	"strings"
 )
 
-// ApplyGBE applies the GBE patch to a specified platform.
-func ApplyGBE(ctx context.Context, platform, appID string, dryRun bool) error {
+// ApplyGBE applies the GBE emulator.
+// If portable is true, it performs direct DLL/SO replacement (copying emulated libraries into the game dir).
+// If portable is false (loader mode), it leaves original game libraries untouched.
+func ApplyGBE(ctx context.Context, platform, appID string, dryRun, portable bool) error {
 	platformCfg, ok := config.PlatformConfig[platform]
 	if !ok {
 		var validPlatforms []string
@@ -60,40 +62,41 @@ func ApplyGBE(ctx context.Context, platform, appID string, dryRun bool) error {
 	}
 
 	for _, file := range targetFiles {
-		slog.Info("Found potential target", "file", file)
+		slog.Info("Found target library", "file", file)
 
-		targetHash, err := util.GetHash(file)
-		if err != nil {
-			slog.Error("Failed to get hash", "file", file, "error", err)
-			continue
-		}
+		if portable {
+			targetHash, err := util.GetHash(file)
+			if err != nil {
+				slog.Error("Failed to get hash", "file", file, "error", err)
+				continue
+			}
 
-		if targetHash == sourceHash {
-			slog.Info("File is already up-to-date", "file", file)
-			continue
-		}
-
-		if dryRun {
-			slog.Info("[DRY RUN] Would replace file", "file", file)
-		} else if err := util.BackupAndReplace(sourceFile, file); err != nil {
-			slog.Error("Failed to replace file", "file", file, "error", err)
-			continue
-		}
-
-		if platformCfg.Additional != "" {
-			additionalSource := filepath.Join(gbePath, platformCfg.Additional)
-			additionalDest := filepath.Join(filepath.Dir(file), platformCfg.Additional)
-			if _, err := os.Stat(additionalSource); err == nil { // Check if source exists
-				if _, err := os.Stat(additionalDest); err == nil { // Check if destination exists
-					if dryRun {
-						slog.Info("[DRY RUN] Would replace additional file", "dest", additionalDest)
-					} else if err := util.BackupAndReplace(additionalSource, additionalDest); err != nil {
-						slog.Warn("Failed to replace additional file", "dest", additionalDest, "error", err)
-					}
-				} else {
-					slog.Info("Additional file does not exist in destination, skipping replacement", "dest", additionalDest)
+			if targetHash == sourceHash {
+				slog.Info("File is already up-to-date", "file", file)
+			} else {
+				if dryRun {
+					slog.Info("[DRY RUN] Would replace file with Goldberg emulator", "file", file)
+				} else if err := util.BackupAndReplace(sourceFile, file); err != nil {
+					slog.Error("Failed to replace file", "file", file, "error", err)
+					continue
 				}
 			}
+
+			if platformCfg.Additional != "" {
+				additionalSource := filepath.Join(gbePath, platformCfg.Additional)
+				additionalDest := filepath.Join(filepath.Dir(file), platformCfg.Additional)
+				if _, err := os.Stat(additionalSource); err == nil {
+					if _, err := os.Stat(additionalDest); err == nil {
+						if dryRun {
+							slog.Info("[DRY RUN] Would replace additional file", "dest", additionalDest)
+						} else if err := util.BackupAndReplace(additionalSource, additionalDest); err != nil {
+							slog.Warn("Failed to replace additional file", "dest", additionalDest, "error", err)
+						}
+					}
+				}
+			}
+		} else {
+			slog.Info("[LOADER MODE] Keeping original library intact (zero file replacement)", "file", file)
 		}
 
 		homeDir, err = os.UserHomeDir()

@@ -1,5 +1,5 @@
 // go.mod
-module gbe_fork_helper
+module gamux
 
 go 1.24.2
 

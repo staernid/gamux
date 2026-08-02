@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gbe_fork_helper/config"
+	"gamux/config"
 	"io"
 	"log/slog"
 	"net/http"

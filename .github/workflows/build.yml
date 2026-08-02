@@ -24,13 +24,13 @@ jobs:
     - name: Build for Linux
       run: |
         go mod tidy
-        GOOS=linux GOARCH=amd64 go build -o gbe_fork_helper_linux_amd64 main.go
+        GOOS=linux GOARCH=amd64 go build -o gamux_linux_amd64 ./cmd/gamux
 
     - name: Archive production artifact
       uses: actions/upload-artifact@v4
       with:
-        name: gbe_fork_helper_linux_amd64
-        path: gbe_fork_helper_linux_amd64
+        name: gamux_linux_amd64
+        path: gamux_linux_amd64
 
     - name: Create Release
       id: create_release
@@ -49,6 +49,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./gbe_fork_helper_linux_amd64
-        asset_name: gbe_fork_helper_linux_amd64
+        asset_path: ./gamux_linux_amd64
+        asset_name: gamux_linux_amd64
         asset_content_type: application/octet-stream

@@ -1,5 +1,5 @@
-BINARY_NAME=gbe_fork_helper
-CMD_PATH=./cmd/gbe_fork_helper
+BINARY_NAME=gamux
+CMD_PATH=./cmd/gamux
 PREFIX ?= ~/.local
 
 .PHONY: all build clean test lint run install uninstall

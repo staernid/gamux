@@ -24,7 +24,7 @@ func InitConfig(customPath string) error {
 		if err != nil {
 			return err
 		}
-		path = filepath.Join(homeDir, ".config", "gbe_fork_helper", "config.json")
+		path = filepath.Join(homeDir, ".config", "gamux", "config.json")
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"gbe_fork_helper/config"
+	"gamux/config"
 )
 
 func mustTempDir(t *testing.T) string {

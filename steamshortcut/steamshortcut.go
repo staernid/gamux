@@ -4,6 +4,7 @@
 package steamshortcut
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log/slog"
@@ -13,7 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gbe_fork_helper/config"
+	"gamux/config"
+	"gamux/steam"
 )
 
 // ShortcutConfig holds parameters for a Steam non-Steam game shortcut.
@@ -521,16 +523,58 @@ Categories=Game;
 	return desktopPath, nil
 }
 
+// FetchSteamGridArtwork downloads grid images for an AppID into Steam's grid folder.
+func FetchSteamGridArtwork(ctx context.Context, appID string, dryRun bool) error {
+	if appID == "" || appID == "0" {
+		return nil
+	}
+
+	steamDir, err := SteamUserdataDir()
+	if err != nil {
+		return fmt.Errorf("steamshortcut: find userdata for grid art: %w", err)
+	}
+
+	gridDir := filepath.Join(steamDir, "config", "grid")
+	coverPath := filepath.Join(gridDir, appID+"p.jpg")
+	bannerPath := filepath.Join(gridDir, appID+".jpg")
+
+	coverURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", appID)
+	bannerURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID)
+
+	if dryRun {
+		slog.Info("[DRY RUN] Would fetch Steam grid cover art", "url", coverURL, "target", coverPath)
+		slog.Info("[DRY RUN] Would fetch Steam grid banner image", "url", bannerURL, "target", bannerPath)
+		return nil
+	}
+
+	if err := steam.DownloadFile(ctx, coverURL, coverPath); err == nil {
+		slog.Info("Fetched Steam grid cover art", "path", coverPath)
+	} else {
+		_ = steam.DownloadFile(ctx, bannerURL, coverPath)
+	}
+
+	if err := steam.DownloadFile(ctx, bannerURL, bannerPath); err == nil {
+		slog.Info("Fetched Steam grid banner image", "path", bannerPath)
+	}
+
+	return nil
+}
+
 // RegisterShortcut is a convenience function that tries VDF first, then
-// falls back to .desktop entry. It also attempts to run `update-desktop-database`
-// so the entry appears immediately in Steam.
-func RegisterShortcut(cfg ShortcutConfig, dryRun bool) error {
+// falls back to .desktop entry. It also fetches Steam grid artwork if an AppID is provided
+// and attempts to run `update-desktop-database` so the entry appears immediately in Steam.
+func RegisterShortcut(ctx context.Context, cfg ShortcutConfig, dryRun bool) error {
 	if err := AddShortcut(cfg, dryRun); err != nil {
 		return err
 	}
 
+	if cfg.AppID != "" && cfg.AppID != "0" {
+		if err := FetchSteamGridArtwork(ctx, cfg.AppID, dryRun); err != nil {
+			slog.Warn("Failed to fetch Steam grid artwork", "appID", cfg.AppID, "error", err)
+		}
+	}
+
 	if !dryRun {
-		// Refresh the desktop database so Steam picks up the new entry
 		cmd := exec.Command("update-desktop-database")
 		if err := cmd.Run(); err != nil {
 			slog.Warn("update-desktop-database failed (non-fatal)", "error", err)

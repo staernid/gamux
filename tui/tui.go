@@ -3,10 +3,17 @@ package tui
 import (
 	"context"
 	"fmt"
-	"gbe_fork_helper/gbe"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"gamux/config"
+	"gamux/gbe"
+	"gamux/lutris"
+	"gamux/steam"
+	"gamux/steamshortcut"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,32 +23,46 @@ import (
 type state int
 
 const (
-	statePlatform state = iota
+	stateMode state = iota
+	statePlatform
+	stateExePath
 	stateAppID
 	stateApplying
 	stateDone
 )
 
+type mode int
+
+const (
+	modeGBE mode = iota
+	modeLutris
+	modeSteam
+)
+
 type model struct {
 	state     state
+	mode      mode
+	modes     []string
 	platforms []string
 	selected  int
 	textInput textinput.Model
 	appID     string
 	platform  string
+	exePath   string
+	portable  bool
 	err       error
 	applying  bool
 }
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "Enter Steam AppID"
 	ti.Focus()
-	ti.CharLimit = 15
-	ti.Width = 20
+	ti.CharLimit = 256
+	ti.Width = 40
 
 	return model{
-		state:     statePlatform,
+		state:     stateMode,
+		modes:     []string{"Apply GBE (DRM Removal)", "Add Game to Lutris", "Add Non-Steam Game Shortcut"},
 		platforms: []string{"linux", "win64", "win32"},
 		selected:  0,
 		textInput: ti,
@@ -65,6 +86,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch m.state {
+		case stateMode:
+			switch msg.String() {
+			case "up", "k":
+				if m.selected > 0 {
+					m.selected--
+				}
+			case "down", "j":
+				if m.selected < len(m.modes)-1 {
+					m.selected++
+				}
+			case "enter":
+				m.mode = mode(m.selected)
+				m.selected = 0
+				if m.mode == modeGBE {
+					m.state = statePlatform
+				} else {
+					m.state = stateExePath
+					m.textInput.Placeholder = "Enter executable absolute path"
+					m.textInput.SetValue("")
+					return m, textinput.Blink
+				}
+			}
+
 		case statePlatform:
 			switch msg.String() {
 			case "up", "k":
@@ -78,19 +122,79 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.platform = m.platforms[m.selected]
 				m.state = stateAppID
+				m.textInput.Placeholder = "Enter Steam AppID"
+				m.textInput.SetValue("")
 				return m, textinput.Blink
 			}
 
+		case stateExePath:
+			if msg.String() == "enter" {
+				m.exePath = strings.TrimSpace(m.textInput.Value())
+				if m.exePath != "" {
+					m.state = stateAppID
+					m.textInput.Placeholder = "Enter Steam AppID (optional)"
+					m.textInput.SetValue("")
+					return m, textinput.Blink
+				}
+			}
+			var cmd tea.Cmd
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+
 		case stateAppID:
 			if msg.String() == "enter" {
-				m.appID = m.textInput.Value()
-				if m.appID != "" {
-					m.state = stateApplying
-					m.applying = true
-					return m, func() tea.Msg {
-						err := gbe.ApplyGBE(context.Background(), m.platform, m.appID, false)
-						return applyMsg{err: err}
+				m.appID = strings.TrimSpace(m.textInput.Value())
+				if m.mode == modeGBE && m.appID == "" {
+					return m, nil
+				}
+				m.state = stateApplying
+				m.applying = true
+
+				return m, func() tea.Msg {
+					ctx := context.Background()
+					var err error
+					switch m.mode {
+					case modeGBE:
+						err = gbe.ApplyGBE(ctx, m.platform, m.appID, false, m.portable)
+					case modeLutris:
+						name := ""
+						if m.appID != "" {
+							if n, e := steam.FetchAppName(ctx, m.appID); e == nil {
+								name = n
+							}
+						}
+						if name == "" {
+							name = strings.TrimSuffix(filepath.Base(m.exePath), filepath.Ext(m.exePath))
+						}
+						home, e := os.UserHomeDir()
+						if e != nil {
+							err = e
+							break
+						}
+						lcfg := lutris.Config{
+							Name:     name,
+							GamePath: m.exePath,
+							Runner:   "linux",
+						}
+						err = lutris.Write(lcfg, filepath.Join(home, config.LutrisDir))
+					case modeSteam:
+						name := ""
+						if m.appID != "" {
+							if n, e := steam.FetchAppName(ctx, m.appID); e == nil {
+								name = n
+							}
+						}
+						if name == "" {
+							name = strings.TrimSuffix(filepath.Base(m.exePath), filepath.Ext(m.exePath))
+						}
+						scfg := steamshortcut.ShortcutConfig{
+							Name:    name,
+							ExePath: m.exePath,
+							AppID:   m.appID,
+						}
+						err = steamshortcut.RegisterShortcut(ctx, scfg, false)
 					}
+					return applyMsg{err: err}
 				}
 			}
 			var cmd tea.Cmd
@@ -133,34 +237,56 @@ func (m model) View() string {
 	var s string
 
 	switch m.state {
+	case stateMode:
+		s += titleStyle.Render("Select Workflow Mode:") + "\n"
+		for i, modeName := range m.modes {
+			cursor := "  "
+			if i == m.selected {
+				cursor = "> "
+				s += selectedStyle.Render(cursor+modeName) + "\n"
+			} else {
+				s += cursor + modeName + "\n"
+			}
+		}
+		s += "\n(press enter to select)"
+
 	case statePlatform:
 		s += titleStyle.Render("Select Platform:") + "\n"
 		for i, p := range m.platforms {
 			cursor := "  "
 			if i == m.selected {
 				cursor = "> "
-				s += selectedStyle.Render(cursor + p) + "\n"
+				s += selectedStyle.Render(cursor+p) + "\n"
 			} else {
 				s += cursor + p + "\n"
 			}
 		}
 		s += "\n(press enter to select)"
 
+	case stateExePath:
+		s += titleStyle.Render("Executable Path:") + "\n"
+		s += m.textInput.View() + "\n"
+		s += "\n(press enter to confirm)"
+
 	case stateAppID:
-		s += titleStyle.Render(fmt.Sprintf("Enter AppID for %s:", m.platform)) + "\n"
+		if m.mode == modeGBE {
+			s += titleStyle.Render(fmt.Sprintf("Enter AppID for %s:", m.platform)) + "\n"
+		} else {
+			s += titleStyle.Render("Enter Steam AppID (optional, press Enter to skip):") + "\n"
+		}
 		s += m.textInput.View() + "\n"
 		s += "\n(press enter to apply)"
 
 	case stateApplying:
-		s += titleStyle.Render(fmt.Sprintf("Applying GBE to %s (AppID: %s)...", m.platform, m.appID)) + "\n"
+		s += titleStyle.Render("Processing request...") + "\n"
 		s += "Please wait."
 
 	case stateDone:
 		if m.err != nil {
-			s += titleStyle.Render("Error Applying GBE:") + "\n"
+			s += titleStyle.Render("Error:") + "\n"
 			s += errorStyle.Render(m.err.Error()) + "\n"
 		} else {
-			s += doneStyle.Render("Successfully applied GBE!") + "\n"
+			s += doneStyle.Render("Operation completed successfully!") + "\n"
 		}
 		s += "\n(press enter to start over, or q to quit)"
 	}
@@ -169,8 +295,7 @@ func (m model) View() string {
 }
 
 func Run() error {
-	// Redirect slog output to a file when running in TUI mode to avoid screen corruption.
-	logFile, err := os.OpenFile("gbe_fork_helper.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile("gamux.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		defer logFile.Close()
 		slog.SetDefault(slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
