@@ -22,7 +22,7 @@ import (
 )
 
 // Version of the gamux application
-const Version = "v1"
+const Version = "v2"
 
 func promptYesNo(promptText string, defaultYes bool) bool {
 	hint := " [Y/n]: "
@@ -187,7 +187,7 @@ func main() {
 						}
 					}
 
-					slog.Info("Setup completed successfully for "+info.Name)
+					slog.Info("Setup completed successfully for " + info.Name)
 					return nil
 				},
 			},

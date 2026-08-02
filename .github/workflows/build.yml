@@ -24,7 +24,7 @@ jobs:
     - name: Build for Linux
       run: |
         go mod tidy
-        GOOS=linux GOARCH=amd64 go build -o gamux_linux_amd64 ./cmd/gamux
+        GOOS=linux GOARCH=amd64 go build -o gamux_linux_amd64 main.go
 
     - name: Archive production artifact
       uses: actions/upload-artifact@v4

@@ -1,5 +1,5 @@
 BINARY_NAME=gamux
-CMD_PATH=./cmd/gamux
+CMD_PATH=.
 PREFIX ?= ~/.local
 
 .PHONY: all build clean test lint run install uninstall
