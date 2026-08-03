@@ -13,7 +13,6 @@ import (
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/lutris"
 	"github.com/staernid/gamux/steam"
-	"github.com/staernid/gamux/steamshortcut"
 	"github.com/staernid/gamux/util"
 )
 
@@ -21,7 +20,6 @@ import (
 type ProcessOptions struct {
 	Path       string
 	AddLutris  bool
-	AddSteam   bool
 	Portable   bool
 	Promote    bool
 	DryRun     bool
@@ -34,7 +32,6 @@ type ProcessOptions struct {
 type ProcessResult struct {
 	Info           *detector.GameInfo
 	LutrisAdded    bool
-	SteamAdded     bool
 	Patched        bool
 	ManifestsMoved bool
 	Errors         []string
@@ -107,6 +104,13 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 
 	// 2. Add to Lutris
 	if opts.AddLutris {
+		if strings.TrimSpace(info.ExePath) == "" {
+			err := fmt.Errorf("cannot register in Lutris: no executable (.exe or Linux binary) detected in %s", info.GameDir)
+			slog.Error(err.Error())
+			res.Errors = append(res.Errors, err.Error())
+			return res, err
+		}
+
 		runner := opts.Runner
 		if runner == "" {
 			if info.Platform == "linux" {
@@ -155,36 +159,10 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 				_, _ = steam.FetchLutrisArtwork(ctx, info.AppID, lutris.Slugify(info.Name), false)
 				res.LutrisAdded = true
 			} else {
-				slog.Warn("Failed to write Lutris game config", "error", err)
+				slog.Error("Failed to write Lutris game config", "error", err)
 				res.Errors = append(res.Errors, fmt.Sprintf("lutris register: %v", err))
+				return res, fmt.Errorf("failed to register in Lutris: %w", err)
 			}
-		}
-	}
-
-	// 3. Add to Steam
-	if opts.AddSteam {
-		launchOpt := ""
-		if !opts.Portable {
-			gbeBase := e.Config.GbeDir
-			if !filepath.IsAbs(gbeBase) {
-				home, _ := os.UserHomeDir()
-				gbeBase = filepath.Join(home, gbeBase)
-			}
-			soPath := filepath.Join(gbeBase, "linux_release", "experimental", "x64", "steamclient.so")
-			launchOpt = fmt.Sprintf("LD_PRELOAD=%s %%command%%", soPath)
-		}
-
-		scfg := steamshortcut.ShortcutConfig{
-			Name:      info.Name,
-			ExePath:   info.ExePath,
-			AppID:     info.AppID,
-			LaunchOpt: launchOpt,
-		}
-		if err := steamshortcut.RegisterShortcut(ctx, scfg, opts.DryRun); err != nil {
-			slog.Warn("Failed to register Steam shortcut", "error", err)
-			res.Errors = append(res.Errors, fmt.Sprintf("steam shortcut: %v", err))
-		} else {
-			res.SteamAdded = true
 		}
 	}
 

@@ -39,19 +39,6 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOpt
 		)
 	}
 
-	addSteam := false
-	if c.IsSet("steam") {
-		addSteam = c.Bool("steam")
-	} else if autoYes {
-		addSteam = true
-	} else if promptIfUnset {
-		addSteam = ui.PromptYesNoWithExplanation(
-			"Add non-Steam game shortcut to Steam?",
-			"Appends an entry to Steam's shortcuts.vdf and automatically downloads grid cover artwork.",
-			true,
-		)
-	}
-
 	portable := c.Bool("portable")
 	if !c.IsSet("portable") && promptIfUnset && !autoYes {
 		portable = ui.PromptYesNoWithExplanation(
@@ -64,7 +51,6 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOpt
 	return engine.ProcessOptions{
 		Path:       extractPath(c),
 		AddLutris:  addLutris,
-		AddSteam:   addSteam,
 		Runner:     c.String("runner"),
 		WinePrefix: c.String("wine-prefix"),
 		Portable:   portable,
@@ -78,7 +64,7 @@ func runInteractiveWizard(c *cli.Context, activeConfig *config.Config) error {
 	ui.RenderHeader(Version)
 
 	options := []ui.MenuOption{
-		{Key: "1", Title: "Process a game directory (add / setup GBE + Lutris + Steam)", Description: "Full setup: detects AppID, configures Goldberg Emulator, Lutris & Steam shortcuts"},
+		{Key: "1", Title: "Process a game directory (add / setup GBE + Lutris)", Description: "Full setup: detects AppID, configures Goldberg Emulator, and registers in Lutris"},
 		{Key: "2", Title: "Batch process a folder of games", Description: "Scans a parent directory containing multiple downloaded game folders"},
 		{Key: "3", Title: "Inspect game directory status", Description: "Shows AppID, platform (Linux/Windows), executable path, and backup status"},
 		{Key: "4", Title: "Rollback changes in a game directory", Description: "Restores .ORIGINAL files and removes Goldberg emulator settings"},
@@ -107,13 +93,11 @@ func runInteractiveWizard(c *cli.Context, activeConfig *config.Config) error {
 		}
 
 		addLutris := ui.PromptYesNoWithExplanation("Add game to Lutris library?", "Creates Lutris YAML launcher config", true)
-		addSteam := ui.PromptYesNoWithExplanation("Add shortcut to Steam & download grid art?", "Adds entry to shortcuts.vdf", true)
 		portable := ui.PromptYesNoWithExplanation("Use Portable Mode (Direct DLL replacement)?", "Replaces DLL directly in game folder instead of loader flags", false)
 
 		opts := engine.ProcessOptions{
 			Path:      targetPath,
 			AddLutris: addLutris,
-			AddSteam:  addSteam,
 			Portable:  portable,
 			Promote:   true,
 		}
@@ -129,19 +113,14 @@ func runInteractiveWizard(c *cli.Context, activeConfig *config.Config) error {
 		if addLutris {
 			nextSteps = append(nextSteps, "Launch the game via Lutris")
 		}
-		if addSteam {
-			nextSteps = append(nextSteps, "Restart Steam to view your new game shortcut and grid artwork")
-		}
 		ui.RenderSuccess("Setup completed successfully for "+res.Info.Name, "", nextSteps)
 
 	case "2":
 		parentDir := ui.PromptString("Enter parent directory path containing multiple games", ".")
 		addLutris := ui.PromptYesNoWithExplanation("Add all games to Lutris?", "Creates Lutris config for each game", true)
-		addSteam := ui.PromptYesNoWithExplanation("Add all games to Steam?", "Creates Steam shortcuts for each game", true)
 
 		opts := engine.ProcessOptions{
 			AddLutris: addLutris,
-			AddSteam:  addSteam,
 			Promote:   true,
 			AutoYes:   true,
 		}
@@ -228,11 +207,10 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:      "add",
-				Usage:     "Complete post-download setup for a game (GBE + optional Lutris & Steam integration)",
+				Usage:     "Complete post-download setup for a game (GBE + optional Lutris integration)",
 				ArgsUsage: "[path]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "lutris", Usage: "Add game to Lutris"},
-					&cli.BoolFlag{Name: "steam", Usage: "Add non-Steam shortcut to Steam"},
 					&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts (non-interactive mode)"},
 					&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
@@ -270,9 +248,6 @@ func main() {
 					if opts.AddLutris {
 						nextSteps = append(nextSteps, "Launch the game via Lutris")
 					}
-					if opts.AddSteam {
-						nextSteps = append(nextSteps, "Restart Steam to view your new game shortcut and grid artwork")
-					}
 					ui.RenderSuccess("Setup completed successfully for "+res.Info.Name, "", nextSteps)
 					return nil
 				},
@@ -305,7 +280,6 @@ func main() {
 				ArgsUsage: "<dir>",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "lutris", Usage: "Add all discovered games to Lutris"},
-					&cli.BoolFlag{Name: "steam", Usage: "Add non-Steam shortcuts for all discovered games to Steam"},
 					&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts"},
 					&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement instead of loader mode"},
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folders to top level"},
@@ -429,29 +403,6 @@ func main() {
 						return err
 					}
 					ui.RenderSuccess("Added to Lutris: "+res.Info.Name, "", []string{"Launch via Lutris"})
-					return nil
-				},
-			},
-			{
-				Name:      "steam-add",
-				Usage:     "Add a non-Steam game shortcut to Steam",
-				ArgsUsage: "<path>",
-				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
-					&cli.BoolFlag{Name: "portable", Usage: "Use direct DLL replacement instead of adding pre-load launch options"},
-					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
-				},
-				Action: func(c *cli.Context) error {
-					opts := extractProcessOptions(c, false)
-					opts.AddSteam = true
-					eng := engine.New(activeConfig)
-					ui.RenderStep(1, 1, "Registering non-Steam game shortcut with Steam")
-					res, err := eng.ProcessGame(c.Context, opts)
-					if err != nil {
-						ui.RenderErrorHelp(err, []string{"Check Steam userdata path"})
-						return err
-					}
-					ui.RenderSuccess("Added to Steam: "+res.Info.Name, "", []string{"Restart Steam to view shortcut & grid artwork"})
 					return nil
 				},
 			},

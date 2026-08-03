@@ -169,8 +169,10 @@ func GenerateInstaller(cfg Config) ([]byte, error) {
 }
 
 // Write generates the YAML and writes it to the given directory (which
-// should be ~/.config/lutris/games/ or equivalent).  The filename is
+// should be ~/.config/lutris/games/ or equivalent). The filename is
 // derived from the slug and the output is created with 0644 permissions.
+// It also updates existing matching Lutris config files and registers/updates
+// the game in Lutris's SQLite database (pdev.db) if present.
 func Write(cfg Config, dir string) error {
 	out, err := Generate(cfg)
 	if err != nil {
@@ -181,18 +183,84 @@ func Write(cfg Config, dir string) error {
 		return fmt.Errorf("lutris: create dir %s: %w", dir, err)
 	}
 
-	// Lutris names files as  slug-timestamp.yml  but the timestamp is
-	// optional; any name printed by  slug.yml  is also recognised.
 	slug := strings.TrimSpace(cfg.Slug)
 	if slug == "" {
 		slug = Slugify(cfg.Name)
 	}
+
+	// 1. Primary path: <slug>.yml
 	fname := slug + ".yml"
-	path := filepath.Join(dir, fname)
-	if err := os.WriteFile(path, out, 0644); err != nil {
-		return fmt.Errorf("lutris: write file %s: %w", path, err)
+	primaryPath := filepath.Join(dir, fname)
+	if err := os.WriteFile(primaryPath, out, 0644); err != nil {
+		return fmt.Errorf("lutris: write file %s: %w", primaryPath, err)
 	}
+
+	// 2. Overwrite any existing Lutris game files in dir matching <slug>*.yml or short slug prefix
+	// so existing Lutris UI entries update immediately without needing re-import.
+	shortPrefix := strings.Split(slug, "-")[0]
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
+				if strings.HasPrefix(nameNoExt, slug) || (len(shortPrefix) >= 4 && strings.HasPrefix(nameNoExt, shortPrefix)) {
+					targetPath := filepath.Join(dir, e.Name())
+					_ = os.WriteFile(targetPath, out, 0644)
+				}
+			}
+		}
+	}
+
+	// 3. Attempt to register in Lutris's SQLite database (non-fatal if database or sqlite3 not present)
+	_ = updateLutrisDB(cfg)
+
 	return nil
+}
+
+func updateLutrisDB(cfg Config) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	dbLocations := []string{
+		filepath.Join(home, ".local", "share", "lutris", "pga.db"),
+		filepath.Join(home, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db"),
+	}
+
+	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
+		dbLocations = append([]string{filepath.Join(dataHome, "lutris", "pga.db")}, dbLocations...)
+	}
+
+	var dbPath string
+	for _, loc := range dbLocations {
+		if _, err := os.Stat(loc); err == nil {
+			dbPath = loc
+			break
+		}
+	}
+
+	if dbPath == "" {
+		return nil
+	}
+
+	slug := strings.TrimSpace(cfg.Slug)
+	if slug == "" {
+		slug = Slugify(cfg.Name)
+	}
+
+	runner := strings.ToLower(strings.TrimSpace(cfg.Runner))
+	if runner == "" {
+		runner = "wine"
+	}
+
+	gameDir := filepath.Dir(cfg.GamePath)
+
+	query := fmt.Sprintf(`DELETE FROM games WHERE slug = %q;
+INSERT INTO games (name, slug, runner, executable, directory, installed, configpath)
+VALUES (%q, %q, %q, %q, %q, 1, %q);`, slug, cfg.Name, slug, runner, cfg.GamePath, gameDir, slug)
+
+	cmd := exec.Command("sqlite3", dbPath, query)
+	return cmd.Run()
 }
 
 // WriteInstaller generates the installer YAML and writes it to path.

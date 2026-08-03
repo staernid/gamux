@@ -236,39 +236,63 @@ func detectPlatformAndLib(info *GameInfo) {
 
 func detectExecutable(info *GameInfo) {
 	var bestExe string
+	var fallbackExe string
+
 	_ = filepath.WalkDir(info.GameDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		name := strings.ToLower(d.Name())
-		// Skip installers, crash handlers, redistributables
+		// Skip installers, crash handlers, redistributables, setup files, console wrappers
 		if strings.Contains(name, "unitycrashhandler") ||
 			strings.Contains(name, "unins") ||
 			strings.Contains(name, "setup") ||
-			strings.Contains(name, "redist") {
+			strings.Contains(name, "redist") ||
+			strings.Contains(name, "dxsetup") ||
+			strings.Contains(name, "vcredist") ||
+			strings.Contains(name, "crashdumper") ||
+			strings.HasSuffix(name, ".console.exe") {
 			return nil
 		}
 
-		if info.Platform == "win64" || info.Platform == "win32" {
-			if strings.HasSuffix(name, ".exe") {
-				if bestExe == "" || strings.EqualFold(strings.TrimSuffix(d.Name(), ".exe"), filepath.Base(info.GameDir)) {
-					bestExe = path
-				}
+		dirName := filepath.Base(info.GameDir)
+
+		// Check Windows executables (.exe)
+		if strings.HasSuffix(name, ".exe") {
+			if fallbackExe == "" {
+				fallbackExe = path
 			}
-		} else { // linux
-			if strings.HasSuffix(name, ".sh") || strings.HasSuffix(name, ".x86_64") || !strings.Contains(d.Name(), ".") {
-				info, err := d.Info()
-				if err == nil && (info.Mode()&0111 != 0) { // Executable bit set
-					if bestExe == "" || strings.EqualFold(d.Name(), filepath.Base(info.Name())) {
-						bestExe = path
-					}
+			baseNoExt := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+			if strings.EqualFold(baseNoExt, dirName) || (info.Name != "" && strings.EqualFold(baseNoExt, info.Name)) {
+				bestExe = path
+			}
+		}
+
+		// Check Linux executables (.sh, .x86_64, or no extension with executable bit)
+		if strings.HasSuffix(name, ".sh") || strings.HasSuffix(name, ".x86_64") || !strings.Contains(d.Name(), ".") {
+			fileInfo, err := d.Info()
+			if err == nil && (fileInfo.Mode()&0111 != 0) { // Executable bit set
+				if fallbackExe == "" {
+					fallbackExe = path
+				}
+				if strings.EqualFold(d.Name(), dirName) || (info.Name != "" && strings.EqualFold(d.Name(), info.Name)) {
+					bestExe = path
 				}
 			}
 		}
 		return nil
 	})
 
-	info.ExePath = bestExe
+	if bestExe != "" {
+		info.ExePath = bestExe
+	} else {
+		info.ExePath = fallbackExe
+	}
+
+	// Update platform if executable is a Windows .exe and platform was defaulted to linux
+	if info.ExePath != "" && strings.HasSuffix(strings.ToLower(info.ExePath), ".exe") && info.Platform == "linux" {
+		info.Platform = "win64"
+	}
 }
 
 func copyFile(src, dest string) error {
