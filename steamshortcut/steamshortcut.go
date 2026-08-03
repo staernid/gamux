@@ -235,7 +235,11 @@ func SteamUserdataDir() (string, error) {
 		return "", fmt.Errorf("steamshortcut: get home dir: %w", err)
 	}
 
-	base := filepath.Join(home, config.SteamUserdata)
+	base := config.SteamUserdata
+	if !filepath.IsAbs(base) {
+		base = filepath.Join(home, base)
+	}
+
 	if _, err := os.Stat(base); os.IsNotExist(err) {
 		// Also try the flatpak path
 		flatpakBase := filepath.Join(home, "var", "lib", "steam", "userdata")
@@ -281,6 +285,11 @@ func SteamUserdataDir() (string, error) {
 	return best, nil
 }
 
+func isSteamRunning() bool {
+	cmd := exec.Command("pgrep", "-x", "steam")
+	return cmd.Run() == nil
+}
+
 // AddShortcut adds a non-Steam game shortcut to Steam's shortcuts.vdf.
 // It finds the Steam userdata directory, locates shortcuts.vdf, and
 // appends an entry. Returns an error if Steam userdata can't be found.
@@ -291,6 +300,10 @@ func AddShortcut(cfg ShortcutConfig, dryRun bool) error {
 	}
 	if cfg.ExePath == "" {
 		return fmt.Errorf("steamshortcut: ExePath is required")
+	}
+
+	if isSteamRunning() {
+		slog.Warn("Steam process detected as currently running; changes to shortcuts.vdf may be overwritten when Steam closes. Consider exiting Steam.", "shortcut", cfg.Name)
 	}
 
 	if dryRun {
@@ -506,14 +519,14 @@ func writeValue(buf []byte, v vdfValue) []byte {
 }
 
 // DesktopEntry writes a .desktop file to ~/.local/share/applications/
-// that launches the game via Steam's protocol handler.
-// This is a fallback for when direct VDF manipulation isn't available.
+// that launches the game binary directly (or with launch options).
 // Returns the file path.
 func DesktopEntry(cfg ShortcutConfig, dryRun bool) (string, error) {
 	appID := "0"
 	if cfg.AppID != "" {
 		appID = cfg.AppID
 	}
+	_ = appID
 
 	// Generate a safe filename from the name
 	slug := strings.ToLower(cfg.Name)
@@ -528,17 +541,35 @@ func DesktopEntry(cfg ShortcutConfig, dryRun bool) (string, error) {
 		slug = "game"
 	}
 
+	execCmd := cfg.ExePath
+	if cfg.AppID != "" && cfg.AppID != "0" {
+		execCmd = fmt.Sprintf("steam://rungameid/%s", cfg.AppID)
+	} else if cfg.LaunchOpt != "" {
+		if strings.Contains(cfg.LaunchOpt, "%command%") {
+			execCmd = strings.Replace(cfg.LaunchOpt, "%command%", cfg.ExePath, 1)
+		} else {
+			execCmd = fmt.Sprintf("%s %s", cfg.LaunchOpt, cfg.ExePath)
+		}
+	}
+
+	startDir := cfg.StartDir
+	if startDir == "" && cfg.ExePath != "" {
+		startDir = filepath.Dir(cfg.ExePath)
+	}
+
+	homeDir, _ := os.UserHomeDir()
 	desktopName := "steam-" + slug + ".desktop"
-	desktopPath := filepath.Join(os.Getenv("HOME"), ".local", "share", "applications", desktopName)
+	desktopPath := filepath.Join(homeDir, ".local", "share", "applications", desktopName)
 
 	desktopContent := fmt.Sprintf(`[Desktop Entry]
 Name=%s
 Type=Application
-Exec=steam://rungameid/%s
+Exec=%s
+Path=%s
 Icon=steam
 Terminal=false
 Categories=Game;
-`, cfg.Name, appID)
+`, cfg.Name, execCmd, startDir)
 
 	if dryRun {
 		slog.Info("[DRY RUN] Would write .desktop entry", "path", desktopPath)
@@ -570,13 +601,19 @@ func FetchSteamGridArtwork(ctx context.Context, appID string, dryRun bool) error
 	gridDir := filepath.Join(steamDir, "config", "grid")
 	coverPath := filepath.Join(gridDir, appID+"p.jpg")
 	bannerPath := filepath.Join(gridDir, appID+".jpg")
+	heroPath := filepath.Join(gridDir, appID+"_hero.jpg")
+	logoPath := filepath.Join(gridDir, appID+"_logo.png")
 
 	coverURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", appID)
 	bannerURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID)
+	heroURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_hero.jpg", appID)
+	logoURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/logo.png", appID)
 
 	if dryRun {
 		slog.Info("[DRY RUN] Would fetch Steam grid cover art", "url", coverURL, "target", coverPath)
 		slog.Info("[DRY RUN] Would fetch Steam grid banner image", "url", bannerURL, "target", bannerPath)
+		slog.Info("[DRY RUN] Would fetch Steam grid hero image", "url", heroURL, "target", heroPath)
+		slog.Info("[DRY RUN] Would fetch Steam grid logo image", "url", logoURL, "target", logoPath)
 		return nil
 	}
 
@@ -588,6 +625,14 @@ func FetchSteamGridArtwork(ctx context.Context, appID string, dryRun bool) error
 
 	if err := steam.DownloadFile(ctx, bannerURL, bannerPath); err == nil {
 		slog.Info("Fetched Steam grid banner image", "path", bannerPath)
+	}
+
+	if err := steam.DownloadFile(ctx, heroURL, heroPath); err == nil {
+		slog.Info("Fetched Steam grid hero image", "path", heroPath)
+	}
+
+	if err := steam.DownloadFile(ctx, logoURL, logoPath); err == nil {
+		slog.Info("Fetched Steam grid logo image", "path", logoPath)
 	}
 
 	return nil

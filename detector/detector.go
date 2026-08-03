@@ -3,7 +3,6 @@ package detector
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util"
 )
 
 // GameInfo represents auto-detected metadata and paths for a game directory.
@@ -84,7 +84,18 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 		info.Name = filepath.Base(info.GameDir)
 	}
 
-	// 6. Detect main executable
+	// 6. Try searching Steam Store API if AppID is still missing
+	if info.AppID == "" && info.Name != "" {
+		if appID, searchName, err := steam.SearchAppID(ctx, info.Name); err == nil && appID != "" {
+			info.AppID = appID
+			if searchName != "" {
+				info.Name = searchName
+			}
+			slog.Info("Auto-discovered AppID via Steam Store search", "title", info.Name, "appID", info.AppID)
+		}
+	}
+
+	// 7. Detect main executable
 	detectExecutable(info)
 
 	return info, nil
@@ -261,20 +272,7 @@ func detectExecutable(info *GameInfo) {
 }
 
 func copyFile(src, dest string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	return err
+	return util.CopyFile(src, dest)
 }
 
 func fileExists(path string) bool {

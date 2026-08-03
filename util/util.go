@@ -87,6 +87,12 @@ func CopyFile(src, dest string) error {
 	return out.Close()
 }
 
+// FileExists checks if a file exists on disk.
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 // DownloadAndExtract downloads a file and extracts it.
 func DownloadAndExtract(ctx context.Context, url, destDir, format string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

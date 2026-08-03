@@ -17,7 +17,20 @@ import (
 // ApplyGBE applies the GBE emulator.
 // If portable is true, it performs direct DLL/SO replacement (copying emulated libraries into the game dir).
 // If portable is false (loader mode), it leaves original game libraries untouched.
-func ApplyGBE(ctx context.Context, platform, appID string, dryRun, portable bool) error {
+func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appID string, dryRun, portable bool) error {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	absTargetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		return fmt.Errorf("resolve target dir: %w", err)
+	}
+
 	platformCfg, ok := config.PlatformConfig[platform]
 	if !ok {
 		var validPlatforms []string
@@ -27,14 +40,19 @@ func ApplyGBE(ctx context.Context, platform, appID string, dryRun, portable bool
 		return fmt.Errorf("invalid platform: '%s'. Valid platforms: %s", platform, strings.Join(validPlatforms, ", "))
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
+	gbeBase := cfg.GbeDir
+	if !filepath.IsAbs(gbeBase) {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		gbeBase = filepath.Join(homeDir, gbeBase)
 	}
-	gbePath := filepath.Join(homeDir, config.GbeDir, platformCfg.Subdir, "experimental", "x"+platformCfg.Arch)
+
+	gbePath := filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x"+platformCfg.Arch)
 
 	var targetFiles []string
-	walkErr := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(absTargetDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -44,11 +62,11 @@ func ApplyGBE(ctx context.Context, platform, appID string, dryRun, portable bool
 		return nil
 	})
 	if walkErr != nil {
-		return fmt.Errorf("failed to search for files: %w", walkErr)
+		return fmt.Errorf("failed to search for files in %s: %w", absTargetDir, walkErr)
 	}
 
 	if len(targetFiles) == 0 {
-		slog.Warn("No target files found", "platform", platform)
+		slog.Warn("No target files found", "platform", platform, "dir", absTargetDir)
 	}
 
 	sourceFile := filepath.Join(gbePath, platformCfg.Target)
@@ -99,25 +117,34 @@ func ApplyGBE(ctx context.Context, platform, appID string, dryRun, portable bool
 			slog.Info("[LOADER MODE] Keeping original library intact (zero file replacement)", "file", file)
 		}
 
-		homeDir, err = os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to get user home directory: %w", err)
-		}
-		generatorPath := filepath.Join(homeDir, config.GbeDir, platformCfg.Subdir, "tools", "generate_interfaces", platformCfg.Generator)
+		generatorPath := filepath.Join(gbeBase, platformCfg.Subdir, "tools", "generate_interfaces", platformCfg.Generator)
 		if _, err := os.Stat(generatorPath); err == nil {
 			if dryRun {
 				slog.Info("[DRY RUN] Would run generator", "generator", platformCfg.Generator)
 			} else {
 				slog.Info("Running generator", "generator", platformCfg.Generator)
-				if runtime.GOOS != "windows" {
-					if err := os.Chmod(generatorPath, 0755); err != nil {
-						slog.Warn("Failed to set executable permissions", "path", generatorPath, "error", err)
+				var cmd *exec.Cmd
+				if strings.HasSuffix(platformCfg.Generator, ".exe") && runtime.GOOS != "windows" {
+					winePath, err := exec.LookPath("wine")
+					if err != nil {
+						slog.Warn("Wine binary not found in PATH; skipping generator execution", "generator", platformCfg.Generator)
+					} else {
+						cmd = exec.Command(winePath, generatorPath, filepath.Base(file))
 					}
+				} else {
+					if runtime.GOOS != "windows" {
+						if err := os.Chmod(generatorPath, 0755); err != nil {
+							slog.Warn("Failed to set executable permissions", "path", generatorPath, "error", err)
+						}
+					}
+					cmd = exec.Command(generatorPath, filepath.Base(file))
 				}
-				cmd := exec.Command(generatorPath, filepath.Base(file))
-				cmd.Dir = filepath.Dir(file)
-				if out, err := cmd.CombinedOutput(); err != nil {
-					slog.Error("Generator failed", "error", err, "output", string(out))
+
+				if cmd != nil {
+					cmd.Dir = filepath.Dir(file)
+					if out, err := cmd.CombinedOutput(); err != nil {
+						slog.Error("Generator failed", "error", err, "output", string(out))
+					}
 				}
 			}
 		}

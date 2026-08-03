@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/staernid/gamux/util"
 )
 
 // ArtworkResult holds local file paths for fetched artwork.
@@ -26,7 +28,7 @@ func DownloadFile(ctx context.Context, downloadURL, targetPath string) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", downloadURL, err)
 	}
@@ -152,7 +154,7 @@ func searchSteamGridDB(ctx context.Context, apiKey, gameName string) (string, er
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -188,7 +190,7 @@ func fetchSGDBImageURL(ctx context.Context, apiKey, gameID, dimensions string) (
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -217,22 +219,8 @@ func fetchSGDBImageURL(ctx context.Context, apiKey, gameID, dimensions string) (
 }
 
 func copyFile(src, dest string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	return err
+	return util.CopyFile(src, dest)
 }

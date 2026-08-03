@@ -8,13 +8,18 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 )
+
+// HTTPClient allows injecting custom HTTP clients or RoundTrippers for testing.
+var HTTPClient = http.DefaultClient
 
 // ReleaseDate holds release date metadata returned from the Steam Store API.
 type ReleaseDate struct {
@@ -81,7 +86,7 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch app details: %w", err)
 	}
@@ -116,6 +121,53 @@ func FetchAppName(ctx context.Context, appID string) (string, error) {
 		return "", err
 	}
 	return details.Name, nil
+}
+
+// SearchResultItem represents an item in storesearch results.
+type SearchResultItem struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// SearchStoreResponse represents the Steam Store search API response.
+type SearchStoreResponse struct {
+	Total int                `json:"total"`
+	Items []SearchResultItem `json:"items"`
+}
+
+// SearchAppID searches the Steam Store API for a game title and returns the best matching AppID and canonical Name.
+func SearchAppID(ctx context.Context, query string) (string, string, error) {
+	if strings.TrimSpace(query) == "" {
+		return "", "", fmt.Errorf("search query cannot be empty")
+	}
+
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.SteamStoreAPI, url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("create search request: %w", err)
+	}
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("fetch store search: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("store search HTTP %d", resp.StatusCode)
+	}
+
+	var res SearchStoreResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", "", fmt.Errorf("decode store search JSON: %w", err)
+	}
+
+	if res.Total == 0 || len(res.Items) == 0 {
+		return "", "", fmt.Errorf("no Steam AppID found for query %q", query)
+	}
+
+	best := res.Items[0]
+	return fmt.Sprintf("%d", best.ID), best.Name, nil
 }
 
 // FetchDLCs fetches DLCs for a given AppID.

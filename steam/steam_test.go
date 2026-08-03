@@ -201,3 +201,33 @@ func TestDownloadAchievementImages(t *testing.T) {
 		t.Error("expected ach2.png to not exist since download was mocked to return 404")
 	}
 }
+
+func TestSearchAppID(t *testing.T) {
+	oldTransport := HTTPClient.Transport
+	defer func() {
+		HTTPClient.Transport = oldTransport
+	}()
+
+	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.Path, "storesearch") {
+			jsonResp := `{"total": 1, "items": [{"id": 2088570, "name": "Tiny Rogues"}]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}
+		return nil, nil
+	})
+
+	appID, name, err := SearchAppID(context.Background(), "Tiny Rogues")
+	if err != nil {
+		t.Fatalf("SearchAppID failed: %v", err)
+	}
+	if appID != "2088570" {
+		t.Errorf("expected AppID 2088570, got %s", appID)
+	}
+	if name != "Tiny Rogues" {
+		t.Errorf("expected Name 'Tiny Rogues', got %s", name)
+	}
+}
