@@ -1,17 +1,15 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/github"
+	"github.com/staernid/gamux/ui"
 
 	"github.com/urfave/cli/v2"
 )
@@ -19,34 +17,188 @@ import (
 // Version of the gamux application
 const Version = "v0.3.1"
 
-func promptYesNo(promptText string, defaultYes bool) bool {
-	hint := " [Y/n]: "
-	if !defaultYes {
-		hint = " [y/N]: "
+func extractPath(c *cli.Context) string {
+	if c.Args().Len() >= 1 {
+		return c.Args().Get(0)
 	}
-	fmt.Print(promptText + hint)
+	return "."
+}
 
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return defaultYes
+func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOptions {
+	autoYes := c.Bool("yes")
+	addLutris := false
+	if c.IsSet("lutris") {
+		addLutris = c.Bool("lutris")
+	} else if autoYes {
+		addLutris = true
+	} else if promptIfUnset {
+		addLutris = ui.PromptYesNoWithExplanation(
+			"Register game in Lutris?",
+			"Creates a Lutris YAML configuration in ~/.config/lutris/ so the game appears in your Lutris library.",
+			true,
+		)
 	}
 
-	input = strings.ToLower(strings.TrimSpace(input))
-	if input == "" {
-		return defaultYes
+	addSteam := false
+	if c.IsSet("steam") {
+		addSteam = c.Bool("steam")
+	} else if autoYes {
+		addSteam = true
+	} else if promptIfUnset {
+		addSteam = ui.PromptYesNoWithExplanation(
+			"Add non-Steam game shortcut to Steam?",
+			"Appends an entry to Steam's shortcuts.vdf and automatically downloads grid cover artwork.",
+			true,
+		)
 	}
-	if input == "y" || input == "yes" {
-		return true
+
+	portable := c.Bool("portable")
+	if !c.IsSet("portable") && promptIfUnset && !autoYes {
+		portable = ui.PromptYesNoWithExplanation(
+			"Use Portable Mode (Direct DLL/SO replacement)?",
+			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default mode uses environment loader flags.",
+			false,
+		)
 	}
-	if input == "n" || input == "no" {
-		return false
+
+	return engine.ProcessOptions{
+		Path:       extractPath(c),
+		AddLutris:  addLutris,
+		AddSteam:   addSteam,
+		Runner:     c.String("runner"),
+		WinePrefix: c.String("wine-prefix"),
+		Portable:   portable,
+		Promote:    c.Bool("promote"),
+		DryRun:     c.Bool("dry-run"),
+		AutoYes:    autoYes,
 	}
-	return defaultYes
+}
+
+func runInteractiveWizard(c *cli.Context, activeConfig *config.Config) error {
+	ui.RenderHeader(Version)
+
+	options := []ui.MenuOption{
+		{Key: "1", Title: "Process a game directory (add / setup GBE + Lutris + Steam)", Description: "Full setup: detects AppID, configures Goldberg Emulator, Lutris & Steam shortcuts"},
+		{Key: "2", Title: "Batch process a folder of games", Description: "Scans a parent directory containing multiple downloaded game folders"},
+		{Key: "3", Title: "Inspect game directory status", Description: "Shows AppID, platform (Linux/Windows), executable path, and backup status"},
+		{Key: "4", Title: "Rollback changes in a game directory", Description: "Restores .ORIGINAL files and removes Goldberg emulator settings"},
+		{Key: "5", Title: "Update Goldberg Emulator assets", Description: "Fetches latest Goldberg Emulator release binaries from GitHub"},
+		{Key: "6", Title: "Exit", Description: "Close gamux"},
+	}
+
+	choice := ui.RenderMenu(options)
+
+	eng := engine.New(activeConfig)
+
+	switch choice {
+	case "1":
+		targetPath := ui.PromptString("Enter path to game directory", ".")
+		status, err := eng.InspectStatus(c.Context, targetPath)
+		if err == nil {
+			ui.RenderDetectionSummary(ui.DetectionInfoSummary{
+				Name:            status.Name,
+				AppID:           status.AppID,
+				Platform:        status.Platform,
+				GameDir:         status.GameDir,
+				ExePath:         status.ExePath,
+				State:           status.State,
+				OriginalBackups: len(status.OriginalBackups),
+			})
+		}
+
+		addLutris := ui.PromptYesNoWithExplanation("Add game to Lutris library?", "Creates Lutris YAML launcher config", true)
+		addSteam := ui.PromptYesNoWithExplanation("Add shortcut to Steam & download grid art?", "Adds entry to shortcuts.vdf", true)
+		portable := ui.PromptYesNoWithExplanation("Use Portable Mode (Direct DLL replacement)?", "Replaces DLL directly in game folder instead of loader flags", false)
+
+		opts := engine.ProcessOptions{
+			Path:      targetPath,
+			AddLutris: addLutris,
+			AddSteam:  addSteam,
+			Portable:  portable,
+			Promote:   true,
+		}
+
+		ui.RenderStep(1, 1, "Processing game setup")
+		res, err := eng.ProcessGame(c.Context, opts)
+		if err != nil {
+			ui.RenderErrorHelp(err, []string{"Verify the game directory path", "Check file permissions"})
+			return err
+		}
+
+		nextSteps := []string{}
+		if addLutris {
+			nextSteps = append(nextSteps, "Launch the game via Lutris")
+		}
+		if addSteam {
+			nextSteps = append(nextSteps, "Restart Steam to view your new game shortcut and grid artwork")
+		}
+		ui.RenderSuccess("Setup completed successfully for "+res.Info.Name, "", nextSteps)
+
+	case "2":
+		parentDir := ui.PromptString("Enter parent directory path containing multiple games", ".")
+		addLutris := ui.PromptYesNoWithExplanation("Add all games to Lutris?", "Creates Lutris config for each game", true)
+		addSteam := ui.PromptYesNoWithExplanation("Add all games to Steam?", "Creates Steam shortcuts for each game", true)
+
+		opts := engine.ProcessOptions{
+			AddLutris: addLutris,
+			AddSteam:  addSteam,
+			Promote:   true,
+			AutoYes:   true,
+		}
+
+		ui.RenderStep(1, 1, "Batch processing parent directory")
+		results, err := eng.BatchProcess(c.Context, parentDir, opts)
+		if err != nil {
+			ui.RenderErrorHelp(err, []string{"Ensure the parent directory exists"})
+			return err
+		}
+
+		ui.RenderSuccess(fmt.Sprintf("Batch processing complete (%d games processed)", len(results)), "", nil)
+
+	case "3":
+		targetPath := ui.PromptString("Enter path to game directory", ".")
+		status, err := eng.InspectStatus(c.Context, targetPath)
+		if err != nil {
+			ui.RenderErrorHelp(err, []string{"Verify game directory path"})
+			return err
+		}
+		ui.RenderDetectionSummary(ui.DetectionInfoSummary{
+			Name:            status.Name,
+			AppID:           status.AppID,
+			Platform:        status.Platform,
+			GameDir:         status.GameDir,
+			ExePath:         status.ExePath,
+			State:           status.State,
+			OriginalBackups: len(status.OriginalBackups),
+		})
+
+	case "4":
+		targetPath := ui.PromptString("Enter path to game directory", ".")
+		if ui.PromptYesNoWithExplanation("Confirm rollback?", "Restores .ORIGINAL files and deletes steam_settings/", true) {
+			if err := eng.Rollback(c.Context, targetPath, false); err != nil {
+				ui.RenderErrorHelp(err, []string{"Ensure files are not locked by running processes"})
+				return err
+			}
+			ui.RenderSuccess("Rollback completed successfully", "Original files have been restored.", nil)
+		}
+
+	case "5":
+		ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets")
+		if err := github.UpdateGBE(c.Context); err != nil {
+			ui.RenderErrorHelp(err, []string{"Check internet connection"})
+			return err
+		}
+		ui.RenderSuccess("Goldberg Emulator assets updated", "", nil)
+
+	case "6":
+		fmt.Println("Goodbye!")
+		os.Exit(0)
+	}
+
+	return nil
 }
 
 func main() {
-	// Initialize structured logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
@@ -69,6 +221,10 @@ func main() {
 			activeConfig, err = config.LoadConfig(c.String("config"))
 			return err
 		},
+		Action: func(c *cli.Context) error {
+			// If run without subcommands, launch the interactive setup wizard
+			return runInteractiveWizard(c, activeConfig)
+		},
 		Commands: []*cli.Command{
 			{
 				Name:      "add",
@@ -83,47 +239,41 @@ func main() {
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
-					autoYes := c.Bool("yes")
-					addLutris := false
-					if c.IsSet("lutris") {
-						addLutris = c.Bool("lutris")
-					} else if autoYes {
-						addLutris = true
-					} else {
-						addLutris = promptYesNo("Add game to Lutris?", true)
-					}
-
-					addSteam := false
-					if c.IsSet("steam") {
-						addSteam = c.Bool("steam")
-					} else if autoYes {
-						addSteam = true
-					} else {
-						addSteam = promptYesNo("Add non-Steam game shortcut to Steam?", true)
-					}
-
+					path := extractPath(c)
 					eng := engine.New(activeConfig)
-					opts := engine.ProcessOptions{
-						Path:      path,
-						AddLutris: addLutris,
-						AddSteam:  addSteam,
-						Portable:  c.Bool("portable"),
-						Promote:   c.Bool("promote"),
-						DryRun:    c.Bool("dry-run"),
-						AutoYes:   autoYes,
+
+					if !c.Bool("yes") {
+						status, err := eng.InspectStatus(c.Context, path)
+						if err == nil {
+							ui.RenderDetectionSummary(ui.DetectionInfoSummary{
+								Name:            status.Name,
+								AppID:           status.AppID,
+								Platform:        status.Platform,
+								GameDir:         status.GameDir,
+								ExePath:         status.ExePath,
+								State:           status.State,
+								OriginalBackups: len(status.OriginalBackups),
+							})
+						}
 					}
 
+					opts := extractProcessOptions(c, true)
+
+					ui.RenderStep(1, 1, "Executing setup for "+path)
 					res, err := eng.ProcessGame(c.Context, opts)
 					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Check directory path", "Verify file permissions"})
 						return err
 					}
 
-					slog.Info("Setup completed successfully for " + res.Info.Name)
+					nextSteps := []string{}
+					if opts.AddLutris {
+						nextSteps = append(nextSteps, "Launch the game via Lutris")
+					}
+					if opts.AddSteam {
+						nextSteps = append(nextSteps, "Restart Steam to view your new game shortcut and grid artwork")
+					}
+					ui.RenderSuccess("Setup completed successfully for "+res.Info.Name, "", nextSteps)
 					return nil
 				},
 			},
@@ -132,35 +282,21 @@ func main() {
 				Usage:     "Apply GBE to Steam API files and configure DLCs",
 				ArgsUsage: "[path]",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:  "dry-run",
-						Usage: "Do not move or write files, just show what would be done",
-					},
-					&cli.BoolFlag{
-						Name:  "portable",
-						Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode",
-					},
-					&cli.BoolFlag{
-						Name:  "promote",
-						Value: true,
-						Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests",
-					},
+					&cli.BoolFlag{Name: "dry-run", Usage: "Do not move or write files, just show what would be done"},
+					&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
+					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
+					opts := extractProcessOptions(c, false)
 					eng := engine.New(activeConfig)
-					opts := engine.ProcessOptions{
-						Path:     path,
-						Portable: c.Bool("portable"),
-						Promote:  c.Bool("promote"),
-						DryRun:   c.Bool("dry-run"),
+					ui.RenderStep(1, 1, "Applying Goldberg Emulator to "+opts.Path)
+					res, err := eng.ProcessGame(c.Context, opts)
+					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Verify target folder contains Steam API files"})
+						return err
 					}
-					_, err := eng.ProcessGame(c.Context, opts)
-					return err
+					ui.RenderSuccess("Goldberg Emulator applied for "+res.Info.Name, "", nil)
+					return nil
 				},
 			},
 			{
@@ -178,22 +314,20 @@ func main() {
 				},
 				Action: func(c *cli.Context) error {
 					if c.Args().Len() < 1 {
-						return fmt.Errorf("batch command requires a parent directory path")
+						err := fmt.Errorf("batch command requires a parent directory path")
+						ui.RenderErrorHelp(err, []string{"Example: gamux batch /path/to/downloads"})
+						return err
 					}
 					parentDir := c.Args().Get(0)
 
+					opts := extractProcessOptions(c, false)
 					eng := engine.New(activeConfig)
-					opts := engine.ProcessOptions{
-						AddLutris: c.Bool("lutris"),
-						AddSteam:  c.Bool("steam"),
-						Portable:   c.Bool("portable"),
-						Promote:    c.Bool("promote"),
-						DryRun:     c.Bool("dry-run"),
-						AutoYes:    c.Bool("yes"),
+					if !c.Bool("json") {
+						ui.RenderStep(1, 1, "Scanning parent directory: "+parentDir)
 					}
-
 					results, err := eng.BatchProcess(c.Context, parentDir, opts)
 					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Verify directory exists"})
 						return err
 					}
 
@@ -203,7 +337,7 @@ func main() {
 						return enc.Encode(results)
 					}
 
-					slog.Info("Batch processing complete", "totalGames", len(results))
+					ui.RenderSuccess(fmt.Sprintf("Batch processing complete (%d games processed)", len(results)), "", nil)
 					return nil
 				},
 			},
@@ -215,14 +349,11 @@ func main() {
 					&cli.BoolFlag{Name: "json", Usage: "Output status inspection result as JSON"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
+					path := extractPath(c)
 					eng := engine.New(activeConfig)
 					status, err := eng.InspectStatus(c.Context, path)
 					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Ensure path points to a valid game directory"})
 						return err
 					}
 
@@ -232,16 +363,15 @@ func main() {
 						return enc.Encode(status)
 					}
 
-					fmt.Printf("Game Title:      %s\n", status.Name)
-					fmt.Printf("AppID:           %s\n", status.AppID)
-					fmt.Printf("Platform:        %s\n", status.Platform)
-					fmt.Printf("Directory:       %s\n", status.GameDir)
-					fmt.Printf("Executable:      %s\n", status.ExePath)
-					fmt.Printf("Patch State:     %s\n", status.State)
-					fmt.Printf("Original Backups: %d file(s)\n", len(status.OriginalBackups))
-					for _, b := range status.OriginalBackups {
-						fmt.Printf("  - %s\n", b)
-					}
+					ui.RenderDetectionSummary(ui.DetectionInfoSummary{
+						Name:            status.Name,
+						AppID:           status.AppID,
+						Platform:        status.Platform,
+						GameDir:         status.GameDir,
+						ExePath:         status.ExePath,
+						State:           status.State,
+						OriginalBackups: len(status.OriginalBackups),
+					})
 					return nil
 				},
 			},
@@ -253,20 +383,28 @@ func main() {
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be restored without mutating files"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
+					path := extractPath(c)
 					eng := engine.New(activeConfig)
-					return eng.Rollback(c.Context, path, c.Bool("dry-run"))
+					ui.RenderStep(1, 1, "Rolling back changes for "+path)
+					if err := eng.Rollback(c.Context, path, c.Bool("dry-run")); err != nil {
+						ui.RenderErrorHelp(err, []string{"Check file permissions"})
+						return err
+					}
+					ui.RenderSuccess("Rollback completed successfully for "+path, "", nil)
+					return nil
 				},
 			},
 			{
 				Name:  "update",
 				Usage: "Update the GBE fork repository",
 				Action: func(c *cli.Context) error {
-					return github.UpdateGBE(c.Context)
+					ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets")
+					if err := github.UpdateGBE(c.Context); err != nil {
+						ui.RenderErrorHelp(err, []string{"Check network connectivity"})
+						return err
+					}
+					ui.RenderSuccess("Goldberg Emulator assets updated", "", nil)
+					return nil
 				},
 			},
 			{
@@ -281,23 +419,17 @@ func main() {
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
+					opts := extractProcessOptions(c, false)
+					opts.AddLutris = true
 					eng := engine.New(activeConfig)
-					opts := engine.ProcessOptions{
-						Path:       path,
-						AddLutris:  true,
-						Runner:     c.String("runner"),
-						WinePrefix: c.String("wine-prefix"),
-						Portable:   c.Bool("portable"),
-						Promote:    c.Bool("promote"),
-						DryRun:     c.Bool("dry-run"),
+					ui.RenderStep(1, 1, "Registering with Lutris")
+					res, err := eng.ProcessGame(c.Context, opts)
+					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Check Lutris configuration path"})
+						return err
 					}
-					_, err := eng.ProcessGame(c.Context, opts)
-					return err
+					ui.RenderSuccess("Added to Lutris: "+res.Info.Name, "", []string{"Launch via Lutris"})
+					return nil
 				},
 			},
 			{
@@ -310,27 +442,23 @@ func main() {
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
 				},
 				Action: func(c *cli.Context) error {
-					path := "."
-					if c.Args().Len() >= 1 {
-						path = c.Args().Get(0)
-					}
-
+					opts := extractProcessOptions(c, false)
+					opts.AddSteam = true
 					eng := engine.New(activeConfig)
-					opts := engine.ProcessOptions{
-						Path:     path,
-						AddSteam: true,
-						Portable: c.Bool("portable"),
-						Promote:  c.Bool("promote"),
-						DryRun:   c.Bool("dry-run"),
+					ui.RenderStep(1, 1, "Registering non-Steam game shortcut with Steam")
+					res, err := eng.ProcessGame(c.Context, opts)
+					if err != nil {
+						ui.RenderErrorHelp(err, []string{"Check Steam userdata path"})
+						return err
 					}
-					_, err := eng.ProcessGame(c.Context, opts)
-					return err
+					ui.RenderSuccess("Added to Steam: "+res.Info.Name, "", []string{"Restart Steam to view shortcut & grid artwork"})
+					return nil
 				},
 			},
 		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		os.Exit(1)
 	}
 }

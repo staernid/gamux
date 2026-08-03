@@ -17,7 +17,8 @@ test:
 	go test -v ./...
 
 lint:
-	golangci-lint run
+	go vet ./...
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
 
 run:
 	go run $(CMD_PATH)

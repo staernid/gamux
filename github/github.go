@@ -17,6 +17,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// HTTPClient is the http.Client used for GitHub API operations, allowing mock overrides in tests.
+var HTTPClient = http.DefaultClient
+
 // UpdateGBE fetches and extracts the latest GBE fork.
 func UpdateGBE(ctx context.Context) error {
 	slog.Info("Fetching latest GBE fork from GitHub")
@@ -31,7 +34,7 @@ func UpdateGBE(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release information: %w", err)
 	}

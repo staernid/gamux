@@ -1,14 +1,10 @@
 # gamux
 
-Post-download Steam game manager for Linux (DRM removal via Goldberg Emulator, Lutris registration, Steam shortcuts).
+Post-download Steam game manager for Linux.
 
-> **Note**: Active prototyping stage. Architecture and CLI interfaces are subject to change.
+## Project Goals
 
-## Quick Start
-
-```bash
-make build   # Build binary to ./gamux
-make run     # Run binary directly
-make test    # Run unit tests
-make lint    # Run linter
-```
+- **Automated DRM Emulation**: Streamline Goldberg Steam Emulator setup for downloaded games.
+- **Ecosystem Integration**: Register games automatically with Lutris and Steam (shortcuts & grid artwork).
+- **File Safety**: Provide non-destructive setup with atomic backups, rollback support, and dry-run previews.
+- **Zero-Friction UX**: Deliver an intuitive, self-guiding CLI experience requiring minimal manual configuration.
