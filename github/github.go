@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -128,5 +129,73 @@ func UpdateGBE(ctx context.Context) error {
 	}
 
 	slog.Info("GBE fork updated successfully")
+	return nil
+}
+
+// UpdateSteamlessAssets fetches the latest release assets from steamless-rs and saves them to destDir.
+func UpdateSteamlessAssets(ctx context.Context, destDir string) error {
+	slog.Info("Fetching latest Steamless release assets from GitHub")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.SteamlessGithubAPI, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to fetch steamless release information: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch steamless release info: HTTP %s", resp.Status)
+	}
+
+	var release config.Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return fmt.Errorf("failed to decode release JSON: %w", err)
+	}
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target directory %s: %w", destDir, err)
+	}
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	for _, asset := range release.Assets {
+		asset := asset
+		g.Go(func() error {
+			destPath := filepath.Join(destDir, asset.Name)
+			slog.Info("Downloading steamless release asset", "asset", asset.Name, "url", asset.BrowserDownloadURL)
+
+			req, err := http.NewRequestWithContext(gCtx, http.MethodGet, asset.BrowserDownloadURL, nil)
+			if err != nil {
+				return err
+			}
+			resp, err := HTTPClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("failed to download asset %s: HTTP %s", asset.Name, resp.Status)
+			}
+
+			out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+
+			_, err = io.Copy(out, resp.Body)
+			return err
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed downloading steamless assets: %w", err)
+	}
+
+	slog.Info("Steamless release assets updated successfully in", "dir", destDir)
 	return nil
 }

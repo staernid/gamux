@@ -12,4 +12,8 @@ Post-download Steam game manager for Linux.
 ## Development & Releasing
 
 - **Tooling**: Run `make test`, `make lint`, and `make build` to verify changes.
+- **Updating Embedded Steamless Binaries**: To fetch and embed the latest release binaries from [`steamless-rs`](https://github.com/staernid/steamless-rs), run:
+  ```bash
+  make update-steamless && make build
+  ```
 - **Tagging & Releasing**: Version sequentially (`v1.0.104` -> `v1.0.105` -> `v1.0.106`). Create and push tags (`git tag v1.0.104 && git push origin v1.0.104`) to trigger GitHub Actions automated builds.

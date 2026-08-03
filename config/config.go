@@ -9,20 +9,24 @@ import (
 
 // Global Configuration fallback defaults
 var (
-	GbeDir        = ".local/share/gbe_fork"
-	SteamStoreAPI = "https://store.steampowered.com/api"
-	GithubAPIURL  = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
-	LutrisDir     = ".config/lutris/games"
-	SteamUserdata = ".local/share/Steam/userdata"
+	GbeDir             = ".local/share/gbe_fork"
+	SteamlessDir       = ".local/share/steamless"
+	SteamStoreAPI      = "https://store.steampowered.com/api"
+	GithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
+	SteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
+	LutrisDir          = ".config/lutris/games"
+	SteamUserdata      = ".local/share/Steam/userdata"
 )
 
 // Config holds user-configurable paths and settings for gamux.
 type Config struct {
-	GbeDir        string `json:"gbe_dir"`
-	LutrisDir     string `json:"lutris_dir"`
-	SteamUserdata string `json:"steam_userdata"`
-	SteamStoreAPI string `json:"steam_store_api"`
-	GithubAPIURL  string `json:"github_api_url"`
+	GbeDir             string `json:"gbe_dir"`
+	SteamlessDir       string `json:"steamless_dir"`
+	LutrisDir          string `json:"lutris_dir"`
+	SteamUserdata      string `json:"steam_userdata"`
+	SteamStoreAPI      string `json:"steam_store_api"`
+	GithubAPIURL       string `json:"github_api_url"`
+	SteamlessGithubAPI string `json:"steamless_github_api"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -44,6 +48,11 @@ func DefaultConfig() *Config {
 		gbePath = filepath.Join(dataHome, "gbe_fork")
 	}
 
+	steamlessPath := SteamlessDir
+	if dataHome != "" {
+		steamlessPath = filepath.Join(dataHome, "steamless")
+	}
+
 	lutrisPath := LutrisDir
 	if configHome != "" {
 		lutrisPath = filepath.Join(configHome, "lutris", "games")
@@ -55,11 +64,13 @@ func DefaultConfig() *Config {
 	}
 
 	return &Config{
-		GbeDir:        gbePath,
-		LutrisDir:     lutrisPath,
-		SteamUserdata: steamUserDataPath,
-		SteamStoreAPI: SteamStoreAPI,
-		GithubAPIURL:  GithubAPIURL,
+		GbeDir:             gbePath,
+		SteamlessDir:       steamlessPath,
+		LutrisDir:          lutrisPath,
+		SteamUserdata:      steamUserDataPath,
+		SteamStoreAPI:      SteamStoreAPI,
+		GithubAPIURL:       GithubAPIURL,
+		SteamlessGithubAPI: SteamlessGithubAPI,
 	}
 }
 

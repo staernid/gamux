@@ -12,29 +12,32 @@ import (
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/lutris"
+	"github.com/staernid/gamux/steamless"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
 // ProcessOptions holds configuration flags for processing a game directory.
 type ProcessOptions struct {
-	Path       string
-	AddLutris  bool
-	Portable   bool
-	Promote    bool
-	DryRun     bool
-	AutoYes    bool
-	WinePrefix string
-	Runner     string
+	Path        string
+	AddLutris   bool
+	Portable    bool
+	Promote     bool
+	DryRun      bool
+	AutoYes     bool
+	NoSteamless bool
+	WinePrefix  string
+	Runner      string
 }
 
 // ProcessResult summarizes the outcome of processing a game.
 type ProcessResult struct {
-	Info           *detector.GameInfo
-	LutrisAdded    bool
-	Patched        bool
-	ManifestsMoved bool
-	Errors         []string
+	Info              *detector.GameInfo
+	LutrisAdded       bool
+	Patched           bool
+	SteamlessUnpacked bool
+	ManifestsMoved    bool
+	Errors            []string
 }
 
 // GameStatus describes the current patch & integration state of a game.
@@ -94,7 +97,19 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 
 	slog.Info("Auto-detected game", "title", info.Name, "appID", info.AppID, "platform", info.Platform, "exe", info.ExePath)
 
-	// 1. Apply GBE
+	// 1. Attempt Steamless DRM Unpacking (unless --no-steamless is set)
+	if opts.NoSteamless {
+		slog.Info("Steamless DRM unpacking disabled via --no-steamless flag", "title", info.Name)
+	} else {
+		unpacked, err := steamless.UnpackExecutable(ctx, e.Config, info.GameDir, opts.DryRun)
+		if err != nil {
+			slog.Warn("Steamless unpacking error", "error", err)
+			res.Errors = append(res.Errors, fmt.Sprintf("steamless unpack: %v", err))
+		}
+		res.SteamlessUnpacked = unpacked
+	}
+
+	// 2. Apply GBE
 	if err := gbe.ApplyGBE(ctx, e.Config, info.GameDir, info.Platform, info.AppID, opts.DryRun, opts.Portable); err != nil {
 		slog.Warn("GBE application warning/error", "error", err)
 		res.Errors = append(res.Errors, fmt.Sprintf("gbe patch: %v", err))

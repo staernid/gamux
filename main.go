@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -49,132 +50,16 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOpt
 	}
 
 	return engine.ProcessOptions{
-		Path:       extractPath(c),
-		AddLutris:  addLutris,
-		Runner:     c.String("runner"),
-		WinePrefix: c.String("wine-prefix"),
-		Portable:   portable,
-		Promote:    c.Bool("promote"),
-		DryRun:     c.Bool("dry-run"),
-		AutoYes:    autoYes,
+		Path:        extractPath(c),
+		AddLutris:   addLutris,
+		Runner:      c.String("runner"),
+		WinePrefix:  c.String("wine-prefix"),
+		Portable:    portable,
+		Promote:     c.Bool("promote"),
+		DryRun:      c.Bool("dry-run"),
+		AutoYes:     autoYes,
+		NoSteamless: c.Bool("no-steamless"),
 	}
-}
-
-func runInteractiveWizard(c *cli.Context, activeConfig *config.Config) error {
-	ui.RenderHeader(Version)
-
-	options := []ui.MenuOption{
-		{Key: "1", Title: "Process a game directory (add / setup GBE + Lutris)", Description: "Full setup: detects AppID, configures Goldberg Emulator, and registers in Lutris"},
-		{Key: "2", Title: "Batch process a folder of games", Description: "Scans a parent directory containing multiple downloaded game folders"},
-		{Key: "3", Title: "Inspect game directory status", Description: "Shows AppID, platform (Linux/Windows), executable path, and backup status"},
-		{Key: "4", Title: "Rollback changes in a game directory", Description: "Restores .ORIGINAL files and removes Goldberg emulator settings"},
-		{Key: "5", Title: "Update Goldberg Emulator assets", Description: "Fetches latest Goldberg Emulator release binaries from GitHub"},
-		{Key: "6", Title: "Exit", Description: "Close gamux"},
-	}
-
-	choice := ui.RenderMenu(options)
-
-	eng := engine.New(activeConfig)
-
-	switch choice {
-	case "1":
-		targetPath := ui.PromptString("Enter path to game directory", ".")
-		status, err := eng.InspectStatus(c.Context, targetPath)
-		if err == nil {
-			ui.RenderDetectionSummary(ui.DetectionInfoSummary{
-				Name:            status.Name,
-				AppID:           status.AppID,
-				Platform:        status.Platform,
-				GameDir:         status.GameDir,
-				ExePath:         status.ExePath,
-				State:           status.State,
-				OriginalBackups: len(status.OriginalBackups),
-			})
-		}
-
-		addLutris := ui.PromptYesNoWithExplanation("Add game to Lutris library?", "Creates Lutris YAML launcher config", true)
-		portable := ui.PromptYesNoWithExplanation("Use Portable Mode (Direct DLL replacement)?", "Replaces DLL directly in game folder instead of loader flags", false)
-
-		opts := engine.ProcessOptions{
-			Path:      targetPath,
-			AddLutris: addLutris,
-			Portable:  portable,
-			Promote:   true,
-		}
-
-		ui.RenderStep(1, 1, "Processing game setup")
-		res, err := eng.ProcessGame(c.Context, opts)
-		if err != nil {
-			ui.RenderErrorHelp(err, []string{"Verify the game directory path", "Check file permissions"})
-			return err
-		}
-
-		nextSteps := []string{}
-		if addLutris {
-			nextSteps = append(nextSteps, "Launch the game via Lutris")
-		}
-		ui.RenderSuccess("Setup completed successfully for "+res.Info.Name, "", nextSteps)
-
-	case "2":
-		parentDir := ui.PromptString("Enter parent directory path containing multiple games", ".")
-		addLutris := ui.PromptYesNoWithExplanation("Add all games to Lutris?", "Creates Lutris config for each game", true)
-
-		opts := engine.ProcessOptions{
-			AddLutris: addLutris,
-			Promote:   true,
-			AutoYes:   true,
-		}
-
-		ui.RenderStep(1, 1, "Batch processing parent directory")
-		results, err := eng.BatchProcess(c.Context, parentDir, opts)
-		if err != nil {
-			ui.RenderErrorHelp(err, []string{"Ensure the parent directory exists"})
-			return err
-		}
-
-		ui.RenderSuccess(fmt.Sprintf("Batch processing complete (%d games processed)", len(results)), "", nil)
-
-	case "3":
-		targetPath := ui.PromptString("Enter path to game directory", ".")
-		status, err := eng.InspectStatus(c.Context, targetPath)
-		if err != nil {
-			ui.RenderErrorHelp(err, []string{"Verify game directory path"})
-			return err
-		}
-		ui.RenderDetectionSummary(ui.DetectionInfoSummary{
-			Name:            status.Name,
-			AppID:           status.AppID,
-			Platform:        status.Platform,
-			GameDir:         status.GameDir,
-			ExePath:         status.ExePath,
-			State:           status.State,
-			OriginalBackups: len(status.OriginalBackups),
-		})
-
-	case "4":
-		targetPath := ui.PromptString("Enter path to game directory", ".")
-		if ui.PromptYesNoWithExplanation("Confirm rollback?", "Restores .ORIGINAL files and deletes steam_settings/", true) {
-			if err := eng.Rollback(c.Context, targetPath, false); err != nil {
-				ui.RenderErrorHelp(err, []string{"Ensure files are not locked by running processes"})
-				return err
-			}
-			ui.RenderSuccess("Rollback completed successfully", "Original files have been restored.", nil)
-		}
-
-	case "5":
-		ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets")
-		if err := github.UpdateGBE(c.Context); err != nil {
-			ui.RenderErrorHelp(err, []string{"Check internet connection"})
-			return err
-		}
-		ui.RenderSuccess("Goldberg Emulator assets updated", "", nil)
-
-	case "6":
-		fmt.Println("Goodbye!")
-		os.Exit(0)
-	}
-
-	return nil
 }
 
 func main() {
@@ -182,6 +67,10 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
+
+	cli.HelpPrinter = func(w io.Writer, templ string, data interface{}) {
+		ui.RenderAppHelp(Version)
+	}
 
 	var activeConfig *config.Config
 
@@ -201,8 +90,8 @@ func main() {
 			return err
 		},
 		Action: func(c *cli.Context) error {
-			// If run without subcommands, launch the interactive setup wizard
-			return runInteractiveWizard(c, activeConfig)
+			ui.RenderAppHelp(Version)
+			return nil
 		},
 		Commands: []*cli.Command{
 			{
@@ -215,6 +104,7 @@ func main() {
 					&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
+					&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
 				},
 				Action: func(c *cli.Context) error {
 					path := extractPath(c)
@@ -260,6 +150,7 @@ func main() {
 					&cli.BoolFlag{Name: "dry-run", Usage: "Do not move or write files, just show what would be done"},
 					&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
+					&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
 				},
 				Action: func(c *cli.Context) error {
 					opts := extractProcessOptions(c, false)
@@ -285,6 +176,7 @@ func main() {
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folders to top level"},
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 					&cli.BoolFlag{Name: "json", Usage: "Output batch results as JSON"},
+					&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
 				},
 				Action: func(c *cli.Context) error {
 					if c.Args().Len() < 1 {
@@ -391,6 +283,7 @@ func main() {
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 					&cli.BoolFlag{Name: "portable", Usage: "Use direct DLL replacement instead of configuring loader env vars"},
 					&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Steam] manifests"},
+					&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
 				},
 				Action: func(c *cli.Context) error {
 					opts := extractProcessOptions(c, false)

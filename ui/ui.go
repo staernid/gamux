@@ -80,42 +80,40 @@ func RenderHeader(version string) {
 	fmt.Println()
 }
 
-// MenuOption represents an item in the interactive menu.
-type MenuOption struct {
-	Key         string
-	Title       string
-	Description string
-}
+// RenderAppHelp displays a friendly, hand-holdy quickstart guide and command reference.
+func RenderAppHelp(version string) {
+	RenderHeader(version)
 
-// RenderMenu presents an interactive menu and returns the selected option key.
-func RenderMenu(options []MenuOption) string {
-	fmt.Println(bold("What would you like to do?"))
+	fmt.Println(bold("🚀 QUICK START EXAMPLES"))
+	fmt.Println(dim("------------------------------------------------------------------------"))
+	fmt.Printf("  %-30s %s\n", cyan("gamux add ./MyGame"), dim("# Complete setup (Steamless + GBE + Lutris)"))
+	fmt.Printf("  %-30s %s\n", cyan("gamux batch ~/Downloads"), dim("# Batch setup all games in a directory"))
+	fmt.Printf("  %-30s %s\n", cyan("gamux status ./MyGame"), dim("# Inspect AppID, platform, and patch state"))
+	fmt.Printf("  %-30s %s\n", cyan("gamux rollback ./MyGame"), dim("# Restore original binaries & remove emulator settings"))
+	fmt.Println(dim("------------------------------------------------------------------------"))
 	fmt.Println()
 
-	for _, opt := range options {
-		fmt.Printf("  [%s] %s\n", cyan(opt.Key), bold(opt.Title))
-		if opt.Description != "" {
-			fmt.Printf("      %s\n", dim(opt.Description))
-		}
-	}
+	fmt.Println(bold("📋 AVAILABLE COMMANDS"))
+	fmt.Println(dim("------------------------------------------------------------------------"))
+	fmt.Printf("  %-18s %s\n", cyan("add <path>"), "Full setup (detect AppID, unpack DRM, patch GBE, register Lutris)")
+	fmt.Printf("  %-18s %s\n", cyan("apply <path>"), "Apply Goldberg Emulator DLLs/SO and configure DLCs")
+	fmt.Printf("  %-18s %s\n", cyan("batch <dir>"), "Scan parent folder containing multiple games and setup each")
+	fmt.Printf("  %-18s %s\n", cyan("status <path>"), "Inspect AppID, platform (Linux/Windows PE), and patch state")
+	fmt.Printf("  %-18s %s\n", cyan("rollback <path>"), "Restore original files (.ORIGINAL) and delete generated settings")
+	fmt.Printf("  %-18s %s\n", cyan("update"), "Update Goldberg Emulator & Steamless release assets")
+	fmt.Printf("  %-18s %s\n", cyan("lutris-add <path>"), "Register game in Lutris launcher")
+	fmt.Println(dim("------------------------------------------------------------------------"))
 	fmt.Println()
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print(bold("Select an option: "))
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return ""
-		}
-		input = strings.TrimSpace(input)
-
-		for _, opt := range options {
-			if strings.EqualFold(input, opt.Key) {
-				return opt.Key
-			}
-		}
-		fmt.Println(yellow("Invalid selection. Please try again."))
-	}
+	fmt.Println(bold("⚙️ KEY FLAGS & OPTIONS"))
+	fmt.Println(dim("------------------------------------------------------------------------"))
+	fmt.Printf("  %-22s %s\n", yellow("--no-steamless"), "Skip automatic Steamless SteamStub DRM executable unpacking")
+	fmt.Printf("  %-22s %s\n", yellow("--portable"), "Perform direct DLL/SO file replacement instead of loader mode")
+	fmt.Printf("  %-22s %s\n", yellow("--lutris"), "Register game in Lutris library configuration")
+	fmt.Printf("  %-22s %s\n", yellow("--dry-run"), "Preview actions without moving or modifying files")
+	fmt.Printf("  %-22s %s\n", yellow("--yes, -y"), "Non-interactive mode (automatic yes to prompts)")
+	fmt.Println(dim("------------------------------------------------------------------------"))
+	fmt.Println()
 }
 
 // PromptString asks for text input with a default value.
