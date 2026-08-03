@@ -2,12 +2,15 @@ BINARY_NAME=gamux
 CMD_PATH=.
 PREFIX ?= ~/.local
 
-.PHONY: all build clean test lint run install uninstall
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS = -s -w -X main.Version=$(VERSION)
+
+.PHONY: all build clean test lint run install uninstall tidy
 
 all: test build
 
 build:
-	go build -o $(BINARY_NAME) $(CMD_PATH)
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) $(CMD_PATH)
 
 clean:
 	go clean
@@ -21,7 +24,7 @@ lint:
 	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
 
 run:
-	go run $(CMD_PATH)
+	go run -ldflags "$(LDFLAGS)" $(CMD_PATH)
 
 tidy:
 	go mod tidy

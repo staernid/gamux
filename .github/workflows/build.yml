@@ -32,7 +32,7 @@ jobs:
     - name: Build for Linux (${{ matrix.goarch }})
       run: |
         go mod tidy
-        GOOS=linux GOARCH=${{ matrix.goarch }} go build -o gamux_linux_${{ matrix.goarch }} .
+        GOOS=linux GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w -X main.Version=${{ github.ref_name }}" -o gamux_linux_${{ matrix.goarch }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

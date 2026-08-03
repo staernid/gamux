@@ -14,8 +14,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// Version of the gamux application
-const Version = "v0.3.1"
+// Version of the gamux application (set at build time via -ldflags)
+var Version = "dev"
 
 func extractPath(c *cli.Context) string {
 	if c.Args().Len() >= 1 {
