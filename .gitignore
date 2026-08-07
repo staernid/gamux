@@ -10,8 +10,8 @@
 /gbe_fork_helper
 /gamux
 
-# Un-ignore embedded Steamless release binaries
-!steamless/bin/*
+# Steamless binaries (downloaded via `make update-steamless`)
+steamless/bin/
 
 # Test binary, built with `go test -c`
 *.test

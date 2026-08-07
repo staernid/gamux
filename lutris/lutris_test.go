@@ -403,3 +403,56 @@ func TestWriteInstaller(t *testing.T) {
 		t.Fatalf("expected installer file %s to exist", path)
 	}
 }
+
+func TestGenerate_RunnerInYAML(t *testing.T) {
+	out, err := Generate(Config{
+		Name:     "Test Game",
+		GamePath: "/tmp/game.exe",
+		Runner:   "wine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var d doc
+	if err := yaml.Unmarshal(out, &d); err != nil {
+		t.Fatal(err)
+	}
+
+	if d.Runner != "wine" {
+		t.Errorf("runner = %q, want wine", d.Runner)
+	}
+}
+
+func TestCreateXDGShortcuts(t *testing.T) {
+	tmpHome := mustTempDir(t)
+	t.Setenv("HOME", tmpHome)
+
+	cfg := Config{
+		Name:                  "Approximately Up",
+		Slug:                  "approximately-up",
+		CreateMenuShortcut:    true,
+		CreateDesktopShortcut: true,
+	}
+
+	if err := CreateXDGShortcuts(cfg, "approximately-up"); err != nil {
+		t.Fatalf("CreateXDGShortcuts failed: %v", err)
+	}
+
+	menuPath := filepath.Join(tmpHome, ".local", "share", "applications", "net.lutris.approximately-up.desktop")
+	desktopPath := filepath.Join(tmpHome, "Desktop", "net.lutris.approximately-up.desktop")
+
+	for _, path := range []string{menuPath, desktopPath} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read shortcut file %s: %v", path, err)
+		}
+		content := string(data)
+		if !strings.Contains(content, "Name=Approximately Up") {
+			t.Errorf("%s missing Name", path)
+		}
+		if !strings.Contains(content, "Exec=env LUTRIS_SKIP_INIT=1 lutris lutris:rungame/approximately-up") {
+			t.Errorf("%s missing Exec line", path)
+		}
+	}
+}

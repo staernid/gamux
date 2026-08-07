@@ -151,11 +151,13 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		}
 
 		lcfg := lutris.Config{
-			Name:       info.Name,
-			GamePath:   info.ExePath,
-			Runner:     runner,
-			PrefixPath: opts.WinePrefix,
-			Env:        env,
+			Name:                  info.Name,
+			GamePath:              info.ExePath,
+			Runner:                runner,
+			PrefixPath:            opts.WinePrefix,
+			Env:                   env,
+			CreateMenuShortcut:    false,
+			CreateDesktopShortcut: false,
 		}
 
 		if opts.DryRun {

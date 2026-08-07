@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -61,16 +62,22 @@ type Config struct {
 
 	// Year is an optional release year string.
 	Year string
+
+	// CreateDesktopShortcut creates a desktop launcher (~/Desktop/net.lutris.<slug>.desktop).
+	CreateDesktopShortcut bool
+
+	// CreateMenuShortcut creates an application menu launcher (~/.local/share/applications/net.lutris.<slug>.desktop).
+	CreateMenuShortcut bool
 }
 
 // WineConfig groups Wine/Proton toggles and the runner version string.
 type WineConfig struct {
-	Battleye bool   `yaml:"battleye,omitempty"`
-	EAC      bool   `yaml:"eac,omitempty"`
-	FSR      bool   `yaml:"fsr,omitempty"`
-	VKD3D    bool   `yaml:"vkd3d,omitempty"`
-	DXVKNVAPI bool  `yaml:"dxvk_nvapi,omitempty"`
-	Version  string `yaml:"version,omitempty"`
+	Battleye  bool   `yaml:"battleye,omitempty"`
+	EAC       bool   `yaml:"eac,omitempty"`
+	FSR       bool   `yaml:"fsr,omitempty"`
+	VKD3D     bool   `yaml:"vkd3d,omitempty"`
+	DXVKNVAPI bool   `yaml:"dxvk_nvapi,omitempty"`
+	Version   string `yaml:"version,omitempty"`
 }
 
 // SystemConfig groups optional system-level overrides.
@@ -89,6 +96,7 @@ type doc struct {
 	GameSlug string         `yaml:"game_slug,omitempty"`
 	Name     string         `yaml:"name"`
 	Slug     string         `yaml:"slug"`
+	Runner   string         `yaml:"runner,omitempty"`
 	Version  string         `yaml:"version,omitempty"`
 	Year     string         `yaml:"year,omitempty"`
 	Wine     *wineSection   `yaml:"wine,omitempty"`
@@ -169,10 +177,10 @@ func GenerateInstaller(cfg Config) ([]byte, error) {
 }
 
 // Write generates the YAML and writes it to the given directory (which
-// should be ~/.config/lutris/games/ or equivalent). The filename is
-// derived from the slug and the output is created with 0644 permissions.
-// It also updates existing matching Lutris config files and registers/updates
-// the game in Lutris's SQLite database (pdev.db) if present.
+// should be ~/.config/lutris/games/ or equivalent). The filename stem matches
+// Lutris's expected timestamped configpath format (<slug>-<timestamp>.yml).
+// It also updates existing matching Lutris config files, registers/updates
+// the game in Lutris's SQLite database (pga.db), and generates desktop/menu shortcuts.
 func Write(cfg Config, dir string) error {
 	out, err := Generate(cfg)
 	if err != nil {
@@ -188,15 +196,21 @@ func Write(cfg Config, dir string) error {
 		slug = Slugify(cfg.Name)
 	}
 
-	// 1. Primary path: <slug>.yml
-	fname := slug + ".yml"
-	primaryPath := filepath.Join(dir, fname)
+	timestamp := time.Now().Unix()
+	configpath := fmt.Sprintf("%s-%d", slug, timestamp)
+
+	// 1. Primary path: <configpath>.yml
+	primaryPath := filepath.Join(dir, configpath+".yml")
 	if err := os.WriteFile(primaryPath, out, 0644); err != nil {
 		return fmt.Errorf("lutris: write file %s: %w", primaryPath, err)
 	}
 
-	// 2. Overwrite any existing Lutris game files in dir matching <slug>*.yml or short slug prefix
-	// so existing Lutris UI entries update immediately without needing re-import.
+	// 2. Also write <slug>.yml for fallback compatibility
+	fallbackPath := filepath.Join(dir, slug+".yml")
+	_ = os.WriteFile(fallbackPath, out, 0644)
+
+	// 3. Overwrite any existing Lutris game files in dir matching <slug>*.yml
+	// so existing Lutris UI entries update immediately.
 	shortPrefix := strings.Split(slug, "-")[0]
 	if entries, err := os.ReadDir(dir); err == nil {
 		for _, e := range entries {
@@ -210,32 +224,45 @@ func Write(cfg Config, dir string) error {
 		}
 	}
 
-	// 3. Attempt to register in Lutris's SQLite database (non-fatal if database or sqlite3 not present)
-	_ = updateLutrisDB(cfg)
+	// 4. Attempt to register in Lutris's SQLite database (non-fatal if database or sqlite3 not present)
+	_ = updateLutrisDB(cfg, configpath)
+
+	// 5. Create XDG Desktop and/or Application Menu shortcuts if requested
+	_ = CreateXDGShortcuts(cfg, slug)
 
 	return nil
 }
 
-func updateLutrisDB(cfg Config) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
+func sqlQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
 
-	dbLocations := []string{
-		filepath.Join(home, ".local", "share", "lutris", "pga.db"),
-		filepath.Join(home, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db"),
-	}
+func updateLutrisDB(cfg Config, configpath string) error {
+	return updateLutrisDBWithPath(cfg, configpath, "")
+}
 
-	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
-		dbLocations = append([]string{filepath.Join(dataHome, "lutris", "pga.db")}, dbLocations...)
-	}
+func updateLutrisDBWithPath(cfg Config, configpath string, overrideDbPath string) error {
+	dbPath := overrideDbPath
+	if dbPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
 
-	var dbPath string
-	for _, loc := range dbLocations {
-		if _, err := os.Stat(loc); err == nil {
-			dbPath = loc
-			break
+		dbLocations := []string{
+			filepath.Join(home, ".local", "share", "lutris", "pga.db"),
+			filepath.Join(home, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db"),
+		}
+
+		if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
+			dbLocations = append([]string{filepath.Join(dataHome, "lutris", "pga.db")}, dbLocations...)
+		}
+
+		for _, loc := range dbLocations {
+			if _, err := os.Stat(loc); err == nil {
+				dbPath = loc
+				break
+			}
 		}
 	}
 
@@ -253,14 +280,77 @@ func updateLutrisDB(cfg Config) error {
 		runner = "wine"
 	}
 
-	gameDir := filepath.Dir(cfg.GamePath)
+	platform := "Windows"
+	if runner == "linux" {
+		platform = "Linux"
+	}
 
-	query := fmt.Sprintf(`DELETE FROM games WHERE slug = %q;
-INSERT INTO games (name, slug, runner, executable, directory, installed, configpath)
-VALUES (%q, %q, %q, %q, %q, 1, %q);`, slug, cfg.Name, slug, runner, cfg.GamePath, gameDir, slug)
+	gameDir := filepath.Dir(cfg.GamePath)
+	now := time.Now().Unix()
+
+	// Check if game already exists in pga.db
+	checkQuery := fmt.Sprintf(`SELECT COUNT(*) FROM games WHERE slug = %s;`, sqlQuote(slug))
+	cmdCheck := exec.Command("sqlite3", dbPath, checkQuery)
+	out, err := cmdCheck.Output()
+
+	exists := false
+	if err == nil && strings.TrimSpace(string(out)) != "0" {
+		exists = true
+	}
+
+	var query string
+	if exists {
+		query = fmt.Sprintf(`UPDATE games SET name = %s, runner = %s, platform = %s, executable = %s, directory = %s, installed = 1, installed_at = %d, configpath = %s WHERE slug = %s;`,
+			sqlQuote(cfg.Name), sqlQuote(runner), sqlQuote(platform), sqlQuote(cfg.GamePath), sqlQuote(gameDir), now, sqlQuote(configpath), sqlQuote(slug))
+	} else {
+		query = fmt.Sprintf(`INSERT INTO games (name, slug, runner, platform, executable, directory, installed, installed_at, configpath) VALUES (%s, %s, %s, %s, %s, %s, 1, %d, %s);`,
+			sqlQuote(cfg.Name), sqlQuote(slug), sqlQuote(runner), sqlQuote(platform), sqlQuote(cfg.GamePath), sqlQuote(gameDir), now, sqlQuote(configpath))
+	}
 
 	cmd := exec.Command("sqlite3", dbPath, query)
 	return cmd.Run()
+}
+
+// CreateXDGShortcuts creates application menu (.local/share/applications) and/or desktop (~/Desktop) launcher files.
+func CreateXDGShortcuts(cfg Config, slug string) error {
+	if !cfg.CreateMenuShortcut && !cfg.CreateDesktopShortcut {
+		return nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	content := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=%s
+Icon=lutris_%s
+Exec=env LUTRIS_SKIP_INIT=1 lutris lutris:rungame/%s
+Categories=Game;
+`, cfg.Name, slug, slug)
+
+	filename := fmt.Sprintf("net.lutris.%s.desktop", slug)
+
+	if cfg.CreateMenuShortcut {
+		appsDir := filepath.Join(home, ".local", "share", "applications")
+		_ = os.MkdirAll(appsDir, 0755)
+		menuPath := filepath.Join(appsDir, filename)
+		if err := os.WriteFile(menuPath, []byte(content), 0755); err != nil {
+			return fmt.Errorf("lutris: write menu shortcut %s: %w", menuPath, err)
+		}
+	}
+
+	if cfg.CreateDesktopShortcut {
+		desktopDir := filepath.Join(home, "Desktop")
+		_ = os.MkdirAll(desktopDir, 0755)
+		desktopPath := filepath.Join(desktopDir, filename)
+		if err := os.WriteFile(desktopPath, []byte(content), 0755); err != nil {
+			return fmt.Errorf("lutris: write desktop shortcut %s: %w", desktopPath, err)
+		}
+	}
+
+	return nil
 }
 
 // WriteInstaller generates the installer YAML and writes it to path.
@@ -421,6 +511,7 @@ func buildDoc(cfg Config) doc {
 		GameSlug: slug,
 		Name:     cfg.Name,
 		Slug:     slug,
+		Runner:   runner,
 		Version:  cfg.Version,
 		Year:     cfg.Year,
 		Wine:     w,
