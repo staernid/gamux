@@ -10,7 +10,7 @@ import (
 )
 
 func TestApplyGBE_InvalidPlatform(t *testing.T) {
-	err := ApplyGBE(context.Background(), config.DefaultConfig(), ".", "invalid_platform", "123", true, false)
+	err := ApplyGBE(context.Background(), config.DefaultConfig(), ".", "invalid_platform", "123", true, false, "", "")
 	if err == nil {
 		t.Fatal("expected error for invalid platform")
 	}
@@ -45,7 +45,9 @@ func TestApplyGBE_ExplicitTargetDirectory(t *testing.T) {
 	}
 
 	// Run ApplyGBE targeting gameDir in portable mode with dry-run
-	err := ApplyGBE(context.Background(), cfg, gameDir, "linux", "12345", true, true)
+	err := ApplyGBE(context.Background(), cfg, gameDir, "linux", "12345", true, true, "", "")
+
+
 	if err != nil {
 		t.Fatalf("ApplyGBE failed: %v", err)
 	}

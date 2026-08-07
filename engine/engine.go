@@ -97,6 +97,22 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 
 	slog.Info("Auto-detected game", "title", info.Name, "appID", info.AppID, "platform", info.Platform, "exe", info.ExePath)
 
+	// If WinePrefix is not specified, attempt to auto-detect from existing Lutris configuration
+	if opts.WinePrefix == "" {
+		slug := lutris.Slugify(info.Name)
+		targetDir := e.Config.LutrisDir
+		if !filepath.IsAbs(targetDir) {
+			home, err := os.UserHomeDir()
+			if err == nil {
+				targetDir = filepath.Join(home, targetDir)
+			}
+		}
+		if existingPrefix := lutris.GetExistingWinePrefix(slug, targetDir); existingPrefix != "" {
+			opts.WinePrefix = existingPrefix
+			slog.Info("Auto-detected existing Lutris Wine prefix", "prefix", existingPrefix)
+		}
+	}
+
 	// 1. Attempt Steamless DRM Unpacking (unless --no-steamless is set)
 	if opts.NoSteamless {
 		slog.Info("Steamless DRM unpacking disabled via --no-steamless flag", "title", info.Name)
@@ -110,12 +126,14 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 	}
 
 	// 2. Apply GBE
-	if err := gbe.ApplyGBE(ctx, e.Config, info.GameDir, info.Platform, info.AppID, opts.DryRun, opts.Portable); err != nil {
+	if err := gbe.ApplyGBE(ctx, e.Config, info.GameDir, info.Platform, info.AppID, opts.DryRun, opts.Portable, opts.WinePrefix, info.ExePath); err != nil {
 		slog.Warn("GBE application warning/error", "error", err)
 		res.Errors = append(res.Errors, fmt.Sprintf("gbe patch: %v", err))
 	} else {
 		res.Patched = true
 	}
+
+
 
 	// 2. Add to Lutris
 	if opts.AddLutris {
@@ -135,6 +153,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 			}
 		}
 
+		gamePath := info.ExePath
 		var env map[string]string
 		if !opts.Portable {
 			gbeBase := e.Config.GbeDir
@@ -146,19 +165,25 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 			if runner == "linux" {
 				env["LD_PRELOAD"] = filepath.Join(gbeBase, "linux_release", "experimental", "x64", "steamclient.so")
 			} else {
-				env["SteamClient64Dll"] = filepath.Join(gbeBase, "win_release", "experimental", "x64", "steamclient64.dll")
+				loaderExeName := "steamclient_loader_x64.exe"
+				if info.Platform == "win32" {
+					loaderExeName = "steamclient_loader_x86.exe"
+				}
+				gamePath = filepath.Join(info.GameDir, loaderExeName)
+				env["PROTON_DISABLE_LSTEAMCLIENT"] = "1"
 			}
 		}
 
 		lcfg := lutris.Config{
 			Name:                  info.Name,
-			GamePath:              info.ExePath,
+			GamePath:              gamePath,
 			Runner:                runner,
 			PrefixPath:            opts.WinePrefix,
 			Env:                   env,
 			CreateMenuShortcut:    false,
 			CreateDesktopShortcut: false,
 		}
+
 
 		if opts.DryRun {
 			slog.Info("[DRY RUN] Would write Lutris config & register in database", "name", info.Name)
@@ -261,9 +286,10 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 		status.SettingsDirExists = true
 	}
 
+	coldClientIni := filepath.Join(info.GameDir, "ColdClientLoader.ini")
 	if len(status.OriginalBackups) > 0 {
 		status.State = "Portable-Patched"
-	} else if status.SettingsDirExists || status.SteamAppIDTxtFound {
+	} else if util.FileExists(coldClientIni) || status.SettingsDirExists || status.SteamAppIDTxtFound {
 		status.State = "Loader-Configured"
 	}
 
@@ -310,6 +336,30 @@ func (e *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) e
 		return fmt.Errorf("walk dir during rollback: %w", err)
 	}
 
+	// Clean up loader files and configurations
+	loaderFiles := []string{
+		"ColdClientLoader.ini",
+		"steamclient_loader_x64.exe",
+		"steamclient_loader_x86.exe",
+		"steamclient64.dll",
+		"steamclient.dll",
+		"GameOverlayRenderer64.dll",
+		"GameOverlayRenderer.dll",
+		"steam_interfaces.txt",
+	}
+
+	for _, fname := range loaderFiles {
+		p := filepath.Join(info.GameDir, fname)
+		if util.FileExists(p) {
+			if dryRun {
+				slog.Info("[DRY RUN] Would remove loader file", "path", p)
+			} else {
+				_ = os.Remove(p)
+				slog.Info("Removed loader file", "path", p)
+			}
+		}
+	}
+
 	steamSettingsDir := filepath.Join(info.GameDir, "steam_settings")
 	if _, err := os.Stat(steamSettingsDir); err == nil {
 		if dryRun {
@@ -321,6 +371,7 @@ func (e *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) e
 		}
 	}
 
+
 	appIDTxt := filepath.Join(info.GameDir, "steam_appid.txt")
 	if util.FileExists(appIDTxt) {
 		if dryRun {
@@ -331,6 +382,25 @@ func (e *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) e
 		}
 	}
 
+	// Clean up Lutris integration if present
+	slug := lutris.Slugify(info.Name)
+	targetDir := e.Config.LutrisDir
+	if !filepath.IsAbs(targetDir) {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			targetDir = filepath.Join(home, targetDir)
+		}
+	}
+
+	if dryRun {
+		slog.Info("[DRY RUN] Would unregister game from Lutris and clean up Lutris configs", "slug", slug)
+	} else {
+		if err := lutris.UnregisterLutris(slug, targetDir); err == nil {
+			slog.Info("Unregistered game from Lutris and cleaned up Lutris configs/shortcuts", "slug", slug)
+		}
+	}
+
 	slog.Info("Rollback completed", "restoredFiles", restoredCount)
 	return nil
 }
+

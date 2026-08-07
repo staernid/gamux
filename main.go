@@ -44,10 +44,11 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOpt
 	if !c.IsSet("portable") && promptIfUnset && !autoYes {
 		portable = ui.PromptYesNoWithExplanation(
 			"Use Portable Mode (Direct DLL/SO replacement)?",
-			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default mode uses environment loader flags.",
+			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
 			false,
 		)
 	}
+
 
 	return engine.ProcessOptions{
 		Path:        extractPath(c),

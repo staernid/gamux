@@ -196,8 +196,12 @@ func Write(cfg Config, dir string) error {
 		slug = Slugify(cfg.Name)
 	}
 
-	timestamp := time.Now().Unix()
-	configpath := fmt.Sprintf("%s-%d", slug, timestamp)
+	// Reuse existing configpath if already present in pga.db or games dir
+	configpath := GetExistingConfigPath(slug, dir, "")
+	if configpath == "" {
+		timestamp := time.Now().Unix()
+		configpath = fmt.Sprintf("%s-%d", slug, timestamp)
+	}
 
 	// 1. Primary path: <configpath>.yml
 	primaryPath := filepath.Join(dir, configpath+".yml")
@@ -210,13 +214,11 @@ func Write(cfg Config, dir string) error {
 	_ = os.WriteFile(fallbackPath, out, 0644)
 
 	// 3. Overwrite any existing Lutris game files in dir matching <slug>*.yml
-	// so existing Lutris UI entries update immediately.
-	shortPrefix := strings.Split(slug, "-")[0]
 	if entries, err := os.ReadDir(dir); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
 				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
-				if strings.HasPrefix(nameNoExt, slug) || (len(shortPrefix) >= 4 && strings.HasPrefix(nameNoExt, shortPrefix)) {
+				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
 					targetPath := filepath.Join(dir, e.Name())
 					_ = os.WriteFile(targetPath, out, 0644)
 				}
@@ -237,38 +239,125 @@ func sqlQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
+func findLutrisDBPath(overrideDbPath string) string {
+	if overrideDbPath != "" {
+		return overrideDbPath
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	dbLocations := []string{
+		filepath.Join(home, ".local", "share", "lutris", "pga.db"),
+		filepath.Join(home, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db"),
+	}
+
+	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
+		dbLocations = append([]string{filepath.Join(dataHome, "lutris", "pga.db")}, dbLocations...)
+	}
+
+	for _, loc := range dbLocations {
+		if _, err := os.Stat(loc); err == nil {
+			return loc
+		}
+	}
+	return ""
+}
+
+// GetExistingConfigPath retrieves an existing configpath for a slug from pga.db or lutris games directory.
+func GetExistingConfigPath(slug, dir, overrideDbPath string) string {
+	dbPath := findLutrisDBPath(overrideDbPath)
+	if dbPath != "" {
+		query := fmt.Sprintf(`SELECT configpath FROM games WHERE slug = %s LIMIT 1;`, sqlQuote(slug))
+		cmd := exec.Command("sqlite3", dbPath, query)
+		if out, err := cmd.Output(); err == nil {
+			cp := strings.TrimSpace(string(out))
+			if cp != "" {
+				return cp
+			}
+		}
+	}
+
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
+				if strings.HasPrefix(nameNoExt, slug+"-") {
+					return nameNoExt
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// GetExistingWinePrefix attempts to read the Wine prefix for a game from existing Lutris YAML configs.
+func GetExistingWinePrefix(slug, dir string) string {
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
+				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
+					data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+					if err == nil {
+						var d doc
+						if err := yaml.Unmarshal(data, &d); err == nil {
+							if d.Game.Prefix != "" {
+								return d.Game.Prefix
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// UnregisterLutris removes all Lutris YAML config files, shortcuts, and pga.db database records for a slug.
+func UnregisterLutris(slug, dir string) error {
+	// 1. Remove YAML files
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
+				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
+					_ = os.Remove(filepath.Join(dir, e.Name()))
+				}
+			}
+		}
+	}
+
+	// 2. Remove Desktop & Menu shortcuts
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		_ = os.Remove(filepath.Join(home, ".local", "share", "applications", "net.lutris."+slug+".desktop"))
+		_ = os.Remove(filepath.Join(home, "Desktop", "net.lutris."+slug+".desktop"))
+	}
+
+	// 3. Remove from pga.db
+	dbPath := findLutrisDBPath("")
+	if dbPath != "" {
+		query := fmt.Sprintf(`DELETE FROM games WHERE slug = %s;`, sqlQuote(slug))
+		cmd := exec.Command("sqlite3", dbPath, query)
+		_ = cmd.Run()
+	}
+
+	return nil
+}
+
 func updateLutrisDB(cfg Config, configpath string) error {
 	return updateLutrisDBWithPath(cfg, configpath, "")
 }
 
 func updateLutrisDBWithPath(cfg Config, configpath string, overrideDbPath string) error {
-	dbPath := overrideDbPath
-	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-
-		dbLocations := []string{
-			filepath.Join(home, ".local", "share", "lutris", "pga.db"),
-			filepath.Join(home, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db"),
-		}
-
-		if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
-			dbLocations = append([]string{filepath.Join(dataHome, "lutris", "pga.db")}, dbLocations...)
-		}
-
-		for _, loc := range dbLocations {
-			if _, err := os.Stat(loc); err == nil {
-				dbPath = loc
-				break
-			}
-		}
-	}
-
+	dbPath := findLutrisDBPath(overrideDbPath)
 	if dbPath == "" {
 		return nil
 	}
+
 
 	slug := strings.TrimSpace(cfg.Slug)
 	if slug == "" {
