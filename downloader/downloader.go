@@ -17,13 +17,16 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/staernid/gamux/manifest"
+	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
 	"github.com/ulikunitz/xz/lzma"
 	"golang.org/x/sync/errgroup"
 )
+
 
 // HTTPClient allows injecting custom HTTP clients for testing.
 var HTTPClient = http.DefaultClient
@@ -36,7 +39,9 @@ type DownloadOptions struct {
 	Platform    string // "win64", "linux", "all"
 	DryRun      bool
 	WorkerLimit int
+	AuditTrace  []string
 }
+
 
 // Result holds the outcome summary of a download/update operation.
 type Result struct {
@@ -125,6 +130,25 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		}
 	}
 
+	if len(m.Files) == 0 {
+		trace := opts.AuditTrace
+		manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
+		if entries, err := os.ReadDir(manifestsDir); err == nil {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d files found, 0 valid .manifest file entries", manifestsDir, len(entries)))
+		} else {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
+		}
+
+		traceStr := ""
+		if len(trace) > 0 {
+			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
+		}
+
+		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", opts.AppID, traceStr)
+	}
+
+
+
 	workerLimit := opts.WorkerLimit
 	if workerLimit <= 0 {
 		workerLimit = 10
@@ -180,15 +204,24 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(workerLimit)
 
+	var processedCount int32
+	totalFiles := len(m.Files)
+
 	for _, fileEntry := range m.Files {
 		entry := fileEntry
 		filePath := filepath.Join(absTargetDir, manifest.NormalizePath(entry.Path))
 
 		g.Go(func() error {
+			curr := atomic.AddInt32(&processedCount, 1)
+			if !opts.DryRun {
+				ui.RenderProgress(int(curr), totalFiles, entry.Path)
+			}
+
 			// Skip directory entries in download loop
 			if entry.Size == 0 || (entry.Flags&0x40) != 0 {
 				return nil
 			}
+
 
 			// Filter out mismatched platform files if specific platform selected
 			normPath := strings.ToLower(entry.Path)
@@ -215,27 +248,27 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			// Check if file exists and hash matches
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 				if uint64(info.Size()) != entry.Size {
-					slog.Info("File size mismatch, needs update", "path", filePath, "localSize", info.Size(), "expectedSize", entry.Size)
+					slog.Debug("File size mismatch, needs update", "path", filePath, "localSize", info.Size(), "expectedSize", entry.Size)
 					needsDownload = true
 				} else if entry.SHA1 != "" {
 					localHash, err := util.GetSHA1Hash(filePath)
 					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
-						slog.Info("File hash mismatch, needs update", "path", filePath)
+						slog.Debug("File hash mismatch, needs update", "path", filePath)
 						needsDownload = true
 					}
 				}
 			} else {
-				slog.Info("New file, needs download", "path", filePath)
+				slog.Debug("New file, needs download", "path", filePath)
 				needsDownload = true
 			}
 
 			if !needsDownload {
-				slog.Info("File is up-to-date", "path", filePath)
+				slog.Debug("File is up-to-date", "path", filePath)
 				return nil
 			}
 
 			if opts.DryRun {
-				slog.Info("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
+				slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
 				result.UpdatedFiles++
 				return nil
 			}
@@ -287,27 +320,32 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 				f.Close()
 			}
 
-			slog.Info("Successfully updated file", "path", filePath)
+			slog.Debug("Successfully updated file", "path", filePath)
 			result.UpdatedFiles++
 			return nil
 		})
 	}
 
 	if err := g.Wait(); err != nil {
+		ui.ClearProgress()
 		return nil, fmt.Errorf("download execution failed: %w", err)
 	}
+
+	ui.ClearProgress()
+
 
 	// Remove checkpoint file on 100% successful completion
 	if !opts.DryRun {
 		_ = os.Remove(checkpointFile)
 	}
 
-	slog.Info("Direct game download/update completed",
+	slog.Debug("Direct game download/update completed",
 		"totalFiles", result.TotalFiles,
 		"updatedFiles", result.UpdatedFiles,
 	)
 
 	return result, nil
+
 }
 
 func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {

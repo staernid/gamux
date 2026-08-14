@@ -110,3 +110,15 @@ func TestManifest_Helpers(t *testing.T) {
 		t.Errorf("expected entry size 1000, got %d", entry.Size)
 	}
 }
+
+func TestScanUntrackedFiles_NoManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	count, untracked, err := ScanUntrackedFiles(tmpDir, 12345)
+	if err != nil {
+		t.Fatalf("ScanUntrackedFiles failed: %v", err)
+	}
+	if count != 0 || len(untracked) != 0 {
+		t.Errorf("expected 0 files, got count %d, untracked %d", count, len(untracked))
+	}
+}
+

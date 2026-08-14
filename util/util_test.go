@@ -212,3 +212,26 @@ func TestSanitizeFilename(t *testing.T) {
 		}
 	}
 }
+
+func TestSanitizeInstallDir(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"The Witcher® 3: Wild Hunt", "The Witcher 3 Wild Hunt"},
+		{"DARK SOULS™ III", "DARK SOULS III"},
+		{"Cyberpunk 2077", "Cyberpunk 2077"},
+		{"Stationeers: Space & Survival", "Stationeers Space & Survival"},
+		{"Game/Title\\Test?", "GameTitleTest"},
+		{"   ", "Game"},
+		{"Game Name...", "Game Name"},
+	}
+
+	for _, tt := range tests {
+		res := SanitizeInstallDir(tt.input)
+		if res != tt.expected {
+			t.Errorf("SanitizeInstallDir(%q) = %q, expected %q", tt.input, res, tt.expected)
+		}
+	}
+}
+

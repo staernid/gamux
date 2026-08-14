@@ -2,9 +2,11 @@ package manifest
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
+
 
 // ChunkInfo represents a single file chunk in a Steam manifest.
 type ChunkInfo struct {
@@ -71,3 +73,124 @@ func (m *Manifest) FindFile(relativePath string) (*ManifestFileEntry, error) {
 	}
 	return nil, fmt.Errorf("file %q not found in manifest", relativePath)
 }
+
+
+// ScanUntrackedFiles walks gameDir and compares every file on disk against official manifest entries.
+// It returns official file count and a slice of relative paths for untracked/mod files.
+// IntegrityReport details file matching, modifications, missing files, and untracked mods.
+type IntegrityReport struct {
+	OfficialCount  int      `json:"official_count"`
+	IntactCount    int      `json:"intact_count"`
+	ModifiedFiles  []string `json:"modified_files,omitempty"`
+	MissingFiles   []string `json:"missing_files,omitempty"`
+	UntrackedFiles []string `json:"untracked_files,omitempty"`
+}
+
+// ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1 mismatches.
+func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) {
+	manifest, err := LoadManifestFromDir(gameDir, appID)
+	if err != nil || manifest == nil || len(manifest.Files) == 0 {
+		return nil, nil
+	}
+
+	report := &IntegrityReport{
+		OfficialCount: len(manifest.Files),
+	}
+
+	officialMap := make(map[string]ManifestFileEntry, len(manifest.Files))
+	foundMap := make(map[string]bool, len(manifest.Files))
+
+	for _, f := range manifest.Files {
+		norm := strings.ToLower(NormalizePath(f.Path))
+		officialMap[norm] = f
+	}
+
+	err = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		rel, relErr := filepath.Rel(gameDir, path)
+		if relErr != nil {
+			return nil
+		}
+
+		normRel := strings.ToLower(NormalizePath(rel))
+		baseName := d.Name()
+
+		// Skip internal gamux folders, GPU caches, and Wine log files
+		if strings.HasPrefix(rel, "[Manifests]") ||
+			strings.HasPrefix(rel, "[Steam]") ||
+			strings.HasPrefix(rel, "steam_settings") ||
+			strings.HasPrefix(rel, "GLCache") ||
+			strings.HasPrefix(rel, "ShaderCache") ||
+			strings.HasPrefix(rel, ".dxvk-cache") ||
+			strings.HasSuffix(strings.ToLower(baseName), ".log") ||
+			strings.Contains(baseName, ".ORIGINAL") ||
+			baseName == "steam_appid.txt" ||
+			baseName == "ColdClientLoader.ini" ||
+			baseName == "steamclient_loader_x64.exe" ||
+			baseName == "steamclient_loader_x86.exe" ||
+			baseName == "steamclient64.dll" ||
+			baseName == "steamclient.dll" ||
+			baseName == "GameOverlayRenderer64.dll" ||
+			baseName == "GameOverlayRenderer.dll" ||
+			baseName == "steam_interfaces.txt" {
+			return nil
+		}
+
+		entry, isOfficial := officialMap[normRel]
+		if isOfficial {
+			foundMap[normRel] = true
+			if !d.IsDir() {
+				if fi, err := d.Info(); err == nil {
+					if uint64(fi.Size()) != entry.Size {
+						report.ModifiedFiles = append(report.ModifiedFiles, rel)
+					} else {
+						report.IntactCount++
+					}
+				} else {
+					report.IntactCount++
+				}
+			}
+		} else if !d.IsDir() {
+			report.UntrackedFiles = append(report.UntrackedFiles, rel)
+		}
+		return nil
+	})
+
+	for normRel, entry := range officialMap {
+		if !foundMap[normRel] {
+			// Ignore directory entries or check if path exists on disk
+			fullPath := filepath.Join(gameDir, entry.Path)
+			if fi, err := os.Stat(fullPath); err == nil {
+				foundMap[normRel] = true
+				if !fi.IsDir() && uint64(fi.Size()) != entry.Size {
+					report.ModifiedFiles = append(report.ModifiedFiles, entry.Path)
+				} else {
+					report.IntactCount++
+				}
+			} else {
+				// Ignore empty directory manifest nodes
+				if (entry.Flags&0x40 != 0) || (len(entry.Chunks) == 0 && entry.Size == 0) {
+					continue
+				}
+				report.MissingFiles = append(report.MissingFiles, entry.Path)
+			}
+		}
+	}
+
+	return report, nil
+}
+
+
+// ScanUntrackedFiles walks gameDir and compares every file on disk against official manifest entries.
+func ScanUntrackedFiles(gameDir string, appID uint32) (int, []string, error) {
+	rep, err := ScanDepotIntegrity(gameDir, appID)
+	if err != nil || rep == nil {
+		return 0, nil, err
+	}
+	return rep.OfficialCount, rep.UntrackedFiles, nil
+}
+
+

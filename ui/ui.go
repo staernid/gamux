@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mattn/go-isatty"
 	"github.com/staernid/gamux/util"
 	"github.com/urfave/cli/v2"
 )
+
 
 var (
 	isTerminal = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
@@ -26,11 +28,28 @@ const (
 	colorGreen  = "\033[32m"
 	colorYellow = "\033[33m"
 	colorRed    = "\033[31m"
-	colorDim    = "\033[2m"
-	colorBlue   = "\033[34m"
+	colorDim     = "\033[2m"
+	colorBlue    = "\033[34m"
+	colorMagenta = "\033[35m"
 )
 
+func magenta(s string) string {
+	if !isTerminal {
+		return s
+	}
+	return colorMagenta + s + colorReset
+}
+
+func blue(s string) string {
+	if !isTerminal {
+		return s
+	}
+	return colorBlue + s + colorReset
+}
+
 func bold(s string) string {
+
+
 	if !isTerminal {
 		return s
 	}
@@ -82,31 +101,20 @@ func RenderHeader(version string) {
 	fmt.Println()
 }
 
-// RenderAppHelp displays a friendly, dynamic quickstart guide and command reference from cli.App.
+// RenderAppHelp displays a clean, concise, single-source workflow guide from cli.App.
 func RenderAppHelp(app *cli.App, version string) {
 	RenderHeader(version)
 
-	fmt.Println(bold("🚀 QUICK START EXAMPLES"))
-	fmt.Println(dim("------------------------------------------------------------------------"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux download 544550"), dim("# Download from Steam CDN & auto-setup"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux add ./MyGame"), dim("# Complete setup for existing game folder"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux batch ~/Downloads"), dim("# Batch setup all games in a directory"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux status ./MyGame --news"), dim("# Inspect AppID, platform, and patch history"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux news ./MyGame 1"), dim("# Read full text of patch note #1"))
-	fmt.Printf("  %-32s %s\n", cyan("gamux rollback ./MyGame"), dim("# Restore original binaries & remove settings"))
-	fmt.Println(dim("------------------------------------------------------------------------"))
-	fmt.Println()
-
 	if app != nil && len(app.Commands) > 0 {
-		fmt.Println(bold("📋 AVAILABLE COMMANDS"))
+		fmt.Println(bold("📋 WORKFLOW & COMMANDS"))
 		fmt.Println(dim("------------------------------------------------------------------------"))
 
-		categories := []string{"Acquisition", "Setup & Management", "Maintenance"}
+		categories := []string{"Step 1: Acquisition", "Step 2: Setup & Integration", "Step 3: Inspection & Maintenance", "Maintenance & Tools"}
 		cmdMap := make(map[string][]*cli.Command)
 		for _, cmd := range app.Commands {
 			cat := cmd.Category
 			if cat == "" {
-				cat = "Maintenance"
+				cat = "Maintenance & Tools"
 			}
 			cmdMap[cat] = append(cmdMap[cat], cmd)
 		}
@@ -122,7 +130,7 @@ func RenderAppHelp(app *cli.App, version string) {
 				if cmd.ArgsUsage != "" {
 					sig += " " + cmd.ArgsUsage
 				}
-				fmt.Printf("    %-24s %s\n", cyan(sig), cmd.Usage)
+				fmt.Printf("    %-28s %s\n", cyan(sig), cmd.Usage)
 			}
 			fmt.Println()
 		}
@@ -130,23 +138,84 @@ func RenderAppHelp(app *cli.App, version string) {
 		fmt.Println(dim("------------------------------------------------------------------------"))
 		fmt.Println()
 
-		fmt.Println(bold("⚙️ KEY FLAGS & OPTIONS"))
-		fmt.Println(dim("------------------------------------------------------------------------"))
-		for _, f := range app.Flags {
-			fmt.Printf("  %-24s %s\n", yellow(f.Names()[0]), f.String())
+		if len(app.Flags) > 0 {
+			fmt.Println(bold("⚙️ GLOBAL OPTIONS"))
+			fmt.Println(dim("------------------------------------------------------------------------"))
+
+			for _, f := range app.Flags {
+				names := f.Names()
+				if len(names) == 0 {
+					continue
+				}
+				var formattedNames []string
+				for _, n := range names {
+					if len(n) == 1 {
+						formattedNames = append(formattedNames, "-"+n)
+					} else {
+						formattedNames = append(formattedNames, "--"+n)
+					}
+				}
+
+				usage := ""
+				switch tf := f.(type) {
+				case *cli.BoolFlag:
+					usage = tf.Usage
+				case *cli.StringFlag:
+					usage = tf.Usage
+				case *cli.UintFlag:
+					usage = tf.Usage
+				case *cli.IntFlag:
+					usage = tf.Usage
+				}
+
+				fmt.Printf("  %-28s %s\n", yellow(strings.Join(formattedNames, ", ")), usage)
+			}
+			fmt.Println(dim("------------------------------------------------------------------------"))
+			fmt.Println()
 		}
-		fmt.Printf("  %-24s %s\n", yellow("--news, --patch-notes"), "Display recent Steam patch notes and update history in status")
-		fmt.Printf("  %-24s %s\n", yellow("--platform win64|linux|osx"), "Target platform architecture for downloading depots")
-		fmt.Printf("  %-24s %s\n", yellow("--no-setup, --raw"), "Skip automatic post-download DRM unpacking & GBE setup")
-		fmt.Printf("  %-24s %s\n", yellow("--portable"), "Perform direct DLL/SO file replacement instead of loader mode")
-		fmt.Printf("  %-24s %s\n", yellow("--yes, -y"), "Non-interactive mode (automatic yes to prompts)")
-		fmt.Println(dim("------------------------------------------------------------------------"))
-		fmt.Println()
 	}
+}
+
+// RenderProgress renders a clean single-line progress bar with current/total count and item label.
+func RenderProgress(current, total int, item string) {
+	if total <= 0 {
+		return
+	}
+	percent := float64(current) / float64(total) * 100
+	width := 20
+	completed := int((percent / 100) * float64(width))
+	if completed > width {
+		completed = width
+	}
+	if completed < 0 {
+		completed = 0
+	}
+
+	bar := strings.Repeat("█", completed) + strings.Repeat("░", width-completed)
+
+	base := filepath.Base(item)
+	if len(base) > 28 {
+		base = base[:25] + "..."
+	}
+
+	fmt.Printf("\r  %s %s %3.0f%% [%d/%d] %-28s",
+		cyan("📥"),
+		green("["+bar+"]"),
+		percent,
+		current,
+		total,
+		dim(base),
+	)
+}
+
+// ClearProgress clears the current progress bar line in the terminal.
+func ClearProgress() {
+	fmt.Print("\r\033[K")
 }
 
 // PromptString asks for text input with a default value.
 func PromptString(promptText string, defaultValue string) string {
+
 	if defaultValue != "" {
 		fmt.Printf("%s [%s]: ", bold(promptText), cyan(defaultValue))
 	} else {
@@ -251,20 +320,65 @@ func PromptSelectPlatform(gameTitle string, availablePlatforms []string) (string
 type DetectionInfoSummary struct {
 	Name             string
 	AppID            string
+	Store            string
 	Platform         string
+
 	GameDir          string
 	ExePath          string
 	State            string
 	OriginalBackups  int
 	ManifestID       string
 	BuildID          string
-	DiskSizeBytes    int64
-	FileCount        int
-	DLCCount         int
-	AchievementCount int
-	LutrisRegistered bool
-	RecentPatchNote  string
-	NewsItems        []NewsItemSummary
+	DiskSizeBytes     int64
+	FileCount         int
+	OfficialFileCount  int
+	ModifiedFiles     []string
+	MissingFiles      []string
+	UntrackedFiles    []string
+	HasUpdate         bool
+	RemoteManifestID  string
+	DLCCount          int
+	AchievementCount  int
+	LutrisRegistered  bool
+	RecentPatchNote   string
+	NewsItems         []NewsItemSummary
+}
+
+// CleanBBCode strips Steam community BBCode tags for clean terminal rendering.
+func CleanBBCode(input string) string {
+	s := input
+	s = strings.ReplaceAll(s, "[p]", "\n")
+	s = strings.ReplaceAll(s, "[/p]", "\n")
+	s = strings.ReplaceAll(s, "[br]", "\n")
+	s = strings.ReplaceAll(s, "[h1]", "\n# ")
+	s = strings.ReplaceAll(s, "[/h1]", "\n")
+	s = strings.ReplaceAll(s, "[h2]", "\n## ")
+	s = strings.ReplaceAll(s, "[/h2]", "\n")
+	s = strings.ReplaceAll(s, "[b]", "")
+	s = strings.ReplaceAll(s, "[/b]", "")
+	s = strings.ReplaceAll(s, "[i]", "")
+	s = strings.ReplaceAll(s, "[/i]", "")
+	s = strings.ReplaceAll(s, "[list]", "\n")
+	s = strings.ReplaceAll(s, "[/list]", "")
+	s = strings.ReplaceAll(s, "[*]", " • ")
+
+	// Strip [img...]...[/img] tags
+	reImg := regexp.MustCompile(`(?i)\[img[^\]]*\].*?\[/img\]`)
+	s = reImg.ReplaceAllString(s, "📷 [Image]")
+
+	// Strip url tags [url=LINK]TEXT[/url] -> TEXT (LINK)
+	reURL := regexp.MustCompile(`(?i)\[url=([^\]]+)\](.*?)\[/url\]`)
+	s = reURL.ReplaceAllString(s, "$2 ($1)")
+
+	// Strip remaining generic BBCode tags
+	reGeneric := regexp.MustCompile(`\[/?[a-zA-Z0-9=\.:_-]+\]`)
+	s = reGeneric.ReplaceAllString(s, "")
+
+	// Clean excess empty lines
+	reMultipleNewlines := regexp.MustCompile(`\n{3,}`)
+	s = reMultipleNewlines.ReplaceAllString(s, "\n\n")
+
+	return strings.TrimSpace(s)
 }
 
 // FormatBytes formats byte counts into human-readable strings (e.g. 1.29 GiB).
@@ -281,8 +395,115 @@ func FormatBytes(b int64) string {
 	return fmt.Sprintf("%.2f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+// RenderTerseHeader outputs a clean section header for batch/terse inspection.
+func RenderTerseHeader(parentDir string, totalGames int) {
+	fmt.Println()
+	fmt.Printf("%s (%s - %d games found)\n", bold(cyan("📦 Game Library Status")), parentDir, totalGames)
+	fmt.Println(dim("----------------------------------------------------------------------------------------------------"))
+}
+
+// RenderTerseStatus prints a crisp 2-line card for a game directory.
+func RenderTerseStatus(info DetectionInfoSummary) {
+	// Game Title
+	title := info.Name
+
+	// Store Badge
+	storeBadge := ""
+	switch strings.ToLower(info.Store) {
+	case "steam":
+		storeBadge = cyan("[Steam]")
+	case "gog":
+		storeBadge = blue("[GOG]")
+	case "epic":
+		storeBadge = magenta("[Epic]")
+	case "itch":
+		storeBadge = yellow("[Itch]")
+	default:
+		storeBadge = dim("[?]")
+	}
+
+	// DRM / Patch Badge
+	drmBadge := ""
+	if strings.Contains(strings.ToLower(info.State), "original") {
+		drmBadge = dim("[Clean]")
+	} else if strings.Contains(strings.ToLower(info.State), "portable") {
+		drmBadge = magenta("[Emu Portable]")
+	} else {
+		drmBadge = yellow("[Emu Loader]")
+	}
+
+
+	// Lutris Badge (only render when registered to reduce noise)
+	lutrisBadge := ""
+	if info.LutrisRegistered {
+		lutrisBadge = green("[Lutris ✓]")
+	}
+
+	// Line 1: Title and inline state badges
+	badges := []string{storeBadge, drmBadge}
+	if lutrisBadge != "" {
+		badges = append(badges, lutrisBadge)
+	}
+
+	fmt.Printf("  %s  %s\n",
+		bold(title),
+		strings.Join(badges, " "),
+	)
+
+	// Line 2: Details metadata card using clean box drawing └─
+	var details []string
+
+	if info.GameDir != "" {
+		folderName := filepath.Base(info.GameDir)
+		if folderName != "" && !strings.EqualFold(folderName, info.Name) && folderName != "." {
+			details = append(details, fmt.Sprintf("dir: %s", folderName))
+		}
+	}
+
+	if len(info.ModifiedFiles) > 0 || len(info.MissingFiles) > 0 {
+		mismatches := len(info.ModifiedFiles) + len(info.MissingFiles)
+		details = append(details, yellow(fmt.Sprintf("%d mismatches", mismatches)))
+	} else if info.HasUpdate {
+		details = append(details, yellow("update available"))
+	} else if info.ManifestID != "" {
+		details = append(details, green("up-to-date"))
+	} else {
+		details = append(details, dim("no manifest"))
+	}
+
+	if len(info.UntrackedFiles) > 0 {
+		details = append(details, yellow(fmt.Sprintf("%d mods", len(info.UntrackedFiles))))
+	}
+
+	if info.AppID != "" && info.AppID != "0" {
+		details = append(details, dim(fmt.Sprintf("appid: %s", info.AppID)))
+	}
+
+	detailStr := strings.Join(details, dim(" | "))
+	fmt.Printf("  %s %s\n\n", dim("└─"), dim(detailStr))
+}
+
+
+
+
+
+// RenderTerseSummary prints summary stats after batch inspection.
+func RenderTerseSummary(total, loaderCount, cleanCount, updatesAvail, lutrisCount int) {
+	fmt.Println(dim("----------------------------------------------------------------------------------------------------"))
+	fmt.Printf("  %s Summary: %d total | %s Emu | %s Clean | %s Updates | %s Lutris\n\n",
+		yellow("💡"),
+		total,
+		yellow(fmt.Sprintf("%d", loaderCount)),
+		green(fmt.Sprintf("%d", cleanCount)),
+		cyan(fmt.Sprintf("%d", updatesAvail)),
+		green(fmt.Sprintf("%d", lutrisCount)),
+	)
+}
+
+
 // RenderDetectionSummary prints a visual preview of detected game metadata.
 func RenderDetectionSummary(info DetectionInfoSummary) {
+
 	fmt.Println()
 	fmt.Println(bold(cyan("🔍 Game Status Dashboard")))
 	fmt.Println(dim("------------------------------------------------------------------------"))
@@ -322,10 +543,47 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 	}
 	fmt.Printf("    • State:      %s\n", stateStr)
 
+	if len(info.ModifiedFiles) > 0 || len(info.MissingFiles) > 0 {
+		count := len(info.ModifiedFiles) + len(info.MissingFiles)
+		fmt.Printf("    • Steam Depot: %s (%d files modified/missing)\n", yellow(fmt.Sprintf("[%d File Mismatches]", count)), count)
+		for i, mod := range info.ModifiedFiles {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("      - %s %s\n", dim(mod), yellow("(Modified/Stale)"))
+		}
+		for i, miss := range info.MissingFiles {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("      - %s %s\n", dim(miss), red("(Missing)"))
+		}
+	} else if info.HasUpdate {
+		fmt.Printf("    • Steam Depot: %s (Local: %s → Remote: %s)\n", yellow("[🚀 Update Available]"), info.ManifestID, info.RemoteManifestID)
+	} else if info.ManifestID != "" {
+		fmt.Printf("    • Steam Depot: %s\n", green("[Up to Date]"))
+	} else {
+		fmt.Printf("    • Steam Depot: %s\n", dim("[No Local Manifest]"))
+	}
+
+
 	if info.LutrisRegistered {
 		fmt.Printf("    • Lutris:     %s\n", green("[Registered]"))
 	} else {
 		fmt.Printf("    • Lutris:     %s\n", dim("[Not Registered]"))
+	}
+
+	if len(info.UntrackedFiles) > 0 {
+		fmt.Printf("    • Untracked/Mods: %s\n", yellow(fmt.Sprintf("[%d files detected]", len(info.UntrackedFiles))))
+		for i, mod := range info.UntrackedFiles {
+			if i >= 5 {
+				fmt.Printf("      - %s\n", dim(fmt.Sprintf("...and %d more untracked files", len(info.UntrackedFiles)-5)))
+				break
+			}
+			fmt.Printf("      - %s\n", dim(mod))
+		}
+	} else if info.OfficialFileCount > 0 {
+		fmt.Printf("    • Untracked/Mods: %s\n", green("[0 untracked files]"))
 	}
 
 	if info.DLCCount > 0 {
@@ -339,17 +597,23 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 		fmt.Println(dim("------------------------------------------------------------------------"))
 		fmt.Println(bold("  📰 Recent Steam Patch Notes / News History:"))
 		for i, n := range info.NewsItems {
-			fmt.Printf("    [%d] %s %s\n", i+1, bold(cyan(n.Title)), dim("("+n.FeedLabel+")"))
+			fmt.Printf("    [%d] %s %s\n", i+1, bold(cyan(CleanBBCode(n.Title))), dim("("+n.FeedLabel+")"))
 		}
 		fmt.Println()
 		fmt.Printf("  💡 %s %s\n", yellow("Tip:"), dim("Run 'gamux news 1' to read full patch details."))
 	} else if info.RecentPatchNote != "" {
 		fmt.Println(dim("------------------------------------------------------------------------"))
 		fmt.Println(bold("  📰 Recent Steam Patch Notes / News:"))
-		fmt.Printf("    %s\n", cyan(info.RecentPatchNote))
+		fmt.Printf("    %s\n", cyan(CleanBBCode(info.RecentPatchNote)))
 		fmt.Println()
 		fmt.Printf("  💡 %s %s\n", yellow("Tip:"), dim("Run 'gamux news 1' to read full patch details."))
 	}
+
+	if strings.Contains(strings.ToLower(info.State), "original") {
+		fmt.Println()
+		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux sync \"%s\"' to set up GBE emulator & Lutris integration.", info.GameDir)))
+	}
+
 
 	fmt.Println(dim("------------------------------------------------------------------------"))
 	fmt.Println()
@@ -359,7 +623,7 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 func RenderNewsItem(gameTitle string, index int, title, feedLabel, contents, url string, date int64) {
 	fmt.Println()
 	fmt.Println(bold(cyan("========================================================================")))
-	fmt.Printf("  📰 %s - Patch Note #%d: %s\n", bold(gameTitle), index, green(title))
+	fmt.Printf("  📰 %s - Patch Note #%d: %s\n", bold(gameTitle), index, green(CleanBBCode(title)))
 	if feedLabel != "" {
 		fmt.Printf("  Source: %s\n", dim(feedLabel))
 	}
@@ -369,7 +633,7 @@ func RenderNewsItem(gameTitle string, index int, title, feedLabel, contents, url
 	fmt.Println(bold(cyan("========================================================================")))
 	fmt.Println()
 	if contents != "" {
-		fmt.Println(contents)
+		fmt.Println(CleanBBCode(contents))
 	} else {
 		fmt.Println(dim("No text contents available for this patch item."))
 	}
@@ -377,6 +641,7 @@ func RenderNewsItem(gameTitle string, index int, title, feedLabel, contents, url
 	fmt.Println(bold(cyan("========================================================================")))
 	fmt.Println()
 }
+
 
 // RenderStep prints a progress step indicator.
 func RenderStep(stepNum, totalSteps int, title string) {

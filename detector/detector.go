@@ -2,6 +2,7 @@ package detector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,10 +15,12 @@ import (
 	"github.com/staernid/gamux/util"
 )
 
+
 // GameInfo represents auto-detected metadata and paths for a game directory.
 type GameInfo struct {
 	AppID            string
 	Name             string
+	InstallDir       string
 	Platform         string // "linux", "win64", "win32"
 	GameDir          string // Primary root directory of the game
 	ExePath          string // Path to the main executable
@@ -25,8 +28,13 @@ type GameInfo struct {
 	TargetLibPath    string // Path to steam_api library
 	ManifestPath     string // Path to appmanifest_<appid>.acf
 	RawDepotLayout   bool   // True if raw steamapps/common/... structure
+	Store            string // "Steam", "GOG", "Epic", "Itch", "Custom"
+	OfficialFileCount int
+	UntrackedFiles   []string
 	LaunchCandidates []LaunchCandidate
 }
+
+
 
 var (
 	appmanifestRegex  = regexp.MustCompile(`(?i)^appmanifest_(\d+)\.acf$`)
@@ -49,6 +57,7 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 	if acfData != nil {
 		info.AppID = acfData.AppID
 		info.Name = acfData.Name
+		info.InstallDir = acfData.InstallDir
 		info.ManifestPath = acfPath
 
 		// Check for raw Steam depot layout: steamapps/common/<installdir>
@@ -82,34 +91,129 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 	// 3. Detect Platform & Target Library
 	detectPlatformAndLib(info)
 
-	// 4. Fetch Game Name if AppID is known but Name is missing or matches raw AppID
+	// 4. Detect store origin FIRST (Steam, GOG, Epic, Itch, Standalone)
+	detectStore(info)
+
+	// 5. Fetch Game Name if AppID is known but Name is missing or matches raw AppID
 	if info.AppID != "" && (info.Name == "" || info.Name == info.AppID) {
 		if name, err := steam.FetchAppName(ctx, info.AppID); err == nil && name != "" {
 			info.Name = name
 		}
 	}
 
-	// 5. Fallback Name to directory basename if still empty
+	// 6. Fallback Name to directory basename if still empty
 	if info.Name == "" {
 		info.Name = filepath.Base(info.GameDir)
 	}
 
-	// 6. Try searching Steam Store API if AppID is still missing
-	if info.AppID == "" && info.Name != "" {
+	// 7. Try searching Steam Store API ONLY if store is Steam and AppID is missing
+	if info.Store == "Steam" && info.AppID == "" && info.Name != "" {
 		if appID, searchName, err := steam.SearchAppID(ctx, info.Name); err == nil && appID != "" {
 			info.AppID = appID
 			if searchName != "" {
 				info.Name = searchName
 			}
-			slog.Info("Auto-discovered AppID via Steam Store search", "title", info.Name, "appID", info.AppID)
+			slog.Debug("Auto-discovered AppID via Steam Store search", "title", info.Name, "appID", info.AppID)
 		}
 	}
 
-	// 7. Detect main executable
+	// 8. Resolve InstallDir if missing
+	if info.InstallDir == "" && info.Name != "" {
+		info.InstallDir = util.SanitizeInstallDir(info.Name)
+	}
+
+	// 9. Detect main executable
 	detectExecutable(info)
 
 	return info, nil
 }
+
+type GOGInfo struct {
+	GameID string `json:"gameId"`
+	Name   string `json:"name"`
+	Title  string `json:"title"`
+}
+
+func parseGOGInfo(gameDir string) (string, string) {
+	entries, err := os.ReadDir(gameDir)
+	if err != nil {
+		return "", ""
+	}
+	for _, e := range entries {
+		lname := strings.ToLower(e.Name())
+		if strings.HasPrefix(lname, "goggame-") && strings.HasSuffix(lname, ".info") {
+			data, err := os.ReadFile(filepath.Join(gameDir, e.Name()))
+			if err != nil {
+				continue
+			}
+			var gog GOGInfo
+			if err := json.Unmarshal(data, &gog); err == nil {
+				name := gog.Name
+				if name == "" {
+					name = gog.Title
+				}
+				return name, gog.GameID
+			}
+		}
+	}
+	return "", ""
+}
+
+func detectStore(info *GameInfo) {
+	// 1. Check for concrete Steam artifacts on disk FIRST (manifests, appid.txt, or steam_api DLL/SO)
+	hasSteamArtifacts := info.ManifestPath != "" || info.TargetLibPath != ""
+	if !hasSteamArtifacts {
+		manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
+		if entries, err := os.ReadDir(manifestsDir); err == nil && len(entries) > 0 {
+			hasSteamArtifacts = true
+		}
+	}
+	if !hasSteamArtifacts {
+		if appidFile := filepath.Join(info.GameDir, "steam_appid.txt"); fileExists(appidFile) {
+			hasSteamArtifacts = true
+		}
+	}
+
+	if hasSteamArtifacts {
+		info.Store = "Steam"
+		return
+	}
+
+	// 2. Check for GOG signatures & parse GOG metadata
+	if gogName, gogID := parseGOGInfo(info.GameDir); gogName != "" || gogID != "" {
+		info.Store = "GOG"
+		if gogName != "" {
+			info.Name = gogName
+		}
+		return
+	}
+
+	if entries, err := os.ReadDir(info.GameDir); err == nil {
+		for _, e := range entries {
+			name := strings.ToLower(e.Name())
+			if strings.HasPrefix(name, "goggame-") || strings.HasPrefix(name, "goglog") || name == "webcache.zip" || strings.HasPrefix(name, "gog") {
+				info.Store = "GOG"
+				return
+			}
+			if name == ".egstore" {
+				info.Store = "Epic"
+				return
+			}
+			if name == ".itch" || name == ".itch.toml" {
+				info.Store = "Itch"
+				return
+			}
+		}
+	}
+
+	// 3. Standalone DRM-free download (Factorio.com, Humble Bundle, direct site download)
+	info.Store = "Standalone"
+}
+
+
+
+
+
 
 // ConsolidateManifests copies/moves appmanifest and .manifest files into <GameDir>/[Manifests]/.
 // If a legacy [Steam] folder exists, its contents are migrated into [Manifests] and [Steam] is removed.
@@ -208,7 +312,99 @@ func ConsolidateManifests(info *GameInfo, promoteFolder bool) error {
 	return nil
 }
 
+// EnsureACFManifest guarantees that a 1:1 appmanifest_<appid>.acf file exists inside <GameDir>/[Manifests]/.
+// If missing or incomplete, it generates a standard Steam KeyValues manifest with canonical name & installdir.
+func EnsureACFManifest(info *GameInfo, dryRun bool) error {
+	if info == nil || info.AppID == "" || info.AppID == "0" {
+		return nil
+	}
+
+	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
+	acfName := fmt.Sprintf("appmanifest_%s.acf", info.AppID)
+	targetACF := filepath.Join(manifestsDir, acfName)
+
+	if fileExists(targetACF) {
+		return nil
+	}
+
+	if info.InstallDir == "" {
+		info.InstallDir = util.SanitizeInstallDir(info.Name)
+	}
+
+	acfData := &ACFData{
+		AppID:      info.AppID,
+		Name:       info.Name,
+		InstallDir: info.InstallDir,
+		BuildID:    "0",
+	}
+
+	content := GenerateACFContent(acfData)
+	if dryRun {
+		slog.Info("[DRY RUN] Would synthesize 1:1 ACF manifest", "path", targetACF, "appID", info.AppID)
+		return nil
+	}
+
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		return fmt.Errorf("create [Manifests] dir: %w", err)
+	}
+
+	if err := os.WriteFile(targetACF, []byte(content), 0644); err != nil {
+		return fmt.Errorf("write ACF manifest: %w", err)
+	}
+
+	info.ManifestPath = targetACF
+	slog.Info("Synthesized 1:1 ACF manifest", "path", targetACF, "appID", info.AppID, "installdir", info.InstallDir)
+	return nil
+}
+
+// NormalizeDirectory renames the game directory to match its official Steam 1:1 InstallDir if different.
+func NormalizeDirectory(info *GameInfo, dryRun bool) error {
+	if info == nil || info.GameDir == "" || info.InstallDir == "" {
+		return nil
+	}
+
+	currentBase := filepath.Base(info.GameDir)
+	if currentBase == info.InstallDir {
+		return nil
+	}
+
+	parentDir := filepath.Dir(info.GameDir)
+	targetDir := filepath.Join(parentDir, info.InstallDir)
+
+	if targetDir == info.GameDir || fileExists(targetDir) {
+		return nil
+	}
+
+	if dryRun {
+		slog.Info("[DRY RUN] Would normalize game directory name to 1:1 Steam installdir", "from", info.GameDir, "to", targetDir)
+		return nil
+	}
+
+	oldGameDir := info.GameDir
+	if err := os.Rename(oldGameDir, targetDir); err != nil {
+		return fmt.Errorf("normalize game directory from %s to %s: %w", oldGameDir, targetDir, err)
+	}
+
+	info.GameDir = targetDir
+	if info.ManifestPath != "" && strings.HasPrefix(info.ManifestPath, oldGameDir) {
+		rel, err := filepath.Rel(oldGameDir, info.ManifestPath)
+		if err == nil {
+			info.ManifestPath = filepath.Join(targetDir, rel)
+		}
+	}
+	if info.ExePath != "" && strings.HasPrefix(info.ExePath, oldGameDir) {
+		rel, err := filepath.Rel(oldGameDir, info.ExePath)
+		if err == nil {
+			info.ExePath = filepath.Join(targetDir, rel)
+		}
+	}
+
+	slog.Info("Normalized game directory name to 1:1 Steam installdir", "from", oldGameDir, "to", targetDir)
+	return nil
+}
+
 // ── Internal Helpers ────────────────────────────────────────────────
+
 
 func findACF(root string) (string, *ACFData) {
 	searchLocations := []string{

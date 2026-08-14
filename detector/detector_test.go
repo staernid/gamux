@@ -188,3 +188,75 @@ func TestConsolidateManifests(t *testing.T) {
 		}
 	})
 }
+
+func TestGenerateACFContent(t *testing.T) {
+	data := &ACFData{
+		AppID:      "1091500",
+		Name:       "Cyberpunk 2077",
+		InstallDir: "Cyberpunk 2077",
+		BuildID:    "12345678",
+	}
+
+	content := GenerateACFContent(data)
+	if !strings.Contains(content, `"appid"`+"\t\t"+`"1091500"`) {
+		t.Errorf("expected appid in generated ACF, got:\n%s", content)
+	}
+	if !strings.Contains(content, `"installdir"`+"\t\t"+`"Cyberpunk 2077"`) {
+		t.Errorf("expected installdir in generated ACF, got:\n%s", content)
+	}
+}
+
+func TestEnsureACFManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	info := &GameInfo{
+		AppID:      "1091500",
+		Name:       "Cyberpunk 2077",
+		InstallDir: "Cyberpunk 2077",
+		GameDir:    tmpDir,
+	}
+
+	if err := EnsureACFManifest(info, false); err != nil {
+		t.Fatalf("EnsureACFManifest failed: %v", err)
+	}
+
+	expectedPath := filepath.Join(tmpDir, "[Manifests]", "appmanifest_1091500.acf")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("expected ACF file at %s", expectedPath)
+	}
+
+	data, err := ParseACFFile(expectedPath)
+	if err != nil {
+		t.Fatalf("ParseACFFile failed on synthesized manifest: %v", err)
+	}
+	if data.AppID != "1091500" || data.InstallDir != "Cyberpunk 2077" {
+		t.Errorf("synthesized ACF content mismatch: %+v", data)
+	}
+}
+
+func TestNormalizeDirectory(t *testing.T) {
+	tmpParent := t.TempDir()
+	rawDir := filepath.Join(tmpParent, "Cyberpunk.2077.v2.12-P2P")
+	if err := os.MkdirAll(rawDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	info := &GameInfo{
+		AppID:      "1091500",
+		Name:       "Cyberpunk 2077",
+		InstallDir: "Cyberpunk 2077",
+		GameDir:    rawDir,
+	}
+
+	if err := NormalizeDirectory(info, false); err != nil {
+		t.Fatalf("NormalizeDirectory failed: %v", err)
+	}
+
+	expectedDir := filepath.Join(tmpParent, "Cyberpunk 2077")
+	if info.GameDir != expectedDir {
+		t.Errorf("expected GameDir %s, got %s", expectedDir, info.GameDir)
+	}
+	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
+		t.Errorf("expected directory at %s", expectedDir)
+	}
+}
+

@@ -99,6 +99,30 @@ func FileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
+// ExpandPath resolves tilde (~) and relative paths against home directory.
+func ExpandPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "~/") || path == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			if path == "~" {
+				return home
+			}
+			return filepath.Join(home, path[2:])
+		}
+	}
+	if !filepath.IsAbs(path) {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, path)
+		}
+	}
+	return path
+}
+
+
 // DownloadAndExtract downloads a file and extracts it.
 func DownloadAndExtract(ctx context.Context, url, destDir, format string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -268,3 +292,30 @@ func SanitizeFilename(name string) string {
 	}
 	return clean
 }
+
+// SanitizeInstallDir converts a game title into a clean, 1:1 Steam-style installdir folder name.
+// It removes trademark/registered symbols (™, ®, ©), removes illegal OS path characters,
+// and normalizes whitespace while preserving standard folder readability.
+func SanitizeInstallDir(title string) string {
+	if strings.TrimSpace(title) == "" {
+		return "Game"
+	}
+	s := title
+	s = strings.ReplaceAll(s, "™", "")
+	s = strings.ReplaceAll(s, "®", "")
+	s = strings.ReplaceAll(s, "©", "")
+
+	invalidChars := []string{":", "/", "\\", "?", "*", "<", ">", "|", "\""}
+	for _, c := range invalidChars {
+		s = strings.ReplaceAll(s, c, "")
+	}
+
+	fields := strings.Fields(s)
+	clean := strings.Join(fields, " ")
+	clean = strings.Trim(clean, ". ")
+	if clean == "" {
+		return "Game"
+	}
+	return clean
+}
+

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/staernid/gamux/cache"
 )
 
 type mockRoundTripper func(req *http.Request) (*http.Response, error)
@@ -18,11 +20,15 @@ func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestFetchAppName(t *testing.T) {
+	cache.DisableCache = true
+	defer func() { cache.DisableCache = false }()
+
 	// Backup and restore default transport
 	oldTransport := http.DefaultClient.Transport
 	defer func() {
 		http.DefaultClient.Transport = oldTransport
 	}()
+
 
 	t.Run("successful response", func(t *testing.T) {
 		http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {

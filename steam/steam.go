@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/staernid/gamux/config"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,8 +14,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/staernid/gamux/cache"
+	"github.com/staernid/gamux/config"
 	"golang.org/x/sync/errgroup"
 )
+
 
 // HTTPClient allows injecting custom HTTP clients or RoundTrippers for testing.
 var HTTPClient = http.DefaultClient
@@ -116,12 +118,19 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 // FetchAppName gets the app name for a Steam AppID.
 // It wraps FetchAppDetails for backward compatibility.
 func FetchAppName(ctx context.Context, appID string) (string, error) {
+	if name, ok := cache.GetAppName(appID); ok {
+		return name, nil
+	}
 	details, err := FetchAppDetails(ctx, appID)
 	if err != nil {
 		return "", err
 	}
+	if details.Name != "" {
+		cache.SaveAppName(appID, details.Name)
+	}
 	return details.Name, nil
 }
+
 
 // SearchResultItem represents an item in storesearch results.
 type SearchResultItem struct {
@@ -350,12 +359,18 @@ type AppNewsResponse struct {
 
 // FetchAppNews fetches the latest news/patch note item for a given Steam AppID.
 func FetchAppNews(ctx context.Context, appID string) (string, error) {
+	if news, ok := cache.GetNews(appID); ok {
+		return news, nil
+	}
 	items, err := FetchAppNewsItems(ctx, appID, 1)
 	if err != nil || len(items) == 0 {
 		return "", err
 	}
-	return fmt.Sprintf("%s (%s)", items[0].Title, items[0].FeedLabel), nil
+	res := fmt.Sprintf("%s (%s)", items[0].Title, items[0].FeedLabel)
+	cache.SaveNews(appID, res)
+	return res, nil
 }
+
 
 // FetchAppNewsItems fetches up to count news/patch note items for a given Steam AppID.
 func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem, error) {

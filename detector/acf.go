@@ -91,3 +91,42 @@ func ParseACFFile(path string) (*ACFData, error) {
 
 	return ParseACF(f)
 }
+
+// GenerateACFContent serializes ACFData into standard 1:1 Steam KeyValues VDF string representation.
+func GenerateACFContent(data *ACFData) string {
+	if data == nil {
+		return ""
+	}
+	appID := data.AppID
+	if appID == "" {
+		appID = "0"
+	}
+	name := data.Name
+	if name == "" {
+		name = "Game"
+	}
+	installDir := data.InstallDir
+	if installDir == "" {
+		installDir = name
+	}
+	buildID := data.BuildID
+	if buildID == "" {
+		buildID = "0"
+	}
+	lang := data.Language
+	if lang == "" {
+		lang = "english"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\"AppState\"\n{\n")
+	fmt.Fprintf(&sb, "\t\"appid\"\t\t\"%s\"\n", appID)
+	fmt.Fprintf(&sb, "\t\"name\"\t\t\"%s\"\n", name)
+	fmt.Fprintf(&sb, "\t\"installdir\"\t\t\"%s\"\n", installDir)
+	fmt.Fprintf(&sb, "\t\"StateFlags\"\t\t\"4\"\n")
+	fmt.Fprintf(&sb, "\t\"buildid\"\t\t\"%s\"\n", buildID)
+	fmt.Fprintf(&sb, "\t\"UserConfig\"\n\t{\n\t\t\"language\"\t\t\"%s\"\n\t}\n", lang)
+	sb.WriteString("}\n")
+	return sb.String()
+}
+

@@ -1,6 +1,8 @@
 package manifest
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,7 +11,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/staernid/gamux/cache"
 )
+
 
 // HTTPClient allows injecting custom HTTP transport for testing.
 var HTTPClient = http.DefaultClient
@@ -28,6 +33,41 @@ type HubcapManifestResponse struct {
 
 // FetchHubcapKeys queries the Hubcap Manifest API for depot keys corresponding to an AppID.
 func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedLua, error) {
+	// 0. Check local disk cache first (saves 100% of API quota)
+	if cachedData, ok := cache.GetHubcapZIP(appID); ok {
+		if zipReader, err := zip.NewReader(bytes.NewReader(cachedData), int64(len(cachedData))); err == nil {
+			var parsedLua *ParsedLua
+			manifestFiles := make(map[string][]byte)
+
+			for _, file := range zipReader.File {
+				rc, err := file.Open()
+				if err != nil {
+					continue
+				}
+				content, err := io.ReadAll(rc)
+				_ = rc.Close()
+				if err != nil {
+					continue
+				}
+
+				name := file.Name
+				if strings.HasSuffix(strings.ToLower(name), ".lua") {
+					if p, err := ParseLua(string(content)); err == nil && p != nil {
+						parsedLua = p
+					}
+				} else if strings.HasSuffix(strings.ToLower(name), ".manifest") {
+					manifestFiles[name] = content
+				}
+			}
+
+			if parsedLua != nil {
+				parsedLua.ManifestFiles = manifestFiles
+				slog.Info("Successfully loaded keys and manifests from local Hubcap cache", "appID", parsedLua.AppID, "depots", len(parsedLua.Depots), "manifestFiles", len(parsedLua.ManifestFiles))
+				return parsedLua, nil
+			}
+		}
+	}
+
 	if apiKey == "" {
 		return nil, fmt.Errorf("hubcap API key cannot be empty")
 	}
@@ -38,7 +78,7 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 		fmt.Sprintf("https://hubcapmanifest.com/api/v1/keys/%d", appID),
 	}
 
-	slog.Info("Querying Hubcap Manifest API for depot keys", "appID", appID)
+	slog.Info("Querying Hubcap Manifest API for depot keys and manifests", "appID", appID)
 
 	var lastErr error
 	for _, apiURL := range endpoints {
@@ -71,7 +111,42 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 			continue
 		}
 
-		// Try parsing as addappid(...) raw lua text first
+		// 1. Try parsing as a ZIP archive (containing .lua and binary .manifest files)
+		if zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes))); err == nil {
+			var parsedLua *ParsedLua
+			manifestFiles := make(map[string][]byte)
+
+			for _, file := range zipReader.File {
+				rc, err := file.Open()
+				if err != nil {
+					continue
+				}
+				content, err := io.ReadAll(rc)
+				_ = rc.Close()
+				if err != nil {
+					continue
+				}
+
+				name := file.Name
+				if strings.HasSuffix(strings.ToLower(name), ".lua") {
+					if p, err := ParseLua(string(content)); err == nil && p != nil {
+						parsedLua = p
+					}
+				} else if strings.HasSuffix(strings.ToLower(name), ".manifest") {
+					manifestFiles[name] = content
+				}
+			}
+
+			if parsedLua != nil {
+				parsedLua.ManifestFiles = manifestFiles
+				_ = cache.SaveHubcapZIP(appID, bodyBytes)
+				slog.Info("Successfully resolved keys and manifests from Hubcap ZIP and cached to disk", "appID", parsedLua.AppID, "depots", len(parsedLua.Depots), "manifestFiles", len(parsedLua.ManifestFiles))
+				return parsedLua, nil
+			}
+		}
+
+
+		// 2. Try parsing as addappid(...) raw lua text
 		bodyStr := string(bodyBytes)
 		if strings.Contains(bodyStr, "addappid") {
 			parsedLua, err := ParseLua(bodyStr)
@@ -126,8 +201,16 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 			}
 		}
 
-		lastErr = fmt.Errorf("could not parse valid depot keys from Hubcap response: %s", bodyStr)
+		if strings.HasPrefix(strings.TrimSpace(strings.ToLower(bodyStr)), "<!") || strings.HasPrefix(strings.TrimSpace(strings.ToLower(bodyStr)), "<html") {
+			lastErr = fmt.Errorf("Hubcap API returned non-JSON HTML response (no keys for AppID %d)", appID)
+		} else {
+			if len(bodyStr) > 120 {
+				bodyStr = bodyStr[:117] + "..."
+			}
+			lastErr = fmt.Errorf("could not parse valid depot keys from Hubcap response: %s", bodyStr)
+		}
 	}
+
 
 	if lastErr != nil {
 		return nil, fmt.Errorf("failed to resolve depot keys from Hubcap API for AppID %d: %w", appID, lastErr)

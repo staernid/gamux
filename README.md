@@ -1,9 +1,10 @@
 # gamux
 
-Post-download Steam game manager for Linux.
+Steam game manager and downloader for Linux.
 
 ## Project Goals
 
+- **Direct Depot Downloads**: Download game depots and updates directly from Steam.
 - **Automated DRM Emulation**: Streamline Goldberg Steam Emulator setup for downloaded games.
 - **Ecosystem Integration**: Register games automatically with Lutris (YAML configuration & `pga.db` database integration).
 - **File Safety**: Provide non-destructive setup with atomic backups, rollback support, and dry-run previews.

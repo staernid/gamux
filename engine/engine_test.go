@@ -1,13 +1,18 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/steam"
 )
+
 
 func TestInspectStatus_Original(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -90,3 +95,58 @@ func TestInspectStatus_PortablePatchedAndRollback(t *testing.T) {
 		t.Errorf("expected steam_settings to be removed")
 	}
 }
+
+type mockRoundTripper func(req *http.Request) (*http.Response, error)
+
+func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		jsonResp := `{"1091500": {"success": true, "data": {"name": "Cyberpunk 2077"}}}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	tmpDir := t.TempDir()
+	rawGameDir := filepath.Join(tmpDir, "Cyberpunk.2077.v2.12-P2P")
+	if err := os.MkdirAll(rawGameDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create steam_appid.txt so AppID is recognized as 1091500
+	_ = os.WriteFile(filepath.Join(rawGameDir, "steam_appid.txt"), []byte("1091500"), 0644)
+	_ = os.WriteFile(filepath.Join(rawGameDir, "Cyberpunk2077.exe"), []byte("fake exe"), 0755)
+
+	eng := New(config.DefaultConfig())
+	opts := ProcessOptions{
+		Path:         rawGameDir,
+		NormalizeDir: true,
+		NoSteamless:  true,
+	}
+
+	res, err := eng.ProcessGame(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("ProcessGame failed: %v", err)
+	}
+
+	expectedNormalizedDir := filepath.Join(tmpDir, "Cyberpunk 2077")
+	if res.Info.GameDir != expectedNormalizedDir {
+		t.Errorf("expected normalized game dir %s, got %s", expectedNormalizedDir, res.Info.GameDir)
+	}
+
+	// Verify synthesized ACF manifest exists inside [Manifests]
+	synthesizedACF := filepath.Join(expectedNormalizedDir, "[Manifests]", "appmanifest_1091500.acf")
+	if _, err := os.Stat(synthesizedACF); os.IsNotExist(err) {
+		t.Errorf("expected synthesized ACF manifest at %s", synthesizedACF)
+	}
+}
+
+
