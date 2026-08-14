@@ -46,46 +46,53 @@ func ResolveProcessOptions(c *cli.Context, cfg *config.Config, promptIfUnset boo
 
 	autoYes := c.Bool("yes") || c.IsSet("yes") || c.IsSet("y")
 
+	// 1. GBE & Portable/Loader Mode Resolution
 	applyGBE := true
-	if promptIfUnset && !autoYes {
+	portable := false
+	gbeMode := cfg.GbeMode
+
+	if c.IsSet("portable") {
+		gbeMode = "portable"
+	} else if c.IsSet("loader") {
+		gbeMode = "loader"
+	} else if c.IsSet("no-gbe") {
+		gbeMode = "disabled"
+	}
+
+	if strings.EqualFold(gbeMode, "portable") {
+		applyGBE = true
+		portable = true
+	} else if strings.EqualFold(gbeMode, "loader") {
+		applyGBE = true
+		portable = false
+	} else if strings.EqualFold(gbeMode, "disabled") || strings.EqualFold(gbeMode, "none") || strings.EqualFold(gbeMode, "off") {
+		applyGBE = false
+		portable = false
+	} else if promptIfUnset && !autoYes {
+		// gbeMode is empty/unset in config, prompt user interactively
 		applyGBE = ui.PromptYesNoWithExplanation(
 			"Apply Goldberg Emulator & Steamless DRM removal?",
 			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
 			true,
 		)
+		if applyGBE {
+			portable = ui.PromptYesNoWithExplanation(
+				"Use Portable Mode (Direct DLL/SO replacement)?",
+				"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
+				false,
+			)
+		}
 	}
 
-	gbeMode := cfg.GbeMode
-	portable := false
-	if c.IsSet("portable") {
-		portable = c.Bool("portable")
-	} else if c.IsSet("loader") {
-		portable = false
-	} else if strings.EqualFold(gbeMode, "portable") {
-		portable = true
-	} else if strings.EqualFold(gbeMode, "loader") {
-		portable = false
-	} else if applyGBE && promptIfUnset && !autoYes {
-		portable = ui.PromptYesNoWithExplanation(
-			"Use Portable Mode (Direct DLL/SO replacement)?",
-			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
-			false,
-		)
-	}
-
+	// 2. Lutris Integration Resolution
 	addLutris := cfg.Lutris
-	if c.IsSet("lutris") {
+	if c.IsSet("no-lutris") {
+		addLutris = false
+	} else if c.IsSet("lutris") {
 		addLutris = c.Bool("lutris")
-	} else if autoYes {
-		addLutris = cfg.Lutris
-	} else if promptIfUnset {
-		addLutris = ui.PromptYesNoWithExplanation(
-			"Register game in Lutris?",
-			"Creates a Lutris YAML configuration in ~/.config/lutris/ so the game appears in your Lutris library.",
-			cfg.Lutris,
-		)
 	}
 
+	// 3. Operational Toggles
 	normalize := cfg.Normalize
 	if c.IsSet("normalize") {
 		normalize = c.Bool("normalize")

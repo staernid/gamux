@@ -32,9 +32,11 @@ var Version = "dev"
 
 func commonSetupFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: "lutris", Usage: "Add game to Lutris"},
+		&cli.BoolFlag{Name: "lutris", Usage: "Enable Lutris library registration"},
+		&cli.BoolFlag{Name: "no-lutris", Usage: "Disable Lutris library registration"},
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts (non-interactive mode)"},
-		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
+		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder"},
+		&cli.BoolFlag{Name: "loader", Usage: "Perform loader mode setup without modifying game DLLs"},
 		&cli.BoolFlag{Name: "normalize", Value: true, Usage: "Normalize directory name to match Steam's official 1:1 installdir"},
 		&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 		&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
