@@ -299,40 +299,69 @@ func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[u
 		}
 	}
 
-	allFiles := make([]ManifestFileEntry, 0)
-	var resolvedDepotID uint32
+	type manifestFileInfo struct {
+		name       string
+		depotID    uint32
+		manifestID uint64
+		path       string
+	}
+
+	depotLatestManifest := make(map[uint32]manifestFileInfo)
 
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
-			manifestPath := filepath.Join(manifestsDir, e.Name())
-			data, err := os.ReadFile(manifestPath)
-			if err != nil {
-				continue
-			}
-
+			name := e.Name()
+			parts := strings.Split(name, "_")
 			var fileDepotID uint32
-			parts := strings.Split(e.Name(), "_")
+			var fileManifestID uint64
+
 			if len(parts) >= 2 {
 				if did, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
 					fileDepotID = uint32(did)
-					if resolvedDepotID == 0 {
-						resolvedDepotID = fileDepotID
-					}
+				}
+				midStr := strings.TrimSuffix(parts[1], ".manifest")
+				if mid, err := strconv.ParseUint(midStr, 10, 64); err == nil {
+					fileManifestID = mid
 				}
 			}
 
-			hexKey := ""
-			if depotKeys != nil {
-				hexKey = depotKeys[fileDepotID]
-			}
+			manifestPath := filepath.Join(manifestsDir, name)
 
-			files, err := ParseBinaryManifestWithKey(data, hexKey)
-			if err == nil && len(files) > 0 {
-				for idx := range files {
-					files[idx].DepotID = fileDepotID
+			existing, exists := depotLatestManifest[fileDepotID]
+			if !exists || fileManifestID > existing.manifestID {
+				depotLatestManifest[fileDepotID] = manifestFileInfo{
+					name:       name,
+					depotID:    fileDepotID,
+					manifestID: fileManifestID,
+					path:       manifestPath,
 				}
-				allFiles = append(allFiles, files...)
 			}
+		}
+	}
+
+	allFiles := make([]ManifestFileEntry, 0)
+	var resolvedDepotID uint32
+
+	for dID, info := range depotLatestManifest {
+		if resolvedDepotID == 0 {
+			resolvedDepotID = dID
+		}
+		data, err := os.ReadFile(info.path)
+		if err != nil {
+			continue
+		}
+
+		hexKey := ""
+		if depotKeys != nil {
+			hexKey = depotKeys[dID]
+		}
+
+		files, err := ParseBinaryManifestWithKey(data, hexKey)
+		if err == nil && len(files) > 0 {
+			for idx := range files {
+				files[idx].DepotID = dID
+			}
+			allFiles = append(allFiles, files...)
 		}
 	}
 

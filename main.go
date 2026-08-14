@@ -217,7 +217,10 @@ func buildApp() *cli.App {
 					}
 
 					platform := c.String("platform")
-					if platform == "" && !c.Bool("yes") {
+					if platform == "" && activeConfig != nil && activeConfig.Platform != "" {
+						platform = activeConfig.Platform
+					}
+					if platform == "" && !isAutoYes(c) {
 						title := fmt.Sprintf("%d", appID)
 						if name, err := steam.FetchAppName(c.Context, fmt.Sprintf("%d", appID)); err == nil {
 							title = fmt.Sprintf("%s (%d)", name, appID)
@@ -246,6 +249,17 @@ func buildApp() *cli.App {
 						manifestsDir := filepath.Join(targetDir, "[Manifests]")
 						_ = os.MkdirAll(manifestsDir, 0755)
 						for fname, fcontent := range parsedLua.ManifestFiles {
+							parts := strings.Split(fname, "_")
+							if len(parts) >= 2 {
+								prefix := parts[0] + "_"
+								if existingEntries, err := os.ReadDir(manifestsDir); err == nil {
+									for _, ee := range existingEntries {
+										if !ee.IsDir() && strings.HasPrefix(ee.Name(), prefix) && strings.HasSuffix(ee.Name(), ".manifest") && ee.Name() != fname {
+											_ = os.Remove(filepath.Join(manifestsDir, ee.Name()))
+										}
+									}
+								}
+							}
 							outPath := filepath.Join(manifestsDir, fname)
 							_ = os.WriteFile(outPath, fcontent, 0644)
 							slog.Info("Saved manifest file", "path", outPath)
