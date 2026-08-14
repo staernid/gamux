@@ -12,6 +12,7 @@ var (
 	GbeDir             = ".local/share/gbe_fork"
 	SteamlessDir       = ".local/share/steamless"
 	SteamStoreAPI      = "https://store.steampowered.com/api"
+	SteamWebAPI        = "https://api.steampowered.com"
 	GithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
 	SteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
 	LutrisDir          = ".config/lutris/games"
@@ -27,6 +28,8 @@ type Config struct {
 	SteamStoreAPI      string `json:"steam_store_api"`
 	GithubAPIURL       string `json:"github_api_url"`
 	SteamlessGithubAPI string `json:"steamless_github_api"`
+	SteamWebAPIKey     string `json:"steam_web_api_key"`
+	HubcapAPIKey       string `json:"hubcap_api_key"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -71,6 +74,8 @@ func DefaultConfig() *Config {
 		SteamStoreAPI:      SteamStoreAPI,
 		GithubAPIURL:       GithubAPIURL,
 		SteamlessGithubAPI: SteamlessGithubAPI,
+		SteamWebAPIKey:     "",
+		HubcapAPIKey:       "",
 	}
 }
 
@@ -100,30 +105,60 @@ func LoadConfig(customPath string) (*Config, error) {
 	}
 
 	var raw struct {
-		GbeDir        string `json:"gbe_dir"`
-		LutrisDir     string `json:"lutris_dir"`
-		SteamUserdata string `json:"steam_userdata"`
-		SteamStoreAPI string `json:"steam_store_api"`
-		GithubAPIURL  string `json:"github_api_url"`
+		GbeDir             string `json:"gbe_dir"`
+		SteamlessDir       string `json:"steamless_dir"`
+		LutrisDir          string `json:"lutris_dir"`
+		SteamUserdata      string `json:"steam_userdata"`
+		SteamStoreAPI      string `json:"steam_store_api"`
+		GithubAPIURL       string `json:"github_api_url"`
+		SteamlessGithubAPI string `json:"steamless_github_api"`
+		SteamWebAPIKey     string `json:"steam_web_api_key"`
+		HubcapAPIKey       string `json:"hubcap_api_key"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
+	healed := false
 	if raw.GbeDir != "" {
 		cfg.GbeDir = raw.GbeDir
+	} else {
+		healed = true
+	}
+	if raw.SteamlessDir != "" {
+		cfg.SteamlessDir = raw.SteamlessDir
+	} else {
+		healed = true
 	}
 	if raw.LutrisDir != "" {
 		cfg.LutrisDir = raw.LutrisDir
+	} else {
+		healed = true
 	}
 	if raw.SteamUserdata != "" {
 		cfg.SteamUserdata = raw.SteamUserdata
+	} else {
+		healed = true
 	}
 	if raw.SteamStoreAPI != "" {
 		cfg.SteamStoreAPI = raw.SteamStoreAPI
+	} else {
+		healed = true
 	}
 	if raw.GithubAPIURL != "" {
 		cfg.GithubAPIURL = raw.GithubAPIURL
+	} else {
+		healed = true
+	}
+	if raw.SteamWebAPIKey != "" {
+		cfg.SteamWebAPIKey = raw.SteamWebAPIKey
+	}
+	if raw.HubcapAPIKey != "" {
+		cfg.HubcapAPIKey = raw.HubcapAPIKey
+	}
+
+	if healed && customPath == "" {
+		_ = SaveConfig(cfg, path)
 	}
 
 	// Update legacy globals for fallback compatibility
@@ -134,6 +169,22 @@ func LoadConfig(customPath string) (*Config, error) {
 	GithubAPIURL = cfg.GithubAPIURL
 
 	return cfg, nil
+}
+
+// SaveConfig writes a Config struct cleanly to a JSON file on disk.
+func SaveConfig(cfg *Config, path string) error {
+	if cfg == nil || path == "" {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // InitConfig initializes the configuration or loads it from a file.

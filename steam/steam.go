@@ -170,6 +170,57 @@ func SearchAppID(ctx context.Context, query string) (string, string, error) {
 	return fmt.Sprintf("%d", best.ID), best.Name, nil
 }
 
+// AppSearchResult represents a single candidate result returned from Steam Store search.
+type AppSearchResult struct {
+	AppID uint32
+	Name  string
+}
+
+// SearchAppIDCandidates queries Steam Store API and returns up to 5 matching game candidates.
+func SearchAppIDCandidates(ctx context.Context, query string) ([]AppSearchResult, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("search query cannot be empty")
+	}
+
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.SteamStoreAPI, url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create search request: %w", err)
+	}
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch store search: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("store search HTTP %d", resp.StatusCode)
+	}
+
+	var res SearchStoreResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, fmt.Errorf("decode store search JSON: %w", err)
+	}
+
+	if res.Total == 0 || len(res.Items) == 0 {
+		return nil, fmt.Errorf("no Steam AppID found for query %q", query)
+	}
+
+	results := make([]AppSearchResult, 0, len(res.Items))
+	for _, item := range res.Items {
+		results = append(results, AppSearchResult{
+			AppID: uint32(item.ID),
+			Name:  item.Name,
+		})
+		if len(results) >= 5 {
+			break
+		}
+	}
+
+	return results, nil
+}
+
 // FetchDLCs fetches DLCs for a given AppID.
 func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) error {
 	slog.Info("Fetching DLCs", "appID", appID, "libraryPath", libraryPath)
@@ -271,4 +322,107 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	}
 
 	return nil
+}
+
+// NewsItem represents a single patch note or news item from Steam Web API.
+type NewsItem struct {
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Author    string `json:"author"`
+	Contents  string `json:"contents"`
+	FeedLabel string `json:"feed_label"`
+	Date      int64  `json:"date"`
+}
+
+// AppNewsResponse models Steam API ISteamNews/GetNewsForApp response.
+type AppNewsResponse struct {
+	AppNews struct {
+		NewsItems []struct {
+			Title     string `json:"title"`
+			URL       string `json:"url"`
+			Author    string `json:"author"`
+			Contents  string `json:"contents"`
+			FeedLabel string `json:"feedlabel"`
+			Date      int64  `json:"date"`
+		} `json:"newsitems"`
+	} `json:"appnews"`
+}
+
+// FetchAppNews fetches the latest news/patch note item for a given Steam AppID.
+func FetchAppNews(ctx context.Context, appID string) (string, error) {
+	items, err := FetchAppNewsItems(ctx, appID, 1)
+	if err != nil || len(items) == 0 {
+		return "", err
+	}
+	return fmt.Sprintf("%s (%s)", items[0].Title, items[0].FeedLabel), nil
+}
+
+// FetchAppNewsItems fetches up to count news/patch note items for a given Steam AppID.
+func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem, error) {
+	if appID == "" || appID == "0" {
+		return nil, fmt.Errorf("invalid appID")
+	}
+	if count <= 0 {
+		count = 3
+	}
+
+	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d", config.SteamWebAPI, appID, count)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, newsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create news request: %w", err)
+	}
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch app news: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("app news HTTP %d", resp.StatusCode)
+	}
+
+	var res AppNewsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, fmt.Errorf("decode news JSON: %w", err)
+	}
+
+	if len(res.AppNews.NewsItems) == 0 {
+		return nil, fmt.Errorf("no news items found")
+	}
+
+	items := make([]NewsItem, 0, len(res.AppNews.NewsItems))
+	for _, item := range res.AppNews.NewsItems {
+		items = append(items, NewsItem{
+			Title:     item.Title,
+			URL:       item.URL,
+			Author:    item.Author,
+			Contents:  StripHTML(item.Contents),
+			FeedLabel: item.FeedLabel,
+			Date:      item.Date,
+		})
+	}
+
+	return items, nil
+}
+
+var htmlTagRegex = regexp.MustCompile(`<[^>]*>`)
+
+// StripHTML converts HTML formatted patch notes into clean, readable terminal text.
+func StripHTML(htmlStr string) string {
+	if htmlStr == "" {
+		return ""
+	}
+	s := strings.ReplaceAll(htmlStr, "<br>", "\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n")
+	s = strings.ReplaceAll(s, "<br />", "\n")
+	s = strings.ReplaceAll(s, "</p>", "\n\n")
+	s = strings.ReplaceAll(s, "</li>", "\n")
+	s = strings.ReplaceAll(s, "<li>", "  • ")
+	s = htmlTagRegex.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "&quot;", `"`)
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	return strings.TrimSpace(s)
 }

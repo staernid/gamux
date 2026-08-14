@@ -139,21 +139,52 @@ func TestConsolidateManifests(t *testing.T) {
 		t.Fatalf("ConsolidateManifests failed: %v", err)
 	}
 
-	// Verify [Steam]/appmanifest_111.acf exists inside MyGame
-	consolidatedACF := filepath.Join(info.GameDir, "[Steam]", "appmanifest_111.acf")
+	// Verify [Manifests]/appmanifest_111.acf exists inside MyGame
+	consolidatedACF := filepath.Join(info.GameDir, "[Manifests]", "appmanifest_111.acf")
 	if _, err := os.Stat(consolidatedACF); os.IsNotExist(err) {
 		t.Errorf("expected consolidated ACF at %s", consolidatedACF)
 	}
 
-	t.Run("no manifest path does not create [Steam] directory", func(t *testing.T) {
+	t.Run("no manifest path does not create [Manifests] directory", func(t *testing.T) {
 		gameDir := t.TempDir()
 		emptyInfo := &GameInfo{GameDir: gameDir}
 		if err := ConsolidateManifests(emptyInfo, false); err != nil {
 			t.Fatalf("ConsolidateManifests failed: %v", err)
 		}
-		steamDir := filepath.Join(gameDir, "[Steam]")
-		if _, err := os.Stat(steamDir); !os.IsNotExist(err) {
-			t.Errorf("expected [Steam] directory to not exist, but found at %s", steamDir)
+		manifestsDir := filepath.Join(gameDir, "[Manifests]")
+		if _, err := os.Stat(manifestsDir); !os.IsNotExist(err) {
+			t.Errorf("expected [Manifests] directory to not exist, but found at %s", manifestsDir)
+		}
+	})
+
+	t.Run("migrates legacy [Steam] directory to [Manifests]", func(t *testing.T) {
+		gameDir := t.TempDir()
+		legacyDir := filepath.Join(gameDir, "[Steam]")
+		_ = os.MkdirAll(legacyDir, 0755)
+		_ = os.WriteFile(filepath.Join(legacyDir, "appmanifest_2088570.acf"), []byte("test"), 0644)
+		_ = os.WriteFile(filepath.Join(legacyDir, "2088571_1234.manifest"), []byte("test"), 0644)
+
+		info := &GameInfo{
+			GameDir:      gameDir,
+			ManifestPath: filepath.Join(legacyDir, "appmanifest_2088570.acf"),
+		}
+
+		if err := ConsolidateManifests(info, false); err != nil {
+			t.Fatalf("ConsolidateManifests failed: %v", err)
+		}
+
+		// Verify [Manifests] has both files
+		manifestsDir := filepath.Join(gameDir, "[Manifests]")
+		if _, err := os.Stat(filepath.Join(manifestsDir, "appmanifest_2088570.acf")); os.IsNotExist(err) {
+			t.Error("expected appmanifest in [Manifests]")
+		}
+		if _, err := os.Stat(filepath.Join(manifestsDir, "2088571_1234.manifest")); os.IsNotExist(err) {
+			t.Error("expected .manifest in [Manifests]")
+		}
+
+		// Verify legacy [Steam] directory was removed
+		if _, err := os.Stat(legacyDir); !os.IsNotExist(err) {
+			t.Error("expected legacy [Steam] directory to be deleted after migration")
 		}
 	})
 }

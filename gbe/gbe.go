@@ -2,6 +2,7 @@ package gbe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/steam"
@@ -284,6 +285,63 @@ IgnoreLoaderArchDifference=0
 			return fmt.Errorf("write ColdClientLoader.ini: %w", err)
 		}
 		slog.Info("Successfully wrote ColdClientLoader.ini", "path", iniPath, "appID", appID, "exe", relExe)
+	}
+
+	return nil
+}
+
+// GenerateAchievementsJSON fetches achievement schema via steam.FetchAchievementSchema, writes steam_settings/achievements.json and downloads icons to steam_settings/img.
+func GenerateAchievementsJSON(ctx context.Context, appID uint32, apiKey string, targetDir string, dryRun bool) error {
+	slog.Info("Fetching and generating achievements.json for GBE", "appID", appID, "targetDir", targetDir)
+
+	steamSettingsDir := filepath.Join(targetDir, "steam_settings")
+	if !dryRun {
+		if err := os.MkdirAll(steamSettingsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create steam_settings directory: %w", err)
+		}
+	}
+
+	achievements, err := steam.FetchAchievementSchema(ctx, appID, apiKey, "english")
+	if err != nil {
+		slog.Warn("Failed to fetch achievement schema", "appID", appID, "error", err)
+		return err
+	}
+
+	if len(achievements) == 0 {
+		slog.Info("No achievements found for AppID", "appID", appID)
+		return nil
+	}
+
+	achievementsJSONPath := filepath.Join(steamSettingsDir, "achievements.json")
+	if dryRun {
+		slog.Info("[DRY RUN] Would write achievements.json", "path", achievementsJSONPath, "count", len(achievements))
+	} else {
+		data, err := json.MarshalIndent(achievements, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal achievements.json: %w", err)
+		}
+		if err := os.WriteFile(achievementsJSONPath, data, 0644); err != nil {
+			return fmt.Errorf("write achievements.json: %w", err)
+		}
+		slog.Info("Wrote achievements.json", "path", achievementsJSONPath, "count", len(achievements))
+	}
+
+	// Collect icon names for downloading
+	imgDir := filepath.Join(steamSettingsDir, "img")
+	iconNames := make([]string, 0, len(achievements)*2)
+	for _, ach := range achievements {
+		if ach.Icon != "" && strings.HasPrefix(ach.Icon, "img/") {
+			iconNames = append(iconNames, strings.TrimPrefix(ach.Icon, "img/"))
+		}
+		if ach.IconGray != "" && strings.HasPrefix(ach.IconGray, "img/") {
+			iconNames = append(iconNames, strings.TrimPrefix(ach.IconGray, "img/"))
+		}
+	}
+
+	if len(iconNames) > 0 && !dryRun {
+		if err := steam.DownloadAchievementImages(ctx, int(appID), iconNames, imgDir); err != nil {
+			slog.Warn("Failed downloading some achievement icons", "appID", appID, "error", err)
+		}
 	}
 
 	return nil

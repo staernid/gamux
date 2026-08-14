@@ -38,7 +38,9 @@ func TestLoadConfig_CustomJSON(t *testing.T) {
 	content := `{
 		"gbe_dir": "/custom/gbe",
 		"lutris_dir": "/custom/lutris",
-		"steam_userdata": "/custom/steam"
+		"steam_userdata": "/custom/steam",
+		"steam_web_api_key": "TESTKEY123",
+		"hubcap_api_key": "HUBCAP123"
 	}`
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -57,5 +59,11 @@ func TestLoadConfig_CustomJSON(t *testing.T) {
 	}
 	if cfg.SteamUserdata != "/custom/steam" {
 		t.Errorf("expected SteamUserdata '/custom/steam', got %s", cfg.SteamUserdata)
+	}
+	if cfg.SteamWebAPIKey != "TESTKEY123" {
+		t.Errorf("expected SteamWebAPIKey 'TESTKEY123', got %s", cfg.SteamWebAPIKey)
+	}
+	if cfg.HubcapAPIKey != "HUBCAP123" {
+		t.Errorf("expected HubcapAPIKey 'HUBCAP123', got %s", cfg.HubcapAPIKey)
 	}
 }

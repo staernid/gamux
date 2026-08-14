@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"context"
-	"crypto/sha256"
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/bodgit/sevenzip"
@@ -30,19 +31,24 @@ func RunCmd(name string, args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// GetHash returns the SHA256 hash of a file.
-func GetHash(filePath string) (string, error) {
+// GetSHA1Hash returns the SHA1 hash of a file.
+func GetSHA1Hash(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}
 
-	h := sha256.New()
+	h := sha1.New()
 	if _, err := h.Write(data); err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// GetHash returns the SHA1 hash of a file.
+func GetHash(filePath string) (string, error) {
+	return GetSHA1Hash(filePath)
 }
 
 // BackupAndReplace backs up a file and replaces it.
@@ -246,4 +252,19 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 	}
 
 	return nil
+}
+
+// SanitizeFilename replaces illegal filesystem characters with dashes to return a clean folder name.
+func SanitizeFilename(name string) string {
+	invalidChars := []string{":", "/", "\\", "?", "*", "<", ">", "|", "\""}
+	res := name
+	for _, c := range invalidChars {
+		res = strings.ReplaceAll(res, c, " - ")
+	}
+	fields := strings.Fields(res)
+	clean := strings.Join(fields, " ")
+	if clean == "" {
+		return "Game"
+	}
+	return clean
 }

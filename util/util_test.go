@@ -51,7 +51,7 @@ func TestGetHash(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	expectedHash := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" // SHA256 hash of "hello"
+	expectedHash := "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d" // SHA1 hash of "hello"
 
 	// Re-create temp file with "hello" content
 	tmpfile2, err := os.CreateTemp("", "testfile2")
@@ -191,5 +191,24 @@ func TestBackupAndReplace(t *testing.T) {
 	}
 	if string(newDestContentAfterNoBackup) != srcContent {
 		t.Errorf("Expected new destination content %q, got %q", srcContent, string(newDestContentAfterNoBackup))
+	}
+}
+
+func TestSanitizeFilename(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Stationeers", "Stationeers"},
+		{"Stationeers: Space & Survival", "Stationeers - Space & Survival"},
+		{"Game/Title\\Test?", "Game - Title - Test -"},
+		{"  ", "Game"},
+	}
+
+	for _, tt := range tests {
+		res := SanitizeFilename(tt.input)
+		if res != tt.expected {
+			t.Errorf("SanitizeFilename(%q) = %q, expected %q", tt.input, res, tt.expected)
+		}
 	}
 }

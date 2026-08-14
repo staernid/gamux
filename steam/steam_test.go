@@ -231,3 +231,114 @@ func TestSearchAppID(t *testing.T) {
 		t.Errorf("expected Name 'Tiny Rogues', got %s", name)
 	}
 }
+
+func TestFetchAchievementSchema(t *testing.T) {
+	oldTransport := HTTPClient.Transport
+	defer func() {
+		HTTPClient.Transport = oldTransport
+	}()
+
+	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.Path, "GetSchemaForGame") {
+			jsonResp := `{
+				"game": {
+					"availableGameStats": {
+						"achievements": [
+							{
+								"name": "ACH_KILL_10",
+								"displayName": "Slayer",
+								"description": "Kill 10 enemies",
+								"hidden": 0,
+								"icon": "https://cdn.steam.com/img/icon_slayer.png",
+								"icongray": "https://cdn.steam.com/img/icon_slayer_gray.png"
+							}
+						]
+					}
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}
+		return nil, nil
+	})
+
+	achs, err := FetchAchievementSchema(context.Background(), 12345, "MOCKKEY", "english")
+	if err != nil {
+		t.Fatalf("FetchAchievementSchema failed: %v", err)
+	}
+
+	if len(achs) != 1 {
+		t.Fatalf("expected 1 achievement, got %d", len(achs))
+	}
+	if achs[0].Name != "ACH_KILL_10" {
+		t.Errorf("expected name ACH_KILL_10, got %s", achs[0].Name)
+	}
+	if achs[0].Icon != "img/icon_slayer.png" {
+		t.Errorf("expected Icon img/icon_slayer.png, got %s", achs[0].Icon)
+	}
+}
+
+func TestExtractWorkshopID(t *testing.T) {
+	id, err := ExtractWorkshopID("https://steamcommunity.com/sharedfiles/filedetails/?id=315783921")
+	if err != nil {
+		t.Fatalf("ExtractWorkshopID failed: %v", err)
+	}
+	if id != 315783921 {
+		t.Errorf("expected ID 315783921, got %d", id)
+	}
+
+	id, err = ExtractWorkshopID("315783921")
+	if err != nil {
+		t.Fatalf("ExtractWorkshopID raw ID failed: %v", err)
+	}
+	if id != 315783921 {
+		t.Errorf("expected ID 315783921, got %d", id)
+	}
+}
+
+func TestFetchWorkshopItemDetails(t *testing.T) {
+	oldTransport := HTTPClient.Transport
+	defer func() {
+		HTTPClient.Transport = oldTransport
+	}()
+
+	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.Path, "GetPublishedFileDetails") {
+			jsonResp := `{
+				"response": {
+					"resultcount": 1,
+					"publishedfiledetails": [
+						{
+							"publishedfileid": "315783921",
+							"result": 1,
+							"title": "Awesome Mod",
+							"hcontent_file": "1234567890",
+							"consumer_app_id": 2088570
+						}
+					]
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}
+		return nil, nil
+	})
+
+	details, err := FetchWorkshopItemDetails(context.Background(), 315783921)
+	if err != nil {
+		t.Fatalf("FetchWorkshopItemDetails failed: %v", err)
+	}
+
+	if details.Title != "Awesome Mod" {
+		t.Errorf("expected title 'Awesome Mod', got %s", details.Title)
+	}
+	if details.HContentFile != "1234567890" {
+		t.Errorf("expected hcontent_file '1234567890', got %s", details.HContentFile)
+	}
+}

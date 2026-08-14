@@ -9,13 +9,22 @@ import (
 	"strings"
 )
 
+// LaunchCandidate represents a Steam app launch option.
+type LaunchCandidate struct {
+	Name        string `json:"name"`
+	Executable  string `json:"executable"`
+	Arguments   string `json:"arguments"`
+	Description string `json:"description"`
+}
+
 // ACFData represents extracted metadata from a Steam appmanifest_<appid>.acf file.
 type ACFData struct {
-	AppID      string
-	Name       string
-	InstallDir string
-	BuildID    string
-	Language   string
+	AppID         string
+	Name          string
+	InstallDir    string
+	BuildID       string
+	Language      string
+	LaunchOptions []LaunchCandidate
 }
 
 var kvRegex = regexp.MustCompile(`^\s*"([^"]+)"\s+"([^"]*)"`)
@@ -46,6 +55,17 @@ func ParseACF(r io.Reader) (*ACFData, error) {
 				data.BuildID = val
 			case "language":
 				data.Language = val
+			case "executable":
+				c := LaunchCandidate{Executable: val}
+				data.LaunchOptions = append(data.LaunchOptions, c)
+			case "arguments":
+				if len(data.LaunchOptions) > 0 {
+					data.LaunchOptions[len(data.LaunchOptions)-1].Arguments = val
+				}
+			case "description":
+				if len(data.LaunchOptions) > 0 {
+					data.LaunchOptions[len(data.LaunchOptions)-1].Description = val
+				}
 			}
 		}
 	}

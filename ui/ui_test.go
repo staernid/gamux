@@ -3,6 +3,8 @@ package ui
 import (
 	"errors"
 	"testing"
+
+	"github.com/urfave/cli/v2"
 )
 
 func TestDetectionSummary(t *testing.T) {
@@ -26,4 +28,21 @@ func TestRenderStepsAndSuccess(t *testing.T) {
 	RenderSubStep("!", "Warning message test")
 	RenderSuccess("Setup Complete", "All operations finished cleanly.", []string{"Launch via Steam", "Check Lutris"})
 	RenderErrorHelp(errors.New("sample error"), []string{"Check file permissions", "Verify game path"})
+}
+
+func TestHelpScreenCoverage(t *testing.T) {
+	// Verify RenderAppHelp runs cleanly with nil app
+	RenderAppHelp(nil, "v1.0.0")
+
+	// Verify RenderAppHelp with cli.App renders commands dynamically
+	dummyApp := &cli.App{
+		Name:    "gamux",
+		Version: "v1.0.0",
+		Commands: []*cli.Command{
+			{Name: "add", Category: "Setup & Management", Usage: "Add game"},
+			{Name: "download", Category: "Acquisition", Usage: "Download game"},
+			{Name: "news", Category: "Maintenance", Usage: "Read patch notes"},
+		},
+	}
+	RenderAppHelp(dummyApp, "v1.0.0")
 }

@@ -6,14 +6,17 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/lutris"
-	"github.com/staernid/gamux/steamless"
+	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/steamless"
+	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
 )
 
@@ -25,9 +28,10 @@ type ProcessOptions struct {
 	Promote     bool
 	DryRun      bool
 	AutoYes     bool
-	NoSteamless bool
-	WinePrefix  string
-	Runner      string
+	NoSteamless       bool
+	FetchAchievements bool
+	WinePrefix        string
+	Runner            string
 }
 
 // ProcessResult summarizes the outcome of processing a game.
@@ -51,6 +55,15 @@ type GameStatus struct {
 	OriginalBackups    []string
 	SettingsDirExists  bool
 	SteamAppIDTxtFound bool
+	ManifestID         string
+	BuildID            string
+	DiskSizeBytes      int64
+	FileCount          int
+	DLCCount           int
+	AchievementCount   int
+	LutrisRegistered   bool
+	RecentPatchNote    string
+	NewsItems          []steam.NewsItem
 }
 
 // Engine is the core domain service orchestrating game scanning, patching, and launcher integrations.
@@ -82,6 +95,56 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 	info, err := detector.Detect(ctx, targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
+	}
+
+	// Interactive Disambiguation: Prompt user to confirm/select game title if ambiguous
+	if !opts.AutoYes && info.Name != "" {
+		candidates, searchErr := steam.SearchAppIDCandidates(ctx, info.Name)
+		if searchErr == nil && len(candidates) > 1 {
+			uiCandidates := make([]ui.CandidateItem, len(candidates))
+			for i, c := range candidates {
+				uiCandidates[i] = ui.CandidateItem{AppID: c.AppID, Name: c.Name}
+			}
+			if selected, promptErr := ui.PromptSelectCandidate(info.Name, uiCandidates); promptErr == nil {
+				info.AppID = fmt.Sprintf("%d", selected.AppID)
+				info.Name = selected.Name
+			}
+		}
+	}
+
+	// Interactive Launch Executable Disambiguation: Prompt user if multiple launch candidates exist
+	if !opts.AutoYes && len(info.LaunchCandidates) > 1 {
+		uiOptions := make([]ui.LaunchOptionItem, len(info.LaunchCandidates))
+		for i, opt := range info.LaunchCandidates {
+			uiOptions[i] = ui.LaunchOptionItem{
+				Name:       opt.Name,
+				Executable: opt.Executable,
+				Arguments:  opt.Arguments,
+			}
+		}
+		if selected, promptErr := ui.PromptSelectLaunchOption(info.Name, uiOptions); promptErr == nil {
+			info.ExePath = selected.Executable
+			info.ExeArgs = selected.Arguments
+		}
+	}
+
+	// Manifest Auto-Fetch & Repair Offer if [Manifests] is missing
+	if info.AppID != "" && info.AppID != "0" {
+		manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
+		if entries, readErr := os.ReadDir(manifestsDir); readErr != nil || len(entries) == 0 {
+			if appIDVal, parseErr := strconv.ParseUint(info.AppID, 10, 32); parseErr == nil {
+				slog.Info("No local [Manifests] found, resolving keys and manifests", "appID", info.AppID)
+				parsedLua, keyErr := manifest.ResolveKeys(ctx, uint32(appIDVal), "", "")
+				if keyErr == nil && len(parsedLua.ManifestFiles) > 0 && !opts.DryRun {
+					_ = os.MkdirAll(manifestsDir, 0755)
+					for fname, fcontent := range parsedLua.ManifestFiles {
+						outPath := filepath.Join(manifestsDir, fname)
+						_ = os.WriteFile(outPath, fcontent, 0644)
+						slog.Info("Auto-fetched and saved manifest file", "path", outPath)
+					}
+				}
+			}
+		}
 	}
 
 	res := &ProcessResult{
@@ -133,6 +196,16 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		res.Patched = true
 	}
 
+	if opts.FetchAchievements {
+		var appIDUint uint32
+		fmt.Sscanf(info.AppID, "%d", &appIDUint)
+		if appIDUint > 0 {
+			if err := gbe.GenerateAchievementsJSON(ctx, appIDUint, e.Config.SteamWebAPIKey, info.GameDir, opts.DryRun); err != nil {
+				slog.Warn("Achievement schema generation warning/error", "error", err)
+			}
+		}
+	}
+
 
 
 	// 2. Add to Lutris
@@ -177,6 +250,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		lcfg := lutris.Config{
 			Name:                  info.Name,
 			GamePath:              gamePath,
+			Args:                  info.ExeArgs,
 			Runner:                runner,
 			PrefixPath:            opts.WinePrefix,
 			Env:                   env,
@@ -266,10 +340,16 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 		State:    "Original",
 	}
 
-	// Walk game directory to check for backup files or settings
+	// Walk game directory to check for backup files, size, and file count
 	_ = filepath.WalkDir(info.GameDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return nil
+		}
+		if !d.IsDir() {
+			status.FileCount++
+			if fi, err := d.Info(); err == nil {
+				status.DiskSizeBytes += fi.Size()
+			}
 		}
 		name := d.Name()
 		if strings.Contains(name, ".ORIGINAL") {
@@ -280,6 +360,41 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 		}
 		return nil
 	})
+
+	// Check manifests
+	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
+	if entries, err := os.ReadDir(manifestsDir); err == nil {
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".manifest") {
+				parts := strings.Split(e.Name(), "_")
+				if len(parts) >= 2 {
+					status.ManifestID = strings.TrimSuffix(parts[1], ".manifest")
+				} else {
+					status.ManifestID = e.Name()
+				}
+				break
+			}
+		}
+	}
+
+	// Check Lutris
+	slug := lutris.Slugify(info.Name)
+	lutrisTargetDir := e.Config.LutrisDir
+	if !filepath.IsAbs(lutrisTargetDir) {
+		if home, err := os.UserHomeDir(); err == nil {
+			lutrisTargetDir = filepath.Join(home, lutrisTargetDir)
+		}
+	}
+	if lutris.GetExistingWinePrefix(slug, lutrisTargetDir) != "" || util.FileExists(filepath.Join(lutrisTargetDir, "games", slug+".yml")) {
+		status.LutrisRegistered = true
+	}
+
+	// Check recent news
+	if info.AppID != "" && info.AppID != "0" {
+		if news, err := steam.FetchAppNews(ctx, info.AppID); err == nil {
+			status.RecentPatchNote = news
+		}
+	}
 
 	steamSettingsDir := filepath.Join(info.GameDir, "steam_settings")
 	if _, err := os.Stat(steamSettingsDir); err == nil {
@@ -294,6 +409,42 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 	}
 
 	return status, nil
+}
+
+// InspectStatusEx extends InspectStatus with customizable news history depth.
+func (e *Engine) InspectStatusEx(ctx context.Context, targetPath string, newsCount int) (*GameStatus, error) {
+	status, err := e.InspectStatus(ctx, targetPath)
+	if err != nil {
+		return nil, err
+	}
+	if newsCount > 1 && status.AppID != "" && status.AppID != "0" {
+		if items, err := steam.FetchAppNewsItems(ctx, status.AppID, newsCount); err == nil {
+			status.NewsItems = items
+		}
+	}
+	return status, nil
+}
+
+// GetPatchNote fetches and retrieves a single patch note at itemIndex (1-indexed) for a game path or AppID.
+func (e *Engine) GetPatchNote(ctx context.Context, targetPath string, itemIndex int) (*steam.NewsItem, string, error) {
+	appID := targetPath
+	gameName := targetPath
+
+	if info, err := detector.Detect(ctx, targetPath); err == nil && info.AppID != "" && info.AppID != "0" {
+		appID = info.AppID
+		gameName = info.Name
+	}
+
+	items, err := steam.FetchAppNewsItems(ctx, appID, itemIndex+5)
+	if err != nil {
+		return nil, gameName, fmt.Errorf("fetch news: %w", err)
+	}
+
+	if itemIndex <= 0 || itemIndex > len(items) {
+		return nil, gameName, fmt.Errorf("news item index %d out of range (1-%d available)", itemIndex, len(items))
+	}
+
+	return &items[itemIndex-1], gameName, nil
 }
 
 // Rollback restores original backup files and cleans up generated configuration files in a game directory.
@@ -402,5 +553,67 @@ func (e *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) e
 
 	slog.Info("Rollback completed", "restoredFiles", restoredCount)
 	return nil
+}
+
+// LibraryUpdateStatus represents update availability status for a game in the library.
+type LibraryUpdateStatus struct {
+	GameTitle       string
+	AppID           string
+	GameDir         string
+	LocalManifestID string
+	HasUpdate       bool
+}
+
+// CheckLibraryUpdates scans a directory containing game folders and checks for available Steam updates.
+func (e *Engine) CheckLibraryUpdates(ctx context.Context, parentDir string) ([]LibraryUpdateStatus, error) {
+	if parentDir == "" {
+		parentDir = "."
+	}
+
+	absPath, err := filepath.Abs(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve abs path: %w", err)
+	}
+
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("read library directory %s: %w", absPath, err)
+	}
+
+	var results []LibraryUpdateStatus
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		gameDir := filepath.Join(absPath, entry.Name())
+		manifestsDir := filepath.Join(gameDir, "[Manifests]")
+		if _, err := os.Stat(manifestsDir); err != nil {
+			continue
+		}
+
+		info, err := detector.Detect(ctx, gameDir)
+		if err != nil || info.AppID == "" || info.AppID == "0" {
+			continue
+		}
+
+		status := LibraryUpdateStatus{
+			GameTitle: info.Name,
+			AppID:     info.AppID,
+			GameDir:   gameDir,
+		}
+
+		manifestEntries, _ := os.ReadDir(manifestsDir)
+		for _, mFile := range manifestEntries {
+			if strings.HasSuffix(mFile.Name(), ".manifest") {
+				status.LocalManifestID = mFile.Name()
+				break
+			}
+		}
+
+		results = append(results, status)
+	}
+
+	return results, nil
 }
 

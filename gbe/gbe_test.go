@@ -2,11 +2,15 @@ package gbe
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/steam"
 )
 
 func TestApplyGBE_InvalidPlatform(t *testing.T) {
@@ -59,5 +63,33 @@ func TestApplyGBE_ExplicitTargetDirectory(t *testing.T) {
 	}
 	if string(data) != "original_steam_lib" {
 		t.Errorf("expected original lib content, got %s", string(data))
+	}
+}
+
+type mockRoundTripper func(req *http.Request) (*http.Response, error)
+
+func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestGenerateAchievementsJSON_DryRun(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() {
+		steam.HTTPClient.Transport = oldTransport
+	}()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		jsonResp := `{"game": {"availableGameStats": {"achievements": [{"name": "ACH1", "displayName": "Ach 1", "icon": "https://cdn.com/ach1.png"}]}}}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(jsonResp)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	tmpDir := t.TempDir()
+	err := GenerateAchievementsJSON(context.Background(), 12345, "MOCKKEY", tmpDir, true)
+	if err != nil {
+		t.Fatalf("GenerateAchievementsJSON dry-run failed: %v", err)
 	}
 }
