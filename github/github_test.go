@@ -3,6 +3,7 @@ package github
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/util"
 )
 
 type mockRoundTripper func(req *http.Request) (*http.Response, error)
@@ -44,7 +46,7 @@ func TestUpdateGBE_HTTPError(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background())
+	err := UpdateGBE(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "HTTP 404 Not Found") {
 		t.Fatalf("expected 404 HTTP error, got: %v", err)
 	}
@@ -64,7 +66,7 @@ func TestUpdateGBE_InvalidJSON(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background())
+	err := UpdateGBE(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "failed to decode JSON") {
 		t.Fatalf("expected JSON decode error, got: %v", err)
 	}
@@ -91,7 +93,7 @@ func TestUpdateGBE_MissingAssets(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background())
+	err := UpdateGBE(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "failed to find Linux download URL") {
 		t.Fatalf("expected missing Linux asset error, got: %v", err)
 	}
@@ -117,13 +119,16 @@ func TestUpdateGBE_AlreadyUpToDate(t *testing.T) {
 		]
 	}`
 
+	cfg := config.DefaultConfig()
 	// Create pre-existing timestamp file matching release updated_at
-	gbeHome := filepath.Join(tmpHome, config.GbeDir)
+	gbeHome := util.ExpandPath(cfg.GbeDir)
 	if err := os.MkdirAll(gbeHome, 0755); err != nil {
 		t.Fatal(err)
 	}
+	var rel config.Release
+	_ = json.Unmarshal([]byte(jsonResponse), &rel)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
-	if err := os.WriteFile(timestampFile, []byte(now.String()), 0644); err != nil {
+	if err := os.WriteFile(timestampFile, []byte(now.Format(time.RFC3339)), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,7 +142,7 @@ func TestUpdateGBE_AlreadyUpToDate(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background())
+	err := UpdateGBE(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("expected nil error for up-to-date check, got: %v", err)
 	}

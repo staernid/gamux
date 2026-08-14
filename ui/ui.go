@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/mattn/go-isatty"
 	"github.com/staernid/gamux/util"
@@ -176,11 +177,75 @@ func RenderAppHelp(app *cli.App, version string) {
 	}
 }
 
+// RenderCommandHelp displays clean formatted help for a specific subcommand.
+func RenderCommandHelp(cmd *cli.Command, version string) {
+	RenderHeader(version)
+
+	if cmd == nil {
+		return
+	}
+
+	sig := cmd.Name
+	if cmd.ArgsUsage != "" {
+		sig += " " + cmd.ArgsUsage
+	}
+
+	fmt.Printf("%s %s\n", bold("📋 COMMAND:"), cyan(sig))
+	fmt.Println(dim("------------------------------------------------------------------------"))
+	if cmd.Usage != "" {
+		fmt.Printf("  %s\n\n", cmd.Usage)
+	}
+
+	if cmd.Description != "" {
+		fmt.Printf("  %s\n\n", dim(cmd.Description))
+	}
+
+	if len(cmd.Flags) > 0 {
+		fmt.Println(bold("⚙️ OPTIONS & FLAGS"))
+		fmt.Println(dim("------------------------------------------------------------------------"))
+		for _, f := range cmd.Flags {
+			names := f.Names()
+			if len(names) == 0 {
+				continue
+			}
+			var formattedNames []string
+			for _, n := range names {
+				if len(n) == 1 {
+					formattedNames = append(formattedNames, "-"+n)
+				} else {
+					formattedNames = append(formattedNames, "--"+n)
+				}
+			}
+
+			usage := ""
+			switch tf := f.(type) {
+			case *cli.BoolFlag:
+				usage = tf.Usage
+			case *cli.StringFlag:
+				usage = tf.Usage
+			case *cli.UintFlag:
+				usage = tf.Usage
+			case *cli.IntFlag:
+				usage = tf.Usage
+			}
+
+			fmt.Printf("  %-28s %s\n", yellow(strings.Join(formattedNames, ", ")), usage)
+		}
+		fmt.Println(dim("------------------------------------------------------------------------"))
+	}
+	fmt.Println()
+}
+
+var progressMutex sync.Mutex
+
 // RenderProgress renders a clean single-line progress bar with current/total count and item label.
 func RenderProgress(current, total int, item string) {
 	if total <= 0 {
 		return
 	}
+	progressMutex.Lock()
+	defer progressMutex.Unlock()
+
 	percent := float64(current) / float64(total) * 100
 	width := 20
 	completed := int((percent / 100) * float64(width))
@@ -198,7 +263,7 @@ func RenderProgress(current, total int, item string) {
 		base = base[:25] + "..."
 	}
 
-	fmt.Printf("\r  %s %s %3.0f%% [%d/%d] %-28s",
+	fmt.Printf("\r\033[K  %s %s %3.0f%% [%d/%d] %-28s",
 		cyan("📥"),
 		green("["+bar+"]"),
 		percent,

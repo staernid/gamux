@@ -268,6 +268,10 @@ func ParseBinaryManifestWithKey(data []byte, hexKey string) ([]ManifestFileEntry
 
 // LoadManifestFromDir scans targetDir/[Manifests]/ for .manifest files and returns a populated Manifest.
 func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
+	return LoadManifestFromDirWithKeys(targetDir, appID, nil)
+}
+
+func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[uint32]string) (*Manifest, error) {
 	manifestsDir := filepath.Join(targetDir, "[Manifests]")
 	if _, err := os.Stat(manifestsDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("manifests directory %s does not exist", manifestsDir)
@@ -276,6 +280,23 @@ func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
 	entries, err := os.ReadDir(manifestsDir)
 	if err != nil {
 		return nil, fmt.Errorf("read manifests dir %s: %w", manifestsDir, err)
+	}
+
+	// Try reading local keys from any .lua files in [Manifests] if depotKeys is empty
+	if len(depotKeys) == 0 {
+		depotKeys = make(map[uint32]string)
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".lua") {
+				luaPath := filepath.Join(manifestsDir, e.Name())
+				if content, err := os.ReadFile(luaPath); err == nil {
+					if parsed, err := ParseLua(string(content)); err == nil && len(parsed.Depots) > 0 {
+						for _, pair := range parsed.Depots {
+							depotKeys[pair.DepotID] = pair.DecryptionKey
+						}
+					}
+				}
+			}
+		}
 	}
 
 	allFiles := make([]ManifestFileEntry, 0)
@@ -300,7 +321,12 @@ func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
 				}
 			}
 
-			files, err := ParseBinaryManifest(data)
+			hexKey := ""
+			if depotKeys != nil {
+				hexKey = depotKeys[fileDepotID]
+			}
+
+			files, err := ParseBinaryManifestWithKey(data, hexKey)
 			if err == nil && len(files) > 0 {
 				for idx := range files {
 					files[idx].DepotID = fileDepotID
@@ -315,8 +341,9 @@ func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
 	}
 
 	return &Manifest{
-		AppID:   appID,
-		DepotID: resolvedDepotID,
-		Files:   allFiles,
+		AppID:     appID,
+		DepotID:   resolvedDepotID,
+		DepotKeys: depotKeys,
+		Files:     allFiles,
 	}, nil
 }

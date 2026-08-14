@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/util"
@@ -22,16 +23,15 @@ import (
 var HTTPClient = http.DefaultClient
 
 // UpdateGBE fetches and extracts the latest GBE fork.
-func UpdateGBE(ctx context.Context) error {
-	slog.Info("Fetching latest GBE fork from GitHub")
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
+func UpdateGBE(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
 	}
-	gbeHome := filepath.Join(homeDir, config.GbeDir)
+	slog.Info("Fetching latest GBE fork from GitHub")
+	gbeHome := util.ExpandPath(cfg.GbeDir)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GithubAPIURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.GithubAPIURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -52,7 +52,7 @@ func UpdateGBE(ctx context.Context) error {
 
 	if _, err := os.Stat(timestampFile); err == nil {
 		timestamp, err := os.ReadFile(timestampFile)
-		if err == nil && string(timestamp) == release.UpdatedAt.String() {
+		if err == nil && strings.TrimSpace(string(timestamp)) == release.UpdatedAt.Format(time.RFC3339) {
 			slog.Info("GBE fork is already up-to-date")
 			return nil
 		}
@@ -124,7 +124,7 @@ func UpdateGBE(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.WriteFile(timestampFile, []byte(release.UpdatedAt.String()), 0644); err != nil {
+	if err := os.WriteFile(timestampFile, []byte(release.UpdatedAt.Format(time.RFC3339)), 0644); err != nil {
 		return fmt.Errorf("failed to write timestamp file: %w", err)
 	}
 
@@ -133,10 +133,13 @@ func UpdateGBE(ctx context.Context) error {
 }
 
 // UpdateSteamlessAssets fetches the latest release assets from steamless-rs and saves them to destDir.
-func UpdateSteamlessAssets(ctx context.Context, destDir string) error {
+func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir string) error {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
 	slog.Info("Fetching latest Steamless release assets from GitHub")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.SteamlessGithubAPI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.SteamlessGithubAPI, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

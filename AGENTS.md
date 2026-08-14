@@ -40,6 +40,10 @@ Essential guidelines, architecture patterns, and conventions for development on 
    - Mock HTTP requests using custom `http.RoundTripper`.
    - Clean up temporary files with `defer os.RemoveAll(tmpDir)`.
 
+6. **No Legacy Compatibility Hacks**:
+   - Do not preserve legacy fallback code or redundant dual paths when breaking changes occur.
+   - Always migrate local configuration files and game setups directly to the single current standard.
+
 ---
 
 ## Development Workflow

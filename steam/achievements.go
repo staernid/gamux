@@ -10,6 +10,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -26,7 +29,7 @@ type AchievementSchema struct {
 
 // DownloadAchievementImages downloads achievement images from Steam CDN.
 func DownloadAchievementImages(ctx context.Context, appID int, imageNames []string, outputFolder string) error {
-	slog.Info("Downloading achievement images", "appID", appID, "count", len(imageNames), "output", outputFolder)
+	slog.Info("Downloading achievement images", "appID", appID, "count", len(imageNames))
 
 	if len(imageNames) == 0 {
 		return nil
@@ -40,18 +43,32 @@ func DownloadAchievementImages(ctx context.Context, appID int, imageNames []stri
 	g.SetLimit(10) // Limit concurrency
 
 	urls := []string{
+		"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/",
 		"https://cdn.akamai.steamstatic.com/steamcommunity/public/images/apps/",
 		"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/",
 	}
+
+	var successCount int64
 
 	for _, name := range imageNames {
 		imgName := name
 		g.Go(func() error {
 			succeeded := false
-			for _, baseURL := range urls {
-				url := fmt.Sprintf("%s%d/%s", baseURL, appID, imgName)
+			reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+
+			targetURLs := urls
+			if strings.HasPrefix(imgName, "http://") || strings.HasPrefix(imgName, "https://") {
+				targetURLs = []string{imgName}
+			}
+
+			for _, baseURL := range targetURLs {
+				fetchURL := baseURL
+				if !strings.HasPrefix(imgName, "http://") && !strings.HasPrefix(imgName, "https://") {
+					fetchURL = fmt.Sprintf("%s%d/%s", baseURL, appID, imgName)
+				}
 				err := func() error {
-					req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+					req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, fetchURL, nil)
 					if err != nil {
 						return err
 					}
@@ -66,7 +83,8 @@ func DownloadAchievementImages(ctx context.Context, appID int, imageNames []stri
 						return fmt.Errorf("HTTP status %d", resp.StatusCode)
 					}
 
-					imgPath := filepath.Join(outputFolder, imgName)
+					saveName := filepath.Base(imgName)
+					imgPath := filepath.Join(outputFolder, saveName)
 					out, err := os.Create(imgPath)
 					if err != nil {
 						return fmt.Errorf("failed to create image file: %w", err)
@@ -87,14 +105,18 @@ func DownloadAchievementImages(ctx context.Context, appID int, imageNames []stri
 				}
 			}
 
-			if !succeeded {
-				slog.Warn("Failed to download achievement image", "name", imgName)
+			if succeeded {
+				atomic.AddInt64(&successCount, 1)
+			} else {
+				slog.Debug("Could not download achievement image", "name", imgName)
 			}
 			return nil
 		})
 	}
 
-	return g.Wait()
+	_ = g.Wait()
+	slog.Info("Finished achievement image downloads", "appID", appID, "successful", atomic.LoadInt64(&successCount), "total", len(imageNames))
+	return nil
 }
 
 // FetchAchievementSchema queries Steam Web API ISteamUserStats/GetSchemaForGame/v2 for a game's achievements.

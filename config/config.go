@@ -7,29 +7,43 @@ import (
 	"time"
 )
 
-// Global Configuration fallback defaults
-var (
-	GbeDir             = ".local/share/gbe_fork"
-	SteamlessDir       = ".local/share/steamless"
-	SteamStoreAPI      = "https://store.steampowered.com/api"
-	SteamWebAPI        = "https://api.steampowered.com"
-	GithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
-	SteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
-	LutrisDir          = ".config/lutris/games"
-	SteamUserdata      = ".local/share/Steam/userdata"
+// Default URL & Path Constants
+const (
+	DefaultSteamStoreAPI      = "https://store.steampowered.com/api"
+	DefaultSteamWebAPI        = "https://api.steampowered.com"
+	DefaultGithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
+	DefaultSteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
 )
 
 // Config holds user-configurable paths and settings for gamux.
 type Config struct {
+	// Paths
 	GbeDir             string `json:"gbe_dir"`
 	SteamlessDir       string `json:"steamless_dir"`
 	LutrisDir          string `json:"lutris_dir"`
 	SteamUserdata      string `json:"steam_userdata"`
 	SteamStoreAPI      string `json:"steam_store_api"`
+	SteamWebAPI        string `json:"steam_web_api"`
 	GithubAPIURL       string `json:"github_api_url"`
 	SteamlessGithubAPI string `json:"steamless_github_api"`
-	SteamWebAPIKey     string `json:"steam_web_api_key"`
-	HubcapAPIKey       string `json:"hubcap_api_key"`
+
+	// API Keys
+	SteamWebAPIKey string `json:"steam_web_api_key"`
+	HubcapAPIKey   string `json:"hubcap_api_key"`
+
+	// Notifications
+	EnableLaunchNotify bool   `json:"enable_launch_notify"`
+	LaunchNotifyMode   string `json:"launch_notify_mode"`
+
+	// Operational Settings
+	GbeMode      string `json:"gbe_mode"`
+	Lutris       bool   `json:"lutris"`
+	Steamless    bool   `json:"steamless"`
+	Achievements bool   `json:"achievements"`
+	Normalize    bool   `json:"normalize"`
+	Platform     string `json:"platform"`
+	Runner       string `json:"runner"`
+	WinePrefix   string `json:"wine_prefix"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -46,22 +60,22 @@ func DefaultConfig() *Config {
 		configHome = filepath.Join(homeDir, ".config")
 	}
 
-	gbePath := GbeDir
+	gbePath := ".local/share/gbe_fork"
 	if dataHome != "" {
 		gbePath = filepath.Join(dataHome, "gbe_fork")
 	}
 
-	steamlessPath := SteamlessDir
+	steamlessPath := ".local/share/steamless"
 	if dataHome != "" {
 		steamlessPath = filepath.Join(dataHome, "steamless")
 	}
 
-	lutrisPath := LutrisDir
+	lutrisPath := ".config/lutris/games"
 	if configHome != "" {
 		lutrisPath = filepath.Join(configHome, "lutris", "games")
 	}
 
-	steamUserDataPath := SteamUserdata
+	steamUserDataPath := ".local/share/Steam/userdata"
 	if dataHome != "" {
 		steamUserDataPath = filepath.Join(dataHome, "Steam", "userdata")
 	}
@@ -71,26 +85,41 @@ func DefaultConfig() *Config {
 		SteamlessDir:       steamlessPath,
 		LutrisDir:          lutrisPath,
 		SteamUserdata:      steamUserDataPath,
-		SteamStoreAPI:      SteamStoreAPI,
-		GithubAPIURL:       GithubAPIURL,
-		SteamlessGithubAPI: SteamlessGithubAPI,
+		SteamStoreAPI:      DefaultSteamStoreAPI,
+		SteamWebAPI:        DefaultSteamWebAPI,
+		GithubAPIURL:       DefaultGithubAPIURL,
+		SteamlessGithubAPI: DefaultSteamlessGithubAPI,
 		SteamWebAPIKey:     "",
 		HubcapAPIKey:       "",
+		EnableLaunchNotify: true,
+		LaunchNotifyMode:   "notify",
+		GbeMode:            "loader",
+		Lutris:             true,
+		Steamless:          true,
+		Achievements:       true,
+		Normalize:          true,
+		Platform:           "win64",
+		Runner:             "wine",
+		WinePrefix:         "",
 	}
+}
+
+// GetConfigPath returns the absolute path to the configuration file.
+func GetConfigPath(customPath string) string {
+	if customPath != "" {
+		return customPath
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "config.json"
+	}
+	return filepath.Join(homeDir, ".config", "gamux", "config.json")
 }
 
 // LoadConfig loads configuration from a JSON file or returns defaults.
 func LoadConfig(customPath string) (*Config, error) {
 	cfg := DefaultConfig()
-
-	path := customPath
-	if path == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return cfg, nil
-		}
-		path = filepath.Join(homeDir, ".config", "gamux", "config.json")
-	}
+	path := GetConfigPath(customPath)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if customPath != "" {
@@ -104,69 +133,9 @@ func LoadConfig(customPath string) (*Config, error) {
 		return nil, err
 	}
 
-	var raw struct {
-		GbeDir             string `json:"gbe_dir"`
-		SteamlessDir       string `json:"steamless_dir"`
-		LutrisDir          string `json:"lutris_dir"`
-		SteamUserdata      string `json:"steam_userdata"`
-		SteamStoreAPI      string `json:"steam_store_api"`
-		GithubAPIURL       string `json:"github_api_url"`
-		SteamlessGithubAPI string `json:"steamless_github_api"`
-		SteamWebAPIKey     string `json:"steam_web_api_key"`
-		HubcapAPIKey       string `json:"hubcap_api_key"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-
-	healed := false
-	if raw.GbeDir != "" {
-		cfg.GbeDir = raw.GbeDir
-	} else {
-		healed = true
-	}
-	if raw.SteamlessDir != "" {
-		cfg.SteamlessDir = raw.SteamlessDir
-	} else {
-		healed = true
-	}
-	if raw.LutrisDir != "" {
-		cfg.LutrisDir = raw.LutrisDir
-	} else {
-		healed = true
-	}
-	if raw.SteamUserdata != "" {
-		cfg.SteamUserdata = raw.SteamUserdata
-	} else {
-		healed = true
-	}
-	if raw.SteamStoreAPI != "" {
-		cfg.SteamStoreAPI = raw.SteamStoreAPI
-	} else {
-		healed = true
-	}
-	if raw.GithubAPIURL != "" {
-		cfg.GithubAPIURL = raw.GithubAPIURL
-	} else {
-		healed = true
-	}
-	if raw.SteamWebAPIKey != "" {
-		cfg.SteamWebAPIKey = raw.SteamWebAPIKey
-	}
-	if raw.HubcapAPIKey != "" {
-		cfg.HubcapAPIKey = raw.HubcapAPIKey
-	}
-
-	if healed && customPath == "" {
-		_ = SaveConfig(cfg, path)
-	}
-
-	// Update legacy globals for fallback compatibility
-	GbeDir = cfg.GbeDir
-	LutrisDir = cfg.LutrisDir
-	SteamUserdata = cfg.SteamUserdata
-	SteamStoreAPI = cfg.SteamStoreAPI
-	GithubAPIURL = cfg.GithubAPIURL
 
 	return cfg, nil
 }

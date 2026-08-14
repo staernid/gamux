@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/github"
+	"github.com/staernid/gamux/lutris"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/ui"
@@ -33,7 +35,6 @@ func commonSetupFlags() []cli.Flag {
 		&cli.BoolFlag{Name: "lutris", Usage: "Add game to Lutris"},
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts (non-interactive mode)"},
 		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder instead of loader mode"},
-		&cli.BoolFlag{Name: "promote", Value: true, Usage: "Promote inner common/ game folder to top level and consolidate [Manifests] manifests"},
 		&cli.BoolFlag{Name: "normalize", Value: true, Usage: "Normalize directory name to match Steam's official 1:1 installdir"},
 		&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 		&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
@@ -60,7 +61,7 @@ func extractPath(c *cli.Context) string {
 	if c.Args().Len() >= 1 {
 		return c.Args().Get(0)
 	}
-	return "."
+	return ""
 }
 
 func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, string) {
@@ -107,64 +108,8 @@ func isAutoYes(c *cli.Context) bool {
 }
 
 
-func extractProcessOptions(c *cli.Context, promptIfUnset bool) engine.ProcessOptions {
-	autoYes := isAutoYes(c)
-
-
-
-	// Prompt 1: Apply Goldberg Emulator & DRM Removal
-	applyGBE := true
-	if promptIfUnset && !autoYes {
-		applyGBE = ui.PromptYesNoWithExplanation(
-			"Apply Goldberg Emulator & Steamless DRM removal?",
-			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
-			true,
-		)
-	}
-
-	// Prompt 2: Portable Mode vs Loader Mode (only if GBE is applied)
-	portable := c.Bool("portable")
-	if applyGBE && !c.IsSet("portable") && promptIfUnset && !autoYes {
-		portable = ui.PromptYesNoWithExplanation(
-			"Use Portable Mode (Direct DLL/SO replacement)?",
-			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
-			false,
-		)
-	}
-
-	// Prompt 3: Register in Lutris
-	addLutris := false
-	if c.IsSet("lutris") {
-		addLutris = c.Bool("lutris")
-	} else if autoYes {
-		addLutris = true
-	} else if promptIfUnset {
-		addLutris = ui.PromptYesNoWithExplanation(
-			"Register game in Lutris?",
-			"Creates a Lutris YAML configuration in ~/.config/lutris/ so the game appears in your Lutris library.",
-			true,
-		)
-	}
-
-	normalize := true
-	if c.IsSet("normalize") {
-		normalize = c.Bool("normalize")
-	}
-
-	return engine.ProcessOptions{
-		Path:              extractPath(c),
-		ApplyGBE:          applyGBE,
-		AddLutris:         addLutris,
-		Runner:            c.String("runner"),
-		WinePrefix:        c.String("wine-prefix"),
-		Portable:          portable,
-		Promote:           c.Bool("promote"),
-		NormalizeDir:      normalize,
-		DryRun:            c.Bool("dry-run"),
-		AutoYes:           autoYes,
-		NoSteamless:       c.Bool("no-steamless"),
-		FetchAchievements: c.Bool("achievements"),
-	}
+func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Config) engine.ProcessOptions {
+	return engine.ResolveProcessOptions(c, cfg, promptIfUnset)
 }
 
 
@@ -212,6 +157,10 @@ func buildApp() *cli.App {
 				ArgsUsage: "[appid_or_target_dir]",
 				Flags:     commonDownloadFlags(),
 				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 && !c.IsSet("dir") && !c.IsSet("app") {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
 					luaPath := c.String("lua")
 					hubcapKey := c.String("hubcap-key")
 					if hubcapKey == "" && activeConfig != nil {
@@ -337,7 +286,7 @@ func buildApp() *cli.App {
 					if c.Bool("setup") && !c.Bool("dry-run") {
 						ui.RenderStep(1, 1, "Executing post-download setup for "+targetDir)
 						eng := engine.New(activeConfig)
-						processOpts := extractProcessOptions(c, false)
+						processOpts := extractProcessOptions(c, false, activeConfig)
 						processOpts.Path = targetDir
 						processOpts.AutoYes = true
 						if _, setupErr := eng.ProcessGame(c.Context, processOpts); setupErr != nil {
@@ -399,6 +348,10 @@ func buildApp() *cli.App {
 				ArgsUsage: "[path]",
 				Flags:     commonSetupFlags(),
 				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
 					path := extractPath(c)
 					eng := engine.New(activeConfig)
 
@@ -431,7 +384,7 @@ func buildApp() *cli.App {
 						}
 					}
 
-					opts := extractProcessOptions(c, true)
+					opts := extractProcessOptions(c, true, activeConfig)
 					opts.Path = path
 
 					ui.RenderStep(1, 1, "Executing unified sync for "+opts.Path)
@@ -462,9 +415,8 @@ func buildApp() *cli.App {
 				),
 				Action: func(c *cli.Context) error {
 					if c.Args().Len() < 1 {
-						err := fmt.Errorf("batch command requires a parent directory path")
-						ui.RenderErrorHelp(err, []string{"Example: gamux batch /path/to/downloads", "Example: gamux batch status /path/to/downloads"})
-						return err
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
 					}
 
 					verb := "sync"
@@ -525,7 +477,7 @@ func buildApp() *cli.App {
 						return nil
 					}
 
-					opts := extractProcessOptions(c, false)
+					opts := extractProcessOptions(c, false, activeConfig)
 					if !c.Bool("json") {
 						ui.RenderStep(1, 1, "Scanning parent directory: "+parentDir)
 					}
@@ -558,6 +510,10 @@ func buildApp() *cli.App {
 					&cli.BoolFlag{Name: "terse", Aliases: []string{"t"}, Usage: "Display single-line compact status summary per game"},
 				},
 				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
 					path := extractPath(c)
 					eng := engine.New(activeConfig)
 
@@ -668,6 +624,10 @@ func buildApp() *cli.App {
 				Usage:     "Read full Steam patch notes and changelogs for a game",
 				ArgsUsage: "[path_or_appid] [index]",
 				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
 					targetPath := "."
 					index := 1
 
@@ -692,7 +652,7 @@ func buildApp() *cli.App {
 						return err
 					}
 
-									ui.RenderNewsItem(gameName, index, item.Title, item.FeedLabel, item.Contents, item.URL, item.Date)
+					ui.RenderNewsItem(gameName, index, item.Title, item.FeedLabel, item.Contents, item.URL, item.Date)
 					return nil
 				},
 			},
@@ -705,6 +665,10 @@ func buildApp() *cli.App {
 					&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be restored without mutating files"},
 				},
 				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
 					path := extractPath(c)
 					eng := engine.New(activeConfig)
 					ui.RenderStep(1, 1, "Rolling back changes for "+path)
@@ -724,7 +688,7 @@ func buildApp() *cli.App {
 				Usage:    "Update Goldberg Emulator release assets from GitHub",
 				Action: func(c *cli.Context) error {
 					ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets from GitHub")
-					if err := github.UpdateGBE(c.Context); err != nil {
+					if err := github.UpdateGBE(c.Context, activeConfig); err != nil {
 						ui.RenderErrorHelp(err, []string{"Check network connectivity"})
 						return err
 					}
@@ -734,7 +698,149 @@ func buildApp() *cli.App {
 					return nil
 				},
 			},
+			{
+				Name:      "config",
+				Category:  "Maintenance & Tools",
+				Usage:     "View, inspect, and interactively configure gamux settings",
+				ArgsUsage: "[show|wizard]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "show", Usage: "Display current configuration dashboard"},
+					&cli.BoolFlag{Name: "json", Usage: "Output configuration in JSON format"},
+				},
+				Action: func(c *cli.Context) error {
+					configPath := config.GetConfigPath(c.String("config"))
+					if activeConfig == nil {
+						var err error
+						activeConfig, err = config.LoadConfig(c.String("config"))
+						if err != nil {
+							activeConfig = config.DefaultConfig()
+						}
+					}
+
+					if c.Bool("json") {
+						enc := json.NewEncoder(os.Stdout)
+						enc.SetIndent("", "  ")
+						return enc.Encode(activeConfig)
+					}
+
+					arg := c.Args().First()
+					if c.Bool("show") || arg == "show" {
+						ui.RenderConfigSummary(activeConfig, configPath)
+						return nil
+					}
+
+					return ui.RunConfigWizard(activeConfig, configPath)
+				},
+				Subcommands: []*cli.Command{
+					{
+						Name:  "show",
+						Usage: "Display current vs default configuration dashboard",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{Name: "json", Usage: "Output configuration in JSON format"},
+						},
+						Action: func(c *cli.Context) error {
+							configPath := config.GetConfigPath(c.String("config"))
+							if activeConfig == nil {
+								var err error
+								activeConfig, err = config.LoadConfig(c.String("config"))
+								if err != nil {
+									activeConfig = config.DefaultConfig()
+								}
+							}
+							if c.Bool("json") {
+								enc := json.NewEncoder(os.Stdout)
+								enc.SetIndent("", "  ")
+								return enc.Encode(activeConfig)
+							}
+							ui.RenderConfigSummary(activeConfig, configPath)
+							return nil
+						},
+					},
+					{
+						Name:  "wizard",
+						Usage: "Run the interactive guided configuration setup wizard",
+						Action: func(c *cli.Context) error {
+							configPath := config.GetConfigPath(c.String("config"))
+							if activeConfig == nil {
+								var err error
+								activeConfig, err = config.LoadConfig(c.String("config"))
+								if err != nil {
+									activeConfig = config.DefaultConfig()
+								}
+							}
+							return ui.RunConfigWizard(activeConfig, configPath)
+						},
+					},
+				},
+			},
+			{
+				Name:      "notify-launch",
+				Category:  "Maintenance & Tools",
+				Usage:     "Pre-launch hook to check game update status and notify via console/desktop notification",
+				ArgsUsage: "[path]",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "path", Usage: "Path to game directory"},
+				},
+				Action: func(c *cli.Context) error {
+					targetPath := c.String("path")
+					if targetPath == "" {
+						targetPath = extractPath(c)
+					}
+					if targetPath == "" {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
+					eng := engine.New(activeConfig)
+					return eng.NotifyLaunch(c.Context, targetPath)
+				},
+			},
+			{
+				Name:      "launch",
+				Category:  "Step 3: Inspection & Maintenance",
+				Usage:     "Run pre-launch update checks and launch game via Lutris",
+				ArgsUsage: "[path]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "no-notify", Usage: "Disable pre-launch update notification check"},
+				},
+				Action: func(c *cli.Context) error {
+					if c.Args().Len() == 0 {
+						ui.RenderCommandHelp(c.Command, Version)
+						return nil
+					}
+					targetPath := extractPath(c)
+					eng := engine.New(activeConfig)
+					if !c.Bool("no-notify") {
+						if err := eng.NotifyLaunch(c.Context, targetPath); err != nil {
+							slog.Warn("Pre-launch notification check failed", "error", err)
+						}
+					}
+					status, err := eng.InspectStatus(c.Context, targetPath)
+					if err != nil {
+						return fmt.Errorf("detect game: %w", err)
+					}
+					slug := lutris.Slugify(status.Name)
+					ui.RenderStep(1, 1, "Launching "+status.Name+" via Lutris...")
+					lutrisBin, err := exec.LookPath("lutris")
+					if err != nil {
+						return fmt.Errorf("lutris binary not found in PATH: %w", err)
+					}
+					cmd := exec.Command(lutrisBin, "lutris:rungame/"+slug)
+					return cmd.Run()
+				},
+			},
 		},
+	}
+}
+
+func init() {
+	cli.HelpPrinter = func(w io.Writer, templ string, data interface{}) {
+		if app, ok := data.(*cli.App); ok {
+			ui.RenderAppHelp(app, Version)
+		} else if cmd, ok := data.(*cli.Command); ok {
+			ui.RenderCommandHelp(cmd, Version)
+		} else {
+			ui.RenderAppHelp(nil, Version)
+		}
 	}
 }
 
@@ -743,15 +849,6 @@ func main() {
 		Level: slog.LevelWarn,
 	}))
 	slog.SetDefault(logger)
-
-
-	cli.HelpPrinter = func(w io.Writer, templ string, data interface{}) {
-		if app, ok := data.(*cli.App); ok {
-			ui.RenderAppHelp(app, Version)
-		} else {
-			ui.RenderAppHelp(nil, Version)
-		}
-	}
 
 	app := buildApp()
 	if err := app.Run(os.Args); err != nil {

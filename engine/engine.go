@@ -18,6 +18,7 @@ import (
 	"github.com/staernid/gamux/steamless"
 	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -28,7 +29,6 @@ type ProcessOptions struct {
 	ApplyGBE          bool
 	AddLutris         bool
 	Portable          bool
-	Promote           bool
 	NormalizeDir      bool
 	DryRun            bool
 	AutoYes           bool
@@ -36,6 +36,99 @@ type ProcessOptions struct {
 	FetchAchievements bool
 	WinePrefix        string
 	Runner            string
+}
+
+// ResolveProcessOptions resolves CLI context flags against user configuration and prompts.
+func ResolveProcessOptions(c *cli.Context, cfg *config.Config, promptIfUnset bool) ProcessOptions {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+
+	autoYes := c.Bool("yes") || c.IsSet("yes") || c.IsSet("y")
+
+	applyGBE := true
+	if promptIfUnset && !autoYes {
+		applyGBE = ui.PromptYesNoWithExplanation(
+			"Apply Goldberg Emulator & Steamless DRM removal?",
+			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
+			true,
+		)
+	}
+
+	gbeMode := cfg.GbeMode
+	portable := false
+	if c.IsSet("portable") {
+		portable = c.Bool("portable")
+	} else if c.IsSet("loader") {
+		portable = false
+	} else if strings.EqualFold(gbeMode, "portable") {
+		portable = true
+	} else if strings.EqualFold(gbeMode, "loader") {
+		portable = false
+	} else if applyGBE && promptIfUnset && !autoYes {
+		portable = ui.PromptYesNoWithExplanation(
+			"Use Portable Mode (Direct DLL/SO replacement)?",
+			"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
+			false,
+		)
+	}
+
+	addLutris := cfg.Lutris
+	if c.IsSet("lutris") {
+		addLutris = c.Bool("lutris")
+	} else if autoYes {
+		addLutris = cfg.Lutris
+	} else if promptIfUnset {
+		addLutris = ui.PromptYesNoWithExplanation(
+			"Register game in Lutris?",
+			"Creates a Lutris YAML configuration in ~/.config/lutris/ so the game appears in your Lutris library.",
+			cfg.Lutris,
+		)
+	}
+
+	normalize := cfg.Normalize
+	if c.IsSet("normalize") {
+		normalize = c.Bool("normalize")
+	}
+
+	noSteamless := !cfg.Steamless
+	if c.IsSet("no-steamless") {
+		noSteamless = c.Bool("no-steamless")
+	}
+
+	fetchAchievements := cfg.Achievements
+	if c.IsSet("achievements") {
+		fetchAchievements = c.Bool("achievements")
+	}
+
+	runner := cfg.Runner
+	if c.IsSet("runner") && c.String("runner") != "" {
+		runner = c.String("runner")
+	}
+
+	winePrefix := cfg.WinePrefix
+	if c.IsSet("wine-prefix") && c.String("wine-prefix") != "" {
+		winePrefix = c.String("wine-prefix")
+	}
+
+	path := ""
+	if c.Args().Len() >= 1 {
+		path = c.Args().Get(0)
+	}
+
+	return ProcessOptions{
+		Path:              path,
+		ApplyGBE:          applyGBE,
+		AddLutris:         addLutris,
+		Runner:            runner,
+		WinePrefix:        winePrefix,
+		Portable:          portable,
+		NormalizeDir:      normalize,
+		DryRun:            c.Bool("dry-run"),
+		AutoYes:           autoYes,
+		NoSteamless:       noSteamless,
+		FetchAchievements: fetchAchievements,
+	}
 }
 
 
@@ -115,8 +208,8 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		return nil, fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
 	}
 
-	// Interactive Disambiguation: Prompt user to confirm/select game title if ambiguous
-	if !opts.AutoYes && info.Name != "" {
+	// Interactive Disambiguation: Prompt user to confirm/select game title if AppID is missing/ambiguous
+	if !opts.AutoYes && (info.AppID == "" || info.AppID == "0") && info.Name != "" {
 		candidates, searchErr := steam.SearchAppIDCandidates(ctx, info.Name)
 		if searchErr == nil && len(candidates) > 1 {
 			uiCandidates := make([]ui.CandidateItem, len(candidates))
@@ -169,14 +262,14 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		Info: info,
 	}
 
-	if err := detector.ConsolidateManifests(info, opts.Promote); err != nil {
+	if err := detector.ConsolidateManifests(info); err != nil {
 		slog.Warn("Failed to consolidate manifests", "error", err)
 		res.Errors = append(res.Errors, fmt.Sprintf("manifest consolidation: %v", err))
 	} else {
 		res.ManifestsMoved = true
 	}
 
-	if opts.NormalizeDir || opts.Promote {
+	if opts.NormalizeDir {
 		if err := detector.NormalizeDirectory(info, opts.DryRun); err != nil {
 			slog.Warn("Failed to normalize directory name", "error", err)
 			res.Errors = append(res.Errors, fmt.Sprintf("directory normalization: %v", err))
@@ -274,6 +367,17 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 			}
 		}
 
+		var sysConfig *lutris.SystemConfig
+		if e.Config.EnableLaunchNotify {
+			if gamuxBin, err := os.Executable(); err == nil {
+				sysConfig = &lutris.SystemConfig{
+					PreLaunchScript: gamuxBin,
+					PreLaunchArg:    fmt.Sprintf("notify-launch --path %q", info.GameDir),
+					PreLaunchWait:   true,
+				}
+			}
+		}
+
 		lcfg := lutris.Config{
 			Name:                  info.Name,
 			GamePath:              gamePath,
@@ -281,6 +385,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 			Runner:                runner,
 			PrefixPath:            opts.WinePrefix,
 			Env:                   env,
+			System:                sysConfig,
 			CreateMenuShortcut:    false,
 			CreateDesktopShortcut: false,
 		}
@@ -458,7 +563,7 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 			lutrisTargetDir = filepath.Join(home, lutrisTargetDir)
 		}
 	}
-	if lutris.GetExistingWinePrefix(slug, lutrisTargetDir) != "" || util.FileExists(filepath.Join(lutrisTargetDir, "games", slug+".yml")) {
+	if lutris.GetExistingWinePrefix(slug, lutrisTargetDir) != "" || util.FileExists(filepath.Join(lutrisTargetDir, slug+".yml")) {
 		status.LutrisRegistered = true
 	}
 
@@ -505,7 +610,6 @@ func (e *Engine) SyncGame(ctx context.Context, opts ProcessOptions) (*ProcessRes
 		slog.Warn("Sync inspection warning", "error", err)
 	}
 
-	opts.Promote = true
 	opts.NormalizeDir = true
 
 	if status != nil && status.HasUpdate {
@@ -720,5 +824,38 @@ func (e *Engine) CheckLibraryUpdates(ctx context.Context, parentDir string) ([]L
 	}
 
 	return results, nil
+}
+
+// NotifyLaunch inspects a game directory for updates or configuration issues, and triggers a console/desktop notification if found.
+func (e *Engine) NotifyLaunch(ctx context.Context, gameDir string) error {
+	status, err := e.InspectStatus(ctx, gameDir)
+	if err != nil {
+		slog.Warn("NotifyLaunch status inspection failed", "dir", gameDir, "error", err)
+		return nil // Don't block launch if inspection fails
+	}
+
+	var issues []string
+	if status.HasUpdate {
+		issues = append(issues, "An update is available for this game on Steam.")
+	}
+	if len(status.MissingFiles) > 0 {
+		issues = append(issues, fmt.Sprintf("%d official game files are missing.", len(status.MissingFiles)))
+	}
+	if len(status.ModifiedFiles) > 0 {
+		issues = append(issues, fmt.Sprintf("%d game files have been modified.", len(status.ModifiedFiles)))
+	}
+
+	if len(issues) == 0 {
+		return nil
+	}
+
+	msg := fmt.Sprintf("Game: %s (AppID: %s)\nPath: %s\n\nIssues Detected:\n", status.Name, status.AppID, status.GameDir)
+	for _, issue := range issues {
+		msg += fmt.Sprintf(" • %s\n", issue)
+	}
+	msg += fmt.Sprintf("\nSuggested Action: Run 'gamux sync %q' to resolve.", status.GameDir)
+
+	slog.Info("Pre-launch notification sent", "title", status.Name, "issuesCount", len(issues))
+	return ui.NotifyIssue(ctx, status.Name, msg)
 }
 

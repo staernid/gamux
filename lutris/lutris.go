@@ -82,10 +82,13 @@ type WineConfig struct {
 
 // SystemConfig groups optional system-level overrides.
 type SystemConfig struct {
-	MangoHud bool   `yaml:"mangohud,omitempty"`
-	GPU      string `yaml:"gpu,omitempty"`
-	VkICD    string `yaml:"vk_icd,omitempty"`
-	Locale   string `yaml:"locale,omitempty"`
+	MangoHud        bool   `yaml:"mangohud,omitempty"`
+	GPU             string `yaml:"gpu,omitempty"`
+	VkICD           string `yaml:"vk_icd,omitempty"`
+	Locale          string `yaml:"locale,omitempty"`
+	PreLaunchScript string `yaml:"pre_launch_script,omitempty"`
+	PreLaunchArg    string `yaml:"pre_launch_arg,omitempty"`
+	PreLaunchWait   bool   `yaml:"pre_launch_wait,omitempty"`
 }
 
 // ── YAML model ──────────────────────────────────────────────────────
@@ -137,11 +140,14 @@ type wineSection struct {
 }
 
 type systemSection struct {
-	Env      map[string]string `yaml:"env,omitempty"`
-	MangoHud bool              `yaml:"mangohud,omitempty"`
-	GPU      string            `yaml:"gpu,omitempty"`
-	VkICD    string            `yaml:"vk_icd,omitempty"`
-	Locale   string            `yaml:"locale,omitempty"`
+	Env             map[string]string `yaml:"env,omitempty"`
+	MangoHud        bool              `yaml:"mangohud,omitempty"`
+	GPU             string            `yaml:"gpu,omitempty"`
+	VkICD           string            `yaml:"vk_icd,omitempty"`
+	Locale          string            `yaml:"locale,omitempty"`
+	PreLaunchScript string            `yaml:"pre_launch_script,omitempty"`
+	PreLaunchArg    string            `yaml:"pre_launch_arg,omitempty"`
+	PreLaunchWait   bool              `yaml:"pre_launch_wait,omitempty"`
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -555,7 +561,8 @@ func buildDoc(cfg Config) doc {
 		if cfg.System.MangoHud ||
 			cfg.System.GPU != "" ||
 			cfg.System.VkICD != "" ||
-			cfg.System.Locale != "" {
+			cfg.System.Locale != "" ||
+			cfg.System.PreLaunchScript != "" {
 			hasSystem = true
 		}
 	}
@@ -572,6 +579,9 @@ func buildDoc(cfg Config) doc {
 			ss.GPU = cfg.System.GPU
 			ss.VkICD = cfg.System.VkICD
 			ss.Locale = cfg.System.Locale
+			ss.PreLaunchScript = cfg.System.PreLaunchScript
+			ss.PreLaunchArg = cfg.System.PreLaunchArg
+			ss.PreLaunchWait = cfg.System.PreLaunchWait
 		}
 		for k, v := range cfg.Env {
 			ss.Env[k] = v

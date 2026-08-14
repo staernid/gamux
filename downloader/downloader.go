@@ -120,11 +120,14 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	}
 
 	if len(m.Files) == 0 {
-		loadedManifest, err := manifest.LoadManifestFromDir(absTargetDir, opts.AppID)
+		loadedManifest, err := manifest.LoadManifestFromDirWithKeys(absTargetDir, opts.AppID, m.DepotKeys)
 		if err == nil && loadedManifest != nil && len(loadedManifest.Files) > 0 {
 			m.Files = loadedManifest.Files
 			if m.DepotID == 0 {
 				m.DepotID = loadedManifest.DepotID
+			}
+			if len(m.DepotKeys) == 0 && len(loadedManifest.DepotKeys) > 0 {
+				m.DepotKeys = loadedManifest.DepotKeys
 			}
 			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID)
 		}
@@ -145,6 +148,13 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		}
 
 		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", opts.AppID, traceStr)
+	}
+
+	// Validate that paths in manifest are decrypted
+	for _, f := range m.Files {
+		if util.IsEncryptedBase64Path(f.Path) {
+			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
+		}
 	}
 
 

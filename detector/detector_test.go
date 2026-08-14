@@ -135,7 +135,7 @@ func TestConsolidateManifests(t *testing.T) {
 		t.Error("expected RawDepotLayout to be true")
 	}
 
-	if err := ConsolidateManifests(info, false); err != nil {
+	if err := ConsolidateManifests(info); err != nil {
 		t.Fatalf("ConsolidateManifests failed: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestConsolidateManifests(t *testing.T) {
 	t.Run("no manifest path does not create [Manifests] directory", func(t *testing.T) {
 		gameDir := t.TempDir()
 		emptyInfo := &GameInfo{GameDir: gameDir}
-		if err := ConsolidateManifests(emptyInfo, false); err != nil {
+		if err := ConsolidateManifests(emptyInfo); err != nil {
 			t.Fatalf("ConsolidateManifests failed: %v", err)
 		}
 		manifestsDir := filepath.Join(gameDir, "[Manifests]")
@@ -169,7 +169,7 @@ func TestConsolidateManifests(t *testing.T) {
 			ManifestPath: filepath.Join(legacyDir, "appmanifest_2088570.acf"),
 		}
 
-		if err := ConsolidateManifests(info, false); err != nil {
+		if err := ConsolidateManifests(info); err != nil {
 			t.Fatalf("ConsolidateManifests failed: %v", err)
 		}
 

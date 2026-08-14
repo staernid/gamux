@@ -319,3 +319,21 @@ func SanitizeInstallDir(title string) string {
 	return clean
 }
 
+// IsEncryptedBase64Path checks if a filename or path contains raw un-decrypted AES base64 output.
+func IsEncryptedBase64Path(p string) bool {
+	base := filepath.Base(p)
+	cleanBase := strings.TrimSpace(strings.ReplaceAll(base, "\n", ""))
+	if strings.HasSuffix(cleanBase, "==") || strings.HasSuffix(cleanBase, "=") {
+		return true
+	}
+	if strings.HasPrefix(cleanBase, "+") && len(cleanBase) > 10 {
+		return true
+	}
+	if len(cleanBase) > 30 && !strings.Contains(cleanBase, " ") && !strings.Contains(cleanBase, ".") && strings.ContainsAny(cleanBase, "+/") {
+		return true
+	}
+	return false
+}
+
+
+

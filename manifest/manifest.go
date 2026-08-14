@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/staernid/gamux/util"
 )
 
 
@@ -93,6 +95,13 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 		return nil, nil
 	}
 
+	// Check if manifest files are encrypted
+	for _, f := range manifest.Files {
+		if util.IsEncryptedBase64Path(f.Path) {
+			return nil, nil
+		}
+	}
+
 	report := &IntegrityReport{
 		OfficialCount: len(manifest.Files),
 	}
@@ -145,7 +154,12 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 			if !d.IsDir() {
 				if fi, err := d.Info(); err == nil {
 					if uint64(fi.Size()) != entry.Size {
-						report.ModifiedFiles = append(report.ModifiedFiles, rel)
+						lowerRel := strings.ToLower(rel)
+						if (strings.HasSuffix(lowerRel, "steam_api64.dll") || strings.HasSuffix(lowerRel, "steam_api.dll") || strings.HasSuffix(lowerRel, "libsteam_api.so")) && hasOriginalBackup(gameDir, rel) {
+							report.IntactCount++
+						} else {
+							report.ModifiedFiles = append(report.ModifiedFiles, rel)
+						}
 					} else {
 						report.IntactCount++
 					}
@@ -171,8 +185,12 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 					report.IntactCount++
 				}
 			} else {
-				// Ignore empty directory manifest nodes
+				// Ignore empty directory manifest nodes or platform-mismatched files (e.g. .so/.dylib for Windows games)
 				if (entry.Flags&0x40 != 0) || (len(entry.Chunks) == 0 && entry.Size == 0) {
+					continue
+				}
+				lowerPath := strings.ToLower(entry.Path)
+				if strings.HasSuffix(lowerPath, ".so") || strings.HasSuffix(lowerPath, ".dylib") || strings.Contains(lowerPath, ".app/contents/") {
 					continue
 				}
 				report.MissingFiles = append(report.MissingFiles, entry.Path)
@@ -191,6 +209,19 @@ func ScanUntrackedFiles(gameDir string, appID uint32) (int, []string, error) {
 		return 0, nil, err
 	}
 	return rep.OfficialCount, rep.UntrackedFiles, nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+func hasOriginalBackup(gameDir, rel string) bool {
+	absPath := filepath.Join(gameDir, rel)
+	if matches, err := filepath.Glob(absPath + "*ORIGINAL*"); err == nil && len(matches) > 0 {
+		return true
+	}
+	return false
 }
 
 

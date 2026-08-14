@@ -456,3 +456,38 @@ func TestCreateXDGShortcuts(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerate_PreLaunchScript(t *testing.T) {
+	out, err := Generate(Config{
+		Name:     "Prelaunch Test Game",
+		GamePath: "/tmp/game.exe",
+		Runner:   "wine",
+		System: &SystemConfig{
+			PreLaunchScript: "/usr/local/bin/gamux",
+			PreLaunchArg:    "notify-launch --path \"/tmp/game\"",
+			PreLaunchWait:   true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var d doc
+	if err := yaml.Unmarshal(out, &d); err != nil {
+		t.Fatal(err)
+	}
+
+	if d.System == nil {
+		t.Fatal("expected system section to be present")
+	}
+	if d.System.PreLaunchScript != "/usr/local/bin/gamux" {
+		t.Errorf("PreLaunchScript = %q, want /usr/local/bin/gamux", d.System.PreLaunchScript)
+	}
+	if d.System.PreLaunchArg != "notify-launch --path \"/tmp/game\"" {
+		t.Errorf("PreLaunchArg = %q", d.System.PreLaunchArg)
+	}
+	if !d.System.PreLaunchWait {
+		t.Errorf("PreLaunchWait should be true")
+	}
+}
+

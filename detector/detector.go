@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/staernid/gamux/config"
@@ -125,6 +126,24 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 	// 9. Detect main executable
 	detectExecutable(info)
 
+	// 10. Check if a saved Lutris config exists for this game and use its target executable if valid
+	if info.Name != "" {
+		slug := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(info.Name, "-"))
+		slug = strings.Trim(slug, "-")
+		if home, err := os.UserHomeDir(); err == nil {
+			lutrisYamlPath := filepath.Join(home, ".config", "lutris", "games", slug+".yml")
+			if data, err := os.ReadFile(lutrisYamlPath); err == nil {
+				reExe := regexp.MustCompile(`(?m)^\s*exe:\s*["']?([^"'\r\n]+)`)
+				if matches := reExe.FindStringSubmatch(string(data)); len(matches) > 1 {
+					savedExe := strings.TrimSpace(matches[1])
+					if savedExe != "" && fileExists(savedExe) {
+						info.ExePath = savedExe
+					}
+				}
+			}
+		}
+	}
+
 	return info, nil
 }
 
@@ -217,38 +236,39 @@ func detectStore(info *GameInfo) {
 
 // ConsolidateManifests copies/moves appmanifest and .manifest files into <GameDir>/[Manifests]/.
 // If a legacy [Steam] folder exists, its contents are migrated into [Manifests] and [Steam] is removed.
-// If promoteFolder is true and the game is inside a raw steamapps/common layout,
-// it moves the game folder up to the main parent directory and cleans up steamapps/depotcache.
-func ConsolidateManifests(info *GameInfo, promoteFolder bool) error {
+func ConsolidateManifests(info *GameInfo) error {
+	if info == nil || info.GameDir == "" {
+		return nil
+	}
+
 	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
 	legacySteamDir := filepath.Join(info.GameDir, "[Steam]")
 
 	// Migrate legacy [Steam] folder to [Manifests] if present
 	if fileExists(legacySteamDir) && legacySteamDir != manifestsDir {
-		if err := os.MkdirAll(manifestsDir, 0755); err == nil {
-			entries, err := os.ReadDir(legacySteamDir)
-			if err == nil {
-				for _, e := range entries {
-					if !e.IsDir() {
-						oldFile := filepath.Join(legacySteamDir, e.Name())
-						newFile := filepath.Join(manifestsDir, e.Name())
-						if err := os.Rename(oldFile, newFile); err != nil {
-							_ = copyFile(oldFile, newFile)
-							_ = os.Remove(oldFile)
-						}
+		_ = os.MkdirAll(manifestsDir, 0755)
+		entries, err := os.ReadDir(legacySteamDir)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					oldFile := filepath.Join(legacySteamDir, e.Name())
+					newFile := filepath.Join(manifestsDir, e.Name())
+					if err := os.Rename(oldFile, newFile); err != nil {
+						_ = copyFile(oldFile, newFile)
+						_ = os.Remove(oldFile)
 					}
 				}
 			}
-			_ = os.RemoveAll(legacySteamDir)
-			slog.Info("Migrated legacy [Steam] folder to [Manifests]", "dir", manifestsDir)
 		}
+		_ = os.RemoveAll(legacySteamDir)
+		slog.Info("Migrated legacy [Steam] folder to [Manifests]", "dir", manifestsDir)
 	}
 
-	// Move/copy ACF file if found
 	if info.ManifestPath != "" {
-		if err := os.MkdirAll(manifestsDir, 0755); err != nil {
-			return fmt.Errorf("create [Manifests] dir: %w", err)
+		if strings.HasPrefix(info.ManifestPath, manifestsDir) {
+			return nil
 		}
+		_ = os.MkdirAll(manifestsDir, 0755)
 
 		srcDir := filepath.Dir(info.ManifestPath)
 		destACF := filepath.Join(manifestsDir, filepath.Base(info.ManifestPath))
@@ -292,23 +312,6 @@ func ConsolidateManifests(info *GameInfo, promoteFolder bool) error {
 		}
 	}
 
-	// Handle promotion if raw depot layout
-	if promoteFolder && info.RawDepotLayout {
-		steamappsParent := filepath.Dir(filepath.Dir(info.GameDir)) // root directory containing steamapps/
-		targetParentDir := filepath.Dir(steamappsParent)
-
-		promotedDir := filepath.Join(targetParentDir, filepath.Base(info.GameDir))
-		if promotedDir != info.GameDir && !fileExists(promotedDir) {
-			if err := os.Rename(info.GameDir, promotedDir); err == nil {
-				slog.Info("Promoted game directory to top level", "from", info.GameDir, "to", promotedDir)
-				info.GameDir = promotedDir
-
-				// Clean up empty steamapps/depotcache structure if possible
-				_ = os.RemoveAll(steamappsParent)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -331,11 +334,30 @@ func EnsureACFManifest(info *GameInfo, dryRun bool) error {
 		info.InstallDir = util.SanitizeInstallDir(info.Name)
 	}
 
+	var launchOpts []LaunchCandidate
+	if info.ExePath != "" {
+		relExe, err := filepath.Rel(info.GameDir, info.ExePath)
+		if err == nil && !strings.HasPrefix(relExe, "..") {
+			launchOpts = append(launchOpts, LaunchCandidate{
+				Executable:  relExe,
+				Arguments:   info.ExeArgs,
+				Description: info.Name,
+			})
+		} else {
+			launchOpts = append(launchOpts, LaunchCandidate{
+				Executable:  info.ExePath,
+				Arguments:   info.ExeArgs,
+				Description: info.Name,
+			})
+		}
+	}
+
 	acfData := &ACFData{
-		AppID:      info.AppID,
-		Name:       info.Name,
-		InstallDir: info.InstallDir,
-		BuildID:    "0",
+		AppID:         info.AppID,
+		Name:          info.Name,
+		InstallDir:    info.InstallDir,
+		BuildID:       "0",
+		LaunchOptions: launchOpts,
 	}
 
 	content := GenerateACFContent(acfData)
@@ -474,6 +496,58 @@ func detectPlatformAndLib(info *GameInfo) {
 	}
 }
 
+func scoreExecutable(exePath string, gameDir string, gameName string) int {
+	base := filepath.Base(exePath)
+	lowerBase := strings.ToLower(base)
+	baseNoExt := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
+
+	cleanDirName := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(filepath.Base(gameDir), ""))
+	cleanGameName := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(gameName, ""))
+	cleanExeName := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(baseNoExt, ""))
+
+	score := 0
+
+	// Exclude / demote crash report tools and secondary helpers
+	if strings.Contains(lowerBase, "bssndrpt") ||
+		strings.Contains(lowerBase, "crashdumper") ||
+		strings.Contains(lowerBase, "bugreport") ||
+		strings.Contains(lowerBase, "errorreport") ||
+		strings.Contains(lowerBase, "unitycrashhandler") {
+		score -= 2000
+	}
+
+	// Demote common secondary tools/editors
+	if strings.Contains(lowerBase, "contentcompiler") ||
+		strings.Contains(lowerBase, "particleeditor") ||
+		strings.Contains(lowerBase, "tileeditor") ||
+		strings.Contains(lowerBase, "worldbuilder") ||
+		strings.Contains(lowerBase, "mapeditor") ||
+		strings.Contains(lowerBase, "dedic") {
+		score -= 500
+	}
+
+	// Boost exact matches with clean directory name or clean game title
+	if cleanExeName != "" {
+		if cleanDirName != "" && cleanExeName == cleanDirName {
+			score += 1000
+		} else if cleanGameName != "" && cleanExeName == cleanGameName {
+			score += 1000
+		} else if cleanDirName != "" && (strings.HasPrefix(cleanExeName, cleanDirName) || strings.HasPrefix(cleanDirName, cleanExeName)) {
+			score += 500
+		} else if cleanGameName != "" && (strings.HasPrefix(cleanExeName, cleanGameName) || strings.HasPrefix(cleanGameName, cleanExeName)) {
+			score += 500
+		}
+	}
+
+	// Boost binaries inside Release/bin/x64 directories
+	dirLower := strings.ToLower(filepath.Dir(exePath))
+	if strings.Contains(dirLower, "release") || strings.Contains(dirLower, "bin") || strings.Contains(dirLower, "x64") {
+		score += 100
+	}
+
+	return score
+}
+
 func detectExecutable(info *GameInfo) {
 	var candidateExes []string
 
@@ -490,6 +564,9 @@ func detectExecutable(info *GameInfo) {
 			strings.Contains(name, "dxsetup") ||
 			strings.Contains(name, "vcredist") ||
 			strings.Contains(name, "crashdumper") ||
+			strings.Contains(name, "bssndrpt") ||
+			strings.Contains(name, "bugreport") ||
+			strings.Contains(name, "errorreport") ||
 			strings.HasSuffix(name, ".console.exe") {
 			return nil
 		}
@@ -501,6 +578,13 @@ func detectExecutable(info *GameInfo) {
 			}
 		}
 		return nil
+	})
+
+	// Sort candidate executables by smart score so main game executables rank #1
+	sort.SliceStable(candidateExes, func(i, j int) bool {
+		scoreI := scoreExecutable(candidateExes[i], info.GameDir, info.Name)
+		scoreJ := scoreExecutable(candidateExes[j], info.GameDir, info.Name)
+		return scoreI > scoreJ
 	})
 
 	// Build LaunchCandidates list
@@ -528,7 +612,7 @@ func detectExecutable(info *GameInfo) {
 		}
 	}
 
-	// Add any remaining detected executables to LaunchCandidates
+	// Add sorted detected executables to LaunchCandidates
 	dirName := filepath.Base(info.GameDir)
 	for _, exe := range candidateExes {
 		if !seenExes[exe] {

@@ -149,4 +149,21 @@ func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
 	}
 }
 
+func TestNotifyLaunch(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "CleanGame")
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = os.WriteFile(filepath.Join(gameDir, "appmanifest_123.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"123\"\n\t\"name\"\t\"CleanGame\"\n}"), 0644)
+
+	eng := New(config.DefaultConfig())
+	err := eng.NotifyLaunch(context.Background(), gameDir)
+	if err != nil {
+		t.Fatalf("NotifyLaunch failed: %v", err)
+	}
+}
+
+
 

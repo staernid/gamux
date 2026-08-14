@@ -126,6 +126,25 @@ func GenerateACFContent(data *ACFData) string {
 	fmt.Fprintf(&sb, "\t\"StateFlags\"\t\t\"4\"\n")
 	fmt.Fprintf(&sb, "\t\"buildid\"\t\t\"%s\"\n", buildID)
 	fmt.Fprintf(&sb, "\t\"UserConfig\"\n\t{\n\t\t\"language\"\t\t\"%s\"\n\t}\n", lang)
+
+	if len(data.LaunchOptions) > 0 {
+		sb.WriteString("\t\"config\"\n\t{\n\t\t\"launch\"\n\t\t{\n")
+		for i, opt := range data.LaunchOptions {
+			fmt.Fprintf(&sb, "\t\t\t\"%d\"\n\t\t\t{\n", i)
+			if opt.Executable != "" {
+				fmt.Fprintf(&sb, "\t\t\t\t\"executable\"\t\t\"%s\"\n", opt.Executable)
+			}
+			if opt.Arguments != "" {
+				fmt.Fprintf(&sb, "\t\t\t\t\"arguments\"\t\t\"%s\"\n", opt.Arguments)
+			}
+			if opt.Description != "" {
+				fmt.Fprintf(&sb, "\t\t\t\t\"description\"\t\t\"%s\"\n", opt.Description)
+			}
+			sb.WriteString("\t\t\t}\n")
+		}
+		sb.WriteString("\t\t}\n\t}\n")
+	}
+
 	sb.WriteString("}\n")
 	return sb.String()
 }

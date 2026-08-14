@@ -83,7 +83,7 @@ type PriceOverview struct {
 // FetchAppDetails fetches full app details for a given AppID.
 func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/appdetails?appids=%s", config.SteamStoreAPI, appID), nil)
+		fmt.Sprintf("%s/appdetails?appids=%s", config.DefaultSteamStoreAPI, appID), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -150,7 +150,7 @@ func SearchAppID(ctx context.Context, query string) (string, string, error) {
 		return "", "", fmt.Errorf("search query cannot be empty")
 	}
 
-	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.SteamStoreAPI, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.DefaultSteamStoreAPI, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("create search request: %w", err)
@@ -191,7 +191,7 @@ func SearchAppIDCandidates(ctx context.Context, query string) ([]AppSearchResult
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
 
-	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.SteamStoreAPI, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.DefaultSteamStoreAPI, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create search request: %w", err)
@@ -381,7 +381,7 @@ func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem
 		count = 3
 	}
 
-	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d", config.SteamWebAPI, appID, count)
+	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d", config.DefaultSteamWebAPI, appID, count)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, newsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create news request: %w", err)
