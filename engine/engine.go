@@ -16,12 +16,9 @@ import (
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/steamless"
-	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
-	"github.com/urfave/cli/v2"
 	"golang.org/x/sync/errgroup"
 )
-
 
 // ProcessOptions holds configuration flags for processing a game directory.
 type ProcessOptions struct {
@@ -38,107 +35,6 @@ type ProcessOptions struct {
 	Runner            string
 }
 
-// ResolveProcessOptions resolves CLI context flags against user configuration and prompts.
-func ResolveProcessOptions(c *cli.Context, cfg *config.Config, promptIfUnset bool) ProcessOptions {
-	if cfg == nil {
-		cfg = config.DefaultConfig()
-	}
-
-	autoYes := c.Bool("yes") || c.IsSet("yes") || c.IsSet("y")
-
-	// 1. GBE & Portable/Loader Mode Resolution
-	applyGBE := true
-	portable := false
-	gbeMode := cfg.GbeMode
-
-	if c.IsSet("portable") {
-		gbeMode = "portable"
-	} else if c.IsSet("loader") {
-		gbeMode = "loader"
-	} else if c.IsSet("no-gbe") {
-		gbeMode = "disabled"
-	}
-
-	if strings.EqualFold(gbeMode, "portable") {
-		applyGBE = true
-		portable = true
-	} else if strings.EqualFold(gbeMode, "loader") {
-		applyGBE = true
-		portable = false
-	} else if strings.EqualFold(gbeMode, "disabled") || strings.EqualFold(gbeMode, "none") || strings.EqualFold(gbeMode, "off") {
-		applyGBE = false
-		portable = false
-	} else if promptIfUnset && !autoYes {
-		// gbeMode is empty/unset in config, prompt user interactively
-		applyGBE = ui.PromptYesNoWithExplanation(
-			"Apply Goldberg Emulator & Steamless DRM removal?",
-			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
-			true,
-		)
-		if applyGBE {
-			portable = ui.PromptYesNoWithExplanation(
-				"Use Portable Mode (Direct DLL/SO replacement)?",
-				"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
-				false,
-			)
-		}
-	}
-
-	// 2. Lutris Integration Resolution
-	addLutris := cfg.Lutris
-	if c.IsSet("no-lutris") {
-		addLutris = false
-	} else if c.IsSet("lutris") {
-		addLutris = c.Bool("lutris")
-	}
-
-	// 3. Operational Toggles
-	normalize := cfg.Normalize
-	if c.IsSet("normalize") {
-		normalize = c.Bool("normalize")
-	}
-
-	noSteamless := !cfg.Steamless
-	if c.IsSet("no-steamless") {
-		noSteamless = c.Bool("no-steamless")
-	}
-
-	fetchAchievements := cfg.Achievements
-	if c.IsSet("achievements") {
-		fetchAchievements = c.Bool("achievements")
-	}
-
-	runner := cfg.Runner
-	if c.IsSet("runner") && c.String("runner") != "" {
-		runner = c.String("runner")
-	}
-
-	winePrefix := cfg.WinePrefix
-	if c.IsSet("wine-prefix") && c.String("wine-prefix") != "" {
-		winePrefix = c.String("wine-prefix")
-	}
-
-	path := ""
-	if c.Args().Len() >= 1 {
-		path = c.Args().Get(0)
-	}
-
-	return ProcessOptions{
-		Path:              path,
-		ApplyGBE:          applyGBE,
-		AddLutris:         addLutris,
-		Runner:            runner,
-		WinePrefix:        winePrefix,
-		Portable:          portable,
-		NormalizeDir:      normalize,
-		DryRun:            c.Bool("dry-run"),
-		AutoYes:           autoYes,
-		NoSteamless:       noSteamless,
-		FetchAchievements: fetchAchievements,
-	}
-}
-
-
 // ProcessResult summarizes the outcome of processing a game.
 type ProcessResult struct {
 	Info                *detector.GameInfo
@@ -151,7 +47,6 @@ type ProcessResult struct {
 	Errors              []string
 }
 
-
 // GameStatus describes the current patch & integration state of a game.
 type GameStatus struct {
 	Name               string
@@ -159,7 +54,6 @@ type GameStatus struct {
 	Store              string // "Steam", "GOG", "Epic", "Itch", "Custom"
 	GameDir            string
 	Platform           string
-
 	ExePath            string
 	State              string // "Original", "Loader-Configured", "Portable-Patched"
 	OriginalBackups    []string
@@ -182,11 +76,10 @@ type GameStatus struct {
 	NewsItems          []steam.NewsItem
 }
 
-
-
 // Engine is the core domain service orchestrating game scanning, patching, and launcher integrations.
 type Engine struct {
-	Config *config.Config
+	Config   *config.Config
+	Notifier func(ctx context.Context, title, message string) error
 }
 
 // New creates a new Engine instance.
@@ -210,40 +103,15 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		targetPath = "."
 	}
 
+	if !opts.DryRun {
+		if count, decErr := util.DecompressVSZaInDir(targetPath); decErr == nil && count > 0 {
+			slog.Info("Decompressed raw VSZa Steam depot files", "target", targetPath, "count", count)
+		}
+	}
+
 	info, err := detector.Detect(ctx, targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
-	}
-
-	// Interactive Disambiguation: Prompt user to confirm/select game title if AppID is missing/ambiguous
-	if !opts.AutoYes && (info.AppID == "" || info.AppID == "0") && info.Name != "" {
-		candidates, searchErr := steam.SearchAppIDCandidates(ctx, info.Name)
-		if searchErr == nil && len(candidates) > 1 {
-			uiCandidates := make([]ui.CandidateItem, len(candidates))
-			for i, c := range candidates {
-				uiCandidates[i] = ui.CandidateItem{AppID: c.AppID, Name: c.Name}
-			}
-			if selected, promptErr := ui.PromptSelectCandidate(info.Name, uiCandidates); promptErr == nil {
-				info.AppID = fmt.Sprintf("%d", selected.AppID)
-				info.Name = selected.Name
-			}
-		}
-	}
-
-	// Interactive Launch Executable Disambiguation: Prompt user if multiple launch candidates exist
-	if !opts.AutoYes && len(info.LaunchCandidates) > 1 {
-		uiOptions := make([]ui.LaunchOptionItem, len(info.LaunchCandidates))
-		for i, opt := range info.LaunchCandidates {
-			uiOptions[i] = ui.LaunchOptionItem{
-				Name:       opt.Name,
-				Executable: opt.Executable,
-				Arguments:  opt.Arguments,
-			}
-		}
-		if selected, promptErr := ui.PromptSelectLaunchOption(info.Name, uiOptions); promptErr == nil {
-			info.ExePath = selected.Executable
-			info.ExeArgs = selected.Arguments
-		}
 	}
 
 	// Manifest Auto-Fetch & Repair Offer if [Manifests] is missing
@@ -342,7 +210,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 	// 2. Add to Lutris
 	if opts.AddLutris {
 		if strings.TrimSpace(info.ExePath) == "" {
-			err := fmt.Errorf("cannot register in Lutris: no executable (.exe or Linux binary) detected in %s", info.GameDir)
+			err := fmt.Errorf("%w: cannot register in Lutris: no executable detected in %s", detector.ErrNoExecutableFound, info.GameDir)
 			slog.Error(err.Error())
 			res.Errors = append(res.Errors, err.Error())
 			return res, err
@@ -863,6 +731,9 @@ func (e *Engine) NotifyLaunch(ctx context.Context, gameDir string) error {
 	msg += fmt.Sprintf("\nSuggested Action: Run 'gamux sync %q' to resolve.", status.GameDir)
 
 	slog.Info("Pre-launch notification sent", "title", status.Name, "issuesCount", len(issues))
-	return ui.NotifyIssue(ctx, status.Name, msg)
+	if e.Notifier != nil {
+		return e.Notifier(ctx, status.Name, msg)
+	}
+	return nil
 }
 

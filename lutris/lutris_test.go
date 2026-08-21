@@ -1,6 +1,7 @@
 package lutris
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -490,4 +491,69 @@ func TestGenerate_PreLaunchScript(t *testing.T) {
 		t.Errorf("PreLaunchWait should be true")
 	}
 }
+
+func TestLutrisDatabaseIntegration(t *testing.T) {
+	tmpDir := mustTempDir(t)
+	dbPath := filepath.Join(tmpDir, "pga.db")
+
+	// Initialize sqlite schema
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test sqlite: %v", err)
+	}
+	defer db.Close()
+
+	schema := `CREATE TABLE games (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		slug TEXT UNIQUE,
+		runner TEXT,
+		platform TEXT,
+		executable TEXT,
+		directory TEXT,
+		installed INTEGER,
+		installed_at INTEGER,
+		configpath TEXT
+	);`
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to create games table: %v", err)
+	}
+
+	cfg := Config{
+		Name:     "Test SQLite Game",
+		Slug:     "test-sqlite-game",
+		GamePath: "/mnt/games/test.exe",
+		Runner:   "wine",
+	}
+
+	// 1. Insert into database
+	if err := updateLutrisDBWithPath(cfg, "test-sqlite-game-12345", dbPath); err != nil {
+		t.Fatalf("updateLutrisDBWithPath insert failed: %v", err)
+	}
+
+	// 2. Query configpath
+	cp := GetExistingConfigPath("test-sqlite-game", tmpDir, dbPath)
+	if cp != "test-sqlite-game-12345" {
+		t.Errorf("expected configpath 'test-sqlite-game-12345', got %q", cp)
+	}
+
+	// 3. Update existing game
+	cfg.Name = "Test SQLite Game Updated"
+	if err := updateLutrisDBWithPath(cfg, "test-sqlite-game-99999", dbPath); err != nil {
+		t.Fatalf("updateLutrisDBWithPath update failed: %v", err)
+	}
+
+	var name, updatedCP string
+	err = db.QueryRow("SELECT name, configpath FROM games WHERE slug = ?", "test-sqlite-game").Scan(&name, &updatedCP)
+	if err != nil {
+		t.Fatalf("query updated game failed: %v", err)
+	}
+	if name != "Test SQLite Game Updated" {
+		t.Errorf("expected updated name, got %q", name)
+	}
+	if updatedCP != "test-sqlite-game-99999" {
+		t.Errorf("expected updated configpath, got %q", updatedCP)
+	}
+}
+
 

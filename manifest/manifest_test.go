@@ -4,8 +4,19 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
+	"os"
 	"testing"
+
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
+
 
 func TestParseLua_ValidContent(t *testing.T) {
 	luaContent := `

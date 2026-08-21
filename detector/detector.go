@@ -49,6 +49,10 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 		return nil, fmt.Errorf("resolve abs path: %w", err)
 	}
 
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("%w: %s", ErrGameNotFound, absPath)
+	}
+
 	info := &GameInfo{
 		GameDir: absPath,
 	}
@@ -136,7 +140,7 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 				reExe := regexp.MustCompile(`(?m)^\s*exe:\s*["']?([^"'\r\n]+)`)
 				if matches := reExe.FindStringSubmatch(string(data)); len(matches) > 1 {
 					savedExe := strings.TrimSpace(matches[1])
-					if savedExe != "" && fileExists(savedExe) {
+					if savedExe != "" && util.FileExists(savedExe) {
 						info.ExePath = savedExe
 					}
 				}
@@ -188,7 +192,7 @@ func detectStore(info *GameInfo) {
 		}
 	}
 	if !hasSteamArtifacts {
-		if appidFile := filepath.Join(info.GameDir, "steam_appid.txt"); fileExists(appidFile) {
+		if appidFile := filepath.Join(info.GameDir, "steam_appid.txt"); util.FileExists(appidFile) {
 			hasSteamArtifacts = true
 		}
 	}
@@ -229,40 +233,13 @@ func detectStore(info *GameInfo) {
 	info.Store = "Standalone"
 }
 
-
-
-
-
-
 // ConsolidateManifests copies/moves appmanifest and .manifest files into <GameDir>/[Manifests]/.
-// If a legacy [Steam] folder exists, its contents are migrated into [Manifests] and [Steam] is removed.
 func ConsolidateManifests(info *GameInfo) error {
 	if info == nil || info.GameDir == "" {
 		return nil
 	}
 
 	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
-	legacySteamDir := filepath.Join(info.GameDir, "[Steam]")
-
-	// Migrate legacy [Steam] folder to [Manifests] if present
-	if fileExists(legacySteamDir) && legacySteamDir != manifestsDir {
-		_ = os.MkdirAll(manifestsDir, 0755)
-		entries, err := os.ReadDir(legacySteamDir)
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() {
-					oldFile := filepath.Join(legacySteamDir, e.Name())
-					newFile := filepath.Join(manifestsDir, e.Name())
-					if err := os.Rename(oldFile, newFile); err != nil {
-						_ = copyFile(oldFile, newFile)
-						_ = os.Remove(oldFile)
-					}
-				}
-			}
-		}
-		_ = os.RemoveAll(legacySteamDir)
-		slog.Info("Migrated legacy [Steam] folder to [Manifests]", "dir", manifestsDir)
-	}
 
 	if info.ManifestPath != "" {
 		if strings.HasPrefix(info.ManifestPath, manifestsDir) {
@@ -272,12 +249,9 @@ func ConsolidateManifests(info *GameInfo) error {
 
 		srcDir := filepath.Dir(info.ManifestPath)
 		destACF := filepath.Join(manifestsDir, filepath.Base(info.ManifestPath))
-		if info.ManifestPath != destACF && fileExists(info.ManifestPath) {
-			if err := copyFile(info.ManifestPath, destACF); err == nil {
+		if info.ManifestPath != destACF && util.FileExists(info.ManifestPath) {
+			if err := util.CopyFile(info.ManifestPath, destACF); err == nil {
 				slog.Info("Consolidated ACF manifest", "dest", destACF)
-				if strings.HasSuffix(srcDir, "[Steam]") {
-					_ = os.Remove(info.ManifestPath)
-				}
 			}
 		}
 		info.ManifestPath = destACF
@@ -300,14 +274,11 @@ func ConsolidateManifests(info *GameInfo) error {
 					destMan := filepath.Join(manifestsDir, e.Name())
 					if srcMan != destMan {
 						if err := os.Rename(srcMan, destMan); err != nil {
-							_ = copyFile(srcMan, destMan)
+							_ = util.CopyFile(srcMan, destMan)
 							_ = os.Remove(srcMan)
 						}
 					}
 				}
-			}
-			if strings.HasSuffix(d, "[Steam]") {
-				_ = os.RemoveAll(d)
 			}
 		}
 	}
@@ -326,7 +297,7 @@ func EnsureACFManifest(info *GameInfo, dryRun bool) error {
 	acfName := fmt.Sprintf("appmanifest_%s.acf", info.AppID)
 	targetACF := filepath.Join(manifestsDir, acfName)
 
-	if fileExists(targetACF) {
+	if util.FileExists(targetACF) {
 		return nil
 	}
 
@@ -393,7 +364,7 @@ func NormalizeDirectory(info *GameInfo, dryRun bool) error {
 	parentDir := filepath.Dir(info.GameDir)
 	targetDir := filepath.Join(parentDir, info.InstallDir)
 
-	if targetDir == info.GameDir || fileExists(targetDir) {
+	if targetDir == info.GameDir || util.FileExists(targetDir) {
 		return nil
 	}
 
@@ -638,13 +609,4 @@ func detectExecutable(info *GameInfo) {
 	if info.ExePath != "" && strings.HasSuffix(strings.ToLower(info.ExePath), ".exe") && info.Platform == "linux" {
 		info.Platform = "win64"
 	}
-}
-
-func copyFile(src, dest string) error {
-	return util.CopyFile(src, dest)
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
 }

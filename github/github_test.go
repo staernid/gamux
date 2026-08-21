@@ -14,13 +14,22 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/util"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
 
 type mockRoundTripper func(req *http.Request) (*http.Response, error)
 
 func (m mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m(req)
 }
+
 
 func mustTempDir(t *testing.T) string {
 	t.Helper()

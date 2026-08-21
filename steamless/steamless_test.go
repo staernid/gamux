@@ -7,7 +7,16 @@ import (
 	"testing"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
+
 
 func TestEnsureBinary_EmbeddedExtraction(t *testing.T) {
 	ctx := context.Background()

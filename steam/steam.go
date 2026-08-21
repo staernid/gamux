@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
@@ -21,7 +22,7 @@ import (
 
 
 // HTTPClient allows injecting custom HTTP clients or RoundTrippers for testing.
-var HTTPClient = http.DefaultClient
+var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // ReleaseDate holds release date metadata returned from the Steam Store API.
 type ReleaseDate struct {
@@ -80,39 +81,72 @@ type PriceOverview struct {
 	} `json:"formatted_prices,omitempty"`
 }
 
-// FetchAppDetails fetches full app details for a given AppID.
+// FetchAppDetails fetches full app details for a given AppID using a tiered fallback strategy.
+// Tier 1: Query with explicit US region, English language, and mature content cookies (bypasses age-gate & NSFW blocks).
+// Tier 2: Fallback query without region/language parameters for geo-IP / region-exclusive store listings.
 func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/appdetails?appids=%s", config.DefaultSteamStoreAPI, appID), nil)
+	doQuery := func(apiURL string) (*AppDetails, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		// Include User-Agent and mature content cookies so Steam doesn't block age-gated/NSFW games with success: false
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+		req.Header.Set("Cookie", "wants_mature_content=1; birthtime=0; lastagecheckage=1-January-1990")
+
+		resp, err := HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch app details: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("failed to fetch app details: HTTP %d", resp.StatusCode)
+		}
+
+		var result map[string]struct {
+			Success bool        `json:"success"`
+			Data    *AppDetails `json:"data"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("failed to decode JSON: %w", err)
+		}
+
+		appData, ok := result[appID]
+		if !ok || !appData.Success || appData.Data == nil {
+			return nil, fmt.Errorf("app details unavailable for AppID %s", appID)
+		}
+
+		return appData.Data, nil
+	}
+
+	var lastErr error
+
+	// Tier 1: Query with explicit US region, English language, and mature content cookies
+	primaryURL := fmt.Sprintf("%s/appdetails?appids=%s&cc=US&l=english", config.DefaultSteamStoreAPI, appID)
+	details, err := doQuery(primaryURL)
+	if err == nil && details != nil && details.Name != "" {
+		return details, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		lastErr = err
 	}
 
-	resp, err := HTTPClient.Do(req)
+	// Tier 2: Fallback query without region query parameters for region-exclusive store listings
+	fallbackURL := fmt.Sprintf("%s/appdetails?appids=%s", config.DefaultSteamStoreAPI, appID)
+	details, err = doQuery(fallbackURL)
+	if err == nil && details != nil && details.Name != "" {
+		return details, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch app details: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch app details: HTTP %d", resp.StatusCode)
+		lastErr = err
 	}
 
-	var result map[string]struct {
-		Success bool        `json:"success"`
-		Data    *AppDetails `json:"data"`
+	if lastErr != nil {
+		return nil, lastErr
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode JSON: %w", err)
-	}
-
-	appData, ok := result[appID]
-	if !ok || !appData.Success || appData.Data == nil {
-		return nil, fmt.Errorf("app details not found or unavailable for AppID %s", appID)
-	}
-
-	return appData.Data, nil
+	return nil, fmt.Errorf("app details not found or unavailable for AppID %s across all store tiers", appID)
 }
 
 // FetchAppName gets the app name for a Steam AppID.
@@ -260,7 +294,7 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch DLCs: %w", err)
 	}
@@ -275,7 +309,7 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	re := regexp.MustCompile(`data-ds-appid=\\"(\d+)`)
+	re := regexp.MustCompile(`data-ds-appid=\\?"(\d+)`)
 	matches := re.FindAllStringSubmatch(string(body), -1)
 
 	if len(matches) == 0 {

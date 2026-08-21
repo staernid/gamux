@@ -12,25 +12,47 @@ import (
 
 var (
 	DisableCache bool
-	cacheDirOnce sync.Once
 	baseCacheDir string
+	dirMutex     sync.RWMutex
 	nameMutex    sync.Mutex
 )
+
+// SetCacheDir overrides the cache root directory (useful for test isolation).
+func SetCacheDir(dir string) {
+	dirMutex.Lock()
+	defer dirMutex.Unlock()
+	baseCacheDir = dir
+	if dir != "" {
+		_ = os.MkdirAll(filepath.Join(baseCacheDir, "hubcap"), 0755)
+		_ = os.MkdirAll(filepath.Join(baseCacheDir, "news"), 0755)
+	}
+}
 
 func getCacheDir() string {
 	if DisableCache {
 		return ""
 	}
-	cacheDirOnce.Do(func() {
-		userCache, err := os.UserCacheDir()
-		if err != nil || userCache == "" {
-			home, _ := os.UserHomeDir()
-			userCache = filepath.Join(home, ".cache")
-		}
-		baseCacheDir = filepath.Join(userCache, "gamux")
-		_ = os.MkdirAll(filepath.Join(baseCacheDir, "hubcap"), 0755)
-		_ = os.MkdirAll(filepath.Join(baseCacheDir, "news"), 0755)
-	})
+	dirMutex.RLock()
+	if baseCacheDir != "" {
+		d := baseCacheDir
+		dirMutex.RUnlock()
+		return d
+	}
+	dirMutex.RUnlock()
+
+	dirMutex.Lock()
+	defer dirMutex.Unlock()
+	if baseCacheDir != "" {
+		return baseCacheDir
+	}
+	userCache, err := os.UserCacheDir()
+	if err != nil || userCache == "" {
+		home, _ := os.UserHomeDir()
+		userCache = filepath.Join(home, ".cache")
+	}
+	baseCacheDir = filepath.Join(userCache, "gamux")
+	_ = os.MkdirAll(filepath.Join(baseCacheDir, "hubcap"), 0755)
+	_ = os.MkdirAll(filepath.Join(baseCacheDir, "news"), 0755)
 	return baseCacheDir
 }
 

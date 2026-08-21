@@ -1,11 +1,9 @@
 package detector
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 )
 
@@ -27,55 +25,46 @@ type ACFData struct {
 	LaunchOptions []LaunchCandidate
 }
 
-var kvRegex = regexp.MustCompile(`^\s*"([^"]+)"\s+"([^"]*)"`)
-
-// ParseACF parses a Steam ACF/VDF manifest file from a reader.
+// ParseACF parses a Steam ACF/VDF manifest file from a reader using the recursive VDF parser.
 func ParseACF(r io.Reader) (*ACFData, error) {
-	scanner := bufio.NewScanner(r)
-	data := &ACFData{}
+	node, err := ParseVDF(r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidManifest, err.Error())
+	}
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
+	data := &ACFData{
+		AppID:      node.GetString("appid"),
+		Name:       node.GetString("name"),
+		InstallDir: node.GetString("installdir"),
+		BuildID:    node.GetString("buildid"),
+		Language:   node.GetString("UserConfig/language"),
+	}
 
-		matches := kvRegex.FindStringSubmatch(line)
-		if len(matches) == 3 {
-			key := strings.ToLower(matches[1])
-			val := matches[2]
-			switch key {
-			case "appid":
-				data.AppID = val
-			case "name":
-				data.Name = val
-			case "installdir":
-				data.InstallDir = val
-			case "buildid":
-				data.BuildID = val
-			case "language":
-				data.Language = val
-			case "executable":
-				c := LaunchCandidate{Executable: val}
-				data.LaunchOptions = append(data.LaunchOptions, c)
-			case "arguments":
-				if len(data.LaunchOptions) > 0 {
-					data.LaunchOptions[len(data.LaunchOptions)-1].Arguments = val
-				}
-			case "description":
-				if len(data.LaunchOptions) > 0 {
-					data.LaunchOptions[len(data.LaunchOptions)-1].Description = val
+	if data.Language == "" {
+		data.Language = node.GetString("language")
+	}
+
+	// Parse launch options from config/launch or direct keys
+	if launchNode := node.Get("config"); launchNode != nil {
+		if sub := launchNode.Get("launch"); sub != nil {
+			for _, child := range sub.Children {
+				exe := child.GetString("executable")
+				args := child.GetString("arguments")
+				desc := child.GetString("description")
+				if exe != "" {
+					data.LaunchOptions = append(data.LaunchOptions, LaunchCandidate{
+						Name:        child.Key,
+						Executable:  exe,
+						Arguments:   args,
+						Description: desc,
+					})
 				}
 			}
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan ACF file: %w", err)
-	}
-
 	if data.AppID == "" && data.Name == "" {
-		return nil, fmt.Errorf("invalid ACF file: missing appid and name")
+		return nil, ErrInvalidManifest
 	}
 
 	return data, nil

@@ -11,7 +11,15 @@ import (
 	"testing"
 
 	"github.com/staernid/gamux/cache"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
 
 type mockRoundTripper func(req *http.Request) (*http.Response, error)
 
@@ -19,19 +27,20 @@ func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+
 func TestFetchAppName(t *testing.T) {
 	cache.DisableCache = true
 	defer func() { cache.DisableCache = false }()
 
 	// Backup and restore default transport
-	oldTransport := http.DefaultClient.Transport
+	oldTransport := HTTPClient.Transport
 	defer func() {
-		http.DefaultClient.Transport = oldTransport
+		HTTPClient.Transport = oldTransport
 	}()
 
 
 	t.Run("successful response", func(t *testing.T) {
-		http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			if !strings.Contains(req.URL.Path, "appdetails") {
 				t.Errorf("unexpected URL path: %s", req.URL.Path)
 			}
@@ -53,7 +62,7 @@ func TestFetchAppName(t *testing.T) {
 	})
 
 	t.Run("rate limit HTTP 429", func(t *testing.T) {
-		http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusTooManyRequests,
 				Body:       io.NopCloser(bytes.NewBufferString("Too Many Requests")),
@@ -71,7 +80,7 @@ func TestFetchAppName(t *testing.T) {
 	})
 
 	t.Run("release_date as object", func(t *testing.T) {
-		http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			jsonResp := `{"3711820": {"success": true, "data": {"name": "Blue Prince DLC", "release_date": {"coming_soon": false, "date": "1 Aug, 2026"}}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -91,9 +100,9 @@ func TestFetchAppName(t *testing.T) {
 }
 
 func TestFetchDLCs(t *testing.T) {
-	oldTransport := http.DefaultClient.Transport
+	oldTransport := HTTPClient.Transport
 	defer func() {
-		http.DefaultClient.Transport = oldTransport
+		HTTPClient.Transport = oldTransport
 	}()
 
 	tmpDir, err := os.MkdirTemp("", "testfetchdlcs")
@@ -102,7 +111,7 @@ func TestFetchDLCs(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 		if strings.Contains(req.URL.Path, "ajaxgetfilteredrecommendations") {
 			htmlResp := `{"results_html": "<div data-ds-appid=\"456\"></div><div data-ds-appid=\"789\"></div>"}`
 			return &http.Response{
@@ -112,7 +121,7 @@ func TestFetchDLCs(t *testing.T) {
 			}, nil
 		}
 		if strings.Contains(req.URL.Path, "appdetails") {
-			var jsonResp string
+			jsonResp := `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}, "789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
 			if strings.Contains(req.URL.RawQuery, "appids=456") {
 				jsonResp = `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}}`
 			} else if strings.Contains(req.URL.RawQuery, "appids=789") {
@@ -124,7 +133,11 @@ func TestFetchDLCs(t *testing.T) {
 				Header:     make(http.Header),
 			}, nil
 		}
-		return nil, nil
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+			Header:     make(http.Header),
+		}, nil
 	})
 
 	err = FetchDLCs(context.Background(), "123", tmpDir, false)
@@ -161,9 +174,9 @@ func TestFetchDLCs(t *testing.T) {
 }
 
 func TestDownloadAchievementImages(t *testing.T) {
-	oldTransport := http.DefaultClient.Transport
+	oldTransport := HTTPClient.Transport
 	defer func() {
-		http.DefaultClient.Transport = oldTransport
+		HTTPClient.Transport = oldTransport
 	}()
 
 	tmpDir, err := os.MkdirTemp("", "testachievements")
@@ -172,7 +185,7 @@ func TestDownloadAchievementImages(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	http.DefaultClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 		if strings.Contains(req.URL.Path, "ach1.png") {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -268,7 +281,11 @@ func TestFetchAchievementSchema(t *testing.T) {
 				Header:     make(http.Header),
 			}, nil
 		}
-		return nil, nil
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+			Header:     make(http.Header),
+		}, nil
 	})
 
 	achs, err := FetchAchievementSchema(context.Background(), 12345, "MOCKKEY", "english")
@@ -333,7 +350,11 @@ func TestFetchWorkshopItemDetails(t *testing.T) {
 				Header:     make(http.Header),
 			}, nil
 		}
-		return nil, nil
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+			Header:     make(http.Header),
+		}, nil
 	})
 
 	details, err := FetchWorkshopItemDetails(context.Background(), 315783921)

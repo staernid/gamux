@@ -211,11 +211,6 @@ func ScanUntrackedFiles(gameDir string, appID uint32) (int, []string, error) {
 	return rep.OfficialCount, rep.UntrackedFiles, nil
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
 func hasOriginalBackup(gameDir, rel string) bool {
 	absPath := filepath.Join(gameDir, rel)
 	if matches, err := filepath.Glob(absPath + "*ORIGINAL*"); err == nil && len(matches) > 0 {

@@ -11,10 +11,30 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
+
 
 
 func TestInspectStatus_Original(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "TestGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -41,6 +61,17 @@ func TestInspectStatus_Original(t *testing.T) {
 }
 
 func TestInspectStatus_PortablePatchedAndRollback(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "PatchedGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -150,6 +181,17 @@ func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
 }
 
 func TestNotifyLaunch(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "CleanGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {

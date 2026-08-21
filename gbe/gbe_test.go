@@ -11,7 +11,16 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
+
 
 func TestApplyGBE_InvalidPlatform(t *testing.T) {
 	err := ApplyGBE(context.Background(), config.DefaultConfig(), ".", "invalid_platform", "123", true, false, "", "")
@@ -48,9 +57,21 @@ func TestApplyGBE_ExplicitTargetDirectory(t *testing.T) {
 		GbeDir: gbeDir,
 	}
 
+	oldTransport := steam.HTTPClient.Transport
+	defer func() {
+		steam.HTTPClient.Transport = oldTransport
+	}()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`[]`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
 	// Run ApplyGBE targeting gameDir in portable mode with dry-run
 	err := ApplyGBE(context.Background(), cfg, gameDir, "linux", "12345", true, true, "", "")
-
 
 	if err != nil {
 		t.Fatalf("ApplyGBE failed: %v", err)

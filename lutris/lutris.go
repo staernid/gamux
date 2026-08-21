@@ -6,6 +6,7 @@
 package lutris
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	_ "modernc.org/sqlite"
 	"gopkg.in/yaml.v3"
 )
 
@@ -241,10 +243,6 @@ func Write(cfg Config, dir string) error {
 	return nil
 }
 
-func sqlQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
-
 func findLutrisDBPath(overrideDbPath string) string {
 	if overrideDbPath != "" {
 		return overrideDbPath
@@ -275,12 +273,14 @@ func findLutrisDBPath(overrideDbPath string) string {
 func GetExistingConfigPath(slug, dir, overrideDbPath string) string {
 	dbPath := findLutrisDBPath(overrideDbPath)
 	if dbPath != "" {
-		query := fmt.Sprintf(`SELECT configpath FROM games WHERE slug = %s LIMIT 1;`, sqlQuote(slug))
-		cmd := exec.Command("sqlite3", dbPath, query)
-		if out, err := cmd.Output(); err == nil {
-			cp := strings.TrimSpace(string(out))
-			if cp != "" {
-				return cp
+		if db, err := sql.Open("sqlite", dbPath); err == nil {
+			defer db.Close()
+			var cp string
+			if err := db.QueryRow("SELECT configpath FROM games WHERE slug = ? LIMIT 1", slug).Scan(&cp); err == nil {
+				cp = strings.TrimSpace(cp)
+				if cp != "" {
+					return cp
+				}
 			}
 		}
 	}
@@ -346,9 +346,10 @@ func UnregisterLutris(slug, dir string) error {
 	// 3. Remove from pga.db
 	dbPath := findLutrisDBPath("")
 	if dbPath != "" {
-		query := fmt.Sprintf(`DELETE FROM games WHERE slug = %s;`, sqlQuote(slug))
-		cmd := exec.Command("sqlite3", dbPath, query)
-		_ = cmd.Run()
+		if db, err := sql.Open("sqlite", dbPath); err == nil {
+			defer db.Close()
+			_, _ = db.Exec("DELETE FROM games WHERE slug = ?", slug)
+		}
 	}
 
 	return nil
@@ -363,7 +364,6 @@ func updateLutrisDBWithPath(cfg Config, configpath string, overrideDbPath string
 	if dbPath == "" {
 		return nil
 	}
-
 
 	slug := strings.TrimSpace(cfg.Slug)
 	if slug == "" {
@@ -383,27 +383,27 @@ func updateLutrisDBWithPath(cfg Config, configpath string, overrideDbPath string
 	gameDir := filepath.Dir(cfg.GamePath)
 	now := time.Now().Unix()
 
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("open lutris db: %w", err)
+	}
+	defer db.Close()
+
 	// Check if game already exists in pga.db
-	checkQuery := fmt.Sprintf(`SELECT COUNT(*) FROM games WHERE slug = %s;`, sqlQuote(slug))
-	cmdCheck := exec.Command("sqlite3", dbPath, checkQuery)
-	out, err := cmdCheck.Output()
+	var count int
+	_ = db.QueryRow("SELECT COUNT(*) FROM games WHERE slug = ?", slug).Scan(&count)
 
-	exists := false
-	if err == nil && strings.TrimSpace(string(out)) != "0" {
-		exists = true
-	}
-
-	var query string
-	if exists {
-		query = fmt.Sprintf(`UPDATE games SET name = %s, runner = %s, platform = %s, executable = %s, directory = %s, installed = 1, installed_at = %d, configpath = %s WHERE slug = %s;`,
-			sqlQuote(cfg.Name), sqlQuote(runner), sqlQuote(platform), sqlQuote(cfg.GamePath), sqlQuote(gameDir), now, sqlQuote(configpath), sqlQuote(slug))
+	if count > 0 {
+		_, err = db.Exec(`UPDATE games SET name = ?, runner = ?, platform = ?, executable = ?, directory = ?, installed = 1, installed_at = ?, configpath = ? WHERE slug = ?`,
+			cfg.Name, runner, platform, cfg.GamePath, gameDir, now, configpath, slug)
 	} else {
-		query = fmt.Sprintf(`INSERT INTO games (name, slug, runner, platform, executable, directory, installed, installed_at, configpath) VALUES (%s, %s, %s, %s, %s, %s, 1, %d, %s);`,
-			sqlQuote(cfg.Name), sqlQuote(slug), sqlQuote(runner), sqlQuote(platform), sqlQuote(cfg.GamePath), sqlQuote(gameDir), now, sqlQuote(configpath))
+		_, err = db.Exec(`INSERT INTO games (name, slug, runner, platform, executable, directory, installed, installed_at, configpath) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			cfg.Name, slug, runner, platform, cfg.GamePath, gameDir, now, configpath)
 	}
-
-	cmd := exec.Command("sqlite3", dbPath, query)
-	return cmd.Run()
+	if err != nil {
+		return fmt.Errorf("save game to lutris db: %w", err)
+	}
+	return nil
 }
 
 // CreateXDGShortcuts creates application menu (.local/share/applications) and/or desktop (~/Desktop) launcher files.

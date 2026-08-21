@@ -6,7 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
 
 func TestParseACF(t *testing.T) {
 	rawACF := `"AppState"
@@ -157,16 +166,16 @@ func TestConsolidateManifests(t *testing.T) {
 		}
 	})
 
-	t.Run("migrates legacy [Steam] directory to [Manifests]", func(t *testing.T) {
+	t.Run("consolidates manifest into [Manifests]", func(t *testing.T) {
 		gameDir := t.TempDir()
-		legacyDir := filepath.Join(gameDir, "[Steam]")
-		_ = os.MkdirAll(legacyDir, 0755)
-		_ = os.WriteFile(filepath.Join(legacyDir, "appmanifest_2088570.acf"), []byte("test"), 0644)
-		_ = os.WriteFile(filepath.Join(legacyDir, "2088571_1234.manifest"), []byte("test"), 0644)
+		sourceDir := filepath.Join(gameDir, "source_manifests")
+		_ = os.MkdirAll(sourceDir, 0755)
+		_ = os.WriteFile(filepath.Join(sourceDir, "appmanifest_2088570.acf"), []byte("test"), 0644)
+		_ = os.WriteFile(filepath.Join(sourceDir, "2088571_1234.manifest"), []byte("test"), 0644)
 
 		info := &GameInfo{
 			GameDir:      gameDir,
-			ManifestPath: filepath.Join(legacyDir, "appmanifest_2088570.acf"),
+			ManifestPath: filepath.Join(sourceDir, "appmanifest_2088570.acf"),
 		}
 
 		if err := ConsolidateManifests(info); err != nil {
@@ -180,11 +189,6 @@ func TestConsolidateManifests(t *testing.T) {
 		}
 		if _, err := os.Stat(filepath.Join(manifestsDir, "2088571_1234.manifest")); os.IsNotExist(err) {
 			t.Error("expected .manifest in [Manifests]")
-		}
-
-		// Verify legacy [Steam] directory was removed
-		if _, err := os.Stat(legacyDir); !os.IsNotExist(err) {
-			t.Error("expected legacy [Steam] directory to be deleted after migration")
 		}
 	})
 }

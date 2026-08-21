@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/detector"
@@ -29,6 +29,27 @@ import (
 
 // Version of the gamux application (set at build time via -ldflags)
 var Version = "dev"
+
+func renderCLIError(err error, fallback ...string) {
+	var suggestions []string
+	if errors.Is(err, detector.ErrGameNotFound) {
+		suggestions = append(suggestions, "Verify that the specified directory path exists", "Provide an absolute path or navigate to the game directory")
+	} else if errors.Is(err, detector.ErrNoExecutableFound) {
+		suggestions = append(suggestions, "Verify that the folder contains a valid .exe or Linux native binary", "Ensure file permissions allow execution (chmod +x)")
+	} else if errors.Is(err, detector.ErrInvalidManifest) {
+		suggestions = append(suggestions, "Re-generate or repair the manifest via 'gamux sync'", "Verify that the ACF file is not empty or corrupted")
+	} else if errors.Is(err, steam.ErrRateLimited) {
+		suggestions = append(suggestions, "Steam API rate limit reached; wait a few minutes before retrying")
+	} else if errors.Is(err, manifest.ErrDepotKeyNotFound) {
+		suggestions = append(suggestions, "No depot key was found for this game on Hubcap or RevoBD", "Supply a custom depot key via lua or manifest folder")
+	} else if len(fallback) > 0 {
+		suggestions = fallback
+	} else {
+		suggestions = []string{"Check file permissions and directory path", "Run with --verbose for detailed debug logs"}
+	}
+	ui.RenderErrorHelp(err, suggestions)
+}
+
 
 func commonSetupFlags() []cli.Flag {
 	return []cli.Flag{
@@ -111,7 +132,101 @@ func isAutoYes(c *cli.Context) bool {
 
 
 func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Config) engine.ProcessOptions {
-	return engine.ResolveProcessOptions(c, cfg, promptIfUnset)
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+
+	autoYes := isAutoYes(c)
+
+	// 1. GBE & Portable/Loader Mode Resolution
+	applyGBE := true
+	portable := false
+	gbeMode := cfg.GbeMode
+
+	if c.IsSet("portable") {
+		gbeMode = "portable"
+	} else if c.IsSet("loader") {
+		gbeMode = "loader"
+	} else if c.IsSet("no-gbe") {
+		gbeMode = "disabled"
+	}
+
+	if strings.EqualFold(gbeMode, "portable") {
+		applyGBE = true
+		portable = true
+	} else if strings.EqualFold(gbeMode, "loader") {
+		applyGBE = true
+		portable = false
+	} else if strings.EqualFold(gbeMode, "disabled") || strings.EqualFold(gbeMode, "none") || strings.EqualFold(gbeMode, "off") {
+		applyGBE = false
+		portable = false
+	} else if promptIfUnset && !autoYes {
+		applyGBE = ui.PromptYesNoWithExplanation(
+			"Apply Goldberg Emulator & Steamless DRM removal?",
+			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
+			true,
+		)
+		if applyGBE {
+			portable = ui.PromptYesNoWithExplanation(
+				"Use Portable Mode (Direct DLL/SO replacement)?",
+				"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
+				false,
+			)
+		}
+	}
+
+	// 2. Lutris Integration Resolution
+	addLutris := cfg.Lutris
+	if c.IsSet("no-lutris") {
+		addLutris = false
+	} else if c.IsSet("lutris") {
+		addLutris = c.Bool("lutris")
+	}
+
+	// 3. Operational Toggles
+	normalize := cfg.Normalize
+	if c.IsSet("normalize") {
+		normalize = c.Bool("normalize")
+	}
+
+	noSteamless := !cfg.Steamless
+	if c.IsSet("no-steamless") {
+		noSteamless = c.Bool("no-steamless")
+	}
+
+	fetchAchievements := cfg.Achievements
+	if c.IsSet("achievements") {
+		fetchAchievements = c.Bool("achievements")
+	}
+
+	runner := cfg.Runner
+	if c.IsSet("runner") && c.String("runner") != "" {
+		runner = c.String("runner")
+	}
+
+	winePrefix := cfg.WinePrefix
+	if c.IsSet("wine-prefix") && c.String("wine-prefix") != "" {
+		winePrefix = c.String("wine-prefix")
+	}
+
+	path := ""
+	if c.Args().Len() >= 1 {
+		path = c.Args().Get(0)
+	}
+
+	return engine.ProcessOptions{
+		Path:              path,
+		ApplyGBE:          applyGBE,
+		AddLutris:         addLutris,
+		Runner:            runner,
+		WinePrefix:        winePrefix,
+		Portable:          portable,
+		NormalizeDir:      normalize,
+		DryRun:            c.Bool("dry-run"),
+		AutoYes:           autoYes,
+		NoSteamless:       noSteamless,
+		FetchAchievements: fetchAchievements,
+	}
 }
 
 
@@ -208,11 +323,11 @@ func buildApp() *cli.App {
 
 					if appID == 0 {
 						err := fmt.Errorf("no AppID provided and could not resolve AppID for target '%s'", targetDir)
-						ui.RenderErrorHelp(err, []string{
+						renderCLIError(err,
 							"Pass numeric AppID directly: gamux download <appid>",
 							"Or pass --app <appid> flag: gamux download . --app <appid>",
 							"Set hubcap_api_key in ~/.config/gamux/config.json",
-						})
+						)
 						return err
 					}
 
@@ -235,10 +350,10 @@ func buildApp() *cli.App {
 
 					parsedLua, err := manifest.ResolveKeys(c.Context, appID, luaPath, hubcapKey)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{
+						renderCLIError(err,
 							"Set hubcap_api_key in ~/.config/gamux/config.json",
 							"Or pass --lua /path/to/game.lua for manual debug key file",
-						})
+						)
 						return err
 					}
 
@@ -287,14 +402,13 @@ func buildApp() *cli.App {
 						AuditTrace: parsedLua.AuditTrace,
 					}
 
-
 					res, err := downloader.DownloadOrUpdateGame(c.Context, dummyManifest, opts)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{
+						renderCLIError(err,
 							fmt.Sprintf("Place official binary depot .manifest file into '%s/[Manifests]/'", targetDir),
 							"Or set hubcap_api_key in ~/.config/gamux/config.json to fetch manifest files automatically",
 							"Verify depot decryption keys and network connectivity",
-						})
+						)
 						return err
 					}
 
@@ -335,7 +449,7 @@ func buildApp() *cli.App {
 				Action: func(c *cli.Context) error {
 					if c.Args().Len() < 1 {
 						err := fmt.Errorf("workshop command requires a Workshop item URL or ID")
-						ui.RenderErrorHelp(err, []string{"Example: gamux workshop https://steamcommunity.com/sharedfiles/filedetails/?id=315783921"})
+						renderCLIError(err, "Example: gamux workshop https://steamcommunity.com/sharedfiles/filedetails/?id=315783921")
 						return err
 					}
 
@@ -347,7 +461,7 @@ func buildApp() *cli.App {
 
 					ui.RenderStep(1, 1, "Fetching Workshop item details: "+input)
 					if err := steam.DownloadWorkshopItem(c.Context, input, targetDir, c.Bool("dry-run")); err != nil {
-						ui.RenderErrorHelp(err, []string{"Verify Workshop URL or ID", "Check internet connection"})
+						renderCLIError(err, "Verify Workshop URL or ID", "Check internet connection")
 						return err
 					}
 
@@ -406,7 +520,7 @@ func buildApp() *cli.App {
 					ui.RenderStep(1, 1, "Executing unified sync for "+opts.Path)
 					res, err := eng.SyncGame(c.Context, opts)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{"Check directory path", "Verify file permissions"})
+						renderCLIError(err, "Check directory path", "Verify file permissions")
 						return err
 					}
 
@@ -447,7 +561,7 @@ func buildApp() *cli.App {
 					if verb == "status" {
 						statuses, err := eng.BatchInspect(c.Context, parentDir)
 						if err != nil {
-							ui.RenderErrorHelp(err, []string{"Verify directory exists"})
+							renderCLIError(err, "Verify directory exists")
 							return err
 						}
 
@@ -499,7 +613,7 @@ func buildApp() *cli.App {
 					}
 					results, err := eng.BatchProcess(c.Context, parentDir, opts)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{"Verify directory exists"})
+						renderCLIError(err, "Verify directory exists")
 						return err
 					}
 
@@ -585,7 +699,7 @@ func buildApp() *cli.App {
 
 					status, err := eng.InspectStatusEx(c.Context, path, newsCount)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{"Ensure path points to a valid game directory"})
+						renderCLIError(err, "Ensure path points to a valid game directory")
 						return err
 					}
 
@@ -664,7 +778,7 @@ func buildApp() *cli.App {
 					eng := engine.New(activeConfig)
 					item, gameName, err := eng.GetPatchNote(c.Context, targetPath, index)
 					if err != nil {
-						ui.RenderErrorHelp(err, []string{"Verify AppID or game directory path", "Check network connectivity"})
+						renderCLIError(err, "Verify AppID or game directory path", "Check network connectivity")
 						return err
 					}
 
@@ -689,7 +803,7 @@ func buildApp() *cli.App {
 					eng := engine.New(activeConfig)
 					ui.RenderStep(1, 1, "Rolling back changes for "+path)
 					if err := eng.Rollback(c.Context, path, c.Bool("dry-run")); err != nil {
-						ui.RenderErrorHelp(err, []string{"Check file permissions"})
+						renderCLIError(err, "Check file permissions")
 						return err
 					}
 					ui.RenderSuccess("Rollback completed successfully for "+path, "", []string{
@@ -705,7 +819,7 @@ func buildApp() *cli.App {
 				Action: func(c *cli.Context) error {
 					ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets from GitHub")
 					if err := github.UpdateGBE(c.Context, activeConfig); err != nil {
-						ui.RenderErrorHelp(err, []string{"Check network connectivity"})
+						renderCLIError(err)
 						return err
 					}
 					ui.RenderSuccess("Goldberg Emulator assets updated", "", []string{
@@ -807,6 +921,7 @@ func buildApp() *cli.App {
 						return nil
 					}
 					eng := engine.New(activeConfig)
+					eng.Notifier = ui.NotifyIssue
 					return eng.NotifyLaunch(c.Context, targetPath)
 				},
 			},
@@ -825,6 +940,7 @@ func buildApp() *cli.App {
 					}
 					targetPath := extractPath(c)
 					eng := engine.New(activeConfig)
+					eng.Notifier = ui.NotifyIssue
 					if !c.Bool("no-notify") {
 						if err := eng.NotifyLaunch(c.Context, targetPath); err != nil {
 							slog.Warn("Pre-launch notification check failed", "error", err)

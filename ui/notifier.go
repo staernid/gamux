@@ -28,7 +28,7 @@ func NotifyIssue(ctx context.Context, title, message string) error {
 			fmt.Sprintf("gamux Alert: %s", title),
 			message,
 		)
-		_ = cmd.Run()
+		_ = cmd.Start()
 	}
 
 	return nil

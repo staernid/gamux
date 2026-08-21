@@ -11,13 +11,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/staernid/gamux/cache"
 )
 
 
 // HTTPClient allows injecting custom HTTP transport for testing.
-var HTTPClient = http.DefaultClient
+var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // HubcapKeyEntry represents a single depot key item returned from Hubcap API.
 type HubcapKeyEntry struct {

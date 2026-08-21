@@ -20,7 +20,7 @@ import (
 )
 
 // HTTPClient is the http.Client used for GitHub API operations, allowing mock overrides in tests.
-var HTTPClient = http.DefaultClient
+var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // UpdateGBE fetches and extracts the latest GBE fork.
 func UpdateGBE(ctx context.Context, cfg *config.Config) error {

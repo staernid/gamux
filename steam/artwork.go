@@ -88,18 +88,18 @@ func FetchLutrisArtwork(ctx context.Context, appID, slug string, dryRun bool) (*
 		if err := DownloadFile(ctx, coverURL, coverPath); err == nil {
 			slog.Info("Fetched Lutris cover art (Steam CDN)", "path", coverPath)
 			res.CoverPath = coverPath
-			_ = copyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
+			_ = util.CopyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
 		} else {
 			if err := DownloadFile(ctx, bannerURL, coverPath); err == nil {
 				res.CoverPath = coverPath
-				_ = copyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
+				_ = util.CopyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
 			}
 		}
 
 		if err := DownloadFile(ctx, bannerURL, bannerPath); err == nil {
 			slog.Info("Fetched Lutris banner image (Steam CDN)", "path", bannerPath)
 			res.BannerPath = bannerPath
-			_ = copyFile(bannerPath, filepath.Join(shareBannerDir, slug+".jpg"))
+			_ = util.CopyFile(bannerPath, filepath.Join(shareBannerDir, slug+".jpg"))
 		}
 	}
 
@@ -112,7 +112,7 @@ func FetchLutrisArtwork(ctx context.Context, appID, slug string, dryRun bool) (*
 					if err := DownloadFile(ctx, coverURL, coverPath); err == nil {
 						slog.Info("Fetched Lutris cover art (SteamGridDB)", "path", coverPath)
 						res.CoverPath = coverPath
-						_ = copyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
+						_ = util.CopyFile(coverPath, filepath.Join(shareCoverDir, slug+".jpg"))
 					}
 				}
 			}
@@ -121,7 +121,7 @@ func FetchLutrisArtwork(ctx context.Context, appID, slug string, dryRun bool) (*
 					if err := DownloadFile(ctx, bannerURL, bannerPath); err == nil {
 						slog.Info("Fetched Lutris banner image (SteamGridDB)", "path", bannerPath)
 						res.BannerPath = bannerPath
-						_ = copyFile(bannerPath, filepath.Join(shareBannerDir, slug+".jpg"))
+						_ = util.CopyFile(bannerPath, filepath.Join(shareBannerDir, slug+".jpg"))
 					}
 				}
 			}
@@ -216,11 +216,4 @@ func fetchSGDBImageURL(ctx context.Context, apiKey, gameID, dimensions string) (
 	}
 
 	return res.Data[0].URL, nil
-}
-
-func copyFile(src, dest string) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-		return err
-	}
-	return util.CopyFile(src, dest)
 }

@@ -1,12 +1,9 @@
 package downloader
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,18 +15,16 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
-	"github.com/ulikunitz/xz/lzma"
 	"golang.org/x/sync/errgroup"
 )
 
-
 // HTTPClient allows injecting custom HTTP clients for testing.
-var HTTPClient = http.DefaultClient
+var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // DownloadOptions holds options for downloading or updating game depots directly.
 type DownloadOptions struct {
@@ -167,7 +162,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	cdnHosts, err := fetchCDNServers(ctx)
 	if err != nil {
 		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
-		cdnHosts = []string{"cache10-fra1.steamcontent.com", "steampipe.steamcontent.com"}
+		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
 	}
 
 	slog.Info("Starting direct game download/update",
@@ -215,6 +210,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	g.SetLimit(workerLimit)
 
 	var processedCount int32
+	var processedUpdated int32
 	totalFiles := len(m.Files)
 
 	for _, fileEntry := range m.Files {
@@ -279,7 +275,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 
 			if opts.DryRun {
 				slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
-				result.UpdatedFiles++
+				atomic.AddInt32(&processedUpdated, 1)
 				return nil
 			}
 
@@ -331,7 +327,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			}
 
 			slog.Debug("Successfully updated file", "path", filePath)
-			result.UpdatedFiles++
+			atomic.AddInt32(&processedUpdated, 1)
 			return nil
 		})
 	}
@@ -342,11 +338,14 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	}
 
 	ui.ClearProgress()
+	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
 
-
-	// Remove checkpoint file on 100% successful completion
+	// Remove checkpoint file and sweep for any remaining VSZa compressed files on 100% successful completion
 	if !opts.DryRun {
 		_ = os.Remove(checkpointFile)
+		if count, err := util.DecompressVSZaInDir(absTargetDir); err == nil && count > 0 {
+			slog.Info("Post-download VSZa file decompression completed", "count", count)
+		}
 	}
 
 	slog.Debug("Direct game download/update completed",
@@ -360,19 +359,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 
 func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {
 	if len(cdnHosts) == 0 {
-		cdnHosts = []string{"cache10-fra1.steamcontent.com", "steampipe.steamcontent.com", "content1.steampowered.com"}
-	} else {
-		// Append global fallback hosts if not present
-		hasGlobal := false
-		for _, h := range cdnHosts {
-			if strings.Contains(h, "steampipe.steamcontent.com") {
-				hasGlobal = true
-				break
-			}
-		}
-		if !hasGlobal {
-			cdnHosts = append(cdnHosts, "steampipe.steamcontent.com", "content1.steampowered.com")
-		}
+		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
 	}
 
 	chunkID := strings.ToLower(chunk.ChunkID)
@@ -448,63 +435,7 @@ func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKe
 }
 
 func decompressChunkData(data []byte, expectedSize uint32) ([]byte, error) {
-	if len(data) < 2 {
-		return data, nil
-	}
-
-	// 1. Steam VZ container header ("VZ" / 0x56 0x5A)
-	if data[0] == 'V' && data[1] == 'Z' {
-		if len(data) < 12 {
-			return nil, fmt.Errorf("invalid VZ payload length %d", len(data))
-		}
-		// Construct standard 13-byte LZMA header:
-		// props (1 byte at offset 7) + dict size (4 bytes at 8:12) + uncompressed size (8 bytes uint64) + compressed stream
-		var lzmaBuf bytes.Buffer
-		lzmaBuf.WriteByte(data[7])
-		lzmaBuf.Write(data[8:12])
-		_ = binary.Write(&lzmaBuf, binary.LittleEndian, uint64(expectedSize))
-		lzmaBuf.Write(data[12:])
-
-		lzr, err := lzma.NewReader(&lzmaBuf)
-		if err != nil {
-			return nil, fmt.Errorf("lzma reader init: %w", err)
-		}
-		uncomp, err := io.ReadAll(lzr)
-		if err != nil {
-			return nil, fmt.Errorf("lzma decode: %w", err)
-		}
-		return uncomp, nil
-	}
-
-	// 2. Zip archive payload ("PK\x03\x04")
-	if bytes.Equal(data[:2], []byte{'P', 'K'}) {
-		r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-		if err == nil && len(r.File) > 0 {
-			rc, err := r.File[0].Open()
-			if err == nil {
-				uncomp, err := io.ReadAll(rc)
-				rc.Close()
-				if err == nil {
-					return uncomp, nil
-				}
-			}
-		}
-	}
-
-	// 3. ZSTD payload (0x28B52FFD)
-	if len(data) >= 4 && binary.LittleEndian.Uint32(data[:4]) == 0x28B52FFD {
-		zr, err := zstd.NewReader(bytes.NewReader(data))
-		if err == nil {
-			uncomp, err := io.ReadAll(zr)
-			zr.Close()
-			if err == nil {
-				return uncomp, nil
-			}
-		}
-	}
-
-	// 4. Raw uncompressed fallback
-	return data, nil
+	return util.DecompressChunkSlice(data, expectedSize)
 }
 
 // Checkpoint tracks completed chunk IDs for resume support.
