@@ -89,3 +89,20 @@ func TestParseVDF_NestedACF(t *testing.T) {
 		t.Errorf("expected manifest 8420445566849588826, got %s", subkeys["1091501"])
 	}
 }
+
+func FuzzParseVDF(f *testing.F) {
+	f.Add([]byte("\"AppState\"\n{\n\t\"appid\"\t\"1091500\"\n\t\"name\"\t\"Cyberpunk\"\n}"))
+	f.Add([]byte("\"Key\"\n{\n\t\"Sub\"\n\t{\n\t\t\"Val\"\t\"1\"\n\t}\n}"))
+	f.Add([]byte(""))
+	f.Add([]byte("   \n\t\r\n"))
+	f.Add([]byte("\"Unclosed\" { \"key\" \"val\""))
+	f.Add([]byte("// Comment only\n// Another comment"))
+	f.Add([]byte("\"Key\" \"ValueNoBraces\""))
+	f.Add([]byte("\"Deep\" { \"1\" { \"2\" { \"3\" { \"4\" { \"val\" \"ok\" } } } } }"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Ensure ParseVDF never panics or crashes on arbitrary input
+		_, _ = ParseVDF(strings.NewReader(string(data)))
+	})
+}
+

@@ -264,3 +264,114 @@ func TestNormalizeDirectory(t *testing.T) {
 	}
 }
 
+func TestDetect_EngineTopologies(t *testing.T) {
+	t.Run("Unity Win64 Topology", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "SuperGame")
+		pluginsDir := filepath.Join(gameDir, "SuperGame_Data", "Plugins", "x86_64")
+		manifestsDir := filepath.Join(gameDir, "[Manifests]")
+		_ = os.MkdirAll(pluginsDir, 0755)
+		_ = os.MkdirAll(manifestsDir, 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "SuperGame.exe"), []byte("exe"), 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "UnityCrashHandler64.exe"), []byte("crash handler"), 0755)
+		_ = os.WriteFile(filepath.Join(pluginsDir, "steam_api64.dll"), []byte("dll"), 0644)
+		_ = os.WriteFile(filepath.Join(manifestsDir, "appmanifest_11111.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"11111\"\n\t\"name\"\t\"SuperGame\"\n}"), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Platform != "win64" {
+			t.Errorf("expected platform win64, got %s", info.Platform)
+		}
+		if info.AppID != "11111" {
+			t.Errorf("expected appid 11111, got %s", info.AppID)
+		}
+		if filepath.Base(info.ExePath) != "SuperGame.exe" {
+			t.Errorf("expected main executable SuperGame.exe, got %s", filepath.Base(info.ExePath))
+		}
+		if !strings.HasSuffix(info.TargetLibPath, "steam_api64.dll") {
+			t.Errorf("expected TargetLibPath to end with steam_api64.dll, got %s", info.TargetLibPath)
+		}
+	})
+
+	t.Run("Unreal Engine Win64 Topology", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "UEGame")
+		binDir := filepath.Join(gameDir, "UEGame", "Binaries", "Win64")
+		steamDir := filepath.Join(gameDir, "Engine", "Binaries", "ThirdParty", "Steamworks", "Steamv153", "Win64")
+		_ = os.MkdirAll(binDir, 0755)
+		_ = os.MkdirAll(steamDir, 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "UEGame.exe"), []byte("launcher"), 0755)
+		_ = os.WriteFile(filepath.Join(binDir, "UEGame-Win64-Shipping.exe"), []byte("shipping exe"), 0755)
+		_ = os.WriteFile(filepath.Join(steamDir, "steam_api64.dll"), []byte("dll"), 0644)
+		_ = os.WriteFile(filepath.Join(gameDir, "appmanifest_22222.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"22222\"\n\t\"name\"\t\"UEGame\"\n}"), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Platform != "win64" {
+			t.Errorf("expected platform win64, got %s", info.Platform)
+		}
+		if info.AppID != "22222" {
+			t.Errorf("expected appid 22222, got %s", info.AppID)
+		}
+		if !strings.HasSuffix(info.TargetLibPath, "steam_api64.dll") {
+			t.Errorf("expected target lib steam_api64.dll, got %s", info.TargetLibPath)
+		}
+	})
+
+	t.Run("Linux Native Topology", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "LinuxGame")
+		libDir := filepath.Join(gameDir, "lib64")
+		_ = os.MkdirAll(libDir, 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "LinuxGame.x86_64"), []byte("elf"), 0755)
+		_ = os.WriteFile(filepath.Join(libDir, "libsteam_api.so"), []byte("so"), 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_appid.txt"), []byte("33333"), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Platform != "linux" {
+			t.Errorf("expected platform linux, got %s", info.Platform)
+		}
+		if info.AppID != "33333" {
+			t.Errorf("expected appid 33333, got %s", info.AppID)
+		}
+		if filepath.Base(info.ExePath) != "LinuxGame.x86_64" {
+			t.Errorf("expected main executable LinuxGame.x86_64, got %s", filepath.Base(info.ExePath))
+		}
+		if !strings.HasSuffix(info.TargetLibPath, "libsteam_api.so") {
+			t.Errorf("expected target lib libsteam_api.so, got %s", info.TargetLibPath)
+		}
+	})
+
+	t.Run("GOG Standalone Topology", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "WitcherGame")
+		_ = os.MkdirAll(gameDir, 0755)
+
+		gogJSON := `{"gameId": "1987654321", "title": "The Witcher 3"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "goggame-1987654321.info"), []byte(gogJSON), 0644)
+		_ = os.WriteFile(filepath.Join(gameDir, "witcher3.exe"), []byte("exe"), 0755)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Store != "GOG" {
+			t.Errorf("expected store GOG, got %s", info.Store)
+		}
+		if info.Name != "The Witcher 3" {
+			t.Errorf("expected name 'The Witcher 3', got %s", info.Name)
+		}
+	})
+}
+
+

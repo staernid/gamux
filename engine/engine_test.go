@@ -11,6 +11,7 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
 
@@ -206,6 +207,162 @@ func TestNotifyLaunch(t *testing.T) {
 		t.Fatalf("NotifyLaunch failed: %v", err)
 	}
 }
+
+func snapshotDir(t *testing.T, root string) map[string]string {
+	t.Helper()
+	hashes := make(map[string]string)
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		hash, err := util.GetHash(path)
+		if err != nil {
+			return err
+		}
+		hashes[rel] = hash
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshotDir failed: %v", err)
+	}
+	return hashes
+}
+
+func TestEngine_DryRunZeroMutationInvariant(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "DryRunGame")
+	_ = os.MkdirAll(filepath.Join(gameDir, "[Manifests]"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "[Manifests]", "appmanifest_12345.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"12345\"\n\t\"name\"\t\"DryRunGame\"\n}"), 0644)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("executable binary payload"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("original dll payload"), 0644)
+
+	baseline := snapshotDir(t, gameDir)
+
+	eng := New(config.DefaultConfig())
+	opts := ProcessOptions{
+		Path:         gameDir,
+		DryRun:       true,
+		ApplyGBE:     true,
+		Portable:     true,
+		NormalizeDir: false,
+		NoSteamless:  true,
+	}
+
+	res, err := eng.ProcessGame(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("ProcessGame dry-run failed: %v", err)
+	}
+	if res == nil {
+		t.Fatal("expected non-nil ProcessResult")
+	}
+
+	postRun := snapshotDir(t, gameDir)
+
+	for k, v := range baseline {
+		if postRun[k] != v {
+			t.Errorf("Dry-run mutation detected on file %s: expected hash %s, got %s", k, v, postRun[k])
+		}
+	}
+	for k := range postRun {
+		if _, ok := baseline[k]; !ok {
+			t.Errorf("Dry-run created unexpected file: %s", k)
+		}
+	}
+}
+
+func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
+	oldTransport := steam.HTTPClient.Transport
+	defer func() { steam.HTTPClient.Transport = oldTransport }()
+
+	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_mock")
+	gbeWin64 := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(gbeWin64, 0755)
+	_ = os.WriteFile(filepath.Join(gbeWin64, "steam_api64.dll"), []byte("gbe_emulator_patched_binary"), 0644)
+
+	cfg := config.DefaultConfig()
+	cfg.GbeDir = gbeDir
+
+	gameDir := filepath.Join(tmpDir, "TestRollbackGame")
+	_ = os.MkdirAll(filepath.Join(gameDir, "[Manifests]"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "[Manifests]", "appmanifest_99999.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"99999\"\n\t\"name\"\t\"TestRollbackGame\"\n}"), 0644)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("original game exe"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("original steam api dll"), 0644)
+
+	baseline := snapshotDir(t, gameDir)
+
+	eng := New(cfg)
+	opts := ProcessOptions{
+		Path:         gameDir,
+		DryRun:       false,
+		ApplyGBE:     true,
+		Portable:     true,
+		NormalizeDir: false,
+		NoSteamless:  true,
+	}
+
+	res, err := eng.ProcessGame(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("ProcessGame failed: %v", err)
+	}
+	if !res.Patched {
+		t.Fatalf("expected game to be patched: errors = %v", res.Errors)
+	}
+
+	// Verify steam_api64.dll was patched
+	patchedData, err := os.ReadFile(filepath.Join(gameDir, "steam_api64.dll"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(patchedData) != "gbe_emulator_patched_binary" {
+		t.Fatalf("expected patched dll content, got %s", string(patchedData))
+	}
+
+	// Perform rollback
+	if err := eng.Rollback(context.Background(), gameDir, false); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+
+	postRollback := snapshotDir(t, gameDir)
+
+	for k, v := range baseline {
+		if postRollback[k] != v {
+			t.Errorf("Rollback state mismatch on file %s: expected baseline hash %s, got %s", k, v, postRollback[k])
+		}
+	}
+	for k := range postRollback {
+		if _, ok := baseline[k]; !ok {
+			t.Errorf("Rollback left unexpected leftover file: %s", k)
+		}
+	}
+}
+
 
 
 
