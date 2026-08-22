@@ -1,5 +1,4 @@
 <script>
-  import { activeView } from '../../stores/library.js';
   import { taskQueue } from '../../stores/queue.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { formatTimeAgo } from '../../utils/format.js';
@@ -9,7 +8,6 @@
   const totalTasks = taskQueue.totalCount;
 
   const items = notificationStore.items;
-  const unreadCount = notificationStore.unreadCount;
 
   function handleClearActivity() {
     notificationStore.items.clearAll();
@@ -40,25 +38,18 @@
         <button
           type="button"
           on:click={markAllRead}
-          class="text-xs font-bold bg-[#181822] hover:bg-[#222230] text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a2a3a] transition-colors"
+          class="text-xs font-bold bg-[#181822] hover:bg-[#222230] text-slate-300 px-3 py-1.5 rounded-xl border border-[#2a2a3a] transition-colors"
         >
           Mark Read
         </button>
         <button
           type="button"
           on:click={handleClearActivity}
-          class="text-xs font-bold bg-[#181822] hover:bg-[#222230] text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a2a3a] transition-colors"
+          class="text-xs font-bold bg-[#181822] hover:bg-[#222230] text-slate-300 px-3 py-1.5 rounded-xl border border-[#2a2a3a] transition-colors"
         >
           Clear History
         </button>
       {/if}
-      <button
-        type="button"
-        on:click={() => { $activeView = 'library'; }}
-        class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-[#1a1a24] border border-[#2a2a38]"
-      >
-        ✕ Shelf
-      </button>
     </div>
   </div>
 

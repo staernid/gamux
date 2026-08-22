@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { activeView } from '../../stores/library.js';
   import { configStore } from '../../stores/config.js';
+  import { notificationStore } from '../../stores/notifications.js';
   import { AppAPI } from '../../api/app.js';
 
   let localCfg = {};
@@ -33,8 +34,17 @@
     try {
       await AppAPI.updateTool(toolKey);
       await loadTools();
+      notificationStore.items.add({
+        type: 'success',
+        title: 'Tool Updated',
+        message: `Successfully updated ${toolKey}`
+      });
     } catch (err) {
-      alert(`Update failed: ${err}`);
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Update Failed',
+        message: err?.message || String(err)
+      });
     }
   }
 
@@ -50,6 +60,11 @@
     configStore.setScale(currentScale);
     const ok = await configStore.save(localCfg);
     if (ok) {
+      notificationStore.items.add({
+        type: 'success',
+        title: 'Settings Saved',
+        message: 'System configuration updated successfully.'
+      });
       activeView.set('library');
     }
   }
@@ -87,14 +102,6 @@
       <h2 class="text-xl font-black text-white">System Settings</h2>
       <p class="text-xs text-slate-400 mt-0.5 font-mono">~/.config/gamux/config.json</p>
     </div>
-
-    <button
-      type="button"
-      on:click={() => { $activeView = 'library'; }}
-      class="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-[#1a1a24] border border-[#2a2a38]"
-    >
-      ✕ Shelf
-    </button>
   </div>
 
   <!-- Settings Panel -->
@@ -180,7 +187,7 @@
             </label>
             <div class="flex space-x-2">
               <input id="setGbeDir" type="text" bind:value={localCfg.gbe_dir} class="flex-1 bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs" />
-              <button type="button" on:click={() => browseFolder('gbe_dir', 'Select Goldberg Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244]">Browse</button>
+              <button type="button" on:click={() => browseFolder('gbe_dir', 'Select Goldberg Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244] text-xs">Browse</button>
             </div>
           </div>
           <div>
@@ -189,7 +196,7 @@
             </label>
             <div class="flex space-x-2">
               <input id="setSteamlessDir" type="text" bind:value={localCfg.steamless_dir} class="flex-1 bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs" />
-              <button type="button" on:click={() => browseFolder('steamless_dir', 'Select Steamless Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244]">Browse</button>
+              <button type="button" on:click={() => browseFolder('steamless_dir', 'Select Steamless Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244] text-xs">Browse</button>
             </div>
           </div>
           <div>
@@ -198,7 +205,7 @@
             </label>
             <div class="flex space-x-2">
               <input id="setLutrisDir" type="text" bind:value={localCfg.lutris_dir} class="flex-1 bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs" />
-              <button type="button" on:click={() => browseFolder('lutris_dir', 'Select Lutris Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244]">Browse</button>
+              <button type="button" on:click={() => browseFolder('lutris_dir', 'Select Lutris Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244] text-xs">Browse</button>
             </div>
           </div>
         </div>
@@ -237,18 +244,13 @@
       <button type="button" on:click={handleReset} class="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-1">
         Reset Defaults
       </button>
-      <div class="flex space-x-2">
-        <button type="button" on:click={() => { $activeView = 'library'; }} class="text-slate-400 hover:text-white text-xs font-bold px-3 py-1.5">
-          Cancel
-        </button>
-        <button
-          type="button"
-          on:click={handleSave}
-          class="bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black text-xs px-5 py-2 rounded-xl transition-colors shadow-sm"
-        >
-          Save Settings
-        </button>
-      </div>
+      <button
+        type="button"
+        on:click={handleSave}
+        class="bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black text-xs px-6 py-2 rounded-xl transition-colors shadow-sm"
+      >
+        Save Settings
+      </button>
     </div>
   </div>
 </div>
