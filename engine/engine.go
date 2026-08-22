@@ -33,6 +33,8 @@ type ProcessOptions struct {
 	FetchAchievements bool
 	WinePrefix        string
 	Runner            string
+	ExePath           string `json:"exe_path,omitempty"`
+	ExeArgs           string `json:"exe_args,omitempty"`
 }
 
 // ProcessResult summarizes the outcome of processing a game.
@@ -49,37 +51,50 @@ type ProcessResult struct {
 
 // GameStatus describes the current patch & integration state of a game.
 type GameStatus struct {
-	Name               string
-	AppID              string
-	Store              string // "Steam", "GOG", "Epic", "Itch", "Custom"
-	GameDir            string
-	Platform           string
-	ExePath            string
-	State              string // "Original", "Loader-Configured", "Portable-Patched"
-	OriginalBackups    []string
-	SettingsDirExists  bool
-	SteamAppIDTxtFound bool
-	ManifestID         string
-	BuildID            string
-	DiskSizeBytes      int64
-	FileCount          int
-	OfficialFileCount  int
-	ModifiedFiles      []string
-	MissingFiles       []string
-	UntrackedFiles     []string
-	HasUpdate          bool
-	RemoteManifestID   string
-	DLCCount           int
-	AchievementCount   int
-	LutrisRegistered   bool
-	RecentPatchNote    string
-	NewsItems          []steam.NewsItem
+	Name               string                     `json:"name"`
+	AppID              string                     `json:"app_id"`
+	Store              string                     `json:"store"` // "Steam", "GOG", "Epic", "Itch", "Custom"
+	GameDir            string                     `json:"game_dir"`
+	Platform           string                     `json:"platform"`
+	ExePath            string                     `json:"exe_path"`
+	ExeArgs            string                     `json:"exe_args,omitempty"`
+	LaunchCandidates   []detector.LaunchCandidate `json:"launch_candidates,omitempty"`
+	State              string                     `json:"state"` // "Original", "Loader-Configured", "Portable-Patched"
+	OriginalBackups    []string                   `json:"original_backups"`
+	SettingsDirExists  bool                       `json:"settings_dir_exists"`
+	SteamAppIDTxtFound bool                       `json:"steam_appid_txt_found"`
+	ManifestID         string                     `json:"manifest_id"`
+	BuildID            string                     `json:"build_id"`
+	DiskSizeBytes      int64                      `json:"disk_size_bytes"`
+	FileCount          int                        `json:"file_count"`
+	OfficialFileCount  int                        `json:"official_file_count"`
+	ModifiedFiles      []string                   `json:"modified_files"`
+	MissingFiles       []string                   `json:"missing_files"`
+	UntrackedFiles     []string                   `json:"untracked_files"`
+	RedistModified     []string                   `json:"redist_modified"`
+	RedistMissing      []string                   `json:"redist_missing"`
+	HasUpdate          bool                       `json:"has_update"`
+	RemoteManifestID   string                     `json:"remote_manifest_id"`
+	DLCCount           int                        `json:"dlc_count"`
+	AchievementCount   int                        `json:"achievement_count"`
+	LutrisRegistered   bool                       `json:"lutris_registered"`
+	RecentPatchNote    string                     `json:"recent_patch_note"`
+	NewsItems          []steam.NewsItem           `json:"news_items"`
+}
+
+// StepProgress defines a progress stage update for UI/CLI consumers.
+type StepProgress struct {
+	Step    int    `json:"step"`
+	Total   int    `json:"total"`
+	Title   string `json:"title"`
+	Details string `json:"details"`
 }
 
 // Engine is the core domain service orchestrating game scanning, patching, and launcher integrations.
 type Engine struct {
-	Config   *config.Config
-	Notifier func(ctx context.Context, title, message string) error
+	Config       *config.Config
+	Notifier     func(ctx context.Context, title, message string) error
+	StepReporter func(ctx context.Context, prog StepProgress)
 }
 
 // New creates a new Engine instance.
@@ -96,12 +111,25 @@ func ProcessGame(ctx context.Context, cfg *config.Config, opts ProcessOptions) (
 	return eng.ProcessGame(ctx, opts)
 }
 
+func (e *Engine) reportStep(ctx context.Context, step, total int, title, details string) {
+	if e.StepReporter != nil {
+		e.StepReporter(ctx, StepProgress{
+			Step:    step,
+			Total:   total,
+			Title:   title,
+			Details: details,
+		})
+	}
+}
+
 // ProcessGame processes a game directory according to the supplied options.
 func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
 	targetPath := opts.Path
 	if targetPath == "" {
 		targetPath = "."
 	}
+
+	e.reportStep(ctx, 1, 5, "Scanning Game Directory & Metadata", targetPath)
 
 	if !opts.DryRun {
 		if count, decErr := util.DecompressVSZaInDir(targetPath); decErr == nil && count > 0 {
@@ -113,6 +141,8 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 	if err != nil {
 		return nil, fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
 	}
+
+	e.reportStep(ctx, 2, 5, "Synthesizing 1:1 ACF Manifest & Consolidating Depots", info.Name)
 
 	// Manifest Auto-Fetch & Repair Offer if [Manifests] is missing
 	if info.AppID != "" && info.AppID != "0" {
@@ -160,6 +190,17 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		res.ACFSynthesized = true
 	}
 
+	if opts.ExePath != "" {
+		if filepath.IsAbs(opts.ExePath) {
+			info.ExePath = opts.ExePath
+		} else {
+			info.ExePath = filepath.Join(info.GameDir, opts.ExePath)
+		}
+	}
+	if opts.ExeArgs != "" {
+		info.ExeArgs = opts.ExeArgs
+	}
+
 	slog.Info("Auto-detected game", "title", info.Name, "appID", info.AppID, "platform", info.Platform, "exe", info.ExePath)
 
 
@@ -175,6 +216,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 
 	// 1. Apply Goldberg Emulator & Steamless DRM Unpacking if enabled
 	if opts.ApplyGBE {
+		e.reportStep(ctx, 3, 5, "Unpacking DRM & Patching Goldberg Emulator", info.Name)
 		if opts.NoSteamless {
 			slog.Info("Steamless DRM unpacking disabled via --no-steamless flag", "title", info.Name)
 		} else {
@@ -194,6 +236,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 		}
 
 		if opts.FetchAchievements {
+			e.reportStep(ctx, 4, 5, "Generating Achievements & DLC Schemas", "AppID: "+info.AppID)
 			var appIDUint uint32
 			fmt.Sscanf(info.AppID, "%d", &appIDUint)
 			if appIDUint > 0 {
@@ -209,6 +252,7 @@ func (e *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Process
 
 	// 2. Add to Lutris
 	if opts.AddLutris {
+		e.reportStep(ctx, 5, 5, "Writing Lutris Configuration & Artwork", info.Name)
 		if strings.TrimSpace(info.ExePath) == "" {
 			err := fmt.Errorf("%w: cannot register in Lutris: no executable detected in %s", detector.ErrNoExecutableFound, info.GameDir)
 			slog.Error(err.Error())
@@ -383,13 +427,15 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 	}
 
 	status := &GameStatus{
-		Name:     info.Name,
-		AppID:    info.AppID,
-		Store:    info.Store,
-		GameDir:  info.GameDir,
-		Platform: info.Platform,
-		ExePath:  info.ExePath,
-		State:    "Original",
+		Name:             info.Name,
+		AppID:            info.AppID,
+		Store:            info.Store,
+		GameDir:          info.GameDir,
+		Platform:         info.Platform,
+		ExePath:          info.ExePath,
+		ExeArgs:          info.ExeArgs,
+		LaunchCandidates: info.LaunchCandidates,
+		State:            "Original",
 	}
 
 
@@ -456,6 +502,8 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 			status.ModifiedFiles = rep.ModifiedFiles
 			status.MissingFiles = rep.MissingFiles
 			status.UntrackedFiles = rep.UntrackedFiles
+			status.RedistModified = rep.RedistModified
+			status.RedistMissing = rep.RedistMissing
 			if len(rep.ModifiedFiles) > 0 || len(rep.MissingFiles) > 0 {
 				status.HasUpdate = true
 			}
@@ -478,17 +526,17 @@ func (e *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameSta
 	return status, nil
 }
 
-// SyncGame performs the end-to-end One-Shot lifecycle: Inspect -> Normalize -> Synthesize ACF -> GBE Setup -> Lutris Register.
-func (e *Engine) SyncGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
+// ApplyGame performs the end-to-end One-Shot lifecycle: Inspect -> Normalize -> Synthesize ACF -> GBE Setup -> Lutris Register.
+func (e *Engine) ApplyGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
 	status, err := e.InspectStatus(ctx, opts.Path)
 	if err != nil {
-		slog.Warn("Sync inspection warning", "error", err)
+		slog.Warn("Apply inspection warning", "error", err)
 	}
 
 	opts.NormalizeDir = true
 
 	if status != nil && status.HasUpdate {
-		slog.Info("Sync detected available Steam depot update", "title", status.Name, "localManifest", status.ManifestID)
+		slog.Info("Apply detected available Steam depot update", "title", status.Name, "localManifest", status.ManifestID)
 	}
 
 	return e.ProcessGame(ctx, opts)
@@ -507,6 +555,21 @@ func (e *Engine) InspectStatusEx(ctx context.Context, targetPath string, newsCou
 		}
 	}
 	return status, nil
+}
+
+// VerifyIntegrity runs an on-demand full depot integrity comparison for a game directory.
+func (e *Engine) VerifyIntegrity(ctx context.Context, targetPath string) (*manifest.IntegrityReport, error) {
+	info, err := detector.Detect(ctx, targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("detect game for integrity check: %w", err)
+	}
+
+	appIDVal, err := strconv.ParseUint(info.AppID, 10, 32)
+	if err != nil || appIDVal == 0 {
+		return nil, fmt.Errorf("invalid AppID %q for integrity verification", info.AppID)
+	}
+
+	return manifest.ScanDepotIntegrity(info.GameDir, uint32(appIDVal))
 }
 
 // GetPatchNote fetches and retrieves a single patch note at itemIndex (1-indexed) for a game path or AppID.
@@ -581,6 +644,7 @@ func (e *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) e
 		"GameOverlayRenderer64.dll",
 		"GameOverlayRenderer.dll",
 		"steam_interfaces.txt",
+		".steam_interfaces.hash",
 	}
 
 	for _, fname := range loaderFiles {
@@ -728,7 +792,7 @@ func (e *Engine) NotifyLaunch(ctx context.Context, gameDir string) error {
 	for _, issue := range issues {
 		msg += fmt.Sprintf(" • %s\n", issue)
 	}
-	msg += fmt.Sprintf("\nSuggested Action: Run 'gamux sync %q' to resolve.", status.GameDir)
+	msg += fmt.Sprintf("\nSuggested Action: Run 'gamux apply %q' to resolve.", status.GameDir)
 
 	slog.Info("Pre-launch notification sent", "title", status.Name, "issuesCount", len(issues))
 	if e.Notifier != nil {

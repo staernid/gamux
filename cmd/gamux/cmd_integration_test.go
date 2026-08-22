@@ -54,14 +54,14 @@ func TestCLI_AppHelp(t *testing.T) {
 	}
 }
 
-func TestCLI_CommandHelp_Sync(t *testing.T) {
-	out, err := executeCLICommand(t, []string{"gamux", "sync", "--help"})
+func TestCLI_CommandHelp_Apply(t *testing.T) {
+	out, err := executeCLICommand(t, []string{"gamux", "apply", "--help"})
 	if err != nil {
-		t.Fatalf("gamux sync --help failed: %v", err)
+		t.Fatalf("gamux apply --help failed: %v", err)
 	}
 
-	if !strings.Contains(out, "COMMAND: sync [path]") {
-		t.Errorf("expected COMMAND: sync [path] header, got:\n%s", out)
+	if !strings.Contains(out, "COMMAND: apply [path]") {
+		t.Errorf("expected COMMAND: apply [path] header, got:\n%s", out)
 	}
 	if !strings.Contains(out, "--portable") {
 		t.Errorf("expected --portable flag listed in help, got:\n%s", out)
@@ -72,13 +72,13 @@ func TestCLI_CommandHelp_Sync(t *testing.T) {
 }
 
 func TestCLI_NoArgs_TriggersCommandHelp(t *testing.T) {
-	out, err := executeCLICommand(t, []string{"gamux", "sync"})
+	out, err := executeCLICommand(t, []string{"gamux", "apply"})
 	if err != nil {
-		t.Fatalf("gamux sync (0 args) failed: %v", err)
+		t.Fatalf("gamux apply (0 args) failed: %v", err)
 	}
 
-	if !strings.Contains(out, "COMMAND: sync [path]") {
-		t.Errorf("expected command help screen when running gamux sync with 0 args, got:\n%s", out)
+	if !strings.Contains(out, "COMMAND: apply [path]") {
+		t.Errorf("expected command help screen when running gamux apply with 0 args, got:\n%s", out)
 	}
 }
 

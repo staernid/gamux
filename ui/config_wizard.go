@@ -33,7 +33,7 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderConfigRow("hubcap_api_key", maskKey(cfg.HubcapAPIKey), "(not set)")
 
 	renderSectionHeader("⚡ Operational Settings")
-	renderConfigRow("gbe_mode", fallback(cfg.GbeMode, "(prompt when sync)"), defaults.GbeMode)
+	renderConfigRow("gbe_mode", fallback(cfg.GbeMode, "(prompt when applying setup)"), defaults.GbeMode)
 	renderConfigRow("lutris", fmt.Sprintf("%t", cfg.Lutris), fmt.Sprintf("%t", defaults.Lutris))
 	renderConfigRow("steamless", fmt.Sprintf("%t", cfg.Steamless), fmt.Sprintf("%t", defaults.Steamless))
 	renderConfigRow("achievements", fmt.Sprintf("%t", cfg.Achievements), fmt.Sprintf("%t", defaults.Achievements))

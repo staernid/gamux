@@ -22,6 +22,201 @@ import (
 // HTTPClient is the http.Client used for GitHub API operations, allowing mock overrides in tests.
 var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
+// ToolInfo holds version, release metadata, and changelog notes for external tools.
+type ToolInfo struct {
+	Name          string `json:"name"`
+	Key           string `json:"key"` // "gbe" | "steamless"
+	InstalledPath string `json:"installed_path"`
+	InstalledTag  string `json:"installed_tag"`
+	LatestTag     string `json:"latest_tag"`
+	ReleaseName   string `json:"release_name"`
+	ReleaseNotes  string `json:"release_notes"`
+	ReleaseURL    string `json:"release_url"`
+	PublishedAt   string `json:"published_at"`
+	HasUpdate     bool   `json:"has_update"`
+}
+
+// FetchGBERelease fetches the latest release metadata and release notes for GBE fork.
+func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error) {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	gbeHome := util.ExpandPath(cfg.GbeDir)
+	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.GithubAPIURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch GBE release: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GBE release HTTP %s", resp.Status)
+	}
+
+	var release config.Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("decode GBE release JSON: %w", err)
+	}
+
+	installedTag := "(not installed)"
+	hasUpdate := true
+	if _, err := os.Stat(timestampFile); err == nil {
+		if timestamp, err := os.ReadFile(timestampFile); err == nil {
+			tsStr := strings.TrimSpace(string(timestamp))
+			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
+				hasUpdate = false
+				installedTag = release.TagName
+				if installedTag == "" {
+					installedTag = "Up to Date"
+				}
+			} else if tsStr != "" {
+				installedTag = tsStr
+			}
+		}
+	}
+
+	pubDate := ""
+	if !release.PublishedAt.IsZero() {
+		pubDate = release.PublishedAt.Format("Jan 02, 2006")
+	} else if !release.UpdatedAt.IsZero() {
+		pubDate = release.UpdatedAt.Format("Jan 02, 2006")
+	}
+
+	return &ToolInfo{
+		Name:          "gbe_fork",
+		Key:           "gbe",
+		InstalledPath: gbeHome,
+		InstalledTag:  installedTag,
+		LatestTag:     release.TagName,
+		ReleaseName:   release.Name,
+		ReleaseNotes:  release.Body,
+		ReleaseURL:    release.HTMLURL,
+		PublishedAt:   pubDate,
+		HasUpdate:     hasUpdate,
+	}, nil
+}
+
+// FetchSteamlessRelease fetches the latest release metadata and release notes for steamless-rs.
+func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error) {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	steamlessHome := util.ExpandPath(cfg.SteamlessDir)
+	timestampFile := filepath.Join(steamlessHome, ".steamless_timestamp")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.SteamlessGithubAPI, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch steamless release: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("steamless release HTTP %s", resp.Status)
+	}
+
+	var release config.Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("decode steamless release JSON: %w", err)
+	}
+
+	installedTag := "(not installed)"
+	hasUpdate := true
+	if _, err := os.Stat(timestampFile); err == nil {
+		if timestamp, err := os.ReadFile(timestampFile); err == nil {
+			tsStr := strings.TrimSpace(string(timestamp))
+			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
+				hasUpdate = false
+				installedTag = release.TagName
+				if installedTag == "" {
+					installedTag = "Up to Date"
+				}
+			} else if tsStr != "" {
+				installedTag = tsStr
+			}
+		}
+	} else if fi, err := os.Stat(filepath.Join(steamlessHome, "steamless")); err == nil && fi.Size() > 0 {
+		installedTag = "Installed (Local)"
+	}
+
+	pubDate := ""
+	if !release.PublishedAt.IsZero() {
+		pubDate = release.PublishedAt.Format("Jan 02, 2006")
+	} else if !release.UpdatedAt.IsZero() {
+		pubDate = release.UpdatedAt.Format("Jan 02, 2006")
+	}
+
+	return &ToolInfo{
+		Name:          "steamless-rs",
+		Key:           "steamless",
+		InstalledPath: steamlessHome,
+		InstalledTag:  installedTag,
+		LatestTag:     release.TagName,
+		ReleaseName:   release.Name,
+		ReleaseNotes:  release.Body,
+		ReleaseURL:    release.HTMLURL,
+		PublishedAt:   pubDate,
+		HasUpdate:     hasUpdate,
+	}, nil
+}
+
+// GetToolsStatus returns release and update status for both GBE and steamless.
+func GetToolsStatus(ctx context.Context, cfg *config.Config) ([]ToolInfo, error) {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+
+	var gbeInfo *ToolInfo
+	var steamlessInfo *ToolInfo
+	var gbeErr, steamlessErr error
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		gbeInfo, gbeErr = FetchGBERelease(gCtx, cfg)
+		return nil
+	})
+	g.Go(func() error {
+		steamlessInfo, steamlessErr = FetchSteamlessRelease(gCtx, cfg)
+		return nil
+	})
+	_ = g.Wait()
+
+	var list []ToolInfo
+	if gbeErr == nil && gbeInfo != nil {
+		list = append(list, *gbeInfo)
+	} else {
+		list = append(list, ToolInfo{
+			Name:          "gbe_fork",
+			Key:           "gbe",
+			InstalledPath: util.ExpandPath(cfg.GbeDir),
+			InstalledTag:  "Installed",
+			ReleaseNotes:  "Could not fetch latest release notes from GitHub.",
+		})
+	}
+
+	if steamlessErr == nil && steamlessInfo != nil {
+		list = append(list, *steamlessInfo)
+	} else {
+		list = append(list, ToolInfo{
+			Name:          "steamless-rs",
+			Key:           "steamless",
+			InstalledPath: util.ExpandPath(cfg.SteamlessDir),
+			InstalledTag:  "Installed",
+			ReleaseNotes:  "Could not fetch latest release notes from GitHub.",
+		})
+	}
+
+	return list, nil
+}
+
 // UpdateGBE fetches and extracts the latest GBE fork.
 func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 	if cfg == nil {
@@ -57,25 +252,16 @@ func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 			return nil
 		}
 	}
-	// Create a new renderer with the desired style
-	// glamour.WithAutoStyle() automatically detects the current terminal's dark/light mode
+	// Render release notes with glamour if available
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 	)
-	if err != nil {
-		slog.Error("Error creating markdown renderer", "error", err)
-		// Fallback to raw text
-		fmt.Println(release.Body)
-	} else {
-		// Render the markdown text
-		renderedText, err := renderer.Render(release.Body)
-		if err != nil {
-			slog.Error("Error rendering markdown", "error", err)
-			fmt.Println(release.Body)
-		} else {
-			// Print the rendered output to the command line
-			fmt.Println(renderedText)
+	if err == nil {
+		if renderedText, err := renderer.Render(release.Body); err == nil && renderedText != "" {
+			slog.Info("GBE Release Notes", "notes", strings.TrimSpace(renderedText))
 		}
+	} else {
+		slog.Info("GBE Release Notes", "notes", strings.TrimSpace(release.Body))
 	}
 
 	if err := os.MkdirAll(gbeHome, 0755); err != nil {
@@ -198,6 +384,9 @@ func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir stri
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("failed downloading steamless assets: %w", err)
 	}
+
+	timestampFile := filepath.Join(destDir, ".steamless_timestamp")
+	_ = os.WriteFile(timestampFile, []byte(release.UpdatedAt.Format(time.RFC3339)), 0644)
 
 	slog.Info("Steamless release assets updated successfully in", "dir", destDir)
 	return nil

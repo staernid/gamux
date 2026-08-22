@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
@@ -28,13 +29,14 @@ var HTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // DownloadOptions holds options for downloading or updating game depots directly.
 type DownloadOptions struct {
-	TargetDir   string
-	AppID       uint32
-	LuaPath     string
-	Platform    string // "win64", "linux", "all"
-	DryRun      bool
-	WorkerLimit int
-	AuditTrace  []string
+	TargetDir        string
+	AppID            uint32
+	LuaPath          string
+	Platform         string // "win64", "linux", "all"
+	DryRun           bool
+	WorkerLimit      int
+	AuditTrace       []string
+	ProgressCallback func(current, total int, item string)
 }
 
 
@@ -220,7 +222,11 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		g.Go(func() error {
 			curr := atomic.AddInt32(&processedCount, 1)
 			if !opts.DryRun {
-				ui.RenderProgress(int(curr), totalFiles, entry.Path)
+				if opts.ProgressCallback != nil {
+					opts.ProgressCallback(int(curr), totalFiles, entry.Path)
+				} else {
+					ui.RenderProgress(int(curr), totalFiles, entry.Path)
+				}
 			}
 
 			// Skip directory entries in download loop
@@ -472,4 +478,58 @@ func (cp *Checkpoint) markCompleted(path string, chunkID string) {
 	if err == nil {
 		_ = os.WriteFile(path, data, 0644)
 	}
+}
+
+// DownloadGame orchestrates key resolution, manifest persistence, and depot chunk downloading for an AppID.
+func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions) (*Result, error) {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	hubcapKey := cfg.HubcapAPIKey
+
+	parsedLua, err := manifest.ResolveKeys(ctx, opts.AppID, opts.LuaPath, hubcapKey)
+	if err != nil {
+		return nil, fmt.Errorf("resolve keys and manifests for AppID %d: %w", opts.AppID, err)
+	}
+
+	opts.AppID = parsedLua.AppID
+	if opts.TargetDir == "" {
+		opts.TargetDir = "."
+	}
+
+	if !opts.DryRun && len(parsedLua.ManifestFiles) > 0 {
+		manifestsDir := filepath.Join(opts.TargetDir, "[Manifests]")
+		_ = os.MkdirAll(manifestsDir, 0755)
+		for fname, fcontent := range parsedLua.ManifestFiles {
+			parts := strings.Split(fname, "_")
+			if len(parts) >= 2 {
+				prefix := parts[0] + "_"
+				if existingEntries, err := os.ReadDir(manifestsDir); err == nil {
+					for _, ee := range existingEntries {
+						if !ee.IsDir() && strings.HasPrefix(ee.Name(), prefix) && strings.HasSuffix(ee.Name(), ".manifest") && ee.Name() != fname {
+							_ = os.Remove(filepath.Join(manifestsDir, ee.Name()))
+						}
+					}
+				}
+			}
+			outPath := filepath.Join(manifestsDir, fname)
+			_ = os.WriteFile(outPath, fcontent, 0644)
+			slog.Info("Saved manifest file", "path", outPath)
+		}
+	}
+
+	dummyManifest := &manifest.Manifest{
+		AppID:     opts.AppID,
+		DepotKeys: make(map[uint32]string),
+	}
+	for _, d := range parsedLua.Depots {
+		dummyManifest.DepotKeys[d.DepotID] = d.DecryptionKey
+	}
+	if len(parsedLua.Depots) > 0 {
+		dummyManifest.DepotID = parsedLua.Depots[0].DepotID
+		dummyManifest.DecryptionKey = parsedLua.Depots[0].DecryptionKey
+	}
+
+	opts.AuditTrace = parsedLua.AuditTrace
+	return DownloadOrUpdateGame(ctx, dummyManifest, opts)
 }

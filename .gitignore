@@ -1,6 +1,3 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -9,6 +6,7 @@
 *.dylib
 /gbe_fork_helper
 /gamux
+/bin/
 
 # Allow steamless embedded release binaries for go:embed
 !steamless/bin/
@@ -23,8 +21,8 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Frontend
+frontend/node_modules/
 
 # Go workspace file
 go.work
@@ -34,8 +32,8 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
 
 /wip
 

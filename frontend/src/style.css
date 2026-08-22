@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg-base: #09090c;
+    --bg-surface: #111116;
+    --bg-card: #16161f;
+    --bg-card-hover: #1e1e2b;
+    --border-subtle: #242432;
+    --border-active: #ffffff;
+  }
+
+  html {
+    font-size: 16px;
+    transition: font-size 0.15s ease;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-base);
+    color: #f4f4f6;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    user-select: none;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Minimalist Clean Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a38;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444456;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@layer components {
+  /* Cartridge Tile Styling */
+  .cartridge {
+    background-color: #14141c;
+    border: 1.5px solid #232330;
+    border-radius: 0.85rem;
+    transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 0.14s ease,
+                box-shadow 0.14s ease,
+                background-color 0.14s ease;
+  }
+
+  .cartridge:hover {
+    background-color: #1b1b26;
+    border-color: #52526a;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.8);
+  }
+
+  .cartridge.active {
+    background-color: #1e1e2c;
+    border-color: #ffffff;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.9), 0 0 0 1px #ffffff;
+  }
+
+  .cartridge:active {
+    transform: scale(0.97);
+  }
+
+  /* Status Pips */
+  .pip {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    display: inline-block;
+  }
+
+  .pip-ready {
+    background-color: #22c55e;
+    box-shadow: 0 0 8px #22c55e;
+  }
+
+  .pip-clean {
+    background-color: #64748b;
+  }
+
+  .pip-update {
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b;
+  }
+
+  .panel-surface {
+    background-color: #111116;
+    border: 1px solid #22222e;
+  }
+
+  .panel-elevated {
+    background-color: #161620;
+    border: 1px solid #2a2a3a;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

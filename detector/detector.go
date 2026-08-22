@@ -140,10 +140,42 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 				reExe := regexp.MustCompile(`(?m)^\s*exe:\s*["']?([^"'\r\n]+)`)
 				if matches := reExe.FindStringSubmatch(string(data)); len(matches) > 1 {
 					savedExe := strings.TrimSpace(matches[1])
-					if savedExe != "" && util.FileExists(savedExe) {
+					savedLower := strings.ToLower(savedExe)
+					if strings.Contains(savedLower, "steamclient_loader") || strings.Contains(savedLower, "coldclientloader") {
+						// Look in ColdClientLoader.ini for the real game binary
+						iniPath := filepath.Join(info.GameDir, "ColdClientLoader.ini")
+						if iniData, err := os.ReadFile(iniPath); err == nil {
+							reIniExe := regexp.MustCompile(`(?i)^\s*Exe\s*=\s*(.+)`)
+							for _, line := range strings.Split(string(iniData), "\n") {
+								if m := reIniExe.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 1 {
+									realExe := strings.TrimSpace(m[1])
+									if !filepath.IsAbs(realExe) {
+										realExe = filepath.Join(info.GameDir, realExe)
+									}
+									realLower := strings.ToLower(filepath.Base(realExe))
+									if util.FileExists(realExe) && !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
+										info.ExePath = realExe
+										break
+									}
+								}
+							}
+						}
+					} else if savedExe != "" && util.FileExists(savedExe) {
 						info.ExePath = savedExe
 					}
 				}
+			}
+		}
+	}
+
+	// Final safeguard: never expose loader wrapper as main game ExePath
+	if strings.Contains(strings.ToLower(info.ExePath), "steamclient_loader") || strings.Contains(strings.ToLower(info.ExePath), "coldclientloader") {
+		info.ExePath = ""
+		for _, cand := range info.LaunchCandidates {
+			candBase := strings.ToLower(filepath.Base(cand.Executable))
+			if !strings.Contains(candBase, "steamclient_loader") && !strings.Contains(candBase, "coldclientloader") {
+				info.ExePath = cand.Executable
+				break
 			}
 		}
 	}
@@ -527,7 +559,7 @@ func detectExecutable(info *GameInfo) {
 			return nil
 		}
 		name := strings.ToLower(d.Name())
-		// Skip installers, crash handlers, redistributables, setup files, console wrappers
+		// Skip installers, crash handlers, redistributables, setup files, loader wrappers, console wrappers
 		if strings.Contains(name, "unitycrashhandler") ||
 			strings.Contains(name, "unins") ||
 			strings.Contains(name, "setup") ||
@@ -538,6 +570,9 @@ func detectExecutable(info *GameInfo) {
 			strings.Contains(name, "bssndrpt") ||
 			strings.Contains(name, "bugreport") ||
 			strings.Contains(name, "errorreport") ||
+			strings.Contains(name, "steamclient_loader") ||
+			strings.Contains(name, "coldclientloader") ||
+			strings.Contains(name, "steamless") ||
 			strings.HasSuffix(name, ".console.exe") {
 			return nil
 		}
@@ -565,6 +600,10 @@ func detectExecutable(info *GameInfo) {
 	if _, acfData := findACF(info.GameDir); acfData != nil && len(acfData.LaunchOptions) > 0 {
 		for _, option := range acfData.LaunchOptions {
 			if option.Executable != "" {
+				baseLower := strings.ToLower(filepath.Base(option.Executable))
+				if strings.Contains(baseLower, "steamclient_loader") || strings.Contains(baseLower, "coldclientloader") || strings.Contains(baseLower, "unitycrashhandler") {
+					continue
+				}
 				fullPath := filepath.Join(info.GameDir, option.Executable)
 				if _, err := os.Stat(fullPath); err == nil {
 					name := option.Description

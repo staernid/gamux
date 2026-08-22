@@ -86,6 +86,18 @@ type IntegrityReport struct {
 	ModifiedFiles  []string `json:"modified_files,omitempty"`
 	MissingFiles   []string `json:"missing_files,omitempty"`
 	UntrackedFiles []string `json:"untracked_files,omitempty"`
+	RedistModified []string `json:"redist_modified,omitempty"`
+	RedistMissing  []string `json:"redist_missing,omitempty"`
+}
+
+// IsRedistFile checks if a relative path belongs to shared DirectX/VC++ runtime installers.
+func IsRedistFile(relPath string) bool {
+	norm := strings.ToLower(NormalizePath(relPath))
+	return strings.HasPrefix(norm, "_commonredist") ||
+		strings.HasPrefix(norm, "directx") ||
+		strings.HasPrefix(norm, "vcredist") ||
+		strings.HasPrefix(norm, "redist") ||
+		strings.HasPrefix(norm, "installers")
 }
 
 // ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1 mismatches.
@@ -127,7 +139,7 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 		normRel := strings.ToLower(NormalizePath(rel))
 		baseName := d.Name()
 
-		// Skip internal gamux folders, GPU caches, and Wine log files
+		// Skip internal gamux folders, GPU caches, and Wine log files from untracked reporting
 		if strings.HasPrefix(rel, "[Manifests]") ||
 			strings.HasPrefix(rel, "[Steam]") ||
 			strings.HasPrefix(rel, "steam_settings") ||
@@ -135,16 +147,7 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 			strings.HasPrefix(rel, "ShaderCache") ||
 			strings.HasPrefix(rel, ".dxvk-cache") ||
 			strings.HasSuffix(strings.ToLower(baseName), ".log") ||
-			strings.Contains(baseName, ".ORIGINAL") ||
-			baseName == "steam_appid.txt" ||
-			baseName == "ColdClientLoader.ini" ||
-			baseName == "steamclient_loader_x64.exe" ||
-			baseName == "steamclient_loader_x86.exe" ||
-			baseName == "steamclient64.dll" ||
-			baseName == "steamclient.dll" ||
-			baseName == "GameOverlayRenderer64.dll" ||
-			baseName == "GameOverlayRenderer.dll" ||
-			baseName == "steam_interfaces.txt" {
+			strings.Contains(baseName, ".ORIGINAL") {
 			return nil
 		}
 
@@ -157,6 +160,8 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 						lowerRel := strings.ToLower(rel)
 						if (strings.HasSuffix(lowerRel, "steam_api64.dll") || strings.HasSuffix(lowerRel, "steam_api.dll") || strings.HasSuffix(lowerRel, "libsteam_api.so")) && hasOriginalBackup(gameDir, rel) {
 							report.IntactCount++
+						} else if IsRedistFile(rel) {
+							report.RedistModified = append(report.RedistModified, rel)
 						} else {
 							report.ModifiedFiles = append(report.ModifiedFiles, rel)
 						}
@@ -168,22 +173,38 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 				}
 			}
 		} else if !d.IsDir() {
-			report.UntrackedFiles = append(report.UntrackedFiles, rel)
+			// Skip emulator/gamux generated files from untracked reporting
+			if baseName != "steam_appid.txt" &&
+				baseName != "ColdClientLoader.ini" &&
+				baseName != "steamclient_loader_x64.exe" &&
+				baseName != "steamclient_loader_x86.exe" &&
+				baseName != "steamclient64.dll" &&
+				baseName != "steamclient.dll" &&
+				baseName != "GameOverlayRenderer64.dll" &&
+				baseName != "GameOverlayRenderer.dll" &&
+				baseName != "steam_interfaces.txt" {
+				report.UntrackedFiles = append(report.UntrackedFiles, rel)
+			}
 		}
 		return nil
 	})
 
 	for normRel, entry := range officialMap {
 		if !foundMap[normRel] {
-			// Ignore directory entries or check if path exists on disk
-			fullPath := filepath.Join(gameDir, entry.Path)
-			if fi, err := os.Stat(fullPath); err == nil {
-				foundMap[normRel] = true
-				if !fi.IsDir() && uint64(fi.Size()) != entry.Size {
-					report.ModifiedFiles = append(report.ModifiedFiles, entry.Path)
-				} else {
-					report.IntactCount++
-				}
+			baseName := filepath.Base(entry.Path)
+			if baseName == "steam_appid.txt" ||
+				baseName == "steam_interfaces.txt" ||
+				baseName == "ColdClientLoader.ini" ||
+				baseName == "steamclient_loader_x64.exe" ||
+				baseName == "steamclient_loader_x86.exe" ||
+				baseName == "steamclient64.dll" ||
+				baseName == "steamclient.dll" ||
+				baseName == "GameOverlayRenderer64.dll" ||
+				baseName == "GameOverlayRenderer.dll" {
+				continue
+			}
+			if IsRedistFile(entry.Path) {
+				report.RedistMissing = append(report.RedistMissing, entry.Path)
 			} else {
 				// Ignore empty directory manifest nodes or platform-mismatched files (e.g. .so/.dylib for Windows games)
 				if (entry.Flags&0x40 != 0) || (len(entry.Chunks) == 0 && entry.Size == 0) {

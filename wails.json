@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "gamux-gui",
+  "outputfilename": "gamux-gui",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "staernid"
+  },
+  "info": {
+    "companyName": "gamux",
+    "productName": "gamux",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright 2026",
+    "comments": "Linux Steam Game Manager"
+  }
+}

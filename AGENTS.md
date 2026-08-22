@@ -7,14 +7,22 @@ Essential guidelines, architecture patterns, and conventions for development on 
 `gamux` is a post-download Steam game manager for Linux (DRM removal via Goldberg Emulator, Lutris registration, and artwork management).
 
 ### Package Layout
-- `cmd` / [`main.go`](file:///home/staernid/projects/gamux/main.go): CLI entry point using `urfave/cli/v2`. Parses flags and delegates to `engine`.
-- [`config`](file:///home/staernid/projects/gamux/config): Global configuration loading (`config.yaml`), default paths, and data models.
+- [`cache`](file:///home/staernid/projects/gamux/cache): Fast disk and in-memory TTL caching for Steam game metadata, AppIDs, and patch note changelogs.
+- [`cmd/gamux`](file:///home/staernid/projects/gamux/cmd/gamux): CLI entry point (`bin/gamux`), flag definitions, and interactive terminal subcommands.
+- [`cmd/gamux-gui`](file:///home/staernid/projects/gamux/cmd/gamux-gui): Wails desktop application entry point (`bin/gamux-gui`).
+- [`config`](file:///home/staernid/projects/gamux/config): Global shared configuration loading (`config.json`), default paths, and data models.
 - [`detector`](file:///home/staernid/projects/gamux/detector): Game directory scanner, AppID detection (via ACF manifests / `steam_appid.txt`), platform inspection (Linux native vs. Windows PE via Wine/Proton).
-- [`engine`](file:///home/staernid/projects/gamux/engine): High-level orchestrator coordinating game detection, GBE patching, and Lutris registration.
+- [`downloader`](file:///home/staernid/projects/gamux/downloader): High-level multi-depot downloader orchestrating key retrieval, manifest decryption, and chunk downloads.
+- [`engine`](file:///home/staernid/projects/gamux/engine): High-level orchestrator coordinating game detection, GBE patching, Lutris registration, step progress reporting, and depot verification.
+- [`frontend`](file:///home/staernid/projects/gamux/frontend): Svelte/Vite web application assets and Go embed bridge.
 - [`gbe`](file:///home/staernid/projects/gamux/gbe): Goldberg Steam Emulator setup (DLL/SO patching, loader env vars, DLC configuration, steam_settings generation).
 - [`github`](file:///home/staernid/projects/gamux/github): GitHub API client for fetching and updating GBE fork release assets.
+- [`gui`](file:///home/staernid/projects/gamux/gui): Wails desktop bridge adapter communicating between the Go engine/downloader and the WebKit frontend.
 - [`lutris`](file:///home/staernid/projects/gamux/lutris): Lutris game registration (YAML configuration generation and SQLite database updates).
-- [`steam`](file:///home/staernid/projects/gamux/steam): Steam Web API client for AppID searching, DLC metadata fetching, and grid artwork downloads.
+- [`manifest`](file:///home/staernid/projects/gamux/manifest): Depot manifest parsing, Lua/RevoBD/SteamDepotDB key resolution, file checksum verification, and integrity reporting.
+- [`steam`](file:///home/staernid/projects/gamux/steam): Steam Web & Store API client for AppID searching, DLC metadata fetching, changelogs, and grid artwork downloads.
+- [`steamless`](file:///home/staernid/projects/gamux/steamless): Steamless-rs automated extraction and SteamStub DRM executable unpacking.
+- [`ui`](file:///home/staernid/projects/gamux/ui): CLI dashboards, guided wizards, help formatters, and terminal progress indicators.
 - [`util`](file:///home/staernid/projects/gamux/util): File utilities (backup & atomic replacement, archive extraction, hash calculation, process execution).
 
 ---

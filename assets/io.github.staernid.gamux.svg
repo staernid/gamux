@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e232d"/>
+      <stop offset="100%" stop-color="#0f1318"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.05"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#glowGrad)" stroke-width="4"/>
+
+  <!-- Lowercase 'g' & 'x' Glyphs in Crisp White -->
+  <g fill="#ffffff" transform="translate(68, 110)">
+    <!-- Lowercase 'g' -->
+    <path d="M 120 40 
+             C 65 40, 20 85, 20 145 
+             C 20 205, 65 250, 120 250 
+             C 148 250, 172 239, 190 220 
+             L 190 245 
+             C 190 285, 160 310, 115 310 
+             C 80 310, 52 295, 42 272 
+             L 2 288 
+             C 18 328, 60 352, 115 352 
+             C 185 352, 232 312, 232 240 
+             L 232 48 
+             L 190 48 
+             L 190 70 
+             C 172 52, 148 40, 120 40 Z 
+             M 126 82 
+             C 160 82, 190 110, 190 145 
+             C 190 180, 160 208, 126 208 
+             C 92 208, 62 180, 62 145 
+             C 62 110, 92 82, 126 82 Z" />
+
+    <!-- Lowercase 'x' -->
+    <path d="M 252 48 
+             L 298 48 
+             L 342 124 
+             L 386 48 
+             L 432 48 
+             L 366 148 
+             L 436 248 
+             L 390 248 
+             L 342 172 
+             L 294 248 
+             L 248 248 
+             L 318 148 Z" />
+  </g>
+</svg>

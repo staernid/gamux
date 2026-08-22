@@ -134,18 +134,40 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 
 
 		generatorPath := filepath.Join(gbeBase, platformCfg.Subdir, "tools", "generate_interfaces", platformCfg.Generator)
-		if _, err := os.Stat(generatorPath); err == nil {
+		interfacesPath := filepath.Join(filepath.Dir(file), "steam_interfaces.txt")
+		hashPath := filepath.Join(filepath.Dir(file), ".steam_interfaces.hash")
+
+		// Determine the source original binary for interface detection
+		sourceDll := file
+		if util.FileExists(file + ".ORIGINAL") {
+			sourceDll = file + ".ORIGINAL"
+		}
+
+		shouldGenerate := true
+		if util.FileExists(interfacesPath) && util.FileExists(hashPath) {
+			if currHash, err := util.GetHash(sourceDll); err == nil && currHash != "" {
+				if savedHash, err := os.ReadFile(hashPath); err == nil && strings.TrimSpace(string(savedHash)) == currHash {
+					if fi, err := os.Stat(interfacesPath); err == nil && fi.Size() > 0 {
+						shouldGenerate = false
+						slog.Info("steam_interfaces.txt is up-to-date; skipping generator", "interfaces", interfacesPath)
+					}
+				}
+			}
+		}
+
+		if shouldGenerate && util.FileExists(generatorPath) {
 			if dryRun {
 				slog.Info("[DRY RUN] Would run generator", "generator", platformCfg.Generator)
 			} else {
 				slog.Info("Running generator", "generator", platformCfg.Generator)
 				var cmd *exec.Cmd
+				genTarget := filepath.Base(file)
 				if strings.HasSuffix(platformCfg.Generator, ".exe") && runtime.GOOS != "windows" {
 					winePath, err := exec.LookPath("wine")
 					if err != nil {
 						slog.Warn("Wine binary not found in PATH; skipping generator execution", "generator", platformCfg.Generator)
 					} else {
-						cmd = exec.Command(winePath, generatorPath, filepath.Base(file))
+						cmd = exec.Command(winePath, generatorPath, genTarget)
 					}
 				} else {
 					if runtime.GOOS != "windows" {
@@ -153,13 +175,17 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 							slog.Warn("Failed to set executable permissions", "path", generatorPath, "error", err)
 						}
 					}
-					cmd = exec.Command(generatorPath, filepath.Base(file))
+					cmd = exec.Command(generatorPath, genTarget)
 				}
 
 				if cmd != nil {
 					cmd.Dir = filepath.Dir(file)
 					if out, err := cmd.CombinedOutput(); err != nil {
 						slog.Error("Generator failed", "error", err, "output", string(out))
+					} else {
+						if h, err := util.GetHash(sourceDll); err == nil && h != "" {
+							_ = os.WriteFile(hashPath, []byte(h), 0644)
+						}
 					}
 				}
 			}

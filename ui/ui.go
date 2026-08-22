@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -340,6 +341,64 @@ type NewsItemSummary struct {
 	URL       string
 }
 
+// LaunchCandidateSummary holds information about an executable launch option.
+type LaunchCandidateSummary struct {
+	Name        string
+	Executable  string
+	Arguments   string
+	Description string
+}
+
+// PromptSelectLaunchOption presents an interactive choice for executable / launch option selection.
+func PromptSelectLaunchOption(gameTitle string, candidates []LaunchCandidateSummary) (LaunchCandidateSummary, error) {
+	if len(candidates) == 0 {
+		return LaunchCandidateSummary{}, fmt.Errorf("no launch options available")
+	}
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	if !isTerminal {
+		return candidates[0], nil
+	}
+
+	fmt.Println()
+	fmt.Printf("%s for %s:\n", bold(cyan("🚀 Select Game Launch Option / Executable")), bold(gameTitle))
+	for i, c := range candidates {
+		label := c.Name
+		if label == "" {
+			label = c.Description
+		}
+		if label == "" {
+			label = filepath.Base(c.Executable)
+		}
+		fmt.Printf("  [%d] %-35s %s\n", i+1, bold(label), dim(c.Executable))
+	}
+	fmt.Println()
+	fmt.Printf("  %s %s", yellow("?"), bold("Select option [1]: "))
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return candidates[0], nil
+	}
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return candidates[0], nil
+	}
+
+	if idx, err := strconv.Atoi(input); err == nil && idx >= 1 && idx <= len(candidates) {
+		return candidates[idx-1], nil
+	}
+
+	for _, c := range candidates {
+		if strings.EqualFold(c.Name, input) || strings.EqualFold(filepath.Base(c.Executable), input) {
+			return c, nil
+		}
+	}
+
+	return candidates[0], nil
+}
+
 // PromptSelectPlatform presents an interactive choice for target platform/depot selection.
 func PromptSelectPlatform(gameTitle string, availablePlatforms []string) (string, error) {
 	if len(availablePlatforms) == 0 {
@@ -348,34 +407,43 @@ func PromptSelectPlatform(gameTitle string, availablePlatforms []string) (string
 
 	fmt.Println()
 	fmt.Printf("%s for %s:\n", bold(cyan("🖥️ Select Target Platform / Architecture")), bold(gameTitle))
-	fmt.Println(dim("------------------------------------------------------------------------"))
 	for i, p := range availablePlatforms {
-		desc := ""
+		label := p
 		switch p {
-		case "win64", "win32":
-			desc = "(Recommended for Proton / Wine)"
+		case "win64":
+			label = "Windows (64-bit) [Proton/Wine]"
+		case "win32":
+			label = "Windows (32-bit) [Wine]"
 		case "linux":
-			desc = "(Native Linux binary)"
-		case "osx", "macos":
-			desc = "(Native macOS binary)"
+			label = "Linux Native (x86_64)"
+		case "osx":
+			label = "macOS"
 		case "all":
-			desc = "(Download all available depot architectures)"
+			label = "All Platforms / Depots"
 		}
-		fmt.Printf("  [%d] %s %s\n", i+1, bold(p), dim(desc))
+		fmt.Printf("  [%d] %-30s (%s)\n", i+1, bold(label), p)
 	}
-	fmt.Println(dim("------------------------------------------------------------------------"))
-	fmt.Print(bold(fmt.Sprintf("  Choice [1-%d] (default 1): ", len(availablePlatforms))))
+	fmt.Println()
+	fmt.Printf("  %s %s", yellow("?"), bold("Select platform [1]: "))
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
 		return availablePlatforms[0], nil
 	}
-
 	input = strings.TrimSpace(input)
-	var choice int
-	if _, err := fmt.Sscanf(input, "%d", &choice); err == nil && choice >= 1 && choice <= len(availablePlatforms) {
-		return availablePlatforms[choice-1], nil
+	if input == "" {
+		return availablePlatforms[0], nil
+	}
+
+	if idx, err := strconv.Atoi(input); err == nil && idx >= 1 && idx <= len(availablePlatforms) {
+		return availablePlatforms[idx-1], nil
+	}
+
+	for _, p := range availablePlatforms {
+		if strings.EqualFold(p, input) {
+			return p, nil
+		}
 	}
 
 	return availablePlatforms[0], nil
@@ -390,6 +458,7 @@ type DetectionInfoSummary struct {
 
 	GameDir          string
 	ExePath          string
+	LaunchCandidates []LaunchCandidateSummary
 	State            string
 	OriginalBackups  int
 	ManifestID       string
@@ -587,6 +656,23 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 	if info.ExePath != "" {
 		fmt.Printf("  %-18s %s\n", bold("Main Executable:"), info.ExePath)
 	}
+	if len(info.LaunchCandidates) > 1 {
+		fmt.Printf("  %-18s %s\n", bold("Launch Options:"), cyan(fmt.Sprintf("%d detected", len(info.LaunchCandidates))))
+		for i, cand := range info.LaunchCandidates {
+			desc := cand.Name
+			if desc == "" {
+				desc = cand.Description
+			}
+			if desc == "" {
+				desc = filepath.Base(cand.Executable)
+			}
+			isMain := ""
+			if cand.Executable == info.ExePath {
+				isMain = green(" [Active]")
+			}
+			fmt.Printf("    [%d] %-30s %s%s\n", i+1, bold(desc), dim(cand.Executable), isMain)
+		}
+	}
 	if info.ManifestID != "" {
 		fmt.Printf("  %-18s %s\n", bold("Manifest ID:"), cyan(info.ManifestID))
 	}
@@ -676,7 +762,7 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 
 	if strings.Contains(strings.ToLower(info.State), "original") {
 		fmt.Println()
-		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux sync \"%s\"' to set up GBE emulator & Lutris integration.", info.GameDir)))
+		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux apply \"%s\"' to set up GBE emulator & Lutris integration.", info.GameDir)))
 	}
 
 
@@ -792,59 +878,10 @@ func PromptSelectCandidate(query string, candidates []CandidateItem) (CandidateI
 	}
 
 	input = strings.TrimSpace(input)
-	var choice int
-	if _, err := fmt.Sscanf(input, "%d", &choice); err == nil && choice >= 1 && choice <= len(candidates) {
-		return candidates[choice-1], nil
+	if idx, err := strconv.Atoi(input); err == nil && idx >= 1 && idx <= len(candidates) {
+		return candidates[idx-1], nil
 	}
 
 	return candidates[0], nil
-}
-
-// LaunchOptionItem holds metadata for selecting game launch executable options.
-type LaunchOptionItem struct {
-	Name       string
-	Executable string
-	Arguments  string
-}
-
-// PromptSelectLaunchOption presents an interactive menu to choose between multiple launch options.
-func PromptSelectLaunchOption(gameTitle string, options []LaunchOptionItem) (LaunchOptionItem, error) {
-	if len(options) == 0 {
-		return LaunchOptionItem{}, fmt.Errorf("no launch options to select")
-	}
-	if len(options) == 1 {
-		return options[0], nil
-	}
-
-	fmt.Println()
-	fmt.Printf("%s for %s:\n", bold(cyan("🎮 Select Target Launch Executable")), bold(gameTitle))
-	fmt.Println(dim("------------------------------------------------------------------------"))
-	for i, opt := range options {
-		label := opt.Name
-		if label == "" {
-			label = filepath.Base(opt.Executable)
-		}
-		argsStr := ""
-		if opt.Arguments != "" {
-			argsStr = fmt.Sprintf(" %s", dim("(args: "+opt.Arguments+")"))
-		}
-		fmt.Printf("  [%d] %s %s%s\n", i+1, bold(label), dim(fmt.Sprintf("(%s)", opt.Executable)), argsStr)
-	}
-	fmt.Println(dim("------------------------------------------------------------------------"))
-	fmt.Print(bold("  Choice [1-") + fmt.Sprintf("%d", len(options)) + "] (default 1): ")
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return options[0], nil
-	}
-
-	input = strings.TrimSpace(input)
-	var choice int
-	if _, err := fmt.Sscanf(input, "%d", &choice); err == nil && choice >= 1 && choice <= len(options) {
-		return options[choice-1], nil
-	}
-
-	return options[0], nil
 }
 

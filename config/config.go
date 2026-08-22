@@ -191,10 +191,14 @@ var PlatformConfig = map[string]struct {
 
 // Release represents a GitHub release.
 type Release struct {
-	Assets []struct {
+	TagName     string    `json:"tag_name"`
+	Name        string    `json:"name"`
+	Body        string    `json:"body"`
+	HTMLURL     string    `json:"html_url"`
+	PublishedAt time.Time `json:"published_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Assets      []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Body      string    `json:"body"`
 }
