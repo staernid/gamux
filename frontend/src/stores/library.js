@@ -125,11 +125,7 @@ export async function scanLibrary(pathOverride = '') {
       }
       return normalized.length > 0 ? normalized[0] : null;
     });
-    notificationStore.items.add({
-      type: 'success',
-      title: 'Scan Complete',
-      message: `Found ${normalized.length} games in ${targetPath}`
-    });
+    // Silently update games without logging routine scan completion to activity stream
   } catch (err) {
     notificationStore.items.add({
       type: 'error',
