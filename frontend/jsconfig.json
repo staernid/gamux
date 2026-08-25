@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "module": "ESNext",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "paths": {
+      "$lib/*": ["./src/lib/*"],
+      "@wails/*": ["./wailsjs/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "wailsjs/go/models.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "wailsjs/runtime",
+    "wailsjs/go/gui"
+  ]
+}

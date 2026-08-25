@@ -73,7 +73,7 @@ func DownloadAchievementImages(ctx context.Context, appID int, imageNames []stri
 						return err
 					}
 
-					resp, err := HTTPClient.Do(req)
+					resp, err := HTTPClientFromContext(reqCtx).Do(req)
 					if err != nil {
 						return err
 					}
@@ -134,7 +134,7 @@ func FetchAchievementSchema(ctx context.Context, appID uint32, apiKey string, la
 		return nil, fmt.Errorf("create achievement schema request: %w", err)
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch achievement schema: %w", err)
 	}

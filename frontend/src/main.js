@@ -1,4 +1,5 @@
 import './style.css';
+import './debug/debugBridge.js';
 import { mount } from 'svelte';
 import App from './App.svelte';
 

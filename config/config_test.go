@@ -67,3 +67,27 @@ func TestLoadConfig_CustomJSON(t *testing.T) {
 		t.Errorf("expected HubcapAPIKey 'HUBCAP123', got %s", cfg.HubcapAPIKey)
 	}
 }
+
+func TestSaveConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	cfg := DefaultConfig()
+	cfg.OperatingMode = "standalone"
+	cfg.MangoHud = true
+	cfg.WineFullscreenFSR = true
+	cfg.Language = "english"
+
+	if err := SaveConfig(cfg, configFile); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	loaded, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !loaded.MangoHud || !loaded.WineFullscreenFSR || loaded.Language != "english" {
+		t.Errorf("expected saved settings to persist, got %+v", loaded)
+	}
+}

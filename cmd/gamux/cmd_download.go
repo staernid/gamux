@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -26,10 +28,6 @@ var downloadCommand = &cli.Command{
 			return nil
 		}
 		luaPath := c.String("lua")
-		hubcapKey := c.String("hubcap-key")
-		if hubcapKey == "" && activeConfig != nil {
-			hubcapKey = activeConfig.HubcapAPIKey
-		}
 
 		appID, targetDir := resolveAppIDAndTargetDir(c.Context, c)
 
@@ -79,9 +77,6 @@ var downloadCommand = &cli.Command{
 		}
 
 		platform := c.String("platform")
-		if platform == "" && activeConfig != nil && activeConfig.Platform != "" {
-			platform = activeConfig.Platform
-		}
 		if platform == "" && !isAutoYes(c) {
 			title := fmt.Sprintf("%d", appID)
 			if name, err := steam.FetchAppName(c.Context, fmt.Sprintf("%d", appID)); err == nil {
@@ -95,16 +90,42 @@ var downloadCommand = &cli.Command{
 			platform = "win64"
 		}
 
-		opts := downloader.DownloadOptions{
-			TargetDir: targetDir,
-			AppID:     appID,
-			LuaPath:   luaPath,
-			Platform:  platform,
-			DryRun:    c.Bool("dry-run"),
+		eng := engine.New(activeConfig)
+
+		var applyOpts *engine.ProcessOptions
+		if c.Bool("setup") {
+			opts := extractProcessOptions(c, false, activeConfig)
+			opts.Path = targetDir
+			opts.AutoYes = true
+			applyOpts = &opts
+		}
+
+		dlOpts := engine.DownloadGameOptions{
+			TargetDir:        targetDir,
+			AppID:            appID,
+			LuaPath:          luaPath,
+			Platform:         platform,
+			DryRun:           c.Bool("dry-run"),
+			AutoApply:        c.Bool("setup"),
+			ApplyOptions:     applyOpts,
+			ProgressCallback: ui.RenderProgress,
 		}
 
 		ui.RenderStep(1, 1, fmt.Sprintf("Downloading AppID %d (%s) to %s", appID, platform, targetDir))
-		res, err := downloader.DownloadGame(c.Context, activeConfig, opts)
+		var res *downloader.Result
+		err := eng.Tasks.RunSync(c.Context, tasks.TaskSpec{
+			Type:         tasks.TypeDownload,
+			Title:        fmt.Sprintf("Download AppID %d", appID),
+			AppID:        fmt.Sprintf("%d", appID),
+			GameDir:      targetDir,
+			Capabilities: tasks.CapCancellable | tasks.CapBandwidthLimit,
+			Run: func(ctx context.Context, ctrl *tasks.Controller) error {
+				var dlErr error
+				res, dlErr = eng.DownloadGame(ctx, dlOpts)
+				return dlErr
+			},
+		})
+		ui.ClearProgress()
 		if err != nil {
 			renderCLIError(err,
 				fmt.Sprintf("Place official binary depot .manifest file into '%s/[Manifests]/'", targetDir),
@@ -112,17 +133,6 @@ var downloadCommand = &cli.Command{
 				"Verify depot decryption keys and network connectivity",
 			)
 			return err
-		}
-
-		if c.Bool("setup") && !c.Bool("dry-run") {
-			ui.RenderStep(1, 1, "Executing post-download setup for "+targetDir)
-			eng := engine.New(activeConfig)
-			processOpts := extractProcessOptions(c, false, activeConfig)
-			processOpts.Path = targetDir
-			processOpts.AutoYes = true
-			if _, setupErr := eng.ProcessGame(c.Context, processOpts); setupErr != nil {
-				slog.Warn("Post-download setup encountered warnings", "error", setupErr)
-			}
 		}
 
 		nextSteps := []string{}
@@ -134,7 +144,11 @@ var downloadCommand = &cli.Command{
 		} else {
 			nextSteps = append(nextSteps, fmt.Sprintf("Launch via Lutris or run 'gamux status %s'", targetDir))
 		}
-		ui.RenderSuccess(fmt.Sprintf("Download complete (%d files updated)", res.UpdatedFiles), "", nextSteps)
+		if res != nil {
+			ui.RenderSuccess(fmt.Sprintf("Download complete (%d files updated)", res.UpdatedFiles), "", nextSteps)
+		} else {
+			ui.RenderSuccess("Download complete", "", nextSteps)
+		}
 		return nil
 	},
 }

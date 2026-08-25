@@ -2,9 +2,6 @@ package downloader
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,13 +17,12 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/manifest"
-	"github.com/staernid/gamux/ui"
 	"github.com/staernid/gamux/util"
 	"golang.org/x/sync/errgroup"
 )
 
-// HTTPClient allows injecting custom HTTP clients for testing.
-var HTTPClient = &http.Client{Timeout: 30 * time.Second}
+// DefaultHTTPClient is the default http.Client used for downloader operations.
+var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // DownloadOptions holds options for downloading or updating game depots directly.
 type DownloadOptions struct {
@@ -35,15 +32,16 @@ type DownloadOptions struct {
 	Platform         string // "win64", "linux", "all"
 	DryRun           bool
 	WorkerLimit      int
-	AuditTrace       []string
-	ProgressCallback func(current, total int, item string)
+	AuditTrace           []string
+	ProgressCallback     func(current, total int, item string)
+	ByteProgressCallback func(downloadedBytes, totalBytes int64, speedBps float64, etaSeconds int, pct float64, item string)
+	HTTPClient           *http.Client
 }
-
 
 // Result holds the outcome summary of a download/update operation.
 type Result struct {
-	TotalFiles     int
-	UpdatedFiles   int
+	TotalFiles      int
+	UpdatedFiles    int
 	DownloadedBytes uint64
 }
 
@@ -58,8 +56,78 @@ type cdnServerResponse struct {
 	} `json:"response"`
 }
 
+// rankCDNEdges measures HTTP round-trip latency to candidate edge hosts concurrently and returns hosts ordered by speed.
+func rankCDNEdges(ctx context.Context, client *http.Client, hosts []string) []string {
+	if client == nil {
+		client = DefaultHTTPClient
+	}
+	if len(hosts) <= 1 {
+		return hosts
+	}
+
+	type hostLatency struct {
+		host string
+		lat  time.Duration
+	}
+
+	latCh := make(chan hostLatency, len(hosts))
+	timeoutCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, h := range hosts {
+		host := h
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			req, err := http.NewRequestWithContext(timeoutCtx, http.MethodHead, "https://"+host, nil)
+			if err != nil {
+				return
+			}
+			req.Header.Set("User-Agent", "gamux/1.0")
+			resp, err := client.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+				latCh <- hostLatency{host: host, lat: time.Since(start)}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(latCh)
+
+	var responsive []hostLatency
+	for hl := range latCh {
+		responsive = append(responsive, hl)
+	}
+
+	if len(responsive) == 0 {
+		return hosts
+	}
+
+	sort.Slice(responsive, func(i, j int) bool {
+		return responsive[i].lat < responsive[j].lat
+	})
+
+	ranked := make([]string, 0, len(hosts))
+	seen := make(map[string]bool)
+	for _, r := range responsive {
+		ranked = append(ranked, r.host)
+	}
+	for _, h := range hosts {
+		if !seen[h] {
+			ranked = append(ranked, h)
+		}
+	}
+	return ranked
+}
+
 // fetchCDNServers discovers active SteamPipe CDN edge servers via Valve's directory Web API.
-func fetchCDNServers(ctx context.Context) ([]string, error) {
+func fetchCDNServers(ctx context.Context, client *http.Client) ([]string, error) {
+	if client == nil {
+		client = DefaultHTTPClient
+	}
 	url := "https://api.steampowered.com/IContentServerDirectoryService/GetServersForSteamPipe/v1/?cell_id=0"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -67,7 +135,7 @@ func fetchCDNServers(ctx context.Context) ([]string, error) {
 	}
 	req.Header.Set("User-Agent", "gamux/1.0")
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("cdn query request failed: %w", err)
 	}
@@ -97,7 +165,7 @@ func fetchCDNServers(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("no cdn hosts returned by SteamPipe service")
 	}
 
-	return hosts, nil
+	return rankCDNEdges(ctx, client, hosts), nil
 }
 
 // DownloadOrUpdateGame compares local files in targetDir against the manifest and downloads missing or updated file chunks.
@@ -154,25 +222,29 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		}
 	}
 
-
-
 	workerLimit := opts.WorkerLimit
 	if workerLimit <= 0 {
 		workerLimit = 10
 	}
 
-	cdnHosts, err := fetchCDNServers(ctx)
+	httpClient := opts.HTTPClient
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+
+	cdnHosts, err := fetchCDNServers(ctx, httpClient)
 	if err != nil {
 		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
 		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
 	}
+	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
 
 	slog.Info("Starting direct game download/update",
 		"appID", m.AppID,
 		"depotID", m.DepotID,
 		"files", len(m.Files),
 		"targetDir", absTargetDir,
-		"cdnHosts", len(cdnHosts),
+		"cdnHosts", len(rankedHosts),
 		"dryRun", opts.DryRun,
 	)
 
@@ -211,6 +283,42 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(workerLimit)
 
+	var totalDepotBytes int64
+	for _, f := range m.Files {
+		if f.Size > 0 && (f.Flags&0x40) == 0 {
+			totalDepotBytes += int64(f.Size)
+		}
+	}
+
+	var downloadedBytes int64
+	var networkTransferredBytes int64
+	startTime := time.Now()
+
+	reportBytes := func(item string) {
+		if opts.ByteProgressCallback == nil || opts.DryRun {
+			return
+		}
+		curr := atomic.LoadInt64(&downloadedBytes)
+		netBytes := atomic.LoadInt64(&networkTransferredBytes)
+		elapsed := time.Since(startTime).Seconds()
+		speed := float64(0)
+		eta := 0
+		if elapsed > 0.5 {
+			speed = float64(netBytes) / elapsed
+			if speed > 0 && totalDepotBytes > curr {
+				eta = int(float64(totalDepotBytes-curr) / speed)
+			}
+		}
+		pct := float64(0)
+		if totalDepotBytes > 0 {
+			pct = float64(curr) / float64(totalDepotBytes) * 100.0
+			if pct > 100 {
+				pct = 100
+			}
+		}
+		opts.ByteProgressCallback(curr, totalDepotBytes, speed, eta, pct, item)
+	}
+
 	var processedCount int32
 	var processedUpdated int32
 	totalFiles := len(m.Files)
@@ -221,19 +329,15 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 
 		g.Go(func() error {
 			curr := atomic.AddInt32(&processedCount, 1)
-			if !opts.DryRun {
-				if opts.ProgressCallback != nil {
-					opts.ProgressCallback(int(curr), totalFiles, entry.Path)
-				} else {
-					ui.RenderProgress(int(curr), totalFiles, entry.Path)
-				}
+			if !opts.DryRun && opts.ProgressCallback != nil {
+				opts.ProgressCallback(int(curr), totalFiles, entry.Path)
 			}
+			reportBytes(entry.Path)
 
 			// Skip directory entries in download loop
 			if entry.Size == 0 || (entry.Flags&0x40) != 0 {
 				return nil
 			}
-
 
 			// Filter out mismatched platform files if specific platform selected
 			normPath := strings.ToLower(entry.Path)
@@ -260,12 +364,25 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			// Check if file exists and hash matches
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 				if uint64(info.Size()) != entry.Size {
-					slog.Debug("File size mismatch, needs update", "path", filePath, "localSize", info.Size(), "expectedSize", entry.Size)
+					slog.Debug("File size mismatch, redownloading", "path", filePath, "actual", info.Size(), "expected", entry.Size)
 					needsDownload = true
 				} else if entry.SHA1 != "" {
 					localHash, err := util.GetSHA1Hash(filePath)
 					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
-						slog.Debug("File hash mismatch, needs update", "path", filePath)
+						slog.Debug("File hash mismatch, redownloading", "path", filePath, "actual", localHash, "expected", entry.SHA1)
+						needsDownload = true
+					}
+				} else if len(entry.Chunks) > 0 {
+					// Check if all chunks were completed in checkpoint
+					allChunksDone := true
+					for _, ch := range entry.Chunks {
+						if !cp.isCompleted(ch.ChunkID) {
+							allChunksDone = false
+							break
+						}
+					}
+					if !allChunksDone {
+						slog.Debug("File chunks incomplete in checkpoint, downloading missing chunks", "path", filePath)
 						needsDownload = true
 					}
 				}
@@ -276,12 +393,16 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 
 			if !needsDownload {
 				slog.Debug("File is up-to-date", "path", filePath)
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportBytes(entry.Path)
 				return nil
 			}
 
 			if opts.DryRun {
 				slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
 				atomic.AddInt32(&processedUpdated, 1)
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportBytes(entry.Path)
 				return nil
 			}
 
@@ -302,6 +423,8 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 				}
 				_ = f.Truncate(int64(entry.Size))
 				f.Close()
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportBytes(entry.Path)
 			} else {
 				// Open file for chunk assembly
 				fileFlags := os.O_CREATE | os.O_RDWR
@@ -314,6 +437,8 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 				for _, chunk := range entry.Chunks {
 					if cp.isCompleted(chunk.ChunkID) {
 						slog.Debug("Chunk already completed in checkpoint, skipping", "chunkID", chunk.ChunkID)
+						atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+						reportBytes(entry.Path)
 						continue
 					}
 
@@ -322,11 +447,14 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 						depotID = m.DepotID
 					}
 					decKey := m.GetDecryptionKey(depotID)
-					if err := downloadChunk(gCtx, cdnHosts, depotID, decKey, chunk, f); err != nil {
+					if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, f); err != nil {
 						f.Close()
 						return fmt.Errorf("download chunk for %s (depot %d): %w", filePath, depotID, err)
 					}
 
+					atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+					atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
+					reportBytes(entry.Path)
 					cp.markCompleted(checkpointFile, chunk.ChunkID)
 				}
 				f.Close()
@@ -339,11 +467,9 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	}
 
 	if err := g.Wait(); err != nil {
-		ui.ClearProgress()
 		return nil, fmt.Errorf("download execution failed: %w", err)
 	}
 
-	ui.ClearProgress()
 	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
 
 	// Remove checkpoint file and sweep for any remaining VSZa compressed files on 100% successful completion
@@ -360,10 +486,12 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	)
 
 	return result, nil
-
 }
 
-func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {
+func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {
+	if client == nil {
+		client = DefaultHTTPClient
+	}
 	if len(cdnHosts) == 0 {
 		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
 	}
@@ -379,7 +507,7 @@ func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKe
 		}
 		req.Header.Set("User-Agent", "Valve/Steam HTTP Client 1.0")
 
-		resp, err := HTTPClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
 			continue
@@ -400,26 +528,10 @@ func downloadChunk(ctx context.Context, cdnHosts []string, depotID uint32, decKe
 		}
 
 		// 1. Decrypt chunk payload if encrypted with depot key
-		payloadData := rawChunkData
-		if decKey != "" && len(rawChunkData) >= 16 {
-			keyBytes, err := hex.DecodeString(decKey)
-			if err == nil && len(keyBytes) == 32 {
-				block, err := aes.NewCipher(keyBytes)
-				if err == nil {
-					// First 16 bytes: ECB-encrypted IV
-					encryptedIV := rawChunkData[:16]
-					iv := make([]byte, 16)
-					block.Decrypt(iv, encryptedIV)
-
-					ciphertext := rawChunkData[16:]
-					if len(ciphertext)%16 == 0 && len(ciphertext) > 0 {
-						decrypted := make([]byte, len(ciphertext))
-						mode := cipher.NewCBCDecrypter(block, iv)
-						mode.CryptBlocks(decrypted, ciphertext)
-						payloadData = decrypted
-					}
-				}
-			}
+		payloadData, err := manifest.DecryptChunkPayload(rawChunkData, decKey)
+		if err != nil {
+			lastErr = fmt.Errorf("decrypt chunk %s: %w", chunk.ChunkID, err)
+			continue
 		}
 
 		// 2. Decompress chunk payload
@@ -476,7 +588,10 @@ func (cp *Checkpoint) markCompleted(path string, chunkID string) {
 	cp.CompletedChunks[chunkID] = true
 	data, err := json.Marshal(cp)
 	if err == nil {
-		_ = os.WriteFile(path, data, 0644)
+		tmpPath := path + ".tmp"
+		if err := os.WriteFile(tmpPath, data, 0644); err == nil {
+			_ = os.Rename(tmpPath, path)
+		}
 	}
 }
 

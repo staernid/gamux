@@ -5,15 +5,12 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/staernid/gamux/domain"
 )
 
-// LaunchCandidate represents a Steam app launch option.
-type LaunchCandidate struct {
-	Name        string `json:"name"`
-	Executable  string `json:"executable"`
-	Arguments   string `json:"arguments"`
-	Description string `json:"description"`
-}
+// LaunchCandidate aliases the canonical domain type.
+type LaunchCandidate = domain.LaunchCandidate
 
 // ACFData represents extracted metadata from a Steam appmanifest_<appid>.acf file.
 type ACFData struct {

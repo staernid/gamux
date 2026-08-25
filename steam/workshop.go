@@ -57,7 +57,7 @@ func FetchWorkshopItemDetails(ctx context.Context, publishedFileID uint64) (*Wor
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch workshop details: %w", err)
 	}
@@ -140,7 +140,7 @@ func downloadAndExtractZip(ctx context.Context, downloadURL string, outDir strin
 		return fmt.Errorf("create download request: %w", err)
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return fmt.Errorf("download zip: %w", err)
 	}

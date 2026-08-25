@@ -16,24 +16,22 @@ func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestFetchHubcapKeys_LuaFormat(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			if req.Header.Get("Authorization") != "Bearer MOCK_HUBCAP_KEY" {
+				t.Errorf("expected Authorization header Bearer MOCK_HUBCAP_KEY, got %s", req.Header.Get("Authorization"))
+			}
+			luaBody := `addappid(2088570, 1, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(luaBody)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if req.Header.Get("Authorization") != "Bearer MOCK_HUBCAP_KEY" {
-			t.Errorf("expected Authorization header Bearer MOCK_HUBCAP_KEY, got %s", req.Header.Get("Authorization"))
-		}
-		luaBody := `addappid(2088570, 1, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(luaBody)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
-	parsed, err := FetchHubcapKeys(context.Background(), 2088570, "MOCK_HUBCAP_KEY")
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	parsed, err := FetchHubcapKeys(ctx, 2088570, "MOCK_HUBCAP_KEY")
 	if err != nil {
 		t.Fatalf("FetchHubcapKeys failed: %v", err)
 	}

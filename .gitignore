@@ -35,7 +35,8 @@ go.work.sum
 .idea/
 .vscode/
 
-/wip
-
 # Runtime log
 gamux.log
+
+# GUI Snapshots
+.gui-snapshots/

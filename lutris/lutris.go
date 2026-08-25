@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/staernid/gamux/util"
 	_ "modernc.org/sqlite"
 	"gopkg.in/yaml.v3"
 )
@@ -301,12 +302,16 @@ func GetExistingConfigPath(slug, dir, overrideDbPath string) string {
 
 // GetExistingWinePrefix attempts to read the Wine prefix for a game from existing Lutris YAML configs.
 func GetExistingWinePrefix(slug, dir string) string {
-	if entries, err := os.ReadDir(dir); err == nil {
+	expanded := util.ExpandPath(dir)
+	if expanded == "" {
+		expanded = util.ExpandPath("~/.config/lutris/games")
+	}
+	if entries, err := os.ReadDir(expanded); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
 				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
 				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
-					data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+					data, err := os.ReadFile(filepath.Join(expanded, e.Name()))
 					if err == nil {
 						var d doc
 						if err := yaml.Unmarshal(data, &d); err == nil {
@@ -324,13 +329,17 @@ func GetExistingWinePrefix(slug, dir string) string {
 
 // UnregisterLutris removes all Lutris YAML config files, shortcuts, and pga.db database records for a slug.
 func UnregisterLutris(slug, dir string) error {
+	expanded := util.ExpandPath(dir)
+	if expanded == "" {
+		expanded = util.ExpandPath("~/.config/lutris/games")
+	}
 	// 1. Remove YAML files
-	if entries, err := os.ReadDir(dir); err == nil {
+	if entries, err := os.ReadDir(expanded); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
 				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
 				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
-					_ = os.Remove(filepath.Join(dir, e.Name()))
+					_ = os.Remove(filepath.Join(expanded, e.Name()))
 				}
 			}
 		}
@@ -651,4 +660,35 @@ func buildInstallerDoc(cfg Config) installerDoc {
 			System: d.System,
 		},
 	}
+}
+
+// IsGameRegistered checks whether a game is already registered with Lutris.
+func IsGameRegistered(name, targetDir string) bool {
+	if strings.TrimSpace(name) == "" {
+		return false
+	}
+	slug := Slugify(name)
+	expanded := util.ExpandPath(targetDir)
+	if expanded == "" {
+		expanded = util.ExpandPath("~/.config/lutris/games")
+	}
+
+	if GetExistingWinePrefix(slug, expanded) != "" {
+		return true
+	}
+	yamlPath := filepath.Join(expanded, slug+".yml")
+	if _, err := os.Stat(yamlPath); err == nil {
+		return true
+	}
+	if entries, err := os.ReadDir(expanded); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+				nameNoExt := strings.TrimSuffix(e.Name(), ".yml")
+				if nameNoExt == slug || strings.HasPrefix(nameNoExt, slug+"-") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

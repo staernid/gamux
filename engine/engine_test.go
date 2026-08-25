@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/staernid/gamux/config"
-	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/detector"
+	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/pipeline"
+	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
@@ -25,17 +28,6 @@ func TestMain(m *testing.M) {
 
 
 func TestInspectStatus_Original(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "TestGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -48,6 +40,16 @@ func TestInspectStatus_Original(t *testing.T) {
 	}
 
 	eng := New(config.DefaultConfig())
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
 	status, err := eng.InspectStatus(context.Background(), gameDir)
 	if err != nil {
 		t.Fatalf("InspectStatus failed: %v", err)
@@ -62,17 +64,6 @@ func TestInspectStatus_Original(t *testing.T) {
 }
 
 func TestInspectStatus_PortablePatchedAndRollback(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "PatchedGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -95,6 +86,15 @@ func TestInspectStatus_PortablePatchedAndRollback(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(settingsDir, "configs.app.ini"), []byte("[app]"), 0644)
 
 	eng := New(config.DefaultConfig())
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 	status, err := eng.InspectStatus(context.Background(), gameDir)
 	if err != nil {
 		t.Fatalf("InspectStatus failed: %v", err)
@@ -128,25 +128,7 @@ func TestInspectStatus_PortablePatchedAndRollback(t *testing.T) {
 	}
 }
 
-type mockRoundTripper func(req *http.Request) (*http.Response, error)
-
-func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
 func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		jsonResp := `{"1091500": {"success": true, "data": {"name": "Cyberpunk 2077"}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	rawGameDir := filepath.Join(tmpDir, "Cyberpunk.2077.v2.12-P2P")
 	if err := os.MkdirAll(rawGameDir, 0755); err != nil {
@@ -158,6 +140,17 @@ func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(rawGameDir, "Cyberpunk2077.exe"), []byte("fake exe"), 0755)
 
 	eng := New(config.DefaultConfig())
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			jsonResp := `{"1091500": {"success": true, "data": {"name": "Cyberpunk 2077"}}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
 	opts := ProcessOptions{
 		Path:         rawGameDir,
 		NormalizeDir: true,
@@ -182,17 +175,6 @@ func TestProcessGame_NormalizeAndSynthesizeACF(t *testing.T) {
 }
 
 func TestNotifyLaunch(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "CleanGame")
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -202,6 +184,15 @@ func TestNotifyLaunch(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(gameDir, "appmanifest_123.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"123\"\n\t\"name\"\t\"CleanGame\"\n}"), 0644)
 
 	eng := New(config.DefaultConfig())
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"appnews": {"newsitems": []}}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 	err := eng.NotifyLaunch(context.Background(), gameDir)
 	if err != nil {
 		t.Fatalf("NotifyLaunch failed: %v", err)
@@ -236,17 +227,6 @@ func snapshotDir(t *testing.T, root string) map[string]string {
 }
 
 func TestEngine_DryRunZeroMutationInvariant(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "DryRunGame")
 	_ = os.MkdirAll(filepath.Join(gameDir, "[Manifests]"), 0755)
@@ -257,6 +237,15 @@ func TestEngine_DryRunZeroMutationInvariant(t *testing.T) {
 	baseline := snapshotDir(t, gameDir)
 
 	eng := New(config.DefaultConfig())
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 	opts := ProcessOptions{
 		Path:         gameDir,
 		DryRun:       true,
@@ -289,17 +278,6 @@ func TestEngine_DryRunZeroMutationInvariant(t *testing.T) {
 }
 
 func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
-	oldTransport := steam.HTTPClient.Transport
-	defer func() { steam.HTTPClient.Transport = oldTransport }()
-
-	steam.HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
 	tmpDir := t.TempDir()
 	gbeDir := filepath.Join(tmpDir, "gbe_mock")
 	gbeWin64 := filepath.Join(gbeDir, "win_release", "experimental", "x64")
@@ -318,6 +296,15 @@ func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
 	baseline := snapshotDir(t, gameDir)
 
 	eng := New(cfg)
+	eng.HTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 	opts := ProcessOptions{
 		Path:         gameDir,
 		DryRun:       false,
@@ -364,5 +351,157 @@ func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
 }
 
 
+
+
+
+func TestPipeline_ConsolidateManifests(t *testing.T) {
+	gameDir := t.TempDir()
+	sourceDir := filepath.Join(gameDir, "source_manifests")
+	_ = os.MkdirAll(sourceDir, 0755)
+	_ = os.WriteFile(filepath.Join(sourceDir, "appmanifest_2088570.acf"), []byte("test"), 0644)
+	_ = os.WriteFile(filepath.Join(sourceDir, "2088571_1234.manifest"), []byte("test"), 0644)
+
+	info, err := detector.Detect(context.Background(), gameDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.ManifestPath = filepath.Join(sourceDir, "appmanifest_2088570.acf")
+
+	if err := pipeline.ConsolidateManifestsInDir(info.GameDir, info.ManifestPath, info.RawDepotLayout); err != nil {
+		t.Fatalf("ConsolidateManifests failed: %v", err)
+	}
+
+	manifestsDir := filepath.Join(gameDir, "[Manifests]")
+	if _, err := os.Stat(filepath.Join(manifestsDir, "appmanifest_2088570.acf")); os.IsNotExist(err) {
+		t.Error("expected appmanifest in [Manifests]")
+	}
+	if _, err := os.Stat(filepath.Join(manifestsDir, "2088571_1234.manifest")); os.IsNotExist(err) {
+		t.Error("expected .manifest in [Manifests]")
+	}
+}
+
+func TestPipeline_EnsureACFManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	info, err := detector.Detect(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.AppID = "1091500"
+	info.Name = "Cyberpunk 2077"
+	info.InstallDir = "Cyberpunk 2077"
+
+	game := domain.NewGame(info.Name, info.GameDir, info.AppID, info.Platform)
+	pctx := &pipeline.Context{
+		Game:   game,
+		Config: config.DefaultConfig(),
+	}
+	stage := &pipeline.ManifestStage{}
+	if err := stage.Execute(context.Background(), pctx); err != nil {
+		t.Fatalf("EnsureACFManifest failed: %v", err)
+	}
+
+	expectedPath := filepath.Join(tmpDir, "[Manifests]", "appmanifest_1091500.acf")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("expected ACF file at %s", expectedPath)
+	}
+}
+
+func TestPipeline_NormalizeDirectory(t *testing.T) {
+	tmpParent := t.TempDir()
+	rawDir := filepath.Join(tmpParent, "Cyberpunk.2077.v2.12-P2P")
+	if err := os.MkdirAll(rawDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := detector.Detect(context.Background(), rawDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.AppID = "1091500"
+	info.Name = "Cyberpunk 2077"
+	info.InstallDir = "Cyberpunk 2077"
+
+	game := domain.NewGame(info.Name, info.GameDir, info.AppID, info.Platform)
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			NormalizeDir: true,
+		},
+		Game: game,
+	}
+	stage := &pipeline.NormalizeStage{}
+	if err := stage.Execute(context.Background(), pctx); err != nil {
+		t.Fatalf("NormalizeDirectory failed: %v", err)
+	}
+
+	expectedDir := filepath.Join(tmpParent, "Cyberpunk 2077")
+	if pctx.Game.GameDir != expectedDir {
+		t.Errorf("expected GameDir %s, got %s", expectedDir, pctx.Game.GameDir)
+	}
+}
+
+func TestEngine_DownloadGame_Validation(t *testing.T) {
+	eng := New(config.DefaultConfig())
+	_, err := eng.DownloadGame(context.Background(), DownloadGameOptions{
+		AppID: 0,
+	})
+	if err == nil {
+		t.Fatal("expected error on AppID 0, got nil")
+	}
+}
+
+func TestEngine_ToolsManager(t *testing.T) {
+	eng := New(config.DefaultConfig())
+	mgr := eng.Tools()
+	if mgr == nil {
+		t.Fatal("expected non-nil tool manager")
+	}
+}
+
+func TestEngine_LaunchProfileAndOperatingMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	acfContent := "\"AppState\"\n{\n\t\"appid\"\t\"555\"\n\t\"name\"\t\"StandaloneGame\"\n}"
+	_ = os.WriteFile(filepath.Join(tmpDir, "appmanifest_555.acf"), []byte(acfContent), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "game.x86_64"), []byte("#!/bin/sh\nexit 0"), 0755)
+
+	cfg := config.DefaultConfig()
+	cfg.OperatingMode = "standalone"
+	cfg.DefaultRunner = "linux"
+	eng := New(cfg)
+
+	status, err := eng.InspectStatus(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("InspectStatus failed: %v", err)
+	}
+
+	if status.OperatingMode != "standalone" {
+		t.Errorf("expected OperatingMode standalone, got %s", status.OperatingMode)
+	}
+	if !status.IsReady {
+		t.Errorf("expected game with executable to be ready in standalone mode")
+	}
+
+	// Save a per-game launch profile override
+	trueVal := true
+	profile := runner.LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.x86_64",
+		OperatingMode: "standalone",
+		Runner:        "linux",
+		MangoHud:      &trueVal,
+	}
+
+	if err := eng.SaveLaunchProfile(context.Background(), tmpDir, profile); err != nil {
+		t.Fatalf("SaveLaunchProfile failed: %v", err)
+	}
+
+	// Inspect again and verify ExePath is preserved from LaunchProfile
+	statusAfter, err := eng.InspectStatus(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("InspectStatus after profile save failed: %v", err)
+	}
+	if filepath.Base(statusAfter.ExePath) != "game.x86_64" {
+		t.Errorf("expected status ExePath game.x86_64, got %s", statusAfter.ExePath)
+	}
+}
 
 

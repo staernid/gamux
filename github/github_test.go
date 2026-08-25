@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/config"
-	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
 
@@ -42,10 +41,7 @@ func mustTempDir(t *testing.T) string {
 }
 
 func TestUpdateGBE_HTTPError(t *testing.T) {
-	oldClient := HTTPClient
-	defer func() { HTTPClient = oldClient }()
-
-	HTTPClient = &http.Client{
+	mockClient := &http.Client{
 		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusNotFound,
@@ -55,17 +51,15 @@ func TestUpdateGBE_HTTPError(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background(), nil)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateGBE(ctx, nil)
 	if err == nil || !strings.Contains(err.Error(), "HTTP 404 Not Found") {
 		t.Fatalf("expected 404 HTTP error, got: %v", err)
 	}
 }
 
 func TestUpdateGBE_InvalidJSON(t *testing.T) {
-	oldClient := HTTPClient
-	defer func() { HTTPClient = oldClient }()
-
-	HTTPClient = &http.Client{
+	mockClient := &http.Client{
 		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -75,16 +69,14 @@ func TestUpdateGBE_InvalidJSON(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background(), nil)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateGBE(ctx, nil)
 	if err == nil || !strings.Contains(err.Error(), "failed to decode JSON") {
 		t.Fatalf("expected JSON decode error, got: %v", err)
 	}
 }
 
 func TestUpdateGBE_MissingAssets(t *testing.T) {
-	oldClient := HTTPClient
-	defer func() { HTTPClient = oldClient }()
-
 	jsonResponse := `{
 		"tag_name": "v1.0.0",
 		"updated_at": "2026-01-01T00:00:00Z",
@@ -92,7 +84,7 @@ func TestUpdateGBE_MissingAssets(t *testing.T) {
 		"assets": []
 	}`
 
-	HTTPClient = &http.Client{
+	mockClient := &http.Client{
 		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -102,21 +94,15 @@ func TestUpdateGBE_MissingAssets(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background(), nil)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateGBE(ctx, nil)
 	if err == nil || !strings.Contains(err.Error(), "failed to find Linux download URL") {
 		t.Fatalf("expected missing Linux asset error, got: %v", err)
 	}
 }
 
 func TestUpdateGBE_AlreadyUpToDate(t *testing.T) {
-	oldHome := os.Getenv("HOME")
-	tmpHome := mustTempDir(t)
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", oldHome)
-
-	oldClient := HTTPClient
-	defer func() { HTTPClient = oldClient }()
-
+	tmpDir := t.TempDir()
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	jsonResponse := `{
 		"tag_name": "v1.0.0",
@@ -128,20 +114,22 @@ func TestUpdateGBE_AlreadyUpToDate(t *testing.T) {
 		]
 	}`
 
-	cfg := config.DefaultConfig()
+	cfg := &config.Config{
+		GbeDir: tmpDir,
+	}
 	// Create pre-existing timestamp file matching release updated_at
-	gbeHome := util.ExpandPath(cfg.GbeDir)
+	gbeHome := tmpDir
 	if err := os.MkdirAll(gbeHome, 0755); err != nil {
 		t.Fatal(err)
 	}
-	var rel config.Release
+	var rel Release
 	_ = json.Unmarshal([]byte(jsonResponse), &rel)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
 	if err := os.WriteFile(timestampFile, []byte(now.Format(time.RFC3339)), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	HTTPClient = &http.Client{
+	mockClient := &http.Client{
 		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -151,8 +139,81 @@ func TestUpdateGBE_AlreadyUpToDate(t *testing.T) {
 		}),
 	}
 
-	err := UpdateGBE(context.Background(), cfg)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateGBE(ctx, cfg)
 	if err != nil {
 		t.Fatalf("expected nil error for up-to-date check, got: %v", err)
+	}
+}
+
+func TestFetchUMURelease(t *testing.T) {
+	jsonResponse := `{
+		"tag_name": "1.1.0",
+		"updated_at": "2026-08-01T00:00:00Z",
+		"published_at": "2026-08-01T00:00:00Z",
+		"name": "umu-launcher 1.1.0",
+		"body": "Release notes for umu",
+		"html_url": "https://github.com/Open-Wine-Components/umu-launcher/releases/tag/1.1.0",
+		"assets": [
+			{"name": "umu-run", "browser_download_url": "https://example.com/umu-run"}
+		]
+	}`
+
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResponse)),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	info, err := FetchUMURelease(ctx, nil)
+	if err != nil {
+		t.Fatalf("FetchUMURelease failed: %v", err)
+	}
+	if info.Key != "umu" || info.LatestTag != "1.1.0" {
+		t.Errorf("unexpected ToolInfo: %+v", info)
+	}
+}
+
+func TestUpdateUMUAssets(t *testing.T) {
+	tmpDir := t.TempDir()
+	jsonResponse := `{
+		"tag_name": "1.1.0",
+		"updated_at": "2026-08-01T00:00:00Z",
+		"assets": [
+			{"name": "umu-run", "browser_download_url": "https://example.com/umu-run"}
+		]
+	}`
+
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.String(), "api.github.com") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResponse)),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(bytes.NewBufferString("#!/usr/bin/env python3\nprint('umu')\n")),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateUMUAssets(ctx, nil, tmpDir)
+	if err != nil {
+		t.Fatalf("UpdateUMUAssets failed: %v", err)
+	}
+
+	downloaded := filepath.Join(tmpDir, "umu-run")
+	if data, err := os.ReadFile(downloaded); err != nil || !strings.Contains(string(data), "umu") {
+		t.Errorf("expected downloaded umu-run file, got err: %v, data: %s", err, string(data))
 	}
 }

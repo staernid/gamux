@@ -33,18 +33,18 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderConfigRow("hubcap_api_key", maskKey(cfg.HubcapAPIKey), "(not set)")
 
 	renderSectionHeader("⚡ Operational Settings")
+	renderConfigRow("operating_mode", fallback(cfg.OperatingMode, defaults.OperatingMode), defaults.OperatingMode)
+	renderConfigRow("default_runner", fallback(cfg.DefaultRunner, defaults.DefaultRunner), defaults.DefaultRunner)
 	renderConfigRow("gbe_mode", fallback(cfg.GbeMode, "(prompt when applying setup)"), defaults.GbeMode)
 	renderConfigRow("lutris", fmt.Sprintf("%t", cfg.Lutris), fmt.Sprintf("%t", defaults.Lutris))
 	renderConfigRow("steamless", fmt.Sprintf("%t", cfg.Steamless), fmt.Sprintf("%t", defaults.Steamless))
 	renderConfigRow("achievements", fmt.Sprintf("%t", cfg.Achievements), fmt.Sprintf("%t", defaults.Achievements))
 	renderConfigRow("normalize", fmt.Sprintf("%t", cfg.Normalize), fmt.Sprintf("%t", defaults.Normalize))
-	renderConfigRow("platform", cfg.Platform, defaults.Platform)
-	renderConfigRow("runner", cfg.Runner, defaults.Runner)
+	renderConfigRow("mangohud", fmt.Sprintf("%t", cfg.MangoHud), fmt.Sprintf("%t", defaults.MangoHud))
 	renderConfigRow("wine_prefix", fallback(cfg.WinePrefix, "(auto)"), "(auto)")
 
 	renderSectionHeader("🔔 Launch Notifications")
 	renderConfigRow("enable_launch_notify", fmt.Sprintf("%t", cfg.EnableLaunchNotify), fmt.Sprintf("%t", defaults.EnableLaunchNotify))
-	renderConfigRow("launch_notify_mode", cfg.LaunchNotifyMode, defaults.LaunchNotifyMode)
 
 	fmt.Printf("%s\n\n", cyan("========================================================================"))
 }
@@ -106,13 +106,14 @@ func RunConfigWizard(cfg *config.Config, configPath string) error {
 
 	// Section 3: Operational Settings
 	fmt.Printf("\n%s\n", bold("⚡ CATEGORY 3: Operational Settings"))
+	cfg.OperatingMode = promptString(reader, "Primary Operating Mode (standalone, lutris) [operating_mode]", cfg.OperatingMode, defaults.OperatingMode)
+	cfg.DefaultRunner = promptString(reader, "Default Standalone Runner (umu, wine, proton) [default_runner]", cfg.DefaultRunner, defaults.DefaultRunner)
 	cfg.GbeMode = promptString(reader, "Goldberg Emulation Mode (loader, portable, or empty for prompt) [gbe_mode]", cfg.GbeMode, defaults.GbeMode)
 	cfg.Lutris = promptBool(reader, "Auto-register games in Lutris? [lutris]", cfg.Lutris)
 	cfg.Steamless = promptBool(reader, "Enable automatic Steamless DRM unpacking? [steamless]", cfg.Steamless)
 	cfg.Achievements = promptBool(reader, "Fetch achievement schema & icon assets? [achievements]", cfg.Achievements)
 	cfg.Normalize = promptBool(reader, "Normalize directory names to official 1:1 Steam install dir? [normalize]", cfg.Normalize)
-	cfg.Platform = promptString(reader, "Target platform architecture (win64, win32, linux) [platform]", cfg.Platform, defaults.Platform)
-	cfg.Runner = promptString(reader, "Lutris runner (wine, linux) [runner]", cfg.Runner, defaults.Runner)
+	cfg.MangoHud = promptBool(reader, "Enable MangoHud performance overlay by default? [mangohud]", cfg.MangoHud)
 	cfg.WinePrefix = promptString(reader, "Wine Prefix path [wine_prefix]", cfg.WinePrefix, "(auto)")
 
 	// Section 4: Notifications

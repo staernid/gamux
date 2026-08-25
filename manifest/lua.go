@@ -3,7 +3,6 @@ package manifest
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -89,89 +88,6 @@ func ParseLua(content string) (*ParsedLua, error) {
 // 3. Steam-Depot GitHub DB (https://raw.githubusercontent.com/KoriaPolis/Steam-Depot/main/fallback_depotkeys.json)
 // 4. Hubcap API (if hubcapAPIKey is provided)
 func ResolveKeys(ctx context.Context, appID uint32, luaPath string, hubcapAPIKey string) (*ParsedLua, error) {
-	var trace []string
-
-	// 1. Local .lua file override
-	if luaPath != "" {
-		content, err := os.ReadFile(luaPath)
-		if err != nil {
-			return nil, fmt.Errorf("read local lua file %s: %w", luaPath, err)
-		}
-		parsed, err := ParseLua(string(content))
-		if err != nil {
-			return nil, err
-		}
-		parsed.AuditTrace = append(parsed.AuditTrace, fmt.Sprintf("Local Lua File override ('%s'): %d depot keys, %d manifest files", luaPath, len(parsed.Depots), len(parsed.ManifestFiles)))
-		return parsed, nil
-	} else {
-		trace = append(trace, "Local Lua File: Skipped (no --lua file specified)")
-	}
-
-	if appID == 0 {
-		return nil, fmt.Errorf("no AppID provided and no --lua key file specified")
-	}
-
-	var bestResult *ParsedLua
-	var errs []string
-
-	// 2. RevoBD Public API
-	if parsed, err := FetchRevoBDKeys(ctx, appID); err == nil && parsed != nil && len(parsed.Depots) > 0 {
-		trace = append(trace, fmt.Sprintf("RevoBD API (luagen.revobd.club): Found %d depot keys, %d .manifest files in ZIP", len(parsed.Depots), len(parsed.ManifestFiles)))
-		bestResult = parsed
-	} else if err != nil {
-		trace = append(trace, fmt.Sprintf("RevoBD API (luagen.revobd.club): %v", err))
-		errs = append(errs, fmt.Sprintf("RevoBD: %v", err))
-	}
-
-	// 3. Steam-Depot GitHub DB Fallback
-	if bestResult == nil {
-		if parsed, err := FetchSteamDepotDBKeys(ctx, appID); err == nil && parsed != nil && len(parsed.Depots) > 0 {
-			trace = append(trace, fmt.Sprintf("Steam-Depot DB (KoriaPolis/Steam-Depot): Found %d depot keys, %d .manifest files", len(parsed.Depots), len(parsed.ManifestFiles)))
-			bestResult = parsed
-		} else if err != nil {
-			trace = append(trace, fmt.Sprintf("Steam-Depot DB: %v", err))
-			errs = append(errs, fmt.Sprintf("Steam-Depot: %v", err))
-		}
-	} else {
-		trace = append(trace, "Steam-Depot DB: Skipped (already resolved keys from RevoBD)")
-	}
-
-	// 4. Hubcap API (Always query Hubcap if key is provided and no .manifest files have been obtained yet!)
-	if hubcapAPIKey != "" {
-		maskedKey := hubcapAPIKey
-		if len(maskedKey) > 8 {
-			maskedKey = maskedKey[:4] + "..." + maskedKey[len(maskedKey)-4:]
-		}
-		if bestResult == nil || len(bestResult.ManifestFiles) == 0 {
-			if parsed, err := FetchHubcapKeys(ctx, appID, hubcapAPIKey); err == nil && parsed != nil && len(parsed.Depots) > 0 {
-				trace = append(trace, fmt.Sprintf("Hubcap API (key '%s'): Found %d depot keys, %d .manifest files", maskedKey, len(parsed.Depots), len(parsed.ManifestFiles)))
-				if bestResult == nil {
-					bestResult = parsed
-				} else if len(parsed.ManifestFiles) > 0 {
-					if bestResult.ManifestFiles == nil {
-						bestResult.ManifestFiles = make(map[string][]byte)
-					}
-					for k, v := range parsed.ManifestFiles {
-						bestResult.ManifestFiles[k] = v
-					}
-				}
-			} else if err != nil {
-				trace = append(trace, fmt.Sprintf("Hubcap API (key '%s'): %v", maskedKey, err))
-				errs = append(errs, fmt.Sprintf("Hubcap: %v", err))
-			} else {
-				trace = append(trace, fmt.Sprintf("Hubcap API (key '%s'): Returned 0 depot keys", maskedKey))
-			}
-		} else {
-			trace = append(trace, fmt.Sprintf("Hubcap API (key '%s'): Skipped (already obtained .manifest files from RevoBD)", maskedKey))
-		}
-	} else {
-		trace = append(trace, "Hubcap API: Skipped (no hubcap_api_key configured in ~/.config/gamux/config.json)")
-	}
-
-	if bestResult != nil {
-		bestResult.AuditTrace = trace
-		return bestResult, nil
-	}
-
-	return nil, fmt.Errorf("failed to resolve depot keys for AppID %d via provider chain: %s", appID, strings.Join(errs, " | "))
+	chain := NewDefaultProviderChain(luaPath, hubcapAPIKey)
+	return chain.Resolve(ctx, appID)
 }

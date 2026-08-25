@@ -1,23 +1,36 @@
 <script>
-  import { selectedGame, queueApplyGame, showInspector, libraryPath, scanLibrary, importGame, activeView } from '../../stores/library.js';
+  import { selectedGame, queueApplyGame, showInspector, libraryPath, scanLibrary, importGame, activeView, runningGames, games, refreshGame } from '../../stores/library.js';
+  import { tasksStore } from '../../stores/tasks.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { formatBytes } from '../../utils/format.js';
   import { isSteamApp } from '../../utils/game.js';
   import { AppAPI } from '../../api/app.js';
+  import { modalStore } from '../../stores/modal.js';
   import PosterArt from '../common/PosterArt.svelte';
 
   let isLaunching = false;
+  let isStopping = false;
+
+  $: isRunning = $selectedGame?.gameDir ? $runningGames.has($selectedGame.gameDir) : false;
 
   async function handleLaunch() {
     if (!$selectedGame) return;
-    const slug = $selectedGame.AppID || $selectedGame.Name.toLowerCase().replace(/[^\w-]/g, '-');
     isLaunching = true;
     try {
-      await AppAPI.launchLutrisGame(slug);
+      await AppAPI.launchGame({
+        game_dir: $selectedGame.gameDir,
+        name: $selectedGame.name,
+        app_id: $selectedGame.appId,
+        platform: $selectedGame.platform,
+        exe_path: $selectedGame.exePath,
+        exe_args: $selectedGame.exeArgs,
+        operating_mode: $selectedGame.operatingMode,
+        runner: $selectedGame.runner,
+      });
       notificationStore.items.add({
         type: 'success',
         title: 'Launching',
-        message: `Starting ${$selectedGame.Name}...`
+        message: `Starting ${$selectedGame.name}...`
       });
     } catch (err) {
       notificationStore.items.add({
@@ -30,19 +43,76 @@
     }
   }
 
+  async function handleStop() {
+    if (!$selectedGame?.gameDir) return;
+    isStopping = true;
+    try {
+      await AppAPI.stopGame($selectedGame.gameDir);
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Game Stopped',
+        message: `Stopped ${$selectedGame.name}`
+      });
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Stop Failed',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isStopping = false;
+    }
+  }
+
   function handlePrepare() {
     if (!$selectedGame) return;
     queueApplyGame($selectedGame);
   }
 
+  async function handleUpdateGame() {
+    if (!$selectedGame?.gameDir) return;
+    const appIdNum = parseInt($selectedGame.appId, 10);
+    if (appIdNum && !isNaN(appIdNum)) {
+      try {
+        await tasksStore.start({
+          app_id: appIdNum,
+          game_name: $selectedGame.name,
+          target_dir: $selectedGame.gameDir,
+          platform: $selectedGame.platform,
+          auto_apply: true,
+        });
+      } catch (err) {
+        // Handled in store
+      }
+    } else {
+      tasksStore.enqueue({
+        type: 'update',
+        title: `Update: ${$selectedGame.name}`,
+        gameName: $selectedGame.name,
+        gameDir: $selectedGame.gameDir,
+        run: async () => {
+          await AppAPI.submitUpdate($selectedGame.gameDir);
+          return `Successfully queued update for ${$selectedGame.name}`;
+        },
+        onSuccess: async () => {
+          try {
+            await refreshGame($selectedGame.gameDir);
+          } catch {
+            scanLibrary();
+          }
+        }
+      });
+    }
+  }
+
   async function handleOpenFolder() {
-    if (!$selectedGame?.GameDir) return;
+    if (!$selectedGame?.gameDir) return;
     try {
-      await AppAPI.openFolder($selectedGame.GameDir);
+      await AppAPI.openDirectory($selectedGame.gameDir);
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
-        title: 'Open Folder Failed',
+        title: 'Cannot Open Folder',
         message: err?.message || String(err)
       });
     }
@@ -64,14 +134,30 @@
       <!-- Left: Game Capsule Artwork -->
       <div class="w-56 sm:w-64 lg:w-72 aspect-[2/3] rounded-2xl overflow-hidden bg-[#161622] border-2 border-[#2a2a3c] shadow-2xl flex-shrink-0 relative group">
         <PosterArt
-          appId={$selectedGame.AppID}
-          name={$selectedGame.Name}
+          appId={$selectedGame.appId}
+          name={$selectedGame.name}
+          posterUrl={$selectedGame.coverUrl}
+          localCoverUrl={$selectedGame.localCoverUrl}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {#if isSteamApp($selectedGame.AppID)}
-          <span class="absolute bottom-2 left-2 bg-black/85 backdrop-blur-sm font-mono text-[10px] text-slate-300 px-2 py-0.5 rounded-md font-bold border border-white/10">
-            #{$selectedGame.AppID}
+        <!-- Hover Overlay for Changing Artwork -->
+        <button
+          type="button"
+          on:click={() => { modalStore.open('artwork-picker', { game: $selectedGame }); }}
+          class="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 text-center cursor-pointer backdrop-blur-[2px] z-10"
+          title="Change Artwork"
+        >
+          <span class="w-10 h-10 rounded-full bg-sky-600/90 text-white flex items-center justify-center text-lg mb-2 shadow-lg">
+            🎨
+          </span>
+          <span class="text-xs font-bold text-white">Change Cover</span>
+          <span class="text-[10px] text-slate-300 font-mono mt-0.5">SteamGridDB / Custom</span>
+        </button>
+
+        {#if isSteamApp($selectedGame.appId)}
+          <span class="absolute bottom-2 left-2 bg-black/85 backdrop-blur-sm font-mono text-[10px] text-slate-300 px-2 py-0.5 rounded-md font-bold border border-white/10 pointer-events-none z-20">
+            #{$selectedGame.appId}
           </span>
         {/if}
       </div>
@@ -81,15 +167,26 @@
         <div>
           <!-- Status Pill Strip -->
           <div class="flex items-center justify-center md:justify-start space-x-2.5 mb-2">
-            {#if $selectedGame.isPatched && $selectedGame.lutris_registered}
+            <button
+              type="button"
+              on:click={() => { modalStore.open('metadata-link', { game: $selectedGame }); }}
+              class="inline-flex items-center space-x-1.5 text-xs px-2.5 py-0.5 rounded-full font-bold transition-all hover:scale-105 cursor-pointer {
+                ($selectedGame.store === 'GOG')
+                  ? 'bg-purple-950/50 border border-purple-600/60 text-purple-300 hover:bg-purple-900/60'
+                  : ($selectedGame.store === 'Standalone' || $selectedGame.store === 'Custom')
+                  ? 'bg-emerald-950/50 border border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/60'
+                  : 'bg-blue-950/50 border border-blue-600/60 text-blue-300 hover:bg-blue-900/60'
+              }"
+              title="Click to Change Store / Metadata Provider"
+            >
+              <span>{$selectedGame.store || 'Steam'}</span>
+              <span class="text-[9px] opacity-70">▾</span>
+            </button>
+
+            {#if $selectedGame.isReady || $selectedGame.isPatched}
               <span class="inline-flex items-center space-x-1.5 bg-emerald-950/40 border border-emerald-700/50 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
                 <span class="pip pip-ready"></span>
-                <span>Ready</span>
-              </span>
-            {:else if $selectedGame.isPatched}
-              <span class="inline-flex items-center space-x-1.5 bg-yellow-950/40 border border-yellow-700/50 text-yellow-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                <span class="pip pip-update"></span>
-                <span>Patched</span>
+                <span>{$selectedGame.operatingMode === 'standalone' ? 'Ready (Direct)' : ($selectedGame.lutrisRegistered ? 'Ready (Lutris)' : 'Ready (Prepared)')}</span>
               </span>
             {:else}
               <span class="inline-flex items-center space-x-1.5 bg-slate-900 border border-slate-700 text-slate-400 text-xs px-2.5 py-0.5 rounded-full font-medium">
@@ -98,41 +195,53 @@
               </span>
             {/if}
 
-            {#if $selectedGame.hasUpdatesOrIssues}
-              <span class="inline-flex items-center space-x-1 bg-rose-950/40 border border-rose-700/50 text-rose-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                Update Pending
+            {#if $selectedGame.hasUpdate || $selectedGame.hasUpdatesOrIssues}
+              <span class="inline-flex items-center space-x-1 bg-amber-950/40 border border-amber-700/50 text-amber-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                Update Available
               </span>
             {/if}
           </div>
 
           <!-- Game Title -->
-          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight" title={$selectedGame.Name}>
-            {$selectedGame.Name}
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight" title={$selectedGame.name}>
+            {$selectedGame.name}
           </h1>
 
           <!-- Quick Specs -->
           <div class="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1.5 text-xs text-slate-400 font-mono mt-2.5">
             <span class="text-slate-200 bg-[#161622] px-2.5 py-0.5 rounded-md border border-[#262638]">
-              {$selectedGame.Platform === 'linux' ? '🐧 Linux Native' : '🪟 Windows'}
+              {$selectedGame.platform === 'linux' ? '🐧 Linux Native' : '🪟 Windows'}
             </span>
-            <span>Size: <strong class="text-white font-semibold">{formatBytes($selectedGame.DiskSizeBytes)}</strong></span>
-            {#if $selectedGame.DLCCount}
-              <span>DLCs: <strong class="text-slate-200">{$selectedGame.DLCCount}</strong></span>
+            <span>Size: <strong class="text-white font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</strong></span>
+            {#if $selectedGame.dlcCount}
+              <span>DLCs: <strong class="text-white font-semibold">{$selectedGame.dlcCount}</strong></span>
             {/if}
-            {#if $selectedGame.AchievementCount}
-              <span>Achievements: <strong class="text-slate-200">{$selectedGame.AchievementCount}</strong></span>
+            {#if $selectedGame.achievementCount}
+              <span>Achievements: <strong class="text-slate-200">{$selectedGame.achievementCount}</strong></span>
             {/if}
           </div>
 
           <!-- Directory Path -->
-          <div class="text-[11px] font-mono text-slate-500 truncate max-w-xl mt-2 select-text" title={$selectedGame.GameDir}>
-            {$selectedGame.GameDir}
+          <div class="text-[11px] font-mono text-slate-500 truncate max-w-xl mt-2 select-text" title={$selectedGame.gameDir}>
+            {$selectedGame.gameDir}
           </div>
         </div>
 
         <!-- Chunky Action Buttons -->
         <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
-          {#if $selectedGame.lutris_registered}
+          {#if isRunning}
+            <!-- Running / STOP button -->
+            <button
+              type="button"
+              on:click={handleStop}
+              disabled={isStopping}
+              class="bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-black text-sm sm:text-base px-8 py-3 rounded-2xl shadow-xl shadow-rose-950/50 flex items-center space-x-2.5 transition-transform active:scale-95 disabled:opacity-50"
+            >
+              <span class="w-3 h-3 rounded-sm bg-white inline-block animate-pulse"></span>
+              <span>{isStopping ? 'Stopping...' : 'Stop Game'}</span>
+              <span class="text-[10px] font-mono bg-black/30 px-1.5 py-0.5 rounded font-bold ml-1">Running</span>
+            </button>
+          {:else if $selectedGame.isReady || ($selectedGame.isPatched && ($selectedGame.lutrisRegistered || $selectedGame.operatingMode === 'standalone'))}
             <!-- Primary LAUNCH button -->
             <button
               type="button"
@@ -158,6 +267,21 @@
               </svg>
               <span>Prepare</span>
               <span class="text-[10px] font-mono bg-black/10 px-1.5 py-0.5 rounded font-bold ml-1">↵</span>
+            </button>
+          {/if}
+
+          {#if $selectedGame.hasUpdate || $selectedGame.hasUpdatesOrIssues}
+            <!-- UPDATE GAME button -->
+            <button
+              type="button"
+              on:click={handleUpdateGame}
+              class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-sm sm:text-base px-6 py-3 rounded-2xl shadow-xl shadow-emerald-950/50 flex items-center space-x-2 transition-transform active:scale-95"
+              title="Download delta depot files and apply updates"
+            >
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 11.586V4a1 1 0 011-1zM4 16a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1z" clip-rule="evenodd" />
+              </svg>
+              <span>Update Game</span>
             </button>
           {/if}
 
@@ -214,7 +338,7 @@
         </button>
         <button
           type="button"
-          on:click={() => { $activeView = 'downloader'; }}
+          on:click={() => { $activeView = 'downloads'; }}
           class="bg-white hover:bg-neutral-200 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors shadow-lg"
         >
           Download Game

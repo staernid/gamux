@@ -16,13 +16,43 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/cache"
-	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"golang.org/x/sync/errgroup"
 )
 
+// Default Steam API endpoints
+const (
+	DefaultSteamStoreAPI = "https://store.steampowered.com/api"
+	DefaultSteamWebAPI   = "https://api.steampowered.com"
+)
+
+// DefaultHTTPClient is the default http.Client used for Steam API operations.
+var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // HTTPClient allows injecting custom HTTP clients or RoundTrippers for testing.
-var HTTPClient = &http.Client{Timeout: 30 * time.Second}
+var HTTPClient = DefaultHTTPClient
+
+type contextKey string
+
+const httpClientKey contextKey = "steam_http_client"
+
+// WithHTTPClient returns a new context with the provided http.Client attached.
+func WithHTTPClient(ctx context.Context, client *http.Client) context.Context {
+	if client == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, httpClientKey, client)
+}
+
+// HTTPClientFromContext extracts the http.Client from context or returns DefaultHTTPClient.
+func HTTPClientFromContext(ctx context.Context) *http.Client {
+	if ctx != nil {
+		if client, ok := ctx.Value(httpClientKey).(*http.Client); ok && client != nil {
+			return client
+		}
+	}
+	return DefaultHTTPClient
+}
 
 // ReleaseDate holds release date metadata returned from the Steam Store API.
 type ReleaseDate struct {
@@ -50,16 +80,17 @@ func (r *ReleaseDate) UnmarshalJSON(b []byte) error {
 
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
-	Name          string         `json:"name"`
-	Type          string         `json:"type"`
-	IsFree        bool           `json:"is_free"`
-	HeaderImage   string         `json:"header_image"`
-	RequiredAge   int            `json:"required_age"`
-	About         string         `json:"about_the_game"`
-	ShortDesc     string         `json:"short_description"`
-	ReleaseDate   ReleaseDate    `json:"release_date"`
-	Platforms     AppPlatforms   `json:"platforms"`
-	PriceOverview *PriceOverview `json:"price_overview,omitempty"`
+	Name               string         `json:"name"`
+	Type               string         `json:"type"`
+	IsFree             bool           `json:"is_free"`
+	HeaderImage        string         `json:"header_image"`
+	RequiredAge        int            `json:"required_age"`
+	About              string         `json:"about_the_game"`
+	ShortDesc          string         `json:"short_description"`
+	SupportedLanguages string         `json:"supported_languages"`
+	ReleaseDate        ReleaseDate    `json:"release_date"`
+	Platforms          AppPlatforms   `json:"platforms"`
+	PriceOverview      *PriceOverview `json:"price_overview,omitempty"`
 }
 
 // AppPlatforms holds platform availability flags.
@@ -81,6 +112,73 @@ type PriceOverview struct {
 	} `json:"formatted_prices,omitempty"`
 }
 
+var languageStringToCode = map[string]string{
+	"english":                 "english",
+	"french":                  "french",
+	"italian":                 "italian",
+	"german":                  "german",
+	"spanish":                 "spanish",
+	"spanish - spain":         "spanish",
+	"spanish - latin america": "latam",
+	"arabic":                  "arabic",
+	"czech":                   "czech",
+	"danish":                  "danish",
+	"dutch":                   "dutch",
+	"finnish":                 "finnish",
+	"greek":                   "greek",
+	"hungarian":               "hungarian",
+	"japanese":                "japanese",
+	"korean":                  "koreana",
+	"norwegian":               "norwegian",
+	"polish":                  "polish",
+	"portuguese":              "portuguese",
+	"portuguese - brazil":     "brazilian",
+	"portuguese - portugal":   "portuguese",
+	"russian":                 "russian",
+	"simplified chinese":      "schinese",
+	"traditional chinese":     "tchinese",
+	"swedish":                 "swedish",
+	"thai":                    "thai",
+	"turkish":                 "turkish",
+	"ukrainian":               "ukrainian",
+	"vietnamese":              "vietnamese",
+}
+
+// GetSupportedLanguageCodes parses Steam's HTML-formatted SupportedLanguages string into canonical Steam language identifiers.
+func (a *AppDetails) GetSupportedLanguageCodes() []string {
+	if a == nil || strings.TrimSpace(a.SupportedLanguages) == "" {
+		return []string{"english"}
+	}
+
+	clean := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(a.SupportedLanguages, "")
+	clean = strings.ReplaceAll(clean, "*", "")
+	clean = strings.Split(clean, "languages with full audio support")[0]
+
+	parts := strings.Split(clean, ",")
+	var result []string
+	seen := make(map[string]bool)
+
+	for _, p := range parts {
+		normalized := strings.ToLower(strings.TrimSpace(p))
+		if normalized == "" {
+			continue
+		}
+		code, ok := languageStringToCode[normalized]
+		if !ok {
+			code = normalized
+		}
+		if !seen[code] {
+			seen[code] = true
+			result = append(result, code)
+		}
+	}
+
+	if len(result) == 0 {
+		return []string{"english"}
+	}
+	return result
+}
+
 // FetchAppDetails fetches full app details for a given AppID using a tiered fallback strategy.
 // Tier 1: Query with explicit US region, English language, and mature content cookies (bypasses age-gate & NSFW blocks).
 // Tier 2: Fallback query without region/language parameters for geo-IP / region-exclusive store listings.
@@ -94,7 +192,7 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 		req.Header.Set("Cookie", "wants_mature_content=1; birthtime=0; lastagecheckage=1-January-1990")
 
-		resp, err := HTTPClient.Do(req)
+		resp, err := HTTPClientFromContext(ctx).Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app details: %w", err)
 		}
@@ -124,7 +222,7 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	var lastErr error
 
 	// Tier 1: Query with explicit US region, English language, and mature content cookies
-	primaryURL := fmt.Sprintf("%s/appdetails?appids=%s&cc=US&l=english", config.DefaultSteamStoreAPI, appID)
+	primaryURL := fmt.Sprintf("%s/appdetails?appids=%s&cc=US&l=english", DefaultSteamStoreAPI, appID)
 	details, err := doQuery(primaryURL)
 	if err == nil && details != nil && details.Name != "" {
 		return details, nil
@@ -134,7 +232,7 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	}
 
 	// Tier 2: Fallback query without region query parameters for region-exclusive store listings
-	fallbackURL := fmt.Sprintf("%s/appdetails?appids=%s", config.DefaultSteamStoreAPI, appID)
+	fallbackURL := fmt.Sprintf("%s/appdetails?appids=%s", DefaultSteamStoreAPI, appID)
 	details, err = doQuery(fallbackURL)
 	if err == nil && details != nil && details.Name != "" {
 		return details, nil
@@ -149,20 +247,34 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	return nil, fmt.Errorf("app details not found or unavailable for AppID %s across all store tiers", appID)
 }
 
-// FetchAppName gets the app name for a Steam AppID.
-// It wraps FetchAppDetails for backward compatibility.
+// FetchAppName gets the app name for a Steam AppID with offline cache fallback.
 func FetchAppName(ctx context.Context, appID string) (string, error) {
-	if name, ok := cache.GetAppName(appID); ok {
+	if name, ok := cache.GetAppName(appID); ok && name != "" {
 		return name, nil
 	}
 	details, err := FetchAppDetails(ctx, appID)
 	if err != nil {
+		if cachedName, ok := cache.GetAppName(appID); ok && cachedName != "" {
+			return cachedName, nil
+		}
 		return "", err
 	}
 	if details.Name != "" {
 		cache.SaveAppName(appID, details.Name)
 	}
 	return details.Name, nil
+}
+
+// FetchSupportedLanguages fetches canonical language codes supported by a Steam game.
+func FetchSupportedLanguages(ctx context.Context, appID string) ([]string, error) {
+	if appID == "" || appID == "0" {
+		return []string{"english"}, nil
+	}
+	details, err := FetchAppDetails(ctx, appID)
+	if err != nil {
+		return []string{"english"}, nil
+	}
+	return details.GetSupportedLanguageCodes(), nil
 }
 
 
@@ -184,13 +296,13 @@ func SearchAppID(ctx context.Context, query string) (string, string, error) {
 		return "", "", fmt.Errorf("search query cannot be empty")
 	}
 
-	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.DefaultSteamStoreAPI, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", DefaultSteamStoreAPI, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("create search request: %w", err)
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("fetch store search: %w", err)
 	}
@@ -225,13 +337,13 @@ func SearchAppIDCandidates(ctx context.Context, query string) ([]AppSearchResult
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
 
-	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", config.DefaultSteamStoreAPI, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/storesearch/?term=%s&l=english&cc=US", DefaultSteamStoreAPI, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create search request: %w", err)
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch store search: %w", err)
 	}
@@ -294,7 +406,7 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch DLCs: %w", err)
 	}
@@ -367,15 +479,8 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	return nil
 }
 
-// NewsItem represents a single patch note or news item from Steam Web API.
-type NewsItem struct {
-	Title     string `json:"title"`
-	URL       string `json:"url"`
-	Author    string `json:"author"`
-	Contents  string `json:"contents"`
-	FeedLabel string `json:"feed_label"`
-	Date      int64  `json:"date"`
-}
+// NewsItem aliases canonical domain.NewsItem.
+type NewsItem = domain.NewsItem
 
 // AppNewsResponse models Steam API ISteamNews/GetNewsForApp response.
 type AppNewsResponse struct {
@@ -412,16 +517,29 @@ func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem
 		return nil, fmt.Errorf("invalid appID")
 	}
 	if count <= 0 {
-		count = 3
+		count = 5
 	}
 
-	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d", config.DefaultSteamWebAPI, appID, count)
+	// 1. Check disk cache first to prevent rate limiting and provide instant loading
+	if cachedBytes, ok := cache.GetNewsItems(appID); ok {
+		var cachedItems []NewsItem
+		if err := json.Unmarshal(cachedBytes, &cachedItems); err == nil && len(cachedItems) > 0 {
+			if len(cachedItems) >= count {
+				return cachedItems[:count], nil
+			}
+			return cachedItems, nil
+		}
+	}
+
+	// 2. Fetch from Steam Web API
+	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d&maxlength=0", DefaultSteamWebAPI, appID, count)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, newsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create news request: %w", err)
 	}
+	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Steam Game Manager)")
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch app news: %w", err)
 	}
@@ -446,10 +564,15 @@ func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem
 			Title:     item.Title,
 			URL:       item.URL,
 			Author:    item.Author,
-			Contents:  StripHTML(item.Contents),
+			Contents:  item.Contents,
 			FeedLabel: item.FeedLabel,
 			Date:      item.Date,
 		})
+	}
+
+	// 3. Cache fetched items to disk
+	if itemsData, err := json.Marshal(items); err == nil {
+		cache.SaveNewsItems(appID, itemsData)
 	}
 
 	return items, nil

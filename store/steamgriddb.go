@@ -1,0 +1,318 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// SGDBProvider implements Provider for the SteamGridDB API v2.
+type SGDBProvider struct {
+	apiKey     string
+	httpClient *http.Client
+}
+
+// NewSGDBProvider creates a new SteamGridDB provider instance.
+func NewSGDBProvider(apiKey string) *SGDBProvider {
+	return &SGDBProvider{
+		apiKey:     strings.TrimSpace(apiKey),
+		httpClient: &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+// SetAPIKey dynamically updates the provider's API key.
+func (s *SGDBProvider) SetAPIKey(key string) {
+	s.apiKey = strings.TrimSpace(key)
+}
+
+// APIKey returns the current active API key.
+func (s *SGDBProvider) APIKey() string {
+	return s.apiKey
+}
+
+func (s *SGDBProvider) ID() string {
+	return "steamgriddb"
+}
+
+func (s *SGDBProvider) DisplayName() string {
+	return "SteamGridDB"
+}
+
+type sgdbSearchResponse struct {
+	Success bool `json:"success"`
+	Data    []struct {
+		ID          int    `json:"id"`
+		Name        string `json:"name"`
+		ReleaseDate int64  `json:"release_date,omitempty"`
+		Types       []string `json:"types,omitempty"`
+	} `json:"data"`
+}
+
+type sgdbImageData struct {
+	ID     int    `json:"id"`
+	URL    string `json:"url"`
+	Thumb  string `json:"thumb"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type sgdbImageResponse struct {
+	Success bool            `json:"success"`
+	Data    []sgdbImageData `json:"data"`
+}
+
+type sgdbGameResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		ID          int    `json:"id"`
+		Name        string `json:"name"`
+		ReleaseDate int64  `json:"release_date,omitempty"`
+	} `json:"data"`
+}
+
+func (s *SGDBProvider) doRequest(ctx context.Context, reqURL string, target any) error {
+	if s.apiKey == "" {
+		return fmt.Errorf("steamgriddb API key not configured")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Game Manager)")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("steamgriddb API returned HTTP %d", resp.StatusCode)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	return nil
+}
+
+// Search searches SteamGridDB for games matching a query string or AppID.
+func (s *SGDBProvider) Search(ctx context.Context, query string) ([]SearchResult, error) {
+	q := strings.TrimSpace(query)
+	if q == "" || s.apiKey == "" {
+		return nil, nil
+	}
+
+	// If numeric, look up directly by Steam AppID first
+	if numID, err := strconv.ParseUint(q, 10, 32); err == nil && numID > 0 {
+		if sgdbID, name, err := s.GetGameBySteamAppID(ctx, uint32(numID)); err == nil && sgdbID != "" {
+			return []SearchResult{
+				{
+					ID:    sgdbID,
+					Store: "steamgriddb",
+					Name:  name,
+				},
+			}, nil
+		}
+	}
+
+	reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/search/autocomplete/%s", url.PathEscape(q))
+	var res sgdbSearchResponse
+	if err := s.doRequest(ctx, reqURL, &res); err != nil {
+		return nil, err
+	}
+
+	if !res.Success || len(res.Data) == 0 {
+		return nil, nil
+	}
+
+	results := make([]SearchResult, 0, len(res.Data))
+	for _, item := range res.Data {
+		results = append(results, SearchResult{
+			ID:    strconv.Itoa(item.ID),
+			Store: "steamgriddb",
+			Name:  item.Name,
+		})
+	}
+
+	return results, nil
+}
+
+// GetGameBySteamAppID looks up a game on SteamGridDB directly by its Steam AppID.
+func (s *SGDBProvider) GetGameBySteamAppID(ctx context.Context, appID uint32) (string, string, error) {
+	if appID == 0 || s.apiKey == "" {
+		return "", "", fmt.Errorf("invalid appid or missing api key")
+	}
+
+	reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/games/steam/%d", appID)
+	var res sgdbGameResponse
+	if err := s.doRequest(ctx, reqURL, &res); err != nil {
+		return "", "", err
+	}
+
+	if !res.Success || res.Data.ID == 0 {
+		return "", "", fmt.Errorf("no game found for steam appid %d", appID)
+	}
+
+	return strconv.Itoa(res.Data.ID), res.Data.Name, nil
+}
+
+// GetMetadata retrieves game metadata from SteamGridDB by SGDB game ID or Steam AppID.
+func (s *SGDBProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata, error) {
+	art, _ := s.GetArtwork(ctx, gameID)
+	cover := ""
+	header := ""
+	if art != nil {
+		cover = art.CoverURL
+		header = art.BannerURL
+	}
+
+	return &Metadata{
+		ID:          gameID,
+		Store:       "steamgriddb",
+		HeaderImage: header,
+		PosterImage: cover,
+	}, nil
+}
+
+// GetArtwork fetches the highest rated grid (cover), hero, logo, and icon from SteamGridDB.
+func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork, error) {
+	if gameID == "" || s.apiKey == "" {
+		return nil, fmt.Errorf("missing game id or api key")
+	}
+
+	lookupType := "game"
+	if _, err := strconv.ParseUint(gameID, 10, 32); err == nil {
+		lookupType = "steam"
+	}
+
+	art := &Artwork{}
+
+	// 1. Fetch Vertical Cover Art (600x900)
+	gridURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/grids/%s/%s?dimensions=600x900", lookupType, gameID)
+	var gridRes sgdbImageResponse
+	if err := s.doRequest(ctx, gridURL, &gridRes); err == nil && gridRes.Success && len(gridRes.Data) > 0 {
+		art.CoverURL = gridRes.Data[0].URL
+	}
+
+	// 2. Fetch Hero Banner (1920x620 / standard)
+	heroURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/heroes/%s/%s", lookupType, gameID)
+	var heroRes sgdbImageResponse
+	if err := s.doRequest(ctx, heroURL, &heroRes); err == nil && heroRes.Success && len(heroRes.Data) > 0 {
+		art.HeroURL = heroRes.Data[0].URL
+		art.BannerURL = heroRes.Data[0].URL
+	}
+
+	// 3. Fetch Logo (transparent title PNG)
+	logoURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/logos/%s/%s", lookupType, gameID)
+	var logoRes sgdbImageResponse
+	if err := s.doRequest(ctx, logoURL, &logoRes); err == nil && logoRes.Success && len(logoRes.Data) > 0 {
+		art.LogoURL = logoRes.Data[0].URL
+	}
+
+	// 4. Fetch Icon
+	iconURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/icons/%s/%s", lookupType, gameID)
+	var iconRes sgdbImageResponse
+	if err := s.doRequest(ctx, iconURL, &iconRes); err == nil && iconRes.Success && len(iconRes.Data) > 0 {
+		art.IconURL = iconRes.Data[0].URL
+	}
+
+	return art, nil
+}
+
+func (s *SGDBProvider) parseImageOptions(items []sgdbImageData, assetType string) []ArtworkOption {
+	options := make([]ArtworkOption, 0, len(items))
+	for _, item := range items {
+		thumb := item.Thumb
+		if thumb == "" {
+			thumb = item.URL
+		}
+		options = append(options, ArtworkOption{
+			ID:       strconv.Itoa(item.ID),
+			Provider: "steamgriddb",
+			Type:     assetType,
+			URL:      item.URL,
+			ThumbURL: thumb,
+			Width:    item.Width,
+			Height:   item.Height,
+			Style:    "alternate",
+		})
+	}
+	return options
+}
+
+// QueryArtworkCandidates fetches a list of candidate assets using a typed ArtworkQuery.
+func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query ArtworkQuery) ([]ArtworkOption, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("missing steamgriddb api key")
+	}
+
+	endpoint := "grids"
+	dimQuery := "?dimensions=600x900"
+	switch query.AssetType {
+	case "cover":
+		endpoint = "grids"
+		dimQuery = "?dimensions=600x900"
+	case "banner", "hero":
+		endpoint = "heroes"
+		dimQuery = ""
+	case "logo":
+		endpoint = "logos"
+		dimQuery = ""
+	case "icon":
+		endpoint = "icons"
+		dimQuery = ""
+	default:
+		endpoint = "grids"
+		dimQuery = "?dimensions=600x900"
+	}
+
+	// 1. Direct Steam AppID query (1:1 direct endpoint)
+	if query.SteamAppID > 0 {
+		reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/%s/steam/%d%s", endpoint, query.SteamAppID, dimQuery)
+		var imgRes sgdbImageResponse
+		if err := s.doRequest(ctx, reqURL, &imgRes); err == nil && imgRes.Success && len(imgRes.Data) > 0 {
+			return s.parseImageOptions(imgRes.Data, query.AssetType), nil
+		}
+	}
+
+	// 2. Direct SGDB Game ID query
+	if query.SGDBID != "" {
+		reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/%s/game/%s%s", endpoint, query.SGDBID, dimQuery)
+		var imgRes sgdbImageResponse
+		if err := s.doRequest(ctx, reqURL, &imgRes); err == nil && imgRes.Success && len(imgRes.Data) > 0 {
+			return s.parseImageOptions(imgRes.Data, query.AssetType), nil
+		}
+	}
+
+	// 3. Fuzzy title search
+	if query.Title != "" {
+		results, err := s.Search(ctx, query.Title)
+		if err != nil || len(results) == 0 {
+			return nil, nil
+		}
+		var allOpts []ArtworkOption
+		for i, res := range results {
+			if i >= 2 {
+				break
+			}
+			reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/%s/game/%s%s", endpoint, res.ID, dimQuery)
+			var imgRes sgdbImageResponse
+			if err := s.doRequest(ctx, reqURL, &imgRes); err == nil && imgRes.Success && len(imgRes.Data) > 0 {
+				allOpts = append(allOpts, s.parseImageOptions(imgRes.Data, query.AssetType)...)
+			}
+		}
+		return allOpts, nil
+	}
+
+	return nil, nil
+}
+

@@ -3,9 +3,6 @@ package downloader
 import (
 	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/hex"
 	"io"
 	"net/http"
 	"os"
@@ -22,13 +19,6 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	restore()
 	os.Exit(code)
-}
-
-
-type mockRoundTripper func(req *http.Request) (*http.Response, error)
-
-func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
 }
 
 func TestDownloadOrUpdateGame_DryRun(t *testing.T) {
@@ -63,18 +53,15 @@ func TestDownloadOrUpdateGame_DryRun(t *testing.T) {
 }
 
 func TestDownloadOrUpdateGame_Execution(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString("chunk_data_content")),
-			Header:     make(http.Header),
-		}, nil
-	})
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString("chunk_data_content")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 
 	m := &manifest.Manifest{
 		AppID:   12345,
@@ -96,6 +83,7 @@ func TestDownloadOrUpdateGame_Execution(t *testing.T) {
 		AppID:       12345,
 		DryRun:      false,
 		WorkerLimit: 2,
+		HTTPClient:  mockClient,
 	}
 
 	res, err := DownloadOrUpdateGame(context.Background(), m, opts)
@@ -156,15 +144,10 @@ func TestLevel0ChunkDecompression(t *testing.T) {
 	defer resp.Body.Close()
 	rawChunkData, _ := io.ReadAll(resp.Body)
 
-	keyBytes, _ := hex.DecodeString("1d68c2af57678e17e48935daee51d4fa41f10d47b531e6129d1d890d0436f2a5")
-	block, _ := aes.NewCipher(keyBytes)
-	iv := make([]byte, 16)
-	block.Decrypt(iv, rawChunkData[:16])
-
-	ciphertext := rawChunkData[16:]
-	payloadData := make([]byte, len(ciphertext))
-	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(payloadData, ciphertext)
+	payloadData, err := manifest.DecryptChunkPayload(rawChunkData, "1d68c2af57678e17e48935daee51d4fa41f10d47b531e6129d1d890d0436f2a5")
+	if err != nil {
+		t.Fatalf("manifest.DecryptChunkPayload failed: %v", err)
+	}
 
 	decomp, err := decompressChunkData(payloadData, 12480)
 	if err != nil {
@@ -172,5 +155,34 @@ func TestLevel0ChunkDecompression(t *testing.T) {
 	}
 	if len(decomp) != 12480 {
 		t.Fatalf("expected decompressed length 12480, got %d", len(decomp))
+	}
+}
+
+func TestRankCDNEdges(t *testing.T) {
+	hosts := []string{"cache1.steamcontent.com", "cache2.steamcontent.com"}
+	ranked := rankCDNEdges(context.Background(), nil, hosts)
+	if len(ranked) != 2 {
+		t.Errorf("expected 2 ranked hosts, got %d", len(ranked))
+	}
+}
+
+func TestCheckpoint_AtomicSaveAndLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	cpPath := filepath.Join(tmpDir, ".gamux-checkpoint.json")
+
+	cp := loadCheckpoint(cpPath)
+	if cp.isCompleted("chunk_abc") {
+		t.Error("expected chunk_abc to not be completed")
+	}
+
+	cp.markCompleted(cpPath, "chunk_abc")
+	if !cp.isCompleted("chunk_abc") {
+		t.Error("expected chunk_abc to be completed in memory")
+	}
+
+	// Reload from disk to verify atomic save
+	reloaded := loadCheckpoint(cpPath)
+	if !reloaded.isCompleted("chunk_abc") {
+		t.Error("expected chunk_abc to be completed in reloaded checkpoint")
 	}
 }

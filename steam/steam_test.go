@@ -21,38 +21,30 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-type mockRoundTripper func(req *http.Request) (*http.Response, error)
 
-func (f mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
 
 
 func TestFetchAppName(t *testing.T) {
 	cache.DisableCache = true
 	defer func() { cache.DisableCache = false }()
 
-	// Backup and restore default transport
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
-
 	t.Run("successful response", func(t *testing.T) {
-		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-			if !strings.Contains(req.URL.Path, "appdetails") {
-				t.Errorf("unexpected URL path: %s", req.URL.Path)
-			}
-			jsonResp := `{"123": {"success": true, "data": {"name": "Super Tux Run"}}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
-				Header:     make(http.Header),
-			}, nil
-		})
+		mockClient := &http.Client{
+			Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.Path, "appdetails") {
+					t.Errorf("unexpected URL path: %s", req.URL.Path)
+				}
+				jsonResp := `{"123": {"success": true, "data": {"name": "Super Tux Run"}}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		}
 
-		name, err := FetchAppName(context.Background(), "123")
+		ctx := WithHTTPClient(context.Background(), mockClient)
+		name, err := FetchAppName(ctx, "123")
 		if err != nil {
 			t.Fatalf("FetchAppName failed: %v", err)
 		}
@@ -62,15 +54,18 @@ func TestFetchAppName(t *testing.T) {
 	})
 
 	t.Run("rate limit HTTP 429", func(t *testing.T) {
-		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusTooManyRequests,
-				Body:       io.NopCloser(bytes.NewBufferString("Too Many Requests")),
-				Header:     make(http.Header),
-			}, nil
-		})
+		mockClient := &http.Client{
+			Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Body:       io.NopCloser(bytes.NewBufferString("Too Many Requests")),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		}
 
-		_, err := FetchAppName(context.Background(), "123")
+		ctx := WithHTTPClient(context.Background(), mockClient)
+		_, err := FetchAppName(ctx, "123")
 		if err == nil {
 			t.Fatal("expected error due to HTTP 429, got nil")
 		}
@@ -80,16 +75,19 @@ func TestFetchAppName(t *testing.T) {
 	})
 
 	t.Run("release_date as object", func(t *testing.T) {
-		HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-			jsonResp := `{"3711820": {"success": true, "data": {"name": "Blue Prince DLC", "release_date": {"coming_soon": false, "date": "1 Aug, 2026"}}}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
-				Header:     make(http.Header),
-			}, nil
-		})
+		mockClient := &http.Client{
+			Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				jsonResp := `{"3711820": {"success": true, "data": {"name": "Blue Prince DLC", "release_date": {"coming_soon": false, "date": "1 Aug, 2026"}}}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		}
 
-		name, err := FetchAppName(context.Background(), "3711820")
+		ctx := WithHTTPClient(context.Background(), mockClient)
+		name, err := FetchAppName(ctx, "3711820")
 		if err != nil {
 			t.Fatalf("FetchAppName failed: %v", err)
 		}
@@ -100,47 +98,45 @@ func TestFetchAppName(t *testing.T) {
 }
 
 func TestFetchDLCs(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
 	tmpDir, err := os.MkdirTemp("", "testfetchdlcs")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Path, "ajaxgetfilteredrecommendations") {
-			htmlResp := `{"results_html": "<div data-ds-appid=\"456\"></div><div data-ds-appid=\"789\"></div>"}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(htmlResp)),
-				Header:     make(http.Header),
-			}, nil
-		}
-		if strings.Contains(req.URL.Path, "appdetails") {
-			jsonResp := `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}, "789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
-			if strings.Contains(req.URL.RawQuery, "appids=456") {
-				jsonResp = `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}}`
-			} else if strings.Contains(req.URL.RawQuery, "appids=789") {
-				jsonResp = `{"789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "ajaxgetfilteredrecommendations") {
+				htmlResp := `{"results_html": "<div data-ds-appid=\"456\"></div><div data-ds-appid=\"789\"></div>"}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(htmlResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			if strings.Contains(req.URL.Path, "appdetails") {
+				jsonResp := `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}, "789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
+				if strings.Contains(req.URL.RawQuery, "appids=456") {
+					jsonResp = `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}}`
+				} else if strings.Contains(req.URL.RawQuery, "appids=789") {
+					jsonResp = `{"789": {"success": true, "data": {"name": "DLC Expansion Pack 2"}}}`
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
 			}
 			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
 				Header:     make(http.Header),
 			}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusNotFound,
-			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
-			Header:     make(http.Header),
-		}, nil
-	})
+		}),
+	}
 
-	err = FetchDLCs(context.Background(), "123", tmpDir, false)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err = FetchDLCs(ctx, "123", tmpDir, false)
 	if err != nil {
 		t.Fatalf("FetchDLCs failed: %v", err)
 	}
@@ -174,33 +170,31 @@ func TestFetchDLCs(t *testing.T) {
 }
 
 func TestDownloadAchievementImages(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
 	tmpDir, err := os.MkdirTemp("", "testachievements")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Path, "ach1.png") {
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "ach1.png") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString("fake image data")),
+					Header:     make(http.Header),
+				}, nil
+			}
 			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString("fake image data")),
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
 				Header:     make(http.Header),
 			}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusNotFound,
-			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
-			Header:     make(http.Header),
-		}, nil
-	})
+		}),
+	}
 
-	err = DownloadAchievementImages(context.Background(), 123, []string{"ach1.png", "ach2.png"}, tmpDir)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err = DownloadAchievementImages(ctx, 123, []string{"ach1.png", "ach2.png"}, tmpDir)
 	if err != nil {
 		t.Fatalf("DownloadAchievementImages failed: %v", err)
 	}
@@ -222,24 +216,22 @@ func TestDownloadAchievementImages(t *testing.T) {
 }
 
 func TestSearchAppID(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "storesearch") {
+				jsonResp := `{"total": 1, "items": [{"id": 2088570, "name": "Tiny Rogues"}]}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return nil, nil
+		}),
+	}
 
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Path, "storesearch") {
-			jsonResp := `{"total": 1, "items": [{"id": 2088570, "name": "Tiny Rogues"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
-				Header:     make(http.Header),
-			}, nil
-		}
-		return nil, nil
-	})
-
-	appID, name, err := SearchAppID(context.Background(), "Tiny Rogues")
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	appID, name, err := SearchAppID(ctx, "Tiny Rogues")
 	if err != nil {
 		t.Fatalf("SearchAppID failed: %v", err)
 	}
@@ -252,43 +244,41 @@ func TestSearchAppID(t *testing.T) {
 }
 
 func TestFetchAchievementSchema(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Path, "GetSchemaForGame") {
-			jsonResp := `{
-				"game": {
-					"availableGameStats": {
-						"achievements": [
-							{
-								"name": "ACH_KILL_10",
-								"displayName": "Slayer",
-								"description": "Kill 10 enemies",
-								"hidden": 0,
-								"icon": "https://cdn.steam.com/img/icon_slayer.png",
-								"icongray": "https://cdn.steam.com/img/icon_slayer_gray.png"
-							}
-						]
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "GetSchemaForGame") {
+				jsonResp := `{
+					"game": {
+						"availableGameStats": {
+							"achievements": [
+								{
+									"name": "ACH_KILL_10",
+									"displayName": "Slayer",
+									"description": "Kill 10 enemies",
+									"hidden": 0,
+									"icon": "https://cdn.steam.com/img/icon_slayer.png",
+									"icongray": "https://cdn.steam.com/img/icon_slayer_gray.png"
+								}
+							]
+						}
 					}
-				}
-			}`
+				}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
 			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
 				Header:     make(http.Header),
 			}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusNotFound,
-			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
-			Header:     make(http.Header),
-		}, nil
-	})
+		}),
+	}
 
-	achs, err := FetchAchievementSchema(context.Background(), 12345, "MOCKKEY", "english")
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	achs, err := FetchAchievementSchema(ctx, 12345, "MOCKKEY", "english")
 	if err != nil {
 		t.Fatalf("FetchAchievementSchema failed: %v", err)
 	}
@@ -323,41 +313,39 @@ func TestExtractWorkshopID(t *testing.T) {
 }
 
 func TestFetchWorkshopItemDetails(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		if strings.Contains(req.URL.Path, "GetPublishedFileDetails") {
-			jsonResp := `{
-				"response": {
-					"resultcount": 1,
-					"publishedfiledetails": [
-						{
-							"publishedfileid": "315783921",
-							"result": 1,
-							"title": "Awesome Mod",
-							"hcontent_file": "1234567890",
-							"consumer_app_id": 2088570
-						}
-					]
-				}
-			}`
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "GetPublishedFileDetails") {
+				jsonResp := `{
+					"response": {
+						"resultcount": 1,
+						"publishedfiledetails": [
+							{
+								"publishedfileid": "315783921",
+								"result": 1,
+								"title": "Awesome Mod",
+								"hcontent_file": "1234567890",
+								"consumer_app_id": 2088570
+							}
+						]
+					}
+				}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
 			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
 				Header:     make(http.Header),
 			}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusNotFound,
-			Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
-			Header:     make(http.Header),
-		}, nil
-	})
+		}),
+	}
 
-	details, err := FetchWorkshopItemDetails(context.Background(), 315783921)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	details, err := FetchWorkshopItemDetails(ctx, 315783921)
 	if err != nil {
 		t.Fatalf("FetchWorkshopItemDetails failed: %v", err)
 	}
@@ -367,5 +355,31 @@ func TestFetchWorkshopItemDetails(t *testing.T) {
 	}
 	if details.HContentFile != "1234567890" {
 		t.Errorf("expected hcontent_file '1234567890', got %s", details.HContentFile)
+	}
+}
+
+func TestGetSupportedLanguageCodes(t *testing.T) {
+	details := &AppDetails{
+		SupportedLanguages: "English<strong>*</strong>, French<strong>*</strong>, German<strong>*</strong>, Spanish - Spain<strong>*</strong>, Japanese<strong>*</strong>, Simplified Chinese<strong>*</strong><br><strong>*</strong>languages with full audio support",
+	}
+
+	codes := details.GetSupportedLanguageCodes()
+	expected := []string{"english", "french", "german", "spanish", "japanese", "schinese"}
+
+	if len(codes) != len(expected) {
+		t.Fatalf("expected %d codes, got %d: %v", len(expected), len(codes), codes)
+	}
+
+	for i, exp := range expected {
+		if codes[i] != exp {
+			t.Errorf("at index %d expected %s, got %s", i, exp, codes[i])
+		}
+	}
+
+	// Empty fallback
+	emptyDetails := &AppDetails{}
+	emptyCodes := emptyDetails.GetSupportedLanguageCodes()
+	if len(emptyCodes) != 1 || emptyCodes[0] != "english" {
+		t.Errorf("expected ['english'] for empty details, got %v", emptyCodes)
 	}
 }

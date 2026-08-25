@@ -22,10 +22,12 @@ func commonSetupFlags() []cli.Flag {
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts (non-interactive mode)"},
 		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder"},
 		&cli.BoolFlag{Name: "loader", Usage: "Perform loader mode setup without modifying game DLLs"},
+		&cli.BoolFlag{Name: "no-gbe", Usage: "Disable Goldberg Emulator patching"},
 		&cli.BoolFlag{Name: "normalize", Value: true, Usage: "Normalize directory name to match Steam's official 1:1 installdir"},
 		&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be done without writing"},
 		&cli.BoolFlag{Name: "no-steamless", Usage: "Disable automatic Steamless SteamStub DRM executable unpacking"},
 		&cli.BoolFlag{Name: "achievements", Usage: "Generate GBE achievements.json schema & download icon assets"},
+		&cli.StringFlag{Name: "lang", Aliases: []string{"language"}, Usage: "Force Goldberg emulator language (e.g. english, german, french, spanish, japanese, schinese)"},
 		&cli.StringFlag{Name: "exe", Usage: "Specify game executable path or launch option index (e.g. --exe 1 or --exe bin/game_vk.exe)"},
 	}
 }
@@ -40,6 +42,14 @@ func commonDownloadFlags() []cli.Flag {
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Non-interactive mode (use defaults without prompting)"},
 		&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be downloaded without writing files"},
 		&cli.BoolFlag{Name: "setup", Usage: "Automatically run post-download GBE & Lutris setup after downloading"},
+		&cli.BoolFlag{Name: "lutris", Usage: "Enable Lutris library registration during post-download setup"},
+		&cli.BoolFlag{Name: "no-lutris", Usage: "Disable Lutris library registration during post-download setup"},
+		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder during setup"},
+		&cli.BoolFlag{Name: "loader", Usage: "Perform loader mode setup without modifying game DLLs during setup"},
+		&cli.BoolFlag{Name: "no-gbe", Usage: "Disable Goldberg Emulator patching during post-download setup"},
+		&cli.BoolFlag{Name: "no-steamless", Usage: "Disable Steamless SteamStub DRM unpacking during setup"},
+		&cli.BoolFlag{Name: "achievements", Usage: "Generate GBE achievements schema during setup"},
+		&cli.StringFlag{Name: "lang", Aliases: []string{"language"}, Usage: "Force Goldberg emulator language during post-download setup"},
 	}
 }
 
@@ -138,7 +148,7 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	}
 
 	// 2. Lutris Integration Resolution
-	addLutris := cfg.Lutris
+	addLutris := cfg.OperatingMode == "lutris" || cfg.Lutris
 	if c.IsSet("no-lutris") {
 		addLutris = false
 	} else if c.IsSet("lutris") {
@@ -161,7 +171,7 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 		fetchAchievements = c.Bool("achievements")
 	}
 
-	runner := cfg.Runner
+	runner := cfg.DefaultRunner
 	if c.IsSet("runner") && c.String("runner") != "" {
 		runner = c.String("runner")
 	}
@@ -169,6 +179,11 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	winePrefix := cfg.WinePrefix
 	if c.IsSet("wine-prefix") && c.String("wine-prefix") != "" {
 		winePrefix = c.String("wine-prefix")
+	}
+
+	lang := cfg.Language
+	if c.IsSet("lang") {
+		lang = c.String("lang")
 	}
 
 	path := ""
@@ -189,6 +204,7 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 		AutoYes:           autoYes,
 		NoSteamless:       noSteamless,
 		FetchAchievements: fetchAchievements,
+		Language:          lang,
 		ExePath:           exeFlag,
 	}
 }

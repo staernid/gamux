@@ -42,3 +42,10 @@ func NewMockHTTPClient(stubs map[string]MockResponse) *http.Client {
 		Transport: &MockRoundTripper{Stubs: stubs},
 	}
 }
+
+// RoundTripFunc allows using a function directly as an http.RoundTripper.
+type RoundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}

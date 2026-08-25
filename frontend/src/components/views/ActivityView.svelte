@@ -1,20 +1,25 @@
 <script>
-  import { taskQueue } from '../../stores/queue.js';
+  import { tasksStore } from '../../stores/tasks.js';
   import { notificationStore } from '../../stores/notifications.js';
-  import { formatTimeAgo } from '../../utils/format.js';
+  import { formatTimeAgo, formatBytes } from '../../utils/format.js';
 
-  const activeTask = taskQueue.activeTask;
-  const queue = taskQueue.queue;
-  const totalTasks = taskQueue.totalCount;
+  const activeTasks = tasksStore.active;
+  const queue = tasksStore.queued;
+  const totalTasks = tasksStore.activeCount;
 
   const items = notificationStore.items;
 
   function handleClearActivity() {
     notificationStore.items.clearAll();
+    tasksStore.clearFinished();
   }
 
   function markAllRead() {
     notificationStore.items.markAllRead();
+  }
+
+  function handleCancelTask(id) {
+    tasksStore.cancel(id);
   }
 </script>
 
@@ -54,33 +59,57 @@
   </div>
 
   <div class="space-y-4">
-    <!-- Active In-Progress Task -->
-    {#if $activeTask}
-      <div class="bg-[#161622] border border-[#2e2e42] p-5 rounded-2xl space-y-3 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-2.5 min-w-0">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
-            <strong class="font-bold text-white truncate text-sm sm:text-base">{$activeTask.title}</strong>
-            {#if $activeTask.gameName}
-              <span class="text-[11px] font-mono bg-black/40 text-slate-300 px-2 py-0.5 rounded">
-                {$activeTask.gameName}
-              </span>
-            {/if}
+    <!-- Active In-Progress Tasks (Renders ALL concurrent active tasks/downloads) -->
+    {#if $activeTasks.length > 0}
+      <div class="space-y-3">
+        {#each $activeTasks as task (task.id)}
+          <div class="bg-[#161622] border border-[#2e2e42] p-5 rounded-2xl space-y-3 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2.5 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
+                <strong class="font-bold text-white truncate text-sm sm:text-base">{task.title}</strong>
+                {#if task.gameName || task.game_name}
+                  <span class="text-[11px] font-mono bg-black/40 text-slate-300 px-2 py-0.5 rounded">
+                    {task.gameName || task.game_name}
+                  </span>
+                {/if}
+              </div>
+              <div class="flex items-center space-x-3">
+                <span class="font-mono font-black text-emerald-400 text-sm sm:text-base">{Math.round(task.percent || 0)}%</span>
+                {#if task.id}
+                  <button
+                    type="button"
+                    on:click={() => handleCancelTask(task.id)}
+                    class="text-[11px] font-mono text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 px-2 py-0.5 rounded transition-colors"
+                    title="Cancel Task"
+                  >
+                    Cancel
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <div class="w-full bg-black/60 h-2 rounded-full overflow-hidden">
+              <div
+                class="bg-emerald-400 h-full transition-all duration-150"
+                style="width: {task.percent || 0}%"
+              ></div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs font-mono text-slate-400 pt-0.5">
+              <span class="truncate max-w-[280px]">{task.stage || 'In Progress'}</span>
+              <div class="flex items-center space-x-2 text-slate-500">
+                {#if task.speed_bps || task.bytesPerSec}
+                  <span class="text-sky-400">{formatBytes(task.speed_bps || task.bytesPerSec)}/s</span>
+                {/if}
+                {#if task.eta_seconds || task.etaSeconds}
+                  <span>ETA: {task.eta_seconds || task.etaSeconds}s</span>
+                {/if}
+                <span class="truncate max-w-[180px]">{task.details || ''}</span>
+              </div>
+            </div>
           </div>
-          <span class="font-mono font-black text-emerald-400 text-sm sm:text-base">{$activeTask.percent}%</span>
-        </div>
-
-        <div class="w-full bg-black/60 h-2 rounded-full overflow-hidden">
-          <div
-            class="bg-emerald-400 h-full transition-all duration-150"
-            style="width: {$activeTask.percent}%"
-          ></div>
-        </div>
-
-        <div class="flex items-center justify-between text-xs font-mono text-slate-400 pt-0.5">
-          <span class="truncate max-w-[280px]">{$activeTask.stepText}</span>
-          <span class="truncate text-slate-500 max-w-[200px]">{$activeTask.details}</span>
-        </div>
+        {/each}
       </div>
     {/if}
 
@@ -102,7 +131,18 @@
                   </span>
                 {/if}
               </div>
-              <span class="text-slate-500 font-mono">Waiting</span>
+              <div class="flex items-center space-x-2">
+                <span class="text-slate-500 font-mono">Waiting</span>
+                {#if t.id}
+                  <button
+                    type="button"
+                    on:click={() => handleCancelTask(t.id)}
+                    class="text-[10px] text-slate-400 hover:text-rose-400 font-mono"
+                  >
+                    ✕
+                  </button>
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -147,7 +187,7 @@
     {/if}
 
     <!-- Empty State -->
-    {#if !$activeTask && $queue.length === 0 && $items.length === 0}
+    {#if $activeTasks.length === 0 && $queue.length === 0 && $items.length === 0}
       <div class="p-12 text-center text-slate-500 space-y-1 font-mono text-xs">
         <p class="font-bold text-slate-400">No active tasks or notifications</p>
         <p class="text-[11px] text-slate-600">Downloads, applies, and alerts will appear in this unified stream.</p>

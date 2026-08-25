@@ -1,6 +1,7 @@
 package github
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,8 +20,40 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// HTTPClient is the http.Client used for GitHub API operations, allowing mock overrides in tests.
-var HTTPClient = &http.Client{Timeout: 30 * time.Second}
+// DefaultHTTPClient is the default http.Client used for GitHub API operations.
+var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+// HTTPClient allows injecting custom HTTP clients for testing.
+var HTTPClient = DefaultHTTPClient
+
+type contextKey string
+
+const httpClientKey contextKey = "github_http_client"
+
+// WithHTTPClient returns a new context with the provided http.Client attached.
+func WithHTTPClient(ctx context.Context, client *http.Client) context.Context {
+	if client == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, httpClientKey, client)
+}
+
+// HTTPClientFromContext extracts the http.Client from context or returns DefaultHTTPClient.
+func HTTPClientFromContext(ctx context.Context) *http.Client {
+	if ctx != nil {
+		if client, ok := ctx.Value(httpClientKey).(*http.Client); ok && client != nil {
+			return client
+		}
+	}
+	return DefaultHTTPClient
+}
+
+// Default GitHub release endpoints
+const (
+	DefaultGithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
+	DefaultSteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
+	DefaultUMUGithubAPI       = "https://api.github.com/repos/Open-Wine-Components/umu-launcher/releases/latest"
+)
 
 // ToolInfo holds version, release metadata, and changelog notes for external tools.
 type ToolInfo struct {
@@ -44,11 +77,11 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 	gbeHome := util.ExpandPath(cfg.GbeDir)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.GithubAPIURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultGithubAPIURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch GBE release: %w", err)
 	}
@@ -58,7 +91,7 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		return nil, fmt.Errorf("GBE release HTTP %s", resp.Status)
 	}
 
-	var release config.Release
+	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return nil, fmt.Errorf("decode GBE release JSON: %w", err)
 	}
@@ -68,14 +101,18 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 	if _, err := os.Stat(timestampFile); err == nil {
 		if timestamp, err := os.ReadFile(timestampFile); err == nil {
 			tsStr := strings.TrimSpace(string(timestamp))
-			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
-				hasUpdate = false
-				installedTag = release.TagName
-				if installedTag == "" {
-					installedTag = "Up to Date"
+			if tsStr != "" {
+				if tsStr == release.TagName || tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.PublishedAt.Format(time.RFC3339) {
+					hasUpdate = false
+					installedTag = release.TagName
+					if installedTag == "" {
+						installedTag = "Up to Date"
+					}
+				} else if t, err := time.Parse(time.RFC3339, tsStr); err == nil {
+					installedTag = t.Format("Jan 02, 2006")
+				} else {
+					installedTag = tsStr
 				}
-			} else if tsStr != "" {
-				installedTag = tsStr
 			}
 		}
 	}
@@ -109,11 +146,11 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 	steamlessHome := util.ExpandPath(cfg.SteamlessDir)
 	timestampFile := filepath.Join(steamlessHome, ".steamless_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.SteamlessGithubAPI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultSteamlessGithubAPI, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch steamless release: %w", err)
 	}
@@ -123,7 +160,7 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 		return nil, fmt.Errorf("steamless release HTTP %s", resp.Status)
 	}
 
-	var release config.Release
+	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return nil, fmt.Errorf("decode steamless release JSON: %w", err)
 	}
@@ -168,15 +205,83 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 	}, nil
 }
 
-// GetToolsStatus returns release and update status for both GBE and steamless.
+// FetchUMURelease fetches the latest release metadata and release notes for umu-launcher.
+func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error) {
+	home, _ := os.UserHomeDir()
+	umuHome := filepath.Join(home, ".local", "share", "umu")
+	timestampFile := filepath.Join(umuHome, ".umu_timestamp")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultUMUGithubAPI, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch umu release: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("umu release HTTP %s", resp.Status)
+	}
+
+	var release Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("decode umu release JSON: %w", err)
+	}
+
+	installedTag := "(not installed)"
+	hasUpdate := true
+	if _, err := os.Stat(timestampFile); err == nil {
+		if timestamp, err := os.ReadFile(timestampFile); err == nil {
+			tsStr := strings.TrimSpace(string(timestamp))
+			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
+				hasUpdate = false
+				installedTag = release.TagName
+				if installedTag == "" {
+					installedTag = "Up to Date"
+				}
+			} else if tsStr != "" {
+				installedTag = tsStr
+			}
+		}
+	} else if fi, err := os.Stat(filepath.Join(umuHome, "umu-run")); err == nil && fi.Size() > 0 {
+		installedTag = "Installed"
+		hasUpdate = false
+	} else if lutrisUMU := filepath.Join(home, ".local", "share", "lutris", "runtime", "umu", "umu-run"); util.FileExists(lutrisUMU) {
+		installedTag = "Installed (Lutris Runtime)"
+		hasUpdate = false
+	}
+
+	pubDate := ""
+	if !release.PublishedAt.IsZero() {
+		pubDate = release.PublishedAt.Format("Jan 02, 2006")
+	} else if !release.UpdatedAt.IsZero() {
+		pubDate = release.UpdatedAt.Format("Jan 02, 2006")
+	}
+
+	return &ToolInfo{
+		Name:          "umu-launcher",
+		Key:           "umu",
+		InstalledPath: umuHome,
+		InstalledTag:  installedTag,
+		LatestTag:     release.TagName,
+		ReleaseName:   release.Name,
+		ReleaseNotes:  release.Body,
+		ReleaseURL:    release.HTMLURL,
+		PublishedAt:   pubDate,
+		HasUpdate:     hasUpdate,
+	}, nil
+}
+
+// GetToolsStatus returns release and update status for GBE, steamless, and umu-launcher.
 func GetToolsStatus(ctx context.Context, cfg *config.Config) ([]ToolInfo, error) {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
 
-	var gbeInfo *ToolInfo
-	var steamlessInfo *ToolInfo
-	var gbeErr, steamlessErr error
+	var gbeInfo, steamlessInfo, umuInfo *ToolInfo
+	var gbeErr, steamlessErr, umuErr error
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -185,6 +290,10 @@ func GetToolsStatus(ctx context.Context, cfg *config.Config) ([]ToolInfo, error)
 	})
 	g.Go(func() error {
 		steamlessInfo, steamlessErr = FetchSteamlessRelease(gCtx, cfg)
+		return nil
+	})
+	g.Go(func() error {
+		umuInfo, umuErr = FetchUMURelease(gCtx, cfg)
 		return nil
 	})
 	_ = g.Wait()
@@ -214,6 +323,19 @@ func GetToolsStatus(ctx context.Context, cfg *config.Config) ([]ToolInfo, error)
 		})
 	}
 
+	if umuErr == nil && umuInfo != nil {
+		list = append(list, *umuInfo)
+	} else {
+		home, _ := os.UserHomeDir()
+		list = append(list, ToolInfo{
+			Name:          "umu-launcher",
+			Key:           "umu",
+			InstalledPath: filepath.Join(home, ".local", "share", "umu"),
+			InstalledTag:  "Installed",
+			ReleaseNotes:  "Could not fetch latest release notes from GitHub.",
+		})
+	}
+
 	return list, nil
 }
 
@@ -226,11 +348,11 @@ func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 	gbeHome := util.ExpandPath(cfg.GbeDir)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.GithubAPIURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultGithubAPIURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release information: %w", err)
 	}
@@ -240,16 +362,24 @@ func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to fetch release information: HTTP %s", resp.Status)
 	}
 
-	var release config.Release
+	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return fmt.Errorf("failed to decode JSON: %w", err)
 	}
 
+	tagValue := release.TagName
+	if tagValue == "" {
+		tagValue = release.UpdatedAt.Format(time.RFC3339)
+	}
+
 	if _, err := os.Stat(timestampFile); err == nil {
 		timestamp, err := os.ReadFile(timestampFile)
-		if err == nil && strings.TrimSpace(string(timestamp)) == release.UpdatedAt.Format(time.RFC3339) {
-			slog.Info("GBE fork is already up-to-date")
-			return nil
+		if err == nil {
+			ts := strings.TrimSpace(string(timestamp))
+			if ts == tagValue || ts == release.UpdatedAt.Format(time.RFC3339) || ts == release.PublishedAt.Format(time.RFC3339) {
+				slog.Info("GBE fork is already up-to-date")
+				return nil
+			}
 		}
 	}
 	// Render release notes with glamour if available
@@ -310,7 +440,7 @@ func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	if err := os.WriteFile(timestampFile, []byte(release.UpdatedAt.Format(time.RFC3339)), 0644); err != nil {
+	if err := os.WriteFile(timestampFile, []byte(tagValue), 0644); err != nil {
 		return fmt.Errorf("failed to write timestamp file: %w", err)
 	}
 
@@ -325,11 +455,11 @@ func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir stri
 	}
 	slog.Info("Fetching latest Steamless release assets from GitHub")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.SteamlessGithubAPI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultSteamlessGithubAPI, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch steamless release information: %w", err)
 	}
@@ -339,7 +469,7 @@ func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir stri
 		return fmt.Errorf("failed to fetch steamless release info: HTTP %s", resp.Status)
 	}
 
-	var release config.Release
+	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return fmt.Errorf("failed to decode release JSON: %w", err)
 	}
@@ -360,7 +490,7 @@ func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir stri
 			if err != nil {
 				return err
 			}
-			resp, err := HTTPClient.Do(req)
+			resp, err := HTTPClientFromContext(gCtx).Do(req)
 			if err != nil {
 				return err
 			}
@@ -389,5 +519,147 @@ func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir stri
 	_ = os.WriteFile(timestampFile, []byte(release.UpdatedAt.Format(time.RFC3339)), 0644)
 
 	slog.Info("Steamless release assets updated successfully in", "dir", destDir)
+	return nil
+}
+
+// UpdateUMU downloads the latest standalone umu-run executable asset into ~/.local/share/umu/umu-run.
+func UpdateUMU(ctx context.Context, cfg *config.Config) error {
+	home, _ := os.UserHomeDir()
+	destDir := filepath.Join(home, ".local", "share", "umu")
+	return UpdateUMUAssets(ctx, cfg, destDir)
+}
+
+// UpdateUMUAssets fetches the latest umu-run release asset and saves it to destDir.
+func UpdateUMUAssets(ctx context.Context, cfg *config.Config, destDir string) error {
+	slog.Info("Fetching latest umu-launcher release assets from GitHub")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultUMUGithubAPI, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to fetch umu release information: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch umu release info: HTTP %s", resp.Status)
+	}
+
+	var release Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return fmt.Errorf("failed to decode release JSON: %w", err)
+	}
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target directory %s: %w", destDir, err)
+	}
+
+	var umuAsset *ReleaseAsset
+	for _, asset := range release.Assets {
+		if asset.Name == "umu-run" || asset.Name == "umu_run" || asset.Name == "umu-run.zip" || strings.HasPrefix(asset.Name, "umu-run") {
+			a := asset
+			umuAsset = &a
+			break
+		}
+	}
+
+	if umuAsset == nil && len(release.Assets) > 0 {
+		umuAsset = &release.Assets[0]
+	}
+
+	if umuAsset == nil {
+		return fmt.Errorf("no suitable umu-run asset found in latest GitHub release")
+	}
+
+	destPath := filepath.Join(destDir, "umu-run")
+	slog.Info("Downloading umu-run release asset", "asset", umuAsset.Name, "url", umuAsset.BrowserDownloadURL)
+
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, umuAsset.BrowserDownloadURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err = HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download asset %s: HTTP %s", umuAsset.Name, resp.Status)
+	}
+
+	if strings.HasSuffix(umuAsset.Name, ".zip") && umuAsset.Name != "umu-run" {
+		tmpFile, err := os.CreateTemp("", "umu-*.zip")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(tmpFile.Name())
+		defer tmpFile.Close()
+
+		if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+			return err
+		}
+		if err := extractZipArchive(tmpFile.Name(), destDir); err != nil {
+			return fmt.Errorf("failed extracting umu-run zip: %w", err)
+		}
+	} else {
+		out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, resp.Body); err != nil {
+			return err
+		}
+	}
+
+	_ = os.Chmod(destPath, 0755)
+
+	timestampFile := filepath.Join(destDir, ".umu_timestamp")
+	tag := release.TagName
+	if tag == "" {
+		tag = release.UpdatedAt.Format(time.RFC3339)
+	}
+	_ = os.WriteFile(timestampFile, []byte(tag), 0644)
+
+	slog.Info("umu-launcher asset updated successfully in", "dir", destDir)
+	return nil
+}
+
+func extractZipArchive(zipPath, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		targetPath := filepath.Join(destDir, f.Name)
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(targetPath, f.Mode())
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return err
+		}
+		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+		_, copyErr := io.Copy(outFile, rc)
+		rc.Close()
+		outFile.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+	}
 	return nil
 }

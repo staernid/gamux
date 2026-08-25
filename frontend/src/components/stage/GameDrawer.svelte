@@ -1,58 +1,172 @@
 <script>
-  import { selectedGame, showInspector, queueApplyGame } from '../../stores/library.js';
-  import { taskQueue } from '../../stores/queue.js';
+  import { onMount } from 'svelte';
+  import { selectedGame, showInspector, games, saveGameProfile, resetGameProfile, rollbackGame, refreshGame, renameGameInStore, scanLibrary } from '../../stores/library.js';
+  import { tasksStore } from '../../stores/tasks.js';
+  import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
-  import { formatNewsHTML } from '../../utils/format.js';
   import { isSteamApp } from '../../utils/game.js';
   import { AppAPI } from '../../api/app.js';
 
-  let activeTab = 'config'; // 'config' | 'integrity' | 'news'
+  import DrawerHeader from './drawer/DrawerHeader.svelte';
+  import DrawerTabs from './drawer/DrawerTabs.svelte';
+  import DrawerGeneralTab from './drawer/DrawerGeneralTab.svelte';
+  import DrawerIntegrationsTab from './drawer/DrawerIntegrationsTab.svelte';
+  import DrawerEmuTab from './drawer/DrawerEmuTab.svelte';
+  import DrawerIntegrityTab from './drawer/DrawerIntegrityTab.svelte';
+  import DrawerNewsTab from './drawer/DrawerNewsTab.svelte';
+  import DrawerFooter from './drawer/DrawerFooter.svelte';
+
+  let activeTab = 'general'; // 'general' | 'integrations' | 'emu' | 'integrity' | 'news'
   let integrityReport = null;
+  let integrityError = '';
   let isCheckingIntegrity = false;
   let newsItems = [];
   let isLoadingNews = false;
-  let expandedNewsIndex = 0; // First patch note expanded by default
+  let expandedNewsIndex = 0;
+  let loadedNewsAppID = '';
+  let newsError = '';
+  let globalCfg = {};
 
   // Local form state
   let customExe = '';
   let customArgs = '';
   let customAppID = '';
-  let customMode = 'loader';
+  let customMode = '';
+  let customLanguage = '';
   let customWinePrefix = '';
-  let optAddLutris = true;
+  let customOperatingMode = '';
+  let customRunner = '';
+  let customMangoHud = null; // null = inherit global, true = force on, false = force off
+  let customFSR = null;
+  let customNVAPI = null;
+  let customDXVKHud = '';
+  let customEnvMap = {};
   let optNormalize = true;
   let optSteamless = true;
   let optAchievements = true;
 
-  $: candidates = ($selectedGame?.launch_candidates || $selectedGame?.LaunchCandidates || [])
+  onMount(async () => {
+    const cfg = await configStore.load();
+    if (cfg) globalCfg = cfg;
+  });
+
+  $: candidates = ($selectedGame?.launchCandidates || [])
     .filter(c => {
-      const exe = (c.executable || c.Executable || '').toLowerCase();
+      const exe = (c.executable || '').toLowerCase();
       return !exe.includes('steamclient_loader') && !exe.includes('coldclientloader');
     })
     .map(c => ({
-      name: c.name || c.Name || c.executable || c.Executable || '',
-      executable: c.executable || c.Executable || '',
-      arguments: c.arguments || c.Arguments || '',
-      description: c.description || c.Description || '',
+      name: c.name || c.executable || '',
+      executable: c.executable || '',
+      arguments: c.arguments || '',
+      description: c.description || '',
     }));
 
+  $: languageOptions = ($selectedGame?.supportedLanguages || [
+    'english', 'french', 'italian', 'german', 'spanish', 'japanese', 'schinese', 'russian', 'brazilian', 'koreana', 'polish', 'turkish'
+  ]);
+
   $: if ($selectedGame) {
-    let baseExe = $selectedGame.ExePath || (candidates[0]?.executable || '');
+    const lp = $selectedGame.launchProfile || null;
+    let baseExe = lp?.exe_path || $selectedGame.exePath || (candidates[0]?.executable || '');
     if (baseExe.toLowerCase().includes('steamclient_loader') || baseExe.toLowerCase().includes('coldclientloader')) {
       baseExe = candidates[0]?.executable || '';
     }
     customExe = baseExe;
-    customAppID = $selectedGame.AppID || '';
-    customMode = $selectedGame.isPortable ? 'portable' : 'loader';
-    customArgs = candidates[0]?.arguments || $selectedGame.ExeArgs || '';
-    customWinePrefix = '';
-    optAddLutris = true;
-    optNormalize = true;
-    optSteamless = true;
-    optAchievements = true;
+    customAppID = $selectedGame.appId || '';
+    customMode = $selectedGame.isPortable ? 'portable' : ($selectedGame.isPatched ? 'loader' : '');
+    customLanguage = $selectedGame.currentLanguage || '';
+    customArgs = lp?.exe_args || $selectedGame.exeArgs || candidates[0]?.arguments || '';
+    
+    customOperatingMode = lp?.operating_mode ?? '';
+    customRunner = lp?.runner ?? '';
+    customWinePrefix = lp?.wine_prefix || $selectedGame.winePrefix || '';
+    customMangoHud = (lp?.mangohud !== undefined && lp?.mangohud !== null) ? lp.mangohud : null;
+    customFSR = (lp?.wine_fullscreen_fsr !== undefined && lp?.wine_fullscreen_fsr !== null) ? lp.wine_fullscreen_fsr : null;
+    customNVAPI = (lp?.proton_nvapi !== undefined && lp?.proton_nvapi !== null) ? lp.proton_nvapi : null;
+    customDXVKHud = lp?.dxvk_hud || '';
+    customEnvMap = { ...(lp?.custom_env || {}) };
+
+    optNormalize = globalCfg.normalize ?? true;
+    optSteamless = globalCfg.steamless ?? true;
+    optAchievements = globalCfg.achievements ?? true;
     integrityReport = null;
     newsItems = [];
     expandedNewsIndex = 0;
+  }
+
+  let envEntries = [];
+
+  $: {
+    const globalEnvs = globalCfg.global_env || {};
+    const entries = [];
+    const seen = new Set();
+
+    // Process global envs
+    for (const [k, v] of Object.entries(globalEnvs)) {
+      seen.add(k);
+      if (k in customEnvMap) {
+        entries.push({
+          key: k,
+          value: customEnvMap[k],
+          globalValue: v,
+          isInherited: false,
+          isOverriding: true
+        });
+      } else {
+        entries.push({
+          key: k,
+          value: v,
+          globalValue: v,
+          isInherited: true,
+          isOverriding: false
+        });
+      }
+    }
+
+    // Process custom game envs
+    for (const [k, v] of Object.entries(customEnvMap)) {
+      if (!seen.has(k)) {
+        entries.push({
+          key: k,
+          value: v,
+          globalValue: '',
+          isInherited: false,
+          isOverriding: false
+        });
+      }
+    }
+
+    envEntries = entries;
+  }
+
+  function handleOverrideEnv(key, globalVal) {
+    customEnvMap = { ...customEnvMap, [key]: globalVal };
+  }
+
+  function handleRevertEnv(key) {
+    const next = { ...customEnvMap };
+    delete next[key];
+    customEnvMap = next;
+  }
+
+  function handleUpdateCustomEnv(key, newVal) {
+    customEnvMap = { ...customEnvMap, [key]: newVal };
+  }
+
+  function handleDeleteCustomEnv(key) {
+    const next = { ...customEnvMap };
+    delete next[key];
+    customEnvMap = next;
+  }
+
+  function handleAddCustomEnv() {
+    let newKey = 'CUSTOM_VAR';
+    let counter = 1;
+    while (newKey in customEnvMap || (globalCfg.global_env && newKey in globalCfg.global_env)) {
+      newKey = `CUSTOM_VAR_${counter++}`;
+    }
+    customEnvMap = { ...customEnvMap, [newKey]: '' };
   }
 
   function handleSelectCandidate(e) {
@@ -68,72 +182,182 @@
   }
 
   async function browseExecutable() {
-    if (!$selectedGame?.GameDir) return;
+    if (!$selectedGame?.gameDir) return;
     try {
       const selected = await AppAPI.selectFile('Select Game Executable', 'Executables', '*');
       if (selected) {
         let rel = selected;
-        if (selected.startsWith($selectedGame.GameDir)) {
-          rel = selected.slice($selectedGame.GameDir.length).replace(/^[/\\]+/, '');
+        if (selected.startsWith($selectedGame.gameDir)) {
+          rel = selected.slice($selectedGame.gameDir.length).replace(/^[/\\]+/, '');
         }
         customExe = rel;
       }
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'File Selection Failed',
-        message: err?.message || String(err)
-      });
+      notificationStore.error('File Selection Failed', err);
     }
   }
 
-  function handleApply() {
+  async function handleResetDefaults() {
+    if (!$selectedGame?.gameDir) return;
+    try {
+      await resetGameProfile($selectedGame.gameDir);
+      notificationStore.success('Defaults Restored', `Restored global default settings for ${$selectedGame.name}`);
+      $showInspector = false;
+    } catch (err) {
+      notificationStore.error('Reset Failed', err);
+    }
+  }
+
+  async function handleSave() {
     if (!$selectedGame) return;
-    const opts = {
-      Path: $selectedGame.GameDir,
-      ExePath: customExe.trim(),
-      ExeArgs: customArgs.trim(),
-      AppID: customAppID.trim(),
-      Portable: customMode === 'portable',
-      ApplyGBE: true,
-      AddLutris: optAddLutris,
-      NormalizeDir: optNormalize,
-      NoSteamless: !optSteamless,
-      FetchAchievements: optAchievements,
-      WinePrefix: customWinePrefix.trim(),
+    const gameDir = $selectedGame.gameDir;
+    if (!gameDir) return;
+
+    const launchProfile = {
+      game_dir: gameDir,
+      exe_path: customExe.trim(),
+      exe_args: customArgs.trim(),
+      app_id: customAppID.trim(),
+      name: $selectedGame.name || '',
+      platform: $selectedGame.platform || '',
+      operating_mode: customOperatingMode,
+      runner: customRunner,
+      wine_prefix: customWinePrefix.trim(),
+      mangohud: customMangoHud,
+      wine_fullscreen_fsr: customFSR,
+      proton_nvapi: customNVAPI,
+      dxvk_hud: customDXVKHud.trim(),
+      custom_env: customEnvMap,
     };
-    queueApplyGame($selectedGame, opts);
-    $showInspector = false;
+
+    try {
+      await saveGameProfile(gameDir, launchProfile);
+
+      // If the game is already patched or in Lutris mode, keep on-disk integrations synced
+      const isLutris = customOperatingMode === 'lutris' || (!customOperatingMode && globalCfg.operating_mode === 'lutris');
+      if ($selectedGame.isPatched || $selectedGame.lutrisRegistered || isLutris) {
+        const opts = {
+          path: $selectedGame.gameDir,
+          exe_path: customExe.trim(),
+          exe_args: customArgs.trim(),
+          app_id: customAppID.trim(),
+          portable: customMode === 'portable',
+          language: customLanguage.trim(),
+          apply_gbe: true,
+          add_lutris: isLutris,
+          normalize_dir: optNormalize,
+          no_steamless: !optSteamless,
+          fetch_achievements: optAchievements,
+          wine_prefix: customWinePrefix.trim(),
+        };
+        try {
+          await AppAPI.submitApply(opts);
+        } catch (err) {
+          console.warn('Sync setup notice:', err);
+        }
+      }
+
+      await refreshGame($selectedGame.gameDir);
+
+      notificationStore.success('Settings Saved', `Saved configuration for ${$selectedGame.name}`);
+      $showInspector = false;
+    } catch (err) {
+      notificationStore.error('Save Failed', err);
+    }
   }
 
   async function runIntegrityCheck() {
-    if (!$selectedGame?.GameDir) return;
+    if (!$selectedGame?.gameDir) return;
     isCheckingIntegrity = true;
+    integrityError = '';
+    integrityReport = null;
     try {
-      integrityReport = await AppAPI.verifyIntegrity($selectedGame.GameDir);
+      const rep = await AppAPI.verifyIntegrity($selectedGame.gameDir);
+      const total = rep?.official_count ?? 0;
+      if (!rep || total === 0) {
+        integrityError = 'No official depot manifest entries found for this title.';
+      } else {
+        integrityReport = rep;
+      }
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Integrity Check Failed',
-        message: err?.message || String(err)
-      });
+      integrityError = err?.message || String(err);
+      notificationStore.error('Integrity Check Notice', integrityError);
     } finally {
       isCheckingIntegrity = false;
     }
   }
 
-  async function loadNews() {
-    if (!$selectedGame?.AppID || $selectedGame.AppID === '0') return;
-    isLoadingNews = true;
+  let isNormalizing = false;
+
+  async function handleNormalizeDirectory() {
+    if (!$selectedGame?.gameDir) return;
+    const oldDir = $selectedGame.gameDir;
     try {
-      const items = await AppAPI.fetchNews($selectedGame.AppID, 5);
-      newsItems = items || [];
+      isNormalizing = true;
+      await AppAPI.submitNormalize(oldDir);
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Normalizing Directory',
+        message: `Queued directory normalization for ${$selectedGame.name || oldDir}`
+      });
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
-        title: 'Failed to Fetch News',
+        title: 'Normalization Failed',
         message: err?.message || String(err)
       });
+    } finally {
+      isNormalizing = false;
+    }
+  }
+
+  async function handleUpdateGame() {
+    if (!$selectedGame?.gameDir) return;
+    const appIdNum = parseInt($selectedGame.appId, 10);
+    if (appIdNum && !isNaN(appIdNum)) {
+      try {
+        await tasksStore.start({
+          app_id: appIdNum,
+          game_name: $selectedGame.name,
+          target_dir: $selectedGame.gameDir,
+          platform: $selectedGame.platform,
+          auto_apply: true,
+        });
+      } catch (err) {
+        // Handled in store
+      }
+    } else {
+      try {
+        await AppAPI.submitUpdate($selectedGame.gameDir);
+        notificationStore.items.add({
+          type: 'info',
+          title: 'Update Enqueued',
+          message: `Update task started for ${$selectedGame.name}`,
+          gameName: $selectedGame.name
+        });
+      } catch (err) {
+        notificationStore.error('Update Failed', err);
+      }
+    }
+    $showInspector = false;
+  }
+
+  async function loadNews(force = false) {
+    if (!$selectedGame?.appId || $selectedGame.appId === '0') return;
+    if (!force && loadedNewsAppID === $selectedGame.appId && newsItems.length > 0) return;
+
+    isLoadingNews = true;
+    newsError = '';
+    try {
+      const items = await AppAPI.fetchNews(String($selectedGame.appId), 6);
+      newsItems = items || [];
+      loadedNewsAppID = $selectedGame.appId;
+      if (!items || items.length === 0) {
+        newsError = 'No patch notes found on Steam for this title.';
+      }
+    } catch (err) {
+      newsError = err?.message || String(err);
+      notificationStore.error('Failed to Fetch Patch Notes', newsError);
     } finally {
       isLoadingNews = false;
     }
@@ -144,27 +368,14 @@
   }
 
   function handleRollback() {
-    if (!$selectedGame?.GameDir) return;
-    if (confirm(`Rollback emulator modifications for ${$selectedGame.Name}?`)) {
-      taskQueue.enqueue({
-        type: 'rollback',
-        title: `Rollback: ${$selectedGame.Name}`,
-        gameName: $selectedGame.Name,
-        gameDir: $selectedGame.GameDir,
-        run: async () => {
-          await AppAPI.rollback($selectedGame.GameDir, false);
-          return `Rolled back ${$selectedGame.Name}`;
-        },
-        onSuccess: async () => {
-          const raw = await AppAPI.inspectGameEx($selectedGame.GameDir, 0);
-          if (raw) selectedGame.set(raw);
-        }
-      });
+    if (!$selectedGame?.gameDir) return;
+    if (confirm(`Rollback emulator modifications for ${$selectedGame.name}?`)) {
+      rollbackGame($selectedGame.gameDir, false);
       $showInspector = false;
     }
   }
 
-  $: if ($showInspector && activeTab === 'news' && newsItems.length === 0 && $selectedGame?.AppID) {
+  $: if ($showInspector && activeTab === 'news' && loadedNewsAppID !== $selectedGame?.appId && !isLoadingNews && $selectedGame?.appId) {
     loadNews();
   }
 </script>
@@ -182,301 +393,91 @@
     <!-- Modal Card -->
     <div class="bg-[#121218] border border-[#2c2c3e] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
       <!-- Modal Header -->
-      <div class="px-5 py-3.5 border-b border-[#20202c] flex items-center justify-between bg-[#15151e]">
-        <div class="flex items-center space-x-2.5 min-w-0">
-          <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <h3 class="text-sm font-bold text-white truncate">{$selectedGame.Name}</h3>
-        </div>
-
-        <button
-          type="button"
-          on:click={() => { $showInspector = false; }}
-          class="w-6 h-6 rounded-lg bg-[#1e1e28] hover:bg-[#282836] text-slate-400 hover:text-white flex items-center justify-center text-xs font-bold transition-colors"
-        >
-          ✕
-        </button>
-      </div>
+      <DrawerHeader
+        game={$selectedGame}
+        onClose={() => { $showInspector = false; }}
+      />
 
       <!-- Navigation Tabs -->
-      <div class="px-5 border-b border-[#20202c] bg-[#121218] flex space-x-5 text-xs font-bold">
-        <button
-          type="button"
-          on:click={() => { activeTab = 'config'; }}
-          class="py-2.5 transition-colors {activeTab === 'config' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
-        >
-          Engine
-        </button>
-        <button
-          type="button"
-          on:click={() => { activeTab = 'integrity'; }}
-          class="py-2.5 transition-colors {activeTab === 'integrity' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
-        >
-          Integrity
-        </button>
-        {#if isSteamApp($selectedGame.AppID)}
-          <button
-            type="button"
-            on:click={() => { activeTab = 'news'; }}
-            class="py-2.5 transition-colors {activeTab === 'news' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
-          >
-            Patch Notes
-          </button>
-        {/if}
-      </div>
+      <DrawerTabs
+        {activeTab}
+        showNewsTab={isSteamApp($selectedGame.appId)}
+        onSelectTab={(tab) => { activeTab = tab; }}
+      />
 
       <!-- Modal Body (Scrollable) -->
-      <div class="p-5 overflow-y-auto space-y-3.5 text-xs">
-        {#if activeTab === 'config'}
-          <!-- Executable & Args -->
-          <div class="space-y-3">
-            <div>
-              <label for="drawerMainExe" class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
-                Executable
-              </label>
-              <div class="space-y-1.5">
-                <div class="flex space-x-2">
-                  <select
-                    id="drawerMainExe"
-                    on:change={handleSelectCandidate}
-                    value={candidates.some(c => c.executable === customExe) ? customExe : '__custom__'}
-                    class="flex-1 bg-[#181822] border border-[#282838] rounded-xl px-3 py-1.5 text-slate-100 outline-none font-mono text-xs focus:border-white"
-                  >
-                    {#if candidates.length > 0}
-                      {#each candidates as cand}
-                        <option value={cand.executable}>
-                          {cand.name ? `${cand.name} (${cand.executable})` : cand.executable}
-                        </option>
-                      {/each}
-                    {:else if $selectedGame.ExePath}
-                      <option value={$selectedGame.ExePath}>{$selectedGame.ExePath} (Auto-detected)</option>
-                    {/if}
-                    <option value="__custom__">Custom Executable...</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    on:click={browseExecutable}
-                    class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3 py-1.5 rounded-xl font-bold border border-[#323244] flex-shrink-0"
-                  >
-                    Browse
-                  </button>
-                </div>
-
-                <input
-                  type="text"
-                  bind:value={customExe}
-                  placeholder="Relative path (e.g. Binaries/Win64/Game.exe)"
-                  class="w-full bg-[#0d0d12] border border-[#242432] rounded-xl px-3 py-1 text-slate-200 font-mono outline-none focus:border-white text-[11px]"
-                />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label for="drawerArgs" class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
-                  Launch Flags
-                </label>
-                <input
-                  id="drawerArgs"
-                  type="text"
-                  bind:value={customArgs}
-                  placeholder="-dx11 -fullscreen"
-                  class="w-full bg-[#181822] border border-[#282838] rounded-xl px-3 py-1.5 text-slate-100 outline-none font-mono focus:border-white"
-                />
-              </div>
-              <div>
-                <label for="drawerMode" class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
-                  EMU Mode
-                </label>
-                <select
-                  id="drawerMode"
-                  bind:value={customMode}
-                  class="w-full bg-[#181822] border border-[#282838] rounded-xl px-3 py-1.5 text-slate-100 outline-none focus:border-white"
-                >
-                  <option value="loader">Loader (ColdClientLoader)</option>
-                  <option value="portable">Portable (Direct DLL)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label for="drawerAppId" class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
-                  AppID Override
-                </label>
-                <input
-                  id="drawerAppId"
-                  type="text"
-                  bind:value={customAppID}
-                  placeholder="123456"
-                  class="w-full bg-[#181822] border border-[#282838] rounded-xl px-3 py-1.5 text-slate-100 outline-none font-mono focus:border-white"
-                />
-              </div>
-              <div>
-                <label for="drawerPrefix" class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
-                  Wine Prefix
-                </label>
-                <input
-                  id="drawerPrefix"
-                  type="text"
-                  bind:value={customWinePrefix}
-                  placeholder="~/.wine or custom prefix"
-                  class="w-full bg-[#181822] border border-[#282838] rounded-xl px-3 py-1.5 text-slate-100 outline-none font-mono focus:border-white"
-                />
-              </div>
-            </div>
-
-            <!-- Toggles -->
-            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-[#20202c]">
-              <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
-                <input type="checkbox" bind:checked={optAddLutris} class="w-3.5 h-3.5 rounded bg-black border-slate-700" />
-                <span>Lutris Registration</span>
-              </label>
-              <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
-                <input type="checkbox" bind:checked={optNormalize} class="w-3.5 h-3.5 rounded bg-black border-slate-700" />
-                <span>Normalize Folder</span>
-              </label>
-              <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
-                <input type="checkbox" bind:checked={optSteamless} class="w-3.5 h-3.5 rounded bg-black border-slate-700" />
-                <span>Unpack SteamStub</span>
-              </label>
-              <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
-                <input type="checkbox" bind:checked={optAchievements} class="w-3.5 h-3.5 rounded bg-black border-slate-700" />
-                <span>Achievements & DLCs</span>
-              </label>
-            </div>
-          </div>
-
+      <div class="p-5 overflow-y-auto space-y-4 text-xs">
+        {#if activeTab === 'general'}
+          <DrawerGeneralTab
+            game={$selectedGame}
+            {candidates}
+            bind:customExe
+            bind:customArgs
+            {envEntries}
+            onSelectCandidate={handleSelectCandidate}
+            onBrowseExecutable={browseExecutable}
+            onUpdateGame={handleUpdateGame}
+            envActions={{
+              add: handleAddCustomEnv,
+              update: handleUpdateCustomEnv,
+              override: handleOverrideEnv,
+              revert: handleRevertEnv,
+              delete: handleDeleteCustomEnv
+            }}
+          />
+        {:else if activeTab === 'integrations'}
+          <DrawerIntegrationsTab
+            {globalCfg}
+            bind:customOperatingMode
+            bind:customRunner
+            bind:customWinePrefix
+            bind:customMangoHud
+            bind:customFSR
+            bind:customNVAPI
+            bind:customDXVKHud
+          />
+        {:else if activeTab === 'emu'}
+          <DrawerEmuTab
+            game={$selectedGame}
+            {globalCfg}
+            bind:customMode
+            bind:customLanguage
+            {languageOptions}
+            bind:customAppID
+            bind:optSteamless
+            bind:optAchievements
+            bind:optNormalize
+          />
         {:else if activeTab === 'integrity'}
-          <div class="space-y-3">
-            <p class="text-slate-400">
-              Verify local depot checksums against official SteamPipe SHA-256 manifests:
-            </p>
-
-            <button
-              type="button"
-              on:click={runIntegrityCheck}
-              disabled={isCheckingIntegrity}
-              class="bg-white hover:bg-neutral-200 text-black font-black px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
-            >
-              {isCheckingIntegrity ? 'Verifying...' : 'Run Integrity Check'}
-            </button>
-
-            {#if integrityReport}
-              <div class="bg-[#181822] border border-[#282838] p-3.5 rounded-xl space-y-1 font-mono text-xs">
-                <div>Checked: <strong class="text-white">{integrityReport.TotalCount || 0} files</strong></div>
-                <div class="text-emerald-400">✓ Valid: {integrityReport.ValidCount || 0}</div>
-                {#if integrityReport.CorruptedCount > 0}
-                  <div class="text-rose-400">✗ Corrupted: {integrityReport.CorruptedCount}</div>
-                {/if}
-                {#if integrityReport.MissingCount > 0}
-                  <div class="text-amber-400">⚠ Missing: {integrityReport.MissingCount}</div>
-                {/if}
-              </div>
-            {/if}
-          </div>
-
+          <DrawerIntegrityTab
+            {isCheckingIntegrity}
+            {isNormalizing}
+            {integrityError}
+            {integrityReport}
+            onRunIntegrityCheck={runIntegrityCheck}
+            onUpdateGame={handleUpdateGame}
+            onNormalizeDirectory={handleNormalizeDirectory}
+          />
         {:else if activeTab === 'news'}
-          <div class="space-y-3">
-            {#if isLoadingNews}
-              <div class="py-8 text-center text-slate-400 font-mono">Fetching Steam patch notes...</div>
-            {:else if newsItems.length > 0}
-              {#each newsItems as item, idx}
-                {@const isExpanded = expandedNewsIndex === idx}
-                <div class="bg-[#151520] border border-[#262638] rounded-2xl overflow-hidden shadow-md transition-all">
-                  <!-- Note Header (Click to expand/collapse) -->
-                  <div
-                    class="p-4 cursor-pointer hover:bg-[#1c1c2a] transition-colors flex items-center justify-between gap-3 select-none"
-                    on:click={() => toggleNewsExpand(idx)}
-                    role="button"
-                    tabindex="0"
-                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleNewsExpand(idx); }}
-                  >
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center space-x-2">
-                        <strong class="text-white font-bold text-xs sm:text-sm truncate leading-snug">{item.title}</strong>
-                        {#if item.feed_label}
-                          <span class="text-[10px] font-mono text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-[#2a2a3a]">
-                            {item.feed_label}
-                          </span>
-                        {/if}
-                      </div>
-                      <div class="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center space-x-2">
-                        <span>{new Date(item.date * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                        {#if item.author}
-                          <span>· by {item.author}</span>
-                        {/if}
-                      </div>
-                    </div>
-
-                    <div class="flex items-center space-x-2 flex-shrink-0">
-                      {#if item.url}
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          on:click|stopPropagation
-                          class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-black/40 text-xs"
-                          title="Open on Steam Web"
-                        >
-                          ↗
-                        </a>
-                      {/if}
-                      <span class="text-slate-400 font-mono text-xs transform transition-transform {isExpanded ? 'rotate-180' : ''}">
-                        ▼
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Full Rich Formatted Note Content -->
-                  {#if isExpanded}
-                    <div class="p-4 border-t border-[#202030] bg-[#101017] text-slate-200 leading-relaxed text-xs space-y-2 max-h-96 overflow-y-auto">
-                      {@html formatNewsHTML(item.contents)}
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            {:else}
-              <div class="py-8 text-center text-slate-500 font-mono">No patch notes available for this title.</div>
-            {/if}
-          </div>
+          <DrawerNewsTab
+            {isLoadingNews}
+            {newsError}
+            {newsItems}
+            {expandedNewsIndex}
+            onRefreshNews={() => loadNews(true)}
+            onToggleExpand={toggleNewsExpand}
+          />
         {/if}
       </div>
 
       <!-- Modal Footer -->
-      <div class="px-5 py-3 border-t border-[#20202c] bg-[#15151e] flex items-center justify-between">
-        <div>
-          {#if $selectedGame.isPatched}
-            <button
-              type="button"
-              on:click={handleRollback}
-              class="text-rose-400 hover:text-rose-300 font-bold text-xs"
-            >
-              Rollback
-            </button>
-          {/if}
-        </div>
-
-        <div class="flex items-center space-x-2">
-          <button
-            type="button"
-            on:click={() => { $showInspector = false; }}
-            class="text-slate-400 hover:text-white px-3 py-1.5 font-bold"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            on:click={handleApply}
-            class="bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black px-5 py-1.5 rounded-xl transition-colors shadow-sm"
-          >
-            Apply
-          </button>
-        </div>
-      </div>
+      <DrawerFooter
+        isPatched={$selectedGame.isPatched}
+        onRollback={handleRollback}
+        onResetDefaults={handleResetDefaults}
+        onCancel={() => { $showInspector = false; }}
+        onSave={handleSave}
+      />
     </div>
   </div>
 {/if}

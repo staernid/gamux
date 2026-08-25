@@ -11,31 +11,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
+// GameInfo is an alias for the canonical domain.Game entity.
+type GameInfo = domain.Game
 
-// GameInfo represents auto-detected metadata and paths for a game directory.
-type GameInfo struct {
-	AppID            string
-	Name             string
-	InstallDir       string
-	Platform         string // "linux", "win64", "win32"
-	GameDir          string // Primary root directory of the game
-	ExePath          string // Path to the main executable
-	ExeArgs          string // Command line arguments for launch
-	TargetLibPath    string // Path to steam_api library
-	ManifestPath     string // Path to appmanifest_<appid>.acf
-	RawDepotLayout   bool   // True if raw steamapps/common/... structure
-	Store            string // "Steam", "GOG", "Epic", "Itch", "Custom"
-	OfficialFileCount int
-	UntrackedFiles   []string
-	LaunchCandidates []LaunchCandidate
+// DetectGame scans a target directory and returns a canonical domain.Game entity.
+func DetectGame(ctx context.Context, path string) (*domain.Game, error) {
+	return Detect(ctx, path)
 }
-
-
 
 var (
 	appmanifestRegex  = regexp.MustCompile(`(?i)^appmanifest_(\d+)\.acf$`)
@@ -43,19 +31,18 @@ var (
 )
 
 // Detect scans a target path and automatically identifies its AppID, Title, Platform, and Executable.
+// Detect is strictly read-only and does not mutate files on disk.
 func Detect(ctx context.Context, path string) (*GameInfo, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, fmt.Errorf("resolve abs path: %w", err)
+	absPath := util.CanonicalPath(path)
+	if absPath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
 	}
 
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("%w: %s", ErrGameNotFound, absPath)
 	}
 
-	info := &GameInfo{
-		GameDir: absPath,
-	}
+	info := domain.NewGame("", absPath, "", "")
 
 	// 1. Search for ACF Manifests across subdirectories
 	acfPath, acfData := findACF(absPath)
@@ -69,15 +56,6 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 		commonPath := filepath.Join(absPath, "steamapps", "common")
 		if entries, err := os.ReadDir(commonPath); err == nil && len(entries) > 0 {
 			info.RawDepotLayout = true
-			for _, e := range entries {
-				if e.IsDir() {
-					if acfData.InstallDir != "" && strings.EqualFold(e.Name(), acfData.InstallDir) {
-						info.GameDir = filepath.Join(commonPath, e.Name())
-						break
-					}
-					info.GameDir = filepath.Join(commonPath, e.Name())
-				}
-			}
 		}
 	}
 
@@ -91,6 +69,11 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 				info.AppID = baseName
 			}
 		}
+	}
+
+	if num, ok := util.ParseAppID(info.AppID); ok && num > 0 {
+		info.NumericAppID = num
+		info.ExternalIDs.SteamAppID = num
 	}
 
 	// 3. Detect Platform & Target Library
@@ -112,9 +95,13 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	// 7. Try searching Steam Store API ONLY if store is Steam and AppID is missing
-	if info.Store == "Steam" && info.AppID == "" && info.Name != "" {
+	if (info.Store == "Steam" || info.Source == "Steam") && info.AppID == "" && info.Name != "" {
 		if appID, searchName, err := steam.SearchAppID(ctx, info.Name); err == nil && appID != "" {
 			info.AppID = appID
+			if num, ok := util.ParseAppID(appID); ok && num > 0 {
+				info.NumericAppID = num
+				info.ExternalIDs.SteamAppID = num
+			}
 			if searchName != "" {
 				info.Name = searchName
 			}
@@ -130,59 +117,10 @@ func Detect(ctx context.Context, path string) (*GameInfo, error) {
 	// 9. Detect main executable
 	detectExecutable(info)
 
-	// 10. Check if a saved Lutris config exists for this game and use its target executable if valid
-	if info.Name != "" {
-		slug := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(info.Name, "-"))
-		slug = strings.Trim(slug, "-")
-		if home, err := os.UserHomeDir(); err == nil {
-			lutrisYamlPath := filepath.Join(home, ".config", "lutris", "games", slug+".yml")
-			if data, err := os.ReadFile(lutrisYamlPath); err == nil {
-				reExe := regexp.MustCompile(`(?m)^\s*exe:\s*["']?([^"'\r\n]+)`)
-				if matches := reExe.FindStringSubmatch(string(data)); len(matches) > 1 {
-					savedExe := strings.TrimSpace(matches[1])
-					savedLower := strings.ToLower(savedExe)
-					if strings.Contains(savedLower, "steamclient_loader") || strings.Contains(savedLower, "coldclientloader") {
-						// Look in ColdClientLoader.ini for the real game binary
-						iniPath := filepath.Join(info.GameDir, "ColdClientLoader.ini")
-						if iniData, err := os.ReadFile(iniPath); err == nil {
-							reIniExe := regexp.MustCompile(`(?i)^\s*Exe\s*=\s*(.+)`)
-							for _, line := range strings.Split(string(iniData), "\n") {
-								if m := reIniExe.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 1 {
-									realExe := strings.TrimSpace(m[1])
-									if !filepath.IsAbs(realExe) {
-										realExe = filepath.Join(info.GameDir, realExe)
-									}
-									realLower := strings.ToLower(filepath.Base(realExe))
-									if util.FileExists(realExe) && !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
-										info.ExePath = realExe
-										break
-									}
-								}
-							}
-						}
-					} else if savedExe != "" && util.FileExists(savedExe) {
-						info.ExePath = savedExe
-					}
-				}
-			}
-		}
-	}
-
-	// Final safeguard: never expose loader wrapper as main game ExePath
-	if strings.Contains(strings.ToLower(info.ExePath), "steamclient_loader") || strings.Contains(strings.ToLower(info.ExePath), "coldclientloader") {
-		info.ExePath = ""
-		for _, cand := range info.LaunchCandidates {
-			candBase := strings.ToLower(filepath.Base(cand.Executable))
-			if !strings.Contains(candBase, "steamclient_loader") && !strings.Contains(candBase, "coldclientloader") {
-				info.ExePath = cand.Executable
-				break
-			}
-		}
-	}
-
 	return info, nil
 }
 
+// GOGInfo holds parsed metadata from GOG installation descriptors.
 type GOGInfo struct {
 	GameID string `json:"gameId"`
 	Name   string `json:"name"`
@@ -214,8 +152,59 @@ func parseGOGInfo(gameDir string) (string, string) {
 	return "", ""
 }
 
+func parseEpicInfo(gameDir string) (string, string) {
+	egPath := filepath.Join(gameDir, ".egstore")
+	entries, err := os.ReadDir(egPath)
+	if err != nil {
+		return "", ""
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasSuffix(strings.ToLower(name), ".mancpn") {
+			appName := strings.TrimSuffix(name, filepath.Ext(name))
+			return appName, appName
+		}
+	}
+	return "", ""
+}
+
 func detectStore(info *GameInfo) {
-	// 1. Check for concrete Steam artifacts on disk FIRST (manifests, appid.txt, or steam_api DLL/SO)
+	// 1. Check for GOG signatures & parse GOG metadata FIRST
+	if gogName, gogID := parseGOGInfo(info.GameDir); gogName != "" || gogID != "" {
+		info.Store = "GOG"
+		info.Source = domain.SourceGOG
+		info.GOGID = gogID
+		if gogName != "" && info.Name == "" {
+			info.Name = gogName
+		}
+		return
+	}
+
+	if entries, err := os.ReadDir(info.GameDir); err == nil {
+		for _, e := range entries {
+			name := strings.ToLower(e.Name())
+			if strings.HasPrefix(name, "goggame-") || strings.HasPrefix(name, "goglog") || name == "webcache.zip" || strings.HasPrefix(name, "gog") {
+				info.Store = "GOG"
+				info.Source = domain.SourceGOG
+				return
+			}
+			if name == ".egstore" {
+				info.Store = "Epic"
+				info.Source = domain.SourceEpic
+				if appName, _ := parseEpicInfo(info.GameDir); appName != "" {
+					info.EpicApp = appName
+				}
+				return
+			}
+			if name == ".itch" || name == ".itch.toml" {
+				info.Store = "Itch"
+				info.Source = domain.SourceItch
+				return
+			}
+		}
+	}
+
+	// 2. Check for concrete Steam artifacts on disk (manifests, appid.txt, or steam_api DLL/SO)
 	hasSteamArtifacts := info.ManifestPath != "" || info.TargetLibPath != ""
 	if !hasSteamArtifacts {
 		manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
@@ -231,205 +220,14 @@ func detectStore(info *GameInfo) {
 
 	if hasSteamArtifacts {
 		info.Store = "Steam"
+		info.Source = domain.SourceSteam
 		return
-	}
-
-	// 2. Check for GOG signatures & parse GOG metadata
-	if gogName, gogID := parseGOGInfo(info.GameDir); gogName != "" || gogID != "" {
-		info.Store = "GOG"
-		if gogName != "" {
-			info.Name = gogName
-		}
-		return
-	}
-
-	if entries, err := os.ReadDir(info.GameDir); err == nil {
-		for _, e := range entries {
-			name := strings.ToLower(e.Name())
-			if strings.HasPrefix(name, "goggame-") || strings.HasPrefix(name, "goglog") || name == "webcache.zip" || strings.HasPrefix(name, "gog") {
-				info.Store = "GOG"
-				return
-			}
-			if name == ".egstore" {
-				info.Store = "Epic"
-				return
-			}
-			if name == ".itch" || name == ".itch.toml" {
-				info.Store = "Itch"
-				return
-			}
-		}
 	}
 
 	// 3. Standalone DRM-free download (Factorio.com, Humble Bundle, direct site download)
 	info.Store = "Standalone"
+	info.Source = domain.SourceStandalone
 }
-
-// ConsolidateManifests copies/moves appmanifest and .manifest files into <GameDir>/[Manifests]/.
-func ConsolidateManifests(info *GameInfo) error {
-	if info == nil || info.GameDir == "" {
-		return nil
-	}
-
-	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
-
-	if info.ManifestPath != "" {
-		if strings.HasPrefix(info.ManifestPath, manifestsDir) {
-			return nil
-		}
-		_ = os.MkdirAll(manifestsDir, 0755)
-
-		srcDir := filepath.Dir(info.ManifestPath)
-		destACF := filepath.Join(manifestsDir, filepath.Base(info.ManifestPath))
-		if info.ManifestPath != destACF && util.FileExists(info.ManifestPath) {
-			if err := util.CopyFile(info.ManifestPath, destACF); err == nil {
-				slog.Info("Consolidated ACF manifest", "dest", destACF)
-			}
-		}
-		info.ManifestPath = destACF
-
-		// Also look for matching .manifest files in srcDir or depotcache
-		scanDirs := []string{srcDir}
-		if info.RawDepotLayout {
-			rootParent := filepath.Dir(filepath.Dir(srcDir))
-			scanDirs = append(scanDirs, filepath.Join(rootParent, "depotcache"))
-		}
-
-		for _, d := range scanDirs {
-			entries, err := os.ReadDir(d)
-			if err != nil {
-				continue
-			}
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".manifest") {
-					srcMan := filepath.Join(d, e.Name())
-					destMan := filepath.Join(manifestsDir, e.Name())
-					if srcMan != destMan {
-						if err := os.Rename(srcMan, destMan); err != nil {
-							_ = util.CopyFile(srcMan, destMan)
-							_ = os.Remove(srcMan)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// EnsureACFManifest guarantees that a 1:1 appmanifest_<appid>.acf file exists inside <GameDir>/[Manifests]/.
-// If missing or incomplete, it generates a standard Steam KeyValues manifest with canonical name & installdir.
-func EnsureACFManifest(info *GameInfo, dryRun bool) error {
-	if info == nil || info.AppID == "" || info.AppID == "0" {
-		return nil
-	}
-
-	manifestsDir := filepath.Join(info.GameDir, "[Manifests]")
-	acfName := fmt.Sprintf("appmanifest_%s.acf", info.AppID)
-	targetACF := filepath.Join(manifestsDir, acfName)
-
-	if util.FileExists(targetACF) {
-		return nil
-	}
-
-	if info.InstallDir == "" {
-		info.InstallDir = util.SanitizeInstallDir(info.Name)
-	}
-
-	var launchOpts []LaunchCandidate
-	if info.ExePath != "" {
-		relExe, err := filepath.Rel(info.GameDir, info.ExePath)
-		if err == nil && !strings.HasPrefix(relExe, "..") {
-			launchOpts = append(launchOpts, LaunchCandidate{
-				Executable:  relExe,
-				Arguments:   info.ExeArgs,
-				Description: info.Name,
-			})
-		} else {
-			launchOpts = append(launchOpts, LaunchCandidate{
-				Executable:  info.ExePath,
-				Arguments:   info.ExeArgs,
-				Description: info.Name,
-			})
-		}
-	}
-
-	acfData := &ACFData{
-		AppID:         info.AppID,
-		Name:          info.Name,
-		InstallDir:    info.InstallDir,
-		BuildID:       "0",
-		LaunchOptions: launchOpts,
-	}
-
-	content := GenerateACFContent(acfData)
-	if dryRun {
-		slog.Info("[DRY RUN] Would synthesize 1:1 ACF manifest", "path", targetACF, "appID", info.AppID)
-		return nil
-	}
-
-	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
-		return fmt.Errorf("create [Manifests] dir: %w", err)
-	}
-
-	if err := os.WriteFile(targetACF, []byte(content), 0644); err != nil {
-		return fmt.Errorf("write ACF manifest: %w", err)
-	}
-
-	info.ManifestPath = targetACF
-	slog.Info("Synthesized 1:1 ACF manifest", "path", targetACF, "appID", info.AppID, "installdir", info.InstallDir)
-	return nil
-}
-
-// NormalizeDirectory renames the game directory to match its official Steam 1:1 InstallDir if different.
-func NormalizeDirectory(info *GameInfo, dryRun bool) error {
-	if info == nil || info.GameDir == "" || info.InstallDir == "" {
-		return nil
-	}
-
-	currentBase := filepath.Base(info.GameDir)
-	if currentBase == info.InstallDir {
-		return nil
-	}
-
-	parentDir := filepath.Dir(info.GameDir)
-	targetDir := filepath.Join(parentDir, info.InstallDir)
-
-	if targetDir == info.GameDir || util.FileExists(targetDir) {
-		return nil
-	}
-
-	if dryRun {
-		slog.Info("[DRY RUN] Would normalize game directory name to 1:1 Steam installdir", "from", info.GameDir, "to", targetDir)
-		return nil
-	}
-
-	oldGameDir := info.GameDir
-	if err := os.Rename(oldGameDir, targetDir); err != nil {
-		return fmt.Errorf("normalize game directory from %s to %s: %w", oldGameDir, targetDir, err)
-	}
-
-	info.GameDir = targetDir
-	if info.ManifestPath != "" && strings.HasPrefix(info.ManifestPath, oldGameDir) {
-		rel, err := filepath.Rel(oldGameDir, info.ManifestPath)
-		if err == nil {
-			info.ManifestPath = filepath.Join(targetDir, rel)
-		}
-	}
-	if info.ExePath != "" && strings.HasPrefix(info.ExePath, oldGameDir) {
-		rel, err := filepath.Rel(oldGameDir, info.ExePath)
-		if err == nil {
-			info.ExePath = filepath.Join(targetDir, rel)
-		}
-	}
-
-	slog.Info("Normalized game directory name to 1:1 Steam installdir", "from", oldGameDir, "to", targetDir)
-	return nil
-}
-
-// ── Internal Helpers ────────────────────────────────────────────────
-
 
 func findACF(root string) (string, *ACFData) {
 	searchLocations := []string{
@@ -476,7 +274,7 @@ func findAppIDTxt(root string) (string, error) {
 }
 
 func detectPlatformAndLib(info *GameInfo) {
-	for p, cfg := range config.PlatformConfig {
+	for p, cfg := range gbe.PlatformConfig {
 		_ = filepath.WalkDir(info.GameDir, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -604,7 +402,7 @@ func detectExecutable(info *GameInfo) {
 				if strings.Contains(baseLower, "steamclient_loader") || strings.Contains(baseLower, "coldclientloader") || strings.Contains(baseLower, "unitycrashhandler") {
 					continue
 				}
-				fullPath := filepath.Join(info.GameDir, option.Executable)
+				fullPath := util.JoinPaths(info.GameDir, option.Executable)
 				if _, err := os.Stat(fullPath); err == nil {
 					name := option.Description
 					if name == "" {
@@ -625,23 +423,83 @@ func detectExecutable(info *GameInfo) {
 	// Add sorted detected executables to LaunchCandidates
 	dirName := filepath.Base(info.GameDir)
 	for _, exe := range candidateExes {
-		if !seenExes[exe] {
-			baseNoExt := strings.TrimSuffix(filepath.Base(exe), filepath.Ext(exe))
+		canExe := util.CanonicalPath(exe)
+		if !seenExes[canExe] {
+			baseNoExt := strings.TrimSuffix(filepath.Base(canExe), filepath.Ext(canExe))
 			name := baseNoExt
 			if strings.EqualFold(baseNoExt, dirName) || (info.Name != "" && strings.EqualFold(baseNoExt, info.Name)) {
 				name = info.Name + " (Main Executable)"
 			}
 			info.LaunchCandidates = append(info.LaunchCandidates, LaunchCandidate{
 				Name:       name,
-				Executable: exe,
+				Executable: canExe,
 			})
-			seenExes[exe] = true
+			seenExes[canExe] = true
 		}
 	}
 
-	if len(info.LaunchCandidates) > 0 {
+	// Check steam_settings/launch_profile.json for configured target exe if present
+	lpPath := filepath.Join(info.GameDir, "steam_settings", "launch_profile.json")
+	if lpData, err := os.ReadFile(lpPath); err == nil {
+		var lp struct {
+			ExePath string `json:"exe_path"`
+			ExeArgs string `json:"exe_args"`
+		}
+		if err := json.Unmarshal(lpData, &lp); err == nil && lp.ExePath != "" {
+			realExe := lp.ExePath
+			if !filepath.IsAbs(realExe) {
+				realExe = util.JoinPaths(info.GameDir, realExe)
+			} else {
+				realExe = util.CanonicalPath(realExe)
+			}
+			realLower := strings.ToLower(filepath.Base(realExe))
+			if util.FileExists(realExe) && !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
+				info.ExePath = realExe
+				if lp.ExeArgs != "" {
+					info.ExeArgs = lp.ExeArgs
+				}
+			}
+		}
+	}
+
+	// Check ColdClientLoader.ini for configured target exe if present
+	if info.ExePath == "" {
+		iniPath := filepath.Join(info.GameDir, "ColdClientLoader.ini")
+		if iniData, err := os.ReadFile(iniPath); err == nil {
+			reIniExe := regexp.MustCompile(`(?i)^\s*Exe\s*=\s*(.+)`)
+			for _, line := range strings.Split(string(iniData), "\n") {
+				if m := reIniExe.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 1 {
+					realExe := strings.TrimSpace(m[1])
+					if !filepath.IsAbs(realExe) {
+						realExe = util.JoinPaths(info.GameDir, realExe)
+					} else {
+						realExe = util.CanonicalPath(realExe)
+					}
+					realLower := strings.ToLower(filepath.Base(realExe))
+					if util.FileExists(realExe) && !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
+						info.ExePath = realExe
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if info.ExePath == "" && len(info.LaunchCandidates) > 0 {
 		info.ExePath = info.LaunchCandidates[0].Executable
 		info.ExeArgs = info.LaunchCandidates[0].Arguments
+	}
+
+	// Final safeguard: never expose loader wrapper as main game ExePath
+	if strings.Contains(strings.ToLower(info.ExePath), "steamclient_loader") || strings.Contains(strings.ToLower(info.ExePath), "coldclientloader") {
+		info.ExePath = ""
+		for _, cand := range info.LaunchCandidates {
+			candBase := strings.ToLower(filepath.Base(cand.Executable))
+			if !strings.Contains(candBase, "steamclient_loader") && !strings.Contains(candBase, "coldclientloader") {
+				info.ExePath = cand.Executable
+				break
+			}
+		}
 	}
 
 	// Update platform if executable is a Windows .exe and platform was defaulted to linux

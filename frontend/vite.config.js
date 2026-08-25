@@ -12,5 +12,13 @@ export default defineConfig({
   server: {
     port: 34115,
     strictPort: true,
+  },
+  resolve: {
+    conditions: ['browser'],
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.js'],
   }
 });

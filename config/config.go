@@ -4,46 +4,47 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
-)
-
-// Default URL & Path Constants
-const (
-	DefaultSteamStoreAPI      = "https://store.steampowered.com/api"
-	DefaultSteamWebAPI        = "https://api.steampowered.com"
-	DefaultGithubAPIURL       = "https://api.github.com/repos/Detanup01/gbe_fork/releases/latest"
-	DefaultSteamlessGithubAPI = "https://api.github.com/repos/staernid/steamless-rs/releases/latest"
 )
 
 // Config holds user-configurable paths and settings for gamux.
 type Config struct {
 	// Paths
-	GbeDir             string `json:"gbe_dir"`
-	SteamlessDir       string `json:"steamless_dir"`
-	LutrisDir          string `json:"lutris_dir"`
-	SteamUserdata      string `json:"steam_userdata"`
-	SteamStoreAPI      string `json:"steam_store_api"`
-	SteamWebAPI        string `json:"steam_web_api"`
-	GithubAPIURL       string `json:"github_api_url"`
-	SteamlessGithubAPI string `json:"steamless_github_api"`
+	LibraryPaths  []string `json:"library_paths,omitempty"`
+	GbeDir        string   `json:"gbe_dir,omitempty"`
+	SteamlessDir  string   `json:"steamless_dir,omitempty"`
+	LutrisDir     string   `json:"lutris_dir,omitempty"`
+	SteamUserdata string   `json:"steam_userdata,omitempty"`
 
 	// API Keys
-	SteamWebAPIKey string `json:"steam_web_api_key"`
-	HubcapAPIKey   string `json:"hubcap_api_key"`
+	SteamWebAPIKey   string `json:"steam_web_api_key,omitempty"`
+	HubcapAPIKey     string `json:"hubcap_api_key,omitempty"`
+	SteamGridDBAPIKey string `json:"steamgriddb_api_key,omitempty"`
+	ArtworkDir       string `json:"artwork_dir,omitempty"`
 
 	// Notifications
-	EnableLaunchNotify bool   `json:"enable_launch_notify"`
-	LaunchNotifyMode   string `json:"launch_notify_mode"`
+	EnableLaunchNotify bool `json:"enable_launch_notify"`
 
 	// Operational Settings
-	GbeMode      string `json:"gbe_mode"`
-	Lutris       bool   `json:"lutris"`
-	Steamless    bool   `json:"steamless"`
-	Achievements bool   `json:"achievements"`
-	Normalize    bool   `json:"normalize"`
-	Platform     string `json:"platform"`
-	Runner       string `json:"runner"`
-	WinePrefix   string `json:"wine_prefix"`
+	OperatingMode      string            `json:"operating_mode,omitempty"`
+	DefaultRunner      string            `json:"default_runner,omitempty"`
+	ProtonPath         string            `json:"proton_path,omitempty"`
+	GbeMode            string            `json:"gbe_mode,omitempty"`
+	Lutris             bool              `json:"lutris"`
+	Steamless          bool              `json:"steamless"`
+	Achievements       bool              `json:"achievements"`
+	Normalize          bool              `json:"normalize"`
+	WinePrefix         string            `json:"wine_prefix,omitempty"`
+	MangoHud           bool              `json:"mangohud,omitempty"`
+	DXVKHud            string            `json:"dxvk_hud,omitempty"`
+	WineFullscreenFSR  bool              `json:"wine_fullscreen_fsr,omitempty"`
+	ProtonNVAPI        bool              `json:"proton_nvapi,omitempty"`
+	TransferSpeedLimit int64             `json:"transfer_speed_limit,omitempty"`
+	GlobalEnv          map[string]string `json:"global_env,omitempty"`
+
+	// Emulation Profile Flags
+	Language       string `json:"language,omitempty"`
+	DisableOverlay bool   `json:"disable_overlay,omitempty"`
+	OfflineMode    bool   `json:"offline_mode,omitempty"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -80,27 +81,33 @@ func DefaultConfig() *Config {
 		steamUserDataPath = filepath.Join(dataHome, "Steam", "userdata")
 	}
 
+	artworkPath := ".local/share/gamux/art"
+	if dataHome != "" {
+		artworkPath = filepath.Join(dataHome, "gamux", "art")
+	}
+
 	return &Config{
+		LibraryPaths:       nil,
 		GbeDir:             gbePath,
 		SteamlessDir:       steamlessPath,
 		LutrisDir:          lutrisPath,
 		SteamUserdata:      steamUserDataPath,
-		SteamStoreAPI:      DefaultSteamStoreAPI,
-		SteamWebAPI:        DefaultSteamWebAPI,
-		GithubAPIURL:       DefaultGithubAPIURL,
-		SteamlessGithubAPI: DefaultSteamlessGithubAPI,
+		ArtworkDir:         artworkPath,
 		SteamWebAPIKey:     "",
 		HubcapAPIKey:       "",
+		SteamGridDBAPIKey:  "",
 		EnableLaunchNotify: true,
-		LaunchNotifyMode:   "notify",
+		OperatingMode:      "standalone",
+		DefaultRunner:      "umu",
 		GbeMode:            "loader",
 		Lutris:             true,
 		Steamless:          true,
 		Achievements:       true,
 		Normalize:          true,
-		Platform:           "win64",
-		Runner:             "wine",
 		WinePrefix:         "",
+		MangoHud:           false,
+		WineFullscreenFSR:  false,
+		ProtonNVAPI:        false,
 	}
 }
 
@@ -108,6 +115,10 @@ func DefaultConfig() *Config {
 func GetConfigPath(customPath string) string {
 	if customPath != "" {
 		return customPath
+	}
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome != "" {
+		return filepath.Join(configHome, "gamux", "config.json")
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -122,6 +133,7 @@ func LoadConfig(customPath string) (*Config, error) {
 	path := GetConfigPath(customPath)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		hydrateAPIKeys(cfg)
 		if customPath != "" {
 			return nil, err
 		}
@@ -137,14 +149,32 @@ func LoadConfig(customPath string) (*Config, error) {
 		return nil, err
 	}
 
+	hydrateAPIKeys(cfg)
 	return cfg, nil
+}
+
+func hydrateAPIKeys(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.SteamGridDBAPIKey == "" {
+		if envKey := os.Getenv("STEAMGRIDDB_API_KEY"); envKey != "" {
+			cfg.SteamGridDBAPIKey = envKey
+		} else if home, err := os.UserHomeDir(); err == nil {
+			keyFile := filepath.Join(home, ".config", "lutris_art_apikey.txt")
+			if data, err := os.ReadFile(keyFile); err == nil {
+				cfg.SteamGridDBAPIKey = string(data)
+			}
+		}
+	}
 }
 
 // SaveConfig writes a Config struct cleanly to a JSON file on disk.
 func SaveConfig(cfg *Config, path string) error {
-	if cfg == nil || path == "" {
+	if cfg == nil {
 		return nil
 	}
+	path = GetConfigPath(path)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -160,45 +190,4 @@ func SaveConfig(cfg *Config, path string) error {
 func InitConfig(customPath string) error {
 	_, err := LoadConfig(customPath)
 	return err
-}
-
-// PlatformConfig maps platform names to their configuration.
-var PlatformConfig = map[string]struct {
-	Subdir, Target, Additional, Generator, Arch string
-}{
-	"linux": {
-		Subdir:     "linux_release",
-		Target:     "libsteam_api.so",
-		Additional: "steamclient.so",
-		Generator:  "generate_interfaces_x64",
-		Arch:       "64",
-	},
-	"win64": {
-		Subdir:     "win_release",
-		Target:     "steam_api64.dll",
-		Additional: "steamclient64.dll",
-		Generator:  "generate_interfaces_x64.exe",
-		Arch:       "64",
-	},
-	"win32": {
-		Subdir:     "win_release",
-		Target:     "steam_api.dll",
-		Additional: "steamclient.dll",
-		Generator:  "generate_interfaces_x32.exe",
-		Arch:       "32",
-	},
-}
-
-// Release represents a GitHub release.
-type Release struct {
-	TagName     string    `json:"tag_name"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	HTMLURL     string    `json:"html_url"`
-	PublishedAt time.Time `json:"published_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Assets      []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-	} `json:"assets"`
 }

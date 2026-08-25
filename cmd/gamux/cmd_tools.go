@@ -9,9 +9,7 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/engine"
-	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/ui"
-	"github.com/staernid/gamux/util"
 	"github.com/urfave/cli/v2"
 )
 
@@ -49,7 +47,8 @@ var updateGBECommand = &cli.Command{
 	Usage:    "Update Goldberg Emulator release assets from GitHub",
 	Action: func(c *cli.Context) error {
 		ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets from GitHub")
-		if err := github.UpdateGBE(c.Context, activeConfig); err != nil {
+		eng := engine.New(activeConfig)
+		if err := eng.Tools().Update(c.Context, "gbe"); err != nil {
 			renderCLIError(err)
 			return err
 		}
@@ -65,9 +64,9 @@ var updateSteamlessCommand = &cli.Command{
 	Category: "Maintenance & Tools",
 	Usage:    "Update Steamless DRM unpacker release assets from GitHub",
 	Action: func(c *cli.Context) error {
-		destDir := util.ExpandPath(activeConfig.SteamlessDir)
 		ui.RenderStep(1, 1, "Updating Steamless DRM unpacker release assets from GitHub")
-		if err := github.UpdateSteamlessAssets(c.Context, activeConfig, destDir); err != nil {
+		eng := engine.New(activeConfig)
+		if err := eng.Tools().Update(c.Context, "steamless"); err != nil {
 			renderCLIError(err)
 			return err
 		}
@@ -87,22 +86,22 @@ var toolsCommand = &cli.Command{
 		&cli.BoolFlag{Name: "json", Usage: "Output tools status in JSON format"},
 	},
 	Action: func(c *cli.Context) error {
+		eng := engine.New(activeConfig)
 		arg := c.Args().First()
 		if arg == "update" || arg == "upgrade" {
 			ui.RenderStep(1, 2, "Updating Goldberg Emulator release assets...")
-			if err := github.UpdateGBE(c.Context, activeConfig); err != nil {
+			if err := eng.Tools().Update(c.Context, "gbe"); err != nil {
 				slog.Warn("GBE update failed", "error", err)
 			}
 			ui.RenderStep(2, 2, "Updating Steamless release assets...")
-			destDir := util.ExpandPath(activeConfig.SteamlessDir)
-			if err := github.UpdateSteamlessAssets(c.Context, activeConfig, destDir); err != nil {
+			if err := eng.Tools().Update(c.Context, "steamless"); err != nil {
 				slog.Warn("Steamless update failed", "error", err)
 			}
 			ui.RenderSuccess("Tools update process finished", "", nil)
 			return nil
 		}
 
-		tools, err := github.GetToolsStatus(c.Context, activeConfig)
+		toolsList, err := eng.GetToolsStatus(c.Context)
 		if err != nil {
 			renderCLIError(err)
 			return err
@@ -111,13 +110,13 @@ var toolsCommand = &cli.Command{
 		if c.Bool("json") {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
-			return enc.Encode(tools)
+			return enc.Encode(toolsList)
 		}
 
 		fmt.Println()
 		fmt.Println("🔧 POST-PROCESSING TOOLS & RELEASE NOTES")
 		fmt.Println("------------------------------------------------------------------------")
-		for _, t := range tools {
+		for _, t := range toolsList {
 			statusTag := "Up to Date"
 			if t.HasUpdate {
 				statusTag = "⚠️ Update Available"

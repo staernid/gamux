@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
@@ -18,6 +19,17 @@ var Version = "dev"
 func main() {
 	app := gui.NewApp(nil)
 
+	var runtimeCtx context.Context
+	guard, isPrimary := gui.AcquireOrActivate(func() context.Context {
+		return runtimeCtx
+	})
+	if !isPrimary {
+		return
+	}
+	if guard != nil {
+		defer guard.Release()
+	}
+
 	err := wails.Run(&options.App{
 		Title:     "gamux - Steam Game Manager",
 		Width:     1280,
@@ -25,10 +37,19 @@ func main() {
 		MinWidth:  960,
 		MinHeight: 600,
 		AssetServer: &assetserver.Options{
-			Assets: frontend.Dist,
+			Assets:  frontend.Dist,
+			Handler: app.AssetHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 11, G: 14, B: 20, A: 255},
-		OnStartup:        app.Startup,
+		OnStartup: func(ctx context.Context) {
+			runtimeCtx = ctx
+			app.Startup(ctx)
+		},
+		OnShutdown: func(ctx context.Context) {
+			if guard != nil {
+				guard.Release()
+			}
+		},
 		Bind: []interface{}{
 			app,
 		},

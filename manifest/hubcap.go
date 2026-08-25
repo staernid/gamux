@@ -17,8 +17,33 @@ import (
 )
 
 
+// DefaultHTTPClient is the default http.Client used for manifest key retrieval operations.
+var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
 // HTTPClient allows injecting custom HTTP transport for testing.
-var HTTPClient = &http.Client{Timeout: 30 * time.Second}
+var HTTPClient = DefaultHTTPClient
+
+type contextKey string
+
+const httpClientKey contextKey = "manifest_http_client"
+
+// WithHTTPClient returns a new context with the provided http.Client attached.
+func WithHTTPClient(ctx context.Context, client *http.Client) context.Context {
+	if client == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, httpClientKey, client)
+}
+
+// HTTPClientFromContext extracts the http.Client from context or returns DefaultHTTPClient.
+func HTTPClientFromContext(ctx context.Context) *http.Client {
+	if ctx != nil {
+		if client, ok := ctx.Value(httpClientKey).(*http.Client); ok && client != nil {
+			return client
+		}
+	}
+	return DefaultHTTPClient
+}
 
 // HubcapKeyEntry represents a single depot key item returned from Hubcap API.
 type HubcapKeyEntry struct {
@@ -93,7 +118,7 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 		req.Header.Set("X-API-Key", apiKey)
 		req.Header.Set("User-Agent", "gamux/1.0")
 
-		resp, err := HTTPClient.Do(req)
+		resp, err := HTTPClientFromContext(ctx).Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("hubcap request failed for %s: %w", apiURL, err)
 			continue

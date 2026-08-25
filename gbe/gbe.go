@@ -11,9 +11,35 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
+
+// PlatformConfig maps platform identifiers to their Goldberg Steam Emulator library targets.
+var PlatformConfig = map[string]struct {
+	Subdir, Target, Additional, Generator, Arch string
+}{
+	"linux": {
+		Subdir:     "linux_release",
+		Target:     "libsteam_api.so",
+		Additional: "steamclient.so",
+		Generator:  "generate_interfaces_x64",
+		Arch:       "64",
+	},
+	"win64": {
+		Subdir:     "win_release",
+		Target:     "steam_api64.dll",
+		Additional: "steamclient64.dll",
+		Generator:  "generate_interfaces_x64.exe",
+		Arch:       "64",
+	},
+	"win32": {
+		Subdir:     "win_release",
+		Target:     "steam_api.dll",
+		Additional: "steamclient.dll",
+		Generator:  "generate_interfaces_x32.exe",
+		Arch:       "86",
+	},
+}
 
 // ApplyGBE applies the GBE emulator.
 // If portable is true, it performs direct DLL/SO replacement (copying emulated libraries into the game dir).
@@ -34,25 +60,27 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 		return fmt.Errorf("resolve target dir: %w", err)
 	}
 
-	platformCfg, ok := config.PlatformConfig[platform]
+	platformCfg, ok := PlatformConfig[platform]
 	if !ok {
 		var validPlatforms []string
-		for p := range config.PlatformConfig {
+		for p := range PlatformConfig {
 			validPlatforms = append(validPlatforms, p)
 		}
 		return fmt.Errorf("invalid platform: '%s'. Valid platforms: %s", platform, strings.Join(validPlatforms, ", "))
 	}
 
-	gbeBase := cfg.GbeDir
-	if !filepath.IsAbs(gbeBase) {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to get user home directory: %w", err)
-		}
-		gbeBase = filepath.Join(homeDir, gbeBase)
+	gbeBase := util.CanonicalPath(cfg.GbeDir)
+	if gbeBase == "" {
+		gbeBase = util.CanonicalPath(config.DefaultConfig().GbeDir)
 	}
 
 	gbePath := filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x"+platformCfg.Arch)
+	if !util.FileExists(gbePath) && platformCfg.Arch == "86" {
+		fallbackPath := filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x32")
+		if util.FileExists(fallbackPath) {
+			gbePath = fallbackPath
+		}
+	}
 
 	var targetFiles []string
 	walkErr := filepath.WalkDir(absTargetDir, func(path string, d os.DirEntry, err error) error {
@@ -133,61 +161,22 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 
 
 
-		generatorPath := filepath.Join(gbeBase, platformCfg.Subdir, "tools", "generate_interfaces", platformCfg.Generator)
-		interfacesPath := filepath.Join(filepath.Dir(file), "steam_interfaces.txt")
-		hashPath := filepath.Join(filepath.Dir(file), ".steam_interfaces.hash")
-
 		// Determine the source original binary for interface detection
 		sourceDll := file
 		if util.FileExists(file + ".ORIGINAL") {
 			sourceDll = file + ".ORIGINAL"
 		}
 
-		shouldGenerate := true
-		if util.FileExists(interfacesPath) && util.FileExists(hashPath) {
-			if currHash, err := util.GetHash(sourceDll); err == nil && currHash != "" {
-				if savedHash, err := os.ReadFile(hashPath); err == nil && strings.TrimSpace(string(savedHash)) == currHash {
-					if fi, err := os.Stat(interfacesPath); err == nil && fi.Size() > 0 {
-						shouldGenerate = false
-						slog.Info("steam_interfaces.txt is up-to-date; skipping generator", "interfaces", interfacesPath)
-					}
-				}
+		if dryRun {
+			slog.Info("[DRY RUN] Would extract steam_interfaces.txt into steam_settings", "source", sourceDll)
+		} else {
+			targetDirs := []string{
+				filepath.Join(absTargetDir, "steam_settings"),       // Root steam_settings (for Loader mode)
+				filepath.Join(filepath.Dir(file), "steam_settings"), // Subdir steam_settings (for plugin folders)
+				filepath.Dir(file),                                  // Alongside steam_api.dll (for portable mode)
 			}
-		}
-
-		if shouldGenerate && util.FileExists(generatorPath) {
-			if dryRun {
-				slog.Info("[DRY RUN] Would run generator", "generator", platformCfg.Generator)
-			} else {
-				slog.Info("Running generator", "generator", platformCfg.Generator)
-				var cmd *exec.Cmd
-				genTarget := filepath.Base(file)
-				if strings.HasSuffix(platformCfg.Generator, ".exe") && runtime.GOOS != "windows" {
-					winePath, err := exec.LookPath("wine")
-					if err != nil {
-						slog.Warn("Wine binary not found in PATH; skipping generator execution", "generator", platformCfg.Generator)
-					} else {
-						cmd = exec.Command(winePath, generatorPath, genTarget)
-					}
-				} else {
-					if runtime.GOOS != "windows" {
-						if err := os.Chmod(generatorPath, 0755); err != nil {
-							slog.Warn("Failed to set executable permissions", "path", generatorPath, "error", err)
-						}
-					}
-					cmd = exec.Command(generatorPath, genTarget)
-				}
-
-				if cmd != nil {
-					cmd.Dir = filepath.Dir(file)
-					if out, err := cmd.CombinedOutput(); err != nil {
-						slog.Error("Generator failed", "error", err, "output", string(out))
-					} else {
-						if h, err := util.GetHash(sourceDll); err == nil && h != "" {
-							_ = os.WriteFile(hashPath, []byte(h), 0644)
-						}
-					}
-				}
+			if err := GenerateAndSaveInterfaces(sourceDll, targetDirs...); err != nil {
+				slog.Warn("Failed to extract Steam interfaces from binary", "source", sourceDll, "error", err)
 			}
 		}
 	}
@@ -200,7 +189,83 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 		}
 	}
 
+	// Configure language, persona profile, SteamID, and overlay settings in steam_settings/
+	supportedLangs, _ := steam.FetchSupportedLanguages(ctx, appID)
+	for _, file := range targetFiles {
+		steamSettingsDir := filepath.Join(filepath.Dir(file), "steam_settings")
+		if err := ConfigureCustomSettings(steamSettingsDir, cfg, supportedLangs, dryRun); err != nil {
+			slog.Warn("Failed to configure custom emulator settings", "dir", steamSettingsDir, "error", err)
+		}
+	}
+
 	slog.Info("GBE application process completed")
+	return nil
+}
+
+// ConfigureCustomSettings populates Goldberg emulator profile configurations into steam_settings/.
+func ConfigureCustomSettings(steamSettingsDir string, cfg *config.Config, supportedLanguages []string, dryRun bool) error {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	if !dryRun {
+		_ = os.MkdirAll(steamSettingsDir, 0755)
+	}
+
+	// 1. Language Resolution
+	langFile := filepath.Join(steamSettingsDir, "force_language.txt")
+	targetLang := cfg.Language
+	if targetLang != "" && targetLang != "auto" {
+		// Validate against supported languages if available
+		if len(supportedLanguages) > 0 {
+			isSupported := false
+			for _, sl := range supportedLanguages {
+				if strings.EqualFold(sl, targetLang) {
+					isSupported = true
+					break
+				}
+			}
+			if !isSupported {
+				slog.Info("Preferred language not in game's supported list, falling back", "preferred", targetLang, "fallback", supportedLanguages[0])
+				targetLang = supportedLanguages[0]
+			}
+		}
+
+		if dryRun {
+			slog.Info("[DRY RUN] Would write force_language.txt", "language", targetLang)
+		} else {
+			_ = os.WriteFile(langFile, []byte(strings.ToLower(targetLang)+"\n"), 0644)
+			slog.Info("Configured emulator language", "language", targetLang, "path", langFile)
+		}
+	} else if !dryRun {
+		_ = os.Remove(langFile)
+	}
+
+	// Clean up any legacy per-game force files if present (Goldberg reads global configs.user.ini)
+	if !dryRun {
+		_ = os.Remove(filepath.Join(steamSettingsDir, "force_account_name.txt"))
+		_ = os.Remove(filepath.Join(steamSettingsDir, "force_steamid.txt"))
+	}
+
+	// 4. Disable Overlay
+	if cfg.DisableOverlay {
+		overlayFile := filepath.Join(steamSettingsDir, "disable_overlay.txt")
+		if dryRun {
+			slog.Info("[DRY RUN] Would write disable_overlay.txt")
+		} else {
+			_ = os.WriteFile(overlayFile, []byte("1\n"), 0644)
+		}
+	}
+
+	// 5. Offline Mode
+	if cfg.OfflineMode {
+		offlineFile := filepath.Join(steamSettingsDir, "offline.txt")
+		if dryRun {
+			slog.Info("[DRY RUN] Would write offline.txt")
+		} else {
+			_ = os.WriteFile(offlineFile, []byte("1\n"), 0644)
+		}
+	}
+
 	return nil
 }
 

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/engine"
+	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -99,7 +101,18 @@ var applyCommand = &cli.Command{
 		}
 
 		ui.RenderStep(1, 1, "Applying configuration for "+opts.Path)
-		res, err := eng.ApplyGame(c.Context, opts)
+		var res *engine.ProcessResult
+		err := eng.Tasks.RunSync(c.Context, tasks.TaskSpec{
+			Type:         tasks.TypeApply,
+			Title:        fmt.Sprintf("Apply %s", opts.Path),
+			GameDir:      opts.Path,
+			Capabilities: tasks.CapCancellable,
+			Run: func(ctx context.Context, ctrl *tasks.Controller) error {
+				var applyErr error
+				res, applyErr = eng.ApplyGame(ctx, opts)
+				return applyErr
+			},
+		})
 		if err != nil {
 			renderCLIError(err, "Check directory path", "Verify file permissions")
 			return err

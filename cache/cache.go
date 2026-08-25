@@ -173,3 +173,44 @@ func SaveNews(appID, news string) {
 		_ = os.WriteFile(path, bytes, 0644)
 	}
 }
+
+type CachedNewsItems struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Items     json.RawMessage `json:"items"`
+}
+
+// GetNewsItems retrieves cached Steam patch notes list if less than 12 hours old.
+func GetNewsItems(appID string) ([]byte, bool) {
+	if DisableCache || appID == "" {
+		return nil, false
+	}
+	dir := getCacheDir()
+	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var cached CachedNewsItems
+	if err := json.Unmarshal(data, &cached); err == nil {
+		if time.Since(cached.Timestamp) < 12*time.Hour && len(cached.Items) > 0 {
+			return cached.Items, true
+		}
+	}
+	return nil, false
+}
+
+// SaveNewsItems caches Steam patch notes list to disk for 12 hours.
+func SaveNewsItems(appID string, itemsJSON []byte) {
+	if DisableCache || appID == "" || len(itemsJSON) == 0 {
+		return
+	}
+	dir := getCacheDir()
+	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
+	cached := CachedNewsItems{
+		Timestamp: time.Now(),
+		Items:     itemsJSON,
+	}
+	if data, err := json.MarshalIndent(cached, "", "  "); err == nil {
+		_ = os.WriteFile(path, data, 0644)
+	}
+}

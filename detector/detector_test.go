@@ -118,81 +118,6 @@ func TestDetect_SteamSubfolder(t *testing.T) {
 	}
 }
 
-func TestConsolidateManifests(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Simulate Pattern C: steamapps/appmanifest_111.acf + steamapps/common/MyGame
-	steamappsDir := filepath.Join(tmpDir, "steamapps")
-	commonDir := filepath.Join(steamappsDir, "common", "MyGame")
-	_ = os.MkdirAll(commonDir, 0755)
-
-	acfPath := filepath.Join(steamappsDir, "appmanifest_111.acf")
-	acfContent := `"AppState"
-{
-	"appid" "111"
-	"name" "MyGame"
-	"installdir" "MyGame"
-}`
-	_ = os.WriteFile(acfPath, []byte(acfContent), 0644)
-
-	info, err := Detect(context.Background(), tmpDir)
-	if err != nil {
-		t.Fatalf("Detect failed: %v", err)
-	}
-
-	if !info.RawDepotLayout {
-		t.Error("expected RawDepotLayout to be true")
-	}
-
-	if err := ConsolidateManifests(info); err != nil {
-		t.Fatalf("ConsolidateManifests failed: %v", err)
-	}
-
-	// Verify [Manifests]/appmanifest_111.acf exists inside MyGame
-	consolidatedACF := filepath.Join(info.GameDir, "[Manifests]", "appmanifest_111.acf")
-	if _, err := os.Stat(consolidatedACF); os.IsNotExist(err) {
-		t.Errorf("expected consolidated ACF at %s", consolidatedACF)
-	}
-
-	t.Run("no manifest path does not create [Manifests] directory", func(t *testing.T) {
-		gameDir := t.TempDir()
-		emptyInfo := &GameInfo{GameDir: gameDir}
-		if err := ConsolidateManifests(emptyInfo); err != nil {
-			t.Fatalf("ConsolidateManifests failed: %v", err)
-		}
-		manifestsDir := filepath.Join(gameDir, "[Manifests]")
-		if _, err := os.Stat(manifestsDir); !os.IsNotExist(err) {
-			t.Errorf("expected [Manifests] directory to not exist, but found at %s", manifestsDir)
-		}
-	})
-
-	t.Run("consolidates manifest into [Manifests]", func(t *testing.T) {
-		gameDir := t.TempDir()
-		sourceDir := filepath.Join(gameDir, "source_manifests")
-		_ = os.MkdirAll(sourceDir, 0755)
-		_ = os.WriteFile(filepath.Join(sourceDir, "appmanifest_2088570.acf"), []byte("test"), 0644)
-		_ = os.WriteFile(filepath.Join(sourceDir, "2088571_1234.manifest"), []byte("test"), 0644)
-
-		info := &GameInfo{
-			GameDir:      gameDir,
-			ManifestPath: filepath.Join(sourceDir, "appmanifest_2088570.acf"),
-		}
-
-		if err := ConsolidateManifests(info); err != nil {
-			t.Fatalf("ConsolidateManifests failed: %v", err)
-		}
-
-		// Verify [Manifests] has both files
-		manifestsDir := filepath.Join(gameDir, "[Manifests]")
-		if _, err := os.Stat(filepath.Join(manifestsDir, "appmanifest_2088570.acf")); os.IsNotExist(err) {
-			t.Error("expected appmanifest in [Manifests]")
-		}
-		if _, err := os.Stat(filepath.Join(manifestsDir, "2088571_1234.manifest")); os.IsNotExist(err) {
-			t.Error("expected .manifest in [Manifests]")
-		}
-	})
-}
-
 func TestGenerateACFContent(t *testing.T) {
 	data := &ACFData{
 		AppID:      "1091500",
@@ -207,60 +132,6 @@ func TestGenerateACFContent(t *testing.T) {
 	}
 	if !strings.Contains(content, `"installdir"`+"\t\t"+`"Cyberpunk 2077"`) {
 		t.Errorf("expected installdir in generated ACF, got:\n%s", content)
-	}
-}
-
-func TestEnsureACFManifest(t *testing.T) {
-	tmpDir := t.TempDir()
-	info := &GameInfo{
-		AppID:      "1091500",
-		Name:       "Cyberpunk 2077",
-		InstallDir: "Cyberpunk 2077",
-		GameDir:    tmpDir,
-	}
-
-	if err := EnsureACFManifest(info, false); err != nil {
-		t.Fatalf("EnsureACFManifest failed: %v", err)
-	}
-
-	expectedPath := filepath.Join(tmpDir, "[Manifests]", "appmanifest_1091500.acf")
-	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
-		t.Errorf("expected ACF file at %s", expectedPath)
-	}
-
-	data, err := ParseACFFile(expectedPath)
-	if err != nil {
-		t.Fatalf("ParseACFFile failed on synthesized manifest: %v", err)
-	}
-	if data.AppID != "1091500" || data.InstallDir != "Cyberpunk 2077" {
-		t.Errorf("synthesized ACF content mismatch: %+v", data)
-	}
-}
-
-func TestNormalizeDirectory(t *testing.T) {
-	tmpParent := t.TempDir()
-	rawDir := filepath.Join(tmpParent, "Cyberpunk.2077.v2.12-P2P")
-	if err := os.MkdirAll(rawDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	info := &GameInfo{
-		AppID:      "1091500",
-		Name:       "Cyberpunk 2077",
-		InstallDir: "Cyberpunk 2077",
-		GameDir:    rawDir,
-	}
-
-	if err := NormalizeDirectory(info, false); err != nil {
-		t.Fatalf("NormalizeDirectory failed: %v", err)
-	}
-
-	expectedDir := filepath.Join(tmpParent, "Cyberpunk 2077")
-	if info.GameDir != expectedDir {
-		t.Errorf("expected GameDir %s, got %s", expectedDir, info.GameDir)
-	}
-	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
-		t.Errorf("expected directory at %s", expectedDir)
 	}
 }
 
@@ -352,24 +223,72 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		}
 	})
 
-	t.Run("GOG Standalone Topology", func(t *testing.T) {
+	t.Run("LaunchProfile Custom Target Exe Priority", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		gameDir := filepath.Join(tmpDir, "WitcherGame")
+		gameDir := filepath.Join(tmpDir, "MultiExeGame")
+		_ = os.MkdirAll(filepath.Join(gameDir, "steam_settings"), 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "MultiExeGame.exe"), []byte("exe1"), 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "MultiExeGame_DX11.exe"), []byte("exe2"), 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_appid.txt"), []byte("44444"), 0644)
+
+		lpJSON := `{"exe_path": "MultiExeGame_DX11.exe", "exe_args": "-dx11"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_settings", "launch_profile.json"), []byte(lpJSON), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if filepath.Base(info.ExePath) != "MultiExeGame_DX11.exe" {
+			t.Errorf("expected target executable MultiExeGame_DX11.exe from launch profile, got %s", filepath.Base(info.ExePath))
+		}
+		if info.ExeArgs != "-dx11" {
+			t.Errorf("expected exe_args '-dx11', got %s", info.ExeArgs)
+		}
+	})
+
+	t.Run("GOG Game Detection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "Witcher3")
 		_ = os.MkdirAll(gameDir, 0755)
 
-		gogJSON := `{"gameId": "1987654321", "title": "The Witcher 3"}`
-		_ = os.WriteFile(filepath.Join(gameDir, "goggame-1987654321.info"), []byte(gogJSON), 0644)
+		gogJSON := `{"gameId": "1207664643", "name": "The Witcher 3: Wild Hunt"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "goggame-1207664643.info"), []byte(gogJSON), 0644)
 		_ = os.WriteFile(filepath.Join(gameDir, "witcher3.exe"), []byte("exe"), 0755)
 
 		info, err := Detect(context.Background(), gameDir)
 		if err != nil {
 			t.Fatalf("Detect failed: %v", err)
 		}
-		if info.Store != "GOG" {
-			t.Errorf("expected store GOG, got %s", info.Store)
+		if info.Source != "GOG" || info.Store != "GOG" {
+			t.Errorf("expected GOG store/source, got %s / %s", info.Store, info.Source)
 		}
-		if info.Name != "The Witcher 3" {
-			t.Errorf("expected name 'The Witcher 3', got %s", info.Name)
+		if info.GOGID != "1207664643" {
+			t.Errorf("expected GOGID 1207664643, got %s", info.GOGID)
+		}
+		if info.Name != "The Witcher 3: Wild Hunt" {
+			t.Errorf("expected name 'The Witcher 3: Wild Hunt', got %s", info.Name)
+		}
+	})
+
+	t.Run("Epic Game Detection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "EpicGame")
+		egDir := filepath.Join(gameDir, ".egstore")
+		_ = os.MkdirAll(egDir, 0755)
+
+		_ = os.WriteFile(filepath.Join(egDir, "Sugar.mancpn"), []byte("manifest"), 0644)
+		_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("exe"), 0755)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Source != "Epic" || info.Store != "Epic" {
+			t.Errorf("expected Epic store/source, got %s / %s", info.Store, info.Source)
+		}
+		if info.EpicApp != "Sugar" {
+			t.Errorf("expected EpicApp Sugar, got %s", info.EpicApp)
 		}
 	})
 }

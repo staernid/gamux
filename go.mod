@@ -10,7 +10,9 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/ulikunitz/xz v0.5.16
 	github.com/urfave/cli/v2 v2.27.7
+	github.com/wailsapp/wails/v2 v2.15.1-0.20260821151214-8905cd0e34a5
 	golang.org/x/sync v0.21.0
+	golang.org/x/time v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.57.0
 )
@@ -71,7 +73,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	github.com/wailsapp/wails/v2 v2.15.1-0.20260821151214-8905cd0e34a5 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect

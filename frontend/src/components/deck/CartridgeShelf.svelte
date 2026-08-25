@@ -1,6 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
-  import { filteredGames, selectedGame, activeFilter, sortBy, stats } from '../../stores/library.js';
+  import { filteredGames, selectedGame, activeFilter, sortBy, stats, runningGames } from '../../stores/library.js';
+  import { isSamePath } from '../../utils/game.js';
   import PosterArt from '../common/PosterArt.svelte';
 
   let shelfReelEl;
@@ -76,41 +77,42 @@
     class="flex-1 px-4 sm:px-6 py-2.5 flex items-center space-x-3 sm:space-x-4 overflow-x-auto overflow-y-hidden"
   >
     {#if $filteredGames.length > 0}
-      {#each $filteredGames as game (game.GameDir || game.Name)}
-        {@const isSelected = $selectedGame?.GameDir === game.GameDir}
+      {#each $filteredGames as game (game.gameDir || game.name)}
+        {@const isSelected = isSamePath($selectedGame?.gameDir, game.gameDir)}
         <button
           type="button"
           on:click={() => handleSelect(game)}
           class="cartridge relative flex-shrink-0 w-24 sm:w-28 aspect-[2/3] overflow-hidden group cursor-pointer text-left focus:outline-none {isSelected ? 'active' : ''}"
-          title={game.Name}
+          title={game.name}
         >
           <!-- Capsule Art -->
           <PosterArt
-            appId={game.AppID}
-            name={game.Name}
+            appId={game.appId}
+            name={game.name}
+            posterUrl={game.coverUrl}
+            localCoverUrl={game.localCoverUrl}
             className="w-full h-full object-cover"
           />
 
           <!-- Overlay gradient on bottom -->
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
 
-          <!-- Status Pip in Top-Right Corner -->
+          <!-- Status Pip in Top-Right Corner (Only shown for Running or Updates) -->
           <div class="absolute top-1.5 right-1.5 pointer-events-none">
-            {#if game.hasUpdatesOrIssues}
-              <span class="pip pip-update"></span>
-            {:else if game.isPatched && game.lutris_registered}
-              <span class="pip pip-ready"></span>
-            {:else if game.isPatched}
-              <span class="pip pip-update"></span>
-            {:else}
-              <span class="pip pip-clean"></span>
+            {#if $runningGames.has(game.gameDir)}
+              <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#22c55e]"></span>
+              </span>
+            {:else if (game.hasUpdate || game.hasUpdatesOrIssues)}
+              <span class="pip pip-update" title="Update Available"></span>
             {/if}
           </div>
 
           <!-- Compact Title on Bottom -->
           <div class="absolute bottom-1.5 left-1.5 right-1.5 pointer-events-none">
             <span class="block text-[10px] font-bold text-white truncate leading-tight drop-shadow-sm">
-              {game.Name}
+              {game.name}
             </span>
           </div>
         </button>

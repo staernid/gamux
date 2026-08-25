@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/engine"
-	"github.com/staernid/gamux/lutris"
+	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -209,9 +208,18 @@ var newsCommand = &cli.Command{
 var launchCommand = &cli.Command{
 	Name:      "launch",
 	Category:  "Step 3: Inspection & Maintenance",
-	Usage:     "Run pre-launch update checks and launch game via Lutris",
+	Usage:     "Run pre-launch update checks and launch game (via UMU/Wine/Proton or Lutris)",
 	ArgsUsage: "[path]",
+	Aliases:   []string{"run", "play"},
 	Flags: []cli.Flag{
+		&cli.StringFlag{Name: "mode", Usage: "Operating mode override ('standalone' or 'lutris')"},
+		&cli.StringFlag{Name: "runner", Usage: "Runner override ('umu', 'wine', 'proton', 'linux', 'lutris')"},
+		&cli.StringFlag{Name: "prefix", Usage: "Custom Wine prefix path"},
+		&cli.StringFlag{Name: "proton-path", Usage: "Custom Proton compatibility tool path"},
+		&cli.BoolFlag{Name: "mangohud", Usage: "Enable MangoHud performance overlay (MANGOHUD=1)"},
+		&cli.StringFlag{Name: "dxvk-hud", Usage: "Set DXVK HUD overlay elements (e.g. fps,compiler)"},
+		&cli.BoolFlag{Name: "fsr", Usage: "Enable Wine fullscreen AMD FSR scaling"},
+		&cli.BoolFlag{Name: "nvapi", Usage: "Enable Proton NVAPI support (DLSS)"},
 		&cli.BoolFlag{Name: "no-notify", Usage: "Disable pre-launch update notification check"},
 	},
 	Action: func(c *cli.Context) error {
@@ -231,13 +239,60 @@ var launchCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("detect game: %w", err)
 		}
-		slug := lutris.Slugify(status.Name)
-		ui.RenderStep(1, 1, "Launching "+status.Name+" via Lutris...")
-		lutrisBin, err := exec.LookPath("lutris")
-		if err != nil {
-			return fmt.Errorf("lutris binary not found in PATH: %w", err)
+
+		launchOpts := runner.LaunchOptions{
+			GameDir:       status.GameDir,
+			ExePath:       status.ExePath,
+			ExeArgs:       status.ExeArgs,
+			AppID:         status.AppID,
+			Name:          status.Name,
+			Platform:      status.Platform,
+			OperatingMode: status.OperatingMode,
+			Runner:        status.Runner,
+			WinePrefix:    status.WinePrefix,
 		}
-		cmd := exec.Command(lutrisBin, "lutris:rungame/"+slug)
-		return cmd.Run()
+
+		if status.LaunchProfile != nil {
+			launchOpts = *status.LaunchProfile
+		}
+
+		// Apply CLI flag overrides if explicitly specified
+		if c.IsSet("mode") {
+			launchOpts.OperatingMode = c.String("mode")
+		}
+		if c.IsSet("runner") {
+			launchOpts.Runner = c.String("runner")
+		}
+		if c.IsSet("prefix") {
+			launchOpts.WinePrefix = c.String("prefix")
+		}
+		if c.IsSet("proton-path") {
+			launchOpts.ProtonPath = c.String("proton-path")
+		}
+		if c.IsSet("mangohud") {
+			b := c.Bool("mangohud")
+			launchOpts.MangoHud = &b
+		}
+		if c.IsSet("dxvk-hud") {
+			launchOpts.DXVKHud = c.String("dxvk-hud")
+		}
+		if c.IsSet("fsr") {
+			b := c.Bool("fsr")
+			launchOpts.WineFullscreenFSR = &b
+		}
+		if c.IsSet("nvapi") {
+			b := c.Bool("nvapi")
+			launchOpts.ProtonNVAPI = &b
+		}
+
+		effectiveOpts := runner.ResolveEffectiveOptions(activeConfig, launchOpts)
+
+		modeDesc := "Standalone Launcher"
+		if effectiveOpts.OperatingMode == runner.ModeLutris {
+			modeDesc = "Lutris Helper"
+		}
+		ui.RenderStep(1, 1, fmt.Sprintf("Launching %s (%s, runner: %s)...", status.Name, modeDesc, effectiveOpts.Runner))
+
+		return eng.RunGame(c.Context, effectiveOpts)
 	},
 }

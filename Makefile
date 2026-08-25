@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LDFLAGS = -s -w -X main.Version=$(VERSION)
 GUI_TAGS = -tags desktop,production,webkit2_41
 
-.PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test lint run run-gui install uninstall tidy update-steamless
+.PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test lint run run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
 all: test build
 
@@ -19,9 +19,13 @@ build-cli:
 	go build -ldflags "$(LDFLAGS)" -o $(CLI_BINARY) ./cmd/gamux
 	@cp -f $(CLI_BINARY) gamux
 
-build-frontend:
+generate-bindings:
+	@ln -sf ../../wails.json cmd/gamux-gui/wails.json
+	@which wails > /dev/null 2>&1 && (cd cmd/gamux-gui && wails generate module $(GUI_TAGS) > /dev/null 2>&1) || true
+
+build-frontend: generate-bindings
 	@echo "Building frontend dist assets..."
-	@cd frontend && ([ -f package-lock.json ] && npm ci || npm install) && npm run build
+	@cd frontend && ([ -f package-lock.json ] && npm ci || npm install) && npm run check && npm run build
 
 build-gui: build-frontend
 	@mkdir -p bin
@@ -47,12 +51,34 @@ clean:
 clean-all: clean
 	rm -rf frontend/dist frontend/node_modules
 
-test:
-	go test -v ./...
+test-go:
+	go test -race ./...
+
+test-frontend:
+	@cd frontend && npm test
+	@node ./scripts/gui-eval.js audit
+
+gui-audit:
+	@node ./scripts/gui-eval.js audit
+
+gui-trace:
+	@node ./scripts/gui-eval.js trace
+
+gui-dump:
+	@node ./scripts/gui-eval.js dump
+
+gui-snap:
+	@node ./scripts/gui-eval.js snap
+
+test: test-go test-frontend
 
 lint:
 	go vet ./...
+	@cd frontend && npm run check
 	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
+
+check: lint test-go test-frontend build
+	@echo "✨ All Go and Frontend tests, lints, and builds passed cleanly!"
 
 run: run-cli
 

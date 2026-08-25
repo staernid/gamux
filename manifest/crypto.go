@@ -114,8 +114,9 @@ func DecryptFilename(b64EncryptedName string, hexKey string) (string, error) {
 }
 
 // DecryptChunkPayload decrypts an AES-256 encrypted chunk payload blob downloaded from a Steam CDN.
+// Steam chunk payloads encrypt the 16-byte IV with AES-ECB in the first block, followed by the AES-CBC ciphertext.
 func DecryptChunkPayload(encryptedData []byte, hexKey string) ([]byte, error) {
-	if hexKey == "" {
+	if hexKey == "" || len(encryptedData) < 16 {
 		return encryptedData, nil
 	}
 
@@ -129,17 +130,13 @@ func DecryptChunkPayload(encryptedData []byte, hexKey string) ([]byte, error) {
 		return nil, fmt.Errorf("create AES cipher: %w", err)
 	}
 
-	blockSize := block.BlockSize()
-	if len(encryptedData) < blockSize {
-		return nil, fmt.Errorf("chunk data length %d smaller than block size %d", len(encryptedData), blockSize)
-	}
+	// 1. First 16 bytes: ECB-encrypted IV
+	iv := make([]byte, 16)
+	block.Decrypt(iv, encryptedData[:16])
 
-	// First block is IV for CBC mode
-	iv := encryptedData[:blockSize]
-	ciphertext := encryptedData[blockSize:]
-
-	if len(ciphertext)%blockSize != 0 {
-		// If not aligned to block size, return original (may be unencrypted)
+	// 2. Remaining bytes: CBC ciphertext
+	ciphertext := encryptedData[16:]
+	if len(ciphertext) == 0 || len(ciphertext)%16 != 0 {
 		return encryptedData, nil
 	}
 

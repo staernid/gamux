@@ -10,27 +10,25 @@ import (
 )
 
 func TestFetchRevoBDKeys(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
-
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		buf := new(bytes.Buffer)
-		w := zip.NewWriter(buf)
-		f, _ := w.Create("2088570.lua")
-		f.Write([]byte(`addappid(2088570)
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			buf := new(bytes.Buffer)
+			w := zip.NewWriter(buf)
+			f, _ := w.Create("2088570.lua")
+			f.Write([]byte(`addappid(2088570)
 addappid(2088571, 1, "122e3270335372157a11a595038524e4cd4bfd7b2b9851c40ca5c25be3f85914")`))
-		w.Close()
+			w.Close()
 
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewReader(buf.Bytes())),
-			Header:     make(http.Header),
-		}, nil
-	})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(buf.Bytes())),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 
-	parsed, err := FetchRevoBDKeys(context.Background(), 2088570)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	parsed, err := FetchRevoBDKeys(ctx, 2088570)
 	if err != nil {
 		t.Fatalf("FetchRevoBDKeys failed: %v", err)
 	}
@@ -54,26 +52,24 @@ addappid(2088571, 1, "122e3270335372157a11a595038524e4cd4bfd7b2b9851c40ca5c25be3
 }
 
 func TestFetchSteamDepotDBKeys(t *testing.T) {
-	oldTransport := HTTPClient.Transport
-	defer func() {
-		HTTPClient.Transport = oldTransport
-	}()
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			jsonResp := `{
+				"2088571": {
+					"key": "122e3270335372157a11a595038524e4cd4bfd7b2b9851c40ca5c25be3f85914",
+					"parent_appid": "2088570"
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 
-	HTTPClient.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
-		jsonResp := `{
-			"2088571": {
-				"key": "122e3270335372157a11a595038524e4cd4bfd7b2b9851c40ca5c25be3f85914",
-				"parent_appid": "2088570"
-			}
-		}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
-			Header:     make(http.Header),
-		}, nil
-	})
-
-	parsed, err := FetchSteamDepotDBKeys(context.Background(), 2088570)
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	parsed, err := FetchSteamDepotDBKeys(ctx, 2088570)
 	if err != nil {
 		t.Fatalf("FetchSteamDepotDBKeys failed: %v", err)
 	}

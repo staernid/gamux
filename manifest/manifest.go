@@ -1,14 +1,15 @@
 package manifest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/util"
 )
-
 
 // ChunkInfo represents a single file chunk in a Steam manifest.
 type ChunkInfo struct {
@@ -102,15 +103,75 @@ func IsRedistFile(relPath string) bool {
 
 // ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1 mismatches.
 func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) {
-	manifest, err := LoadManifestFromDir(gameDir, appID)
-	if err != nil || manifest == nil || len(manifest.Files) == 0 {
-		return nil, nil
+	manifest, _ := LoadManifestFromDir(gameDir, appID)
+
+	// Check if manifest files are missing or encrypted
+	needsKeyOrManifest := manifest == nil || len(manifest.Files) == 0
+	if !needsKeyOrManifest {
+		for _, f := range manifest.Files {
+			if util.IsEncryptedBase64Path(f.Path) {
+				needsKeyOrManifest = true
+				break
+			}
+		}
 	}
 
-	// Check if manifest files are encrypted
+	if needsKeyOrManifest {
+		chain := NewDefaultProviderChain("", "")
+		res, err := chain.Resolve(context.Background(), appID)
+		if err == nil && res != nil && len(res.Depots) > 0 {
+			depotKeys := make(map[uint32]string)
+			for _, pair := range res.Depots {
+				depotKeys[pair.DepotID] = pair.DecryptionKey
+			}
+
+			// Try loading local files with resolved keys
+			if loaded, err := LoadManifestFromDirWithKeys(gameDir, appID, depotKeys); err == nil && loaded != nil && len(loaded.Files) > 0 {
+				manifest = loaded
+			} else if len(res.ManifestFiles) > 0 {
+				// Parse remote/provider manifests directly
+				var allFiles []ManifestFileEntry
+				var resolvedDepotID uint32
+				for filename, data := range res.ManifestFiles {
+					parts := strings.Split(filename, "_")
+					var fileDepotID uint32
+					if len(parts) >= 1 {
+						if did, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+							fileDepotID = uint32(did)
+						}
+					}
+					if resolvedDepotID == 0 {
+						resolvedDepotID = fileDepotID
+					}
+					hexKey := depotKeys[fileDepotID]
+					files, err := ParseBinaryManifestWithKey(data, hexKey)
+					if err == nil && len(files) > 0 {
+						for idx := range files {
+							files[idx].DepotID = fileDepotID
+						}
+						allFiles = append(allFiles, files...)
+					}
+				}
+				if len(allFiles) > 0 {
+					manifest = &Manifest{
+						AppID:     appID,
+						DepotID:   resolvedDepotID,
+						DepotKeys: depotKeys,
+						Files:     allFiles,
+					}
+				}
+			}
+		}
+	}
+
+	if manifest == nil || len(manifest.Files) == 0 {
+		return nil, fmt.Errorf("no SteamPipe depot manifests or keys found for AppID %d", appID)
+	}
+
+	// Verify decrypted paths
 	for _, f := range manifest.Files {
 		if util.IsEncryptedBase64Path(f.Path) {
-			return nil, nil
+			return nil, fmt.Errorf("depot manifest files for AppID %d could not be decrypted (missing decryption key)", appID)
 		}
 	}
 
@@ -126,7 +187,7 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 		officialMap[norm] = f
 	}
 
-	err = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -227,7 +288,7 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 func ScanUntrackedFiles(gameDir string, appID uint32) (int, []string, error) {
 	rep, err := ScanDepotIntegrity(gameDir, appID)
 	if err != nil || rep == nil {
-		return 0, nil, err
+		return 0, nil, nil
 	}
 	return rep.OfficialCount, rep.UntrackedFiles, nil
 }

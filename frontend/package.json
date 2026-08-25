@@ -5,15 +5,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check": "svelte-check --tsconfig ./jsconfig.json",
+    "test": "vitest run",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gui:dump": "node ../scripts/gui-eval.js dump",
+    "gui:trace": "node ../scripts/gui-eval.js trace",
+    "gui:audit": "node ../scripts/gui-eval.js audit",
+    "gui:eval": "node ../scripts/gui-eval.js eval",
+    "gui:snap": "node ../scripts/gui-eval.js snap"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/svelte": "^5.4.2",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^30.0.1",
     "postcss": "^8.4.49",
     "svelte": "^5.20.2",
+    "svelte-check": "^4.7.6",
     "tailwindcss": "^3.4.17",
-    "vite": "^6.0.7"
+    "typescript": "^6.0.3",
+    "vite": "^6.0.7",
+    "vitest": "^4.1.11"
   }
 }

@@ -29,7 +29,7 @@ func FetchRevoBDKeys(ctx context.Context, appID uint32) (*ParsedLua, error) {
 
 	req.Header.Set("User-Agent", "gamux/1.0")
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("revoBD request failed: %w", err)
 	}
@@ -103,7 +103,7 @@ func FetchSteamDepotDBKeys(ctx context.Context, appID uint32) (*ParsedLua, error
 
 	req.Header.Set("User-Agent", "gamux/1.0")
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("steam-depot request failed: %w", err)
 	}

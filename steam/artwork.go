@@ -28,7 +28,7 @@ func DownloadFile(ctx context.Context, downloadURL, targetPath string) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", downloadURL, err)
 	}
@@ -154,7 +154,7 @@ func searchSteamGridDB(ctx context.Context, apiKey, gameName string) (string, er
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -190,7 +190,7 @@ func fetchSGDBImageURL(ctx context.Context, apiKey, gameID, dimensions string) (
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
 		return "", err
 	}
