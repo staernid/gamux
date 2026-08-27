@@ -15,9 +15,9 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([]);
     render(DownloadsView);
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/Downloads/i);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/Tasks/i);
     expect(screen.getByText(/0 active/i)).toBeInTheDocument();
-    expect(screen.getByText(/No active downloads running/i)).toBeInTheDocument();
+    expect(screen.getByText(/No active tasks running/i)).toBeInTheDocument();
   });
 
   it('renders active download with formatted byte progress, speed, and ETA', async () => {
@@ -41,7 +41,7 @@ describe('DownloadsView Component', () => {
 
     render(DownloadsView);
 
-    expect(await screen.findByText('Half-Life')).toBeInTheDocument();
+    expect((await screen.findAllByText('Half-Life')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/250.*MiB \/ 800.*MiB \(31%\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/15.*MiB\/s/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/ETA: 38s/i)).toBeInTheDocument();
@@ -130,4 +130,93 @@ describe('DownloadsView Component', () => {
     expect(screen.getByText('Half-Life')).toBeInTheDocument();
     expect(screen.getByText('Dismiss')).toBeInTheDocument();
   });
+
+  it('renders drive capacity gauge and allows expanding multi-depot breakdown', async () => {
+    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
+      {
+        id: 'dl_witcher',
+        game_id: '292030',
+        game_name: 'The Witcher 3: Wild Hunt',
+        target_dir: '/home/staernid/Games/The Witcher 3',
+        status: 'downloading',
+        bytes_downloaded: 35000000000,
+        total_bytes: 50000000000,
+        percent: 70,
+        current_items: 3500,
+        total_items: 5000,
+        depots: [
+          { id: '292031', name: 'Base Content', downloaded_bytes: 28000000000, total_bytes: 35000000000, percent: 80 },
+          { id: '292032', name: 'Executables', downloaded_bytes: 1000000000, total_bytes: 1000000000, percent: 100 }
+        ]
+      }
+    ]);
+    vi.spyOn(AppAPI, 'getDiskSpace').mockResolvedValue({
+      path: '/home/staernid/Games',
+      total_bytes: 1099511627776,
+      free_bytes: 492970344448,
+      used_bytes: 606541283328
+    });
+
+    render(DownloadsView);
+
+    expect(await screen.findByText(/Target Drive Capacity/i)).toBeInTheDocument();
+    expect(screen.getByText(/459.*GiB Free/i)).toBeInTheDocument();
+
+    const depotToggle = screen.getByText(/Depots & Chunk Breakdown/i);
+    expect(depotToggle).toBeInTheDocument();
+    await fireEvent.click(depotToggle);
+
+    expect(await screen.findByText('Base Content')).toBeInTheDocument();
+    expect(screen.getByText('Executables')).toBeInTheDocument();
+  });
+
+  it('renders active system operations and supports filter tab switching', async () => {
+    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
+      {
+        id: 'op_verify_1',
+        type: 'verify',
+        title: 'Verify Integrity (Cyberpunk 2077)',
+        game_name: 'Cyberpunk 2077',
+        target_dir: '/home/staernid/Games/Cyberpunk 2077',
+        status: 'running',
+        stage: 'Verifying Checksums',
+        details: 'Scanning archive hashes (650/1420 files)',
+        percent: 45,
+        current_items: 650,
+        total_items: 1420,
+      },
+      {
+        id: 'dl_half_life',
+        type: 'download',
+        game_name: 'Half-Life',
+        target_dir: '/home/staernid/Games/Half-Life',
+        status: 'downloading',
+        percent: 60,
+        bytes_downloaded: 600,
+        total_bytes: 1000,
+      }
+    ]);
+
+    render(DownloadsView);
+
+    const cpMatches = await screen.findAllByText('Cyberpunk 2077');
+    expect(cpMatches.length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText('Half-Life')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/INTEGRITY/i)).toBeInTheDocument();
+
+    // Switch to Operations tab
+    const opsTab = screen.getByRole('button', { name: /Operations/i });
+    await fireEvent.click(opsTab);
+
+    expect(screen.getAllByText('Cyberpunk 2077').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Half-Life')).not.toBeInTheDocument();
+
+    // Switch to Transfers tab
+    const transfersTab = screen.getByRole('button', { name: /Transfers/i });
+    await fireEvent.click(transfersTab);
+
+    expect(screen.getAllByText('Half-Life').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
+  });
 });
+

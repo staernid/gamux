@@ -43,6 +43,10 @@ func (s *SGDBProvider) DisplayName() string {
 	return "SteamGridDB"
 }
 
+func (s *SGDBProvider) IsGameStore() bool {
+	return false
+}
+
 type sgdbSearchResponse struct {
 	Success bool `json:"success"`
 	Data    []struct {
@@ -249,6 +253,38 @@ func (s *SGDBProvider) parseImageOptions(items []sgdbImageData, assetType string
 	return options
 }
 
+func normalizeTitle(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isTitleMatch(candidateName, targetTitle string) bool {
+	c := normalizeTitle(candidateName)
+	t := normalizeTitle(targetTitle)
+	if c == "" || t == "" {
+		return false
+	}
+	if c == t {
+		return true
+	}
+	if strings.Contains(c, t) || strings.Contains(t, c) {
+		diff := len(c) - len(t)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= 8 || (len(c) > 0 && float64(diff)/float64(len(c)) < 0.35) {
+			return true
+		}
+	}
+	return false
+}
+
 // QueryArtworkCandidates fetches a list of candidate assets using a typed ArtworkQuery.
 func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query ArtworkQuery) ([]ArtworkOption, error) {
 	if s.apiKey == "" {
@@ -293,21 +329,26 @@ func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 		}
 	}
 
-	// 3. Fuzzy title search
+	// 3. Strict title search
 	if query.Title != "" {
 		results, err := s.Search(ctx, query.Title)
 		if err != nil || len(results) == 0 {
 			return nil, nil
 		}
 		var allOpts []ArtworkOption
-		for i, res := range results {
-			if i >= 2 {
-				break
+		matchedCount := 0
+		for _, res := range results {
+			if !isTitleMatch(res.Name, query.Title) {
+				continue
 			}
+			matchedCount++
 			reqURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/%s/game/%s%s", endpoint, res.ID, dimQuery)
 			var imgRes sgdbImageResponse
 			if err := s.doRequest(ctx, reqURL, &imgRes); err == nil && imgRes.Success && len(imgRes.Data) > 0 {
 				allOpts = append(allOpts, s.parseImageOptions(imgRes.Data, query.AssetType)...)
+			}
+			if matchedCount >= 1 {
+				break
 			}
 		}
 		return allOpts, nil

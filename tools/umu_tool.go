@@ -62,12 +62,6 @@ func (u *UMUTool) EnsureAvailable(ctx context.Context) (string, error) {
 		return umuRun, nil
 	}
 
-	// Check if already present in lutris runtime or system
-	lutrisUMU := filepath.Join(home, ".local", "share", "lutris", "runtime", "umu", "umu-run")
-	if util.FileExists(lutrisUMU) {
-		return lutrisUMU, nil
-	}
-
 	if err := u.Update(ctx); err != nil {
 		return "", fmt.Errorf("ensure umu available: %w", err)
 	}

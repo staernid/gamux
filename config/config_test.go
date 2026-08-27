@@ -21,11 +21,6 @@ func TestDefaultConfig_XDGResolution(t *testing.T) {
 		t.Errorf("expected GbeDir %q, got %q", expectedGbe, cfg.GbeDir)
 	}
 
-	expectedLutris := filepath.Join(configHome, "lutris", "games")
-	if cfg.LutrisDir != expectedLutris {
-		t.Errorf("expected LutrisDir %q, got %q", expectedLutris, cfg.LutrisDir)
-	}
-
 	expectedSteam := filepath.Join(dataHome, "Steam", "userdata")
 	if cfg.SteamUserdata != expectedSteam {
 		t.Errorf("expected SteamUserdata %q, got %q", expectedSteam, cfg.SteamUserdata)
@@ -37,7 +32,6 @@ func TestLoadConfig_CustomJSON(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "config.json")
 	content := `{
 		"gbe_dir": "/custom/gbe",
-		"lutris_dir": "/custom/lutris",
 		"steam_userdata": "/custom/steam",
 		"steam_web_api_key": "TESTKEY123",
 		"hubcap_api_key": "HUBCAP123"
@@ -53,9 +47,6 @@ func TestLoadConfig_CustomJSON(t *testing.T) {
 
 	if cfg.GbeDir != "/custom/gbe" {
 		t.Errorf("expected GbeDir '/custom/gbe', got %s", cfg.GbeDir)
-	}
-	if cfg.LutrisDir != "/custom/lutris" {
-		t.Errorf("expected LutrisDir '/custom/lutris', got %s", cfg.LutrisDir)
 	}
 	if cfg.SteamUserdata != "/custom/steam" {
 		t.Errorf("expected SteamUserdata '/custom/steam', got %s", cfg.SteamUserdata)

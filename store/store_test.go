@@ -178,5 +178,166 @@ func TestRegistry_QueryArtworkOptions(t *testing.T) {
 	}
 }
 
+func TestSGDBProvider_IsTitleMatch(t *testing.T) {
+	tests := []struct {
+		candidate string
+		target    string
+		expected  bool
+	}{
+		{"Bang Bang Racing", "Bang Bang Barrage", false},
+		{"Bang Bang Barrage", "Bang Bang Barrage", true},
+		{"Cyberpunk 2077", "Cyberpunk 2077", true},
+		{"The Witcher 3: Wild Hunt", "The Witcher 3", true},
+		{"Hades II", "Hades", true},
+		{"Grand Theft Auto V", "Need For Speed", false},
+	}
+
+	for _, tc := range tests {
+		got := isTitleMatch(tc.candidate, tc.target)
+		if got != tc.expected {
+			t.Errorf("isTitleMatch(%q, %q) = %v; want %v", tc.candidate, tc.target, got, tc.expected)
+		}
+	}
+}
+
+func TestArtworkService_ApplyCustomHeroAndLogo(t *testing.T) {
+	tmpDir := t.TempDir()
+	reg := NewRegistry()
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameDir := t.TempDir()
+	heroImg := filepath.Join(gameDir, "my_custom_hero.jpg")
+	_ = os.WriteFile(heroImg, []byte("hero-image-bytes"), 0644)
+	logoImg := filepath.Join(gameDir, "my_custom_logo.png")
+	_ = os.WriteFile(logoImg, []byte("logo-image-bytes"), 0644)
+
+	g := domain.NewGame("Custom Hero Game", gameDir, "12345", "linux")
+
+	// Apply hero
+	art, err := svc.ApplyCustomArtwork(context.Background(), g, "hero", heroImg)
+	if err != nil {
+		t.Fatalf("apply custom hero: %v", err)
+	}
+	if art.LocalHero == "" || !util.FileExists(art.LocalHero) {
+		t.Fatalf("expected LocalHero to exist at %s", art.LocalHero)
+	}
+	if g.CustomHeroURL != heroImg {
+		t.Errorf("expected CustomHeroURL %s, got %s", heroImg, g.CustomHeroURL)
+	}
+
+	// Apply logo
+	art, err = svc.ApplyCustomArtwork(context.Background(), g, "logo", logoImg)
+	if err != nil {
+		t.Fatalf("apply custom logo: %v", err)
+	}
+	if art.LocalLogo == "" || !util.FileExists(art.LocalLogo) {
+		t.Fatalf("expected LocalLogo to exist at %s", art.LocalLogo)
+	}
+	if g.CustomLogoURL != logoImg {
+		t.Errorf("expected CustomLogoURL %s, got %s", logoImg, g.CustomLogoURL)
+	}
+}
+
+func TestArtworkService_ParameterizedResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+	reg := NewRegistry()
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameDir := t.TempDir()
+	coverFile := filepath.Join(gameDir, "cover.png")
+	bannerFile := filepath.Join(gameDir, "banner.png")
+	heroFile := filepath.Join(gameDir, "hero.png")
+	logoFile := filepath.Join(gameDir, "logo.png")
+	iconFile := filepath.Join(gameDir, "icon.png")
+
+	_ = os.WriteFile(coverFile, []byte("fake-cover"), 0644)
+	_ = os.WriteFile(bannerFile, []byte("fake-banner"), 0644)
+	_ = os.WriteFile(heroFile, []byte("fake-hero"), 0644)
+	_ = os.WriteFile(logoFile, []byte("fake-logo"), 0644)
+	_ = os.WriteFile(iconFile, []byte("fake-icon"), 0644)
+
+	g := domain.NewGame("Parameterized Game", gameDir, "55555", "linux")
+	art, err := svc.Resolve(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	if art.LocalCover != coverFile {
+		t.Errorf("expected cover %s, got %s", coverFile, art.LocalCover)
+	}
+	if art.LocalBanner != bannerFile {
+		t.Errorf("expected banner %s, got %s", bannerFile, art.LocalBanner)
+	}
+	if art.LocalHero != heroFile {
+		t.Errorf("expected hero %s, got %s", heroFile, art.LocalHero)
+	}
+	if art.LocalLogo != logoFile {
+		t.Errorf("expected logo %s, got %s", logoFile, art.LocalLogo)
+	}
+
+	// Verify domain accessors
+	coverLoc := g.GetAsset(domain.AssetCover)
+	if coverLoc.LocalPath != coverFile {
+		t.Errorf("expected GetAsset(cover) LocalPath %s, got %s", coverFile, coverLoc.LocalPath)
+	}
+}
+
+func TestArtworkService_ClearOverrides(t *testing.T) {
+	tmpDir := t.TempDir()
+	reg := NewRegistry()
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameDir := t.TempDir()
+	g := domain.NewGame("Clear Game", gameDir, "77777", "linux")
+
+	art, err := svc.ApplyCustomArtwork(context.Background(), g, "cover", "none")
+	if err != nil {
+		t.Fatalf("ApplyCustomArtwork clear failed: %v", err)
+	}
+	if art.LocalCover != "" || art.CoverURL != "" || g.CustomCoverURL != "none" {
+		t.Errorf("expected cover to be cleared and custom_cover_url='none', got local=%q, custom=%q", art.LocalCover, g.CustomCoverURL)
+	}
+}
+
+func TestRegistry_SearchStores(t *testing.T) {
+	reg := NewRegistry()
+
+	steamMock := &mockProvider{
+		id:          "steam",
+		displayName: "Steam",
+		results: []SearchResult{
+			{ID: "1091500", Store: "steam", Name: "Cyberpunk 2077"},
+		},
+	}
+	gogMock := &mockProvider{
+		id:          "gog",
+		displayName: "GOG.com",
+		results: []SearchResult{
+			{ID: "1424355577", Store: "gog", Name: "Cyberpunk 2077"},
+		},
+	}
+	sgdbMock := NewSGDBProvider("") // IsGameStore() == false
+
+	reg.Register(steamMock)
+	reg.Register(gogMock)
+	reg.Register(sgdbMock)
+
+	results, err := reg.SearchStores(context.Background(), "Cyberpunk")
+	if err != nil {
+		t.Fatalf("SearchStores failed: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results from store providers, got %d", len(results))
+	}
+
+	for _, res := range results {
+		if res.Store == "steamgriddb" {
+			t.Errorf("unexpected steamgriddb result in SearchStores: %+v", res)
+		}
+	}
+}
+
+
 
 

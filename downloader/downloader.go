@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,14 +25,44 @@ import (
 // DefaultHTTPClient is the default http.Client used for downloader operations.
 var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
-// DownloadOptions holds options for downloading or updating game depots directly.
+// ProgressUpdate carries unified quantitative telemetry for active downloads.
+type ProgressUpdate struct {
+	DownloadedBytes int64   `json:"downloaded_bytes"`
+	TotalBytes      int64   `json:"total_bytes"`
+	CurrentItems    int     `json:"current_items"`
+	TotalItems      int     `json:"total_items"`
+	SpeedBps        float64 `json:"speed_bps"`
+	ETASeconds      int     `json:"eta_seconds"`
+	Percent         float64 `json:"percent"`
+	Item            string  `json:"item"`
+}
+
+// DownloadRequest encapsulates parameters and telemetry hooks for downloading or updating game depots.
+type DownloadRequest struct {
+	AppID        uint32
+	TargetDir    string
+	Platform     string // "win64", "linux", "all"
+	LuaPath      string
+	HubcapAPIKey string
+	WorkerLimit  int
+	DryRun       bool
+	HTTPClient   *http.Client
+
+	// Telemetry & lifecycle control hooks
+	OnProgress  func(update ProgressUpdate)
+	OnStage     func(stage, details string)
+	CheckCancel func() error
+	Throttle    func(bytes int) error
+}
+
+// DownloadOptions holds options for downloading or updating game depots directly (for compatibility).
 type DownloadOptions struct {
-	TargetDir        string
-	AppID            uint32
-	LuaPath          string
-	Platform         string // "win64", "linux", "all"
-	DryRun           bool
-	WorkerLimit      int
+	TargetDir            string
+	AppID                uint32
+	LuaPath              string
+	Platform             string // "win64", "linux", "all"
+	DryRun               bool
+	WorkerLimit          int
 	AuditTrace           []string
 	ProgressCallback     func(current, total int, item string)
 	ByteProgressCallback func(downloadedBytes, totalBytes int64, speedBps float64, etaSeconds int, pct float64, item string)
@@ -40,9 +71,9 @@ type DownloadOptions struct {
 
 // Result holds the outcome summary of a download/update operation.
 type Result struct {
-	TotalFiles      int
-	UpdatedFiles    int
-	DownloadedBytes uint64
+	TotalFiles      int    `json:"total_files"`
+	UpdatedFiles    int    `json:"updated_files"`
+	DownloadedBytes uint64 `json:"downloaded_bytes"`
 }
 
 type cdnServerEntry struct {
@@ -54,6 +85,619 @@ type cdnServerResponse struct {
 	Response struct {
 		Servers []cdnServerEntry `json:"servers"`
 	} `json:"response"`
+}
+
+// Download is the primary deep entry point for depot acquisition.
+// It resolves keys across the provider chain, persists manifests to [Manifests]/,
+// loads the file table, discovers and ranks CDN edge nodes, and streams file chunks.
+func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
+	if req.AppID == 0 {
+		return nil, fmt.Errorf("invalid Steam AppID 0")
+	}
+
+	targetDir := req.TargetDir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	absTargetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve target directory: %w", err)
+	}
+
+	httpClient := req.HTTPClient
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+	ctx = manifest.WithHTTPClient(ctx, httpClient)
+
+	if req.OnStage != nil {
+		req.OnStage("Resolving Keys & Manifests", fmt.Sprintf("AppID: %d", req.AppID))
+	}
+
+	// 1. Resolve keys and binary manifests across the multi-tier provider chain
+	parsedLua, err := manifest.ResolveKeys(ctx, req.AppID, req.LuaPath, req.HubcapAPIKey)
+	if err != nil {
+		return nil, fmt.Errorf("resolve keys and manifests for AppID %d: %w", req.AppID, err)
+	}
+
+	req.AppID = parsedLua.AppID
+	manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
+
+	// 2. Persist returned .manifest files to disk
+	if !req.DryRun && len(parsedLua.ManifestFiles) > 0 {
+		_ = os.MkdirAll(manifestsDir, 0755)
+		for fname, fcontent := range parsedLua.ManifestFiles {
+			parts := strings.Split(fname, "_")
+			if len(parts) >= 2 {
+				prefix := parts[0] + "_"
+				if existingEntries, err := os.ReadDir(manifestsDir); err == nil {
+					for _, ee := range existingEntries {
+						if !ee.IsDir() && strings.HasPrefix(ee.Name(), prefix) && strings.HasSuffix(ee.Name(), ".manifest") && ee.Name() != fname {
+							_ = os.Remove(filepath.Join(manifestsDir, ee.Name()))
+						}
+					}
+				}
+			}
+			outPath := filepath.Join(manifestsDir, fname)
+			_ = os.WriteFile(outPath, fcontent, 0644)
+			slog.Info("Saved manifest file", "path", outPath)
+		}
+	}
+
+	// 3. Extract depot keys
+	depotKeys := make(map[uint32]string)
+	for _, d := range parsedLua.Depots {
+		depotKeys[d.DepotID] = d.DecryptionKey
+	}
+
+	// 4. Load binary manifest(s) from disk or memory
+	var loadedManifest *manifest.Manifest
+	if entries, readErr := os.ReadDir(manifestsDir); readErr == nil && len(entries) > 0 {
+		loadedManifest, _ = manifest.LoadManifestFromDirWithKeys(absTargetDir, req.AppID, depotKeys)
+	}
+
+	// Fallback to in-memory parsed manifests if disk manifests are absent (e.g. during DryRun)
+	if (loadedManifest == nil || len(loadedManifest.Files) == 0) && len(parsedLua.ManifestFiles) > 0 {
+		var allFiles []manifest.ManifestFileEntry
+		var firstDepotID uint32
+		for filename, data := range parsedLua.ManifestFiles {
+			parts := strings.Split(filename, "_")
+			var fileDepotID uint32
+			if len(parts) >= 1 {
+				if did, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+					fileDepotID = uint32(did)
+				}
+			}
+			if firstDepotID == 0 {
+				firstDepotID = fileDepotID
+			}
+			hexKey := depotKeys[fileDepotID]
+			files, err := manifest.ParseBinaryManifestWithKey(data, hexKey)
+			if err == nil && len(files) > 0 {
+				for idx := range files {
+					files[idx].DepotID = fileDepotID
+				}
+				allFiles = append(allFiles, files...)
+			}
+		}
+		if len(allFiles) > 0 {
+			loadedManifest = &manifest.Manifest{
+				AppID:     req.AppID,
+				DepotID:   firstDepotID,
+				DepotKeys: depotKeys,
+				Files:     allFiles,
+			}
+		}
+	}
+
+	if loadedManifest == nil || len(loadedManifest.Files) == 0 {
+		trace := parsedLua.AuditTrace
+		if entries, err := os.ReadDir(manifestsDir); err == nil {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d files found, 0 valid .manifest file entries", manifestsDir, len(entries)))
+		} else {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
+		}
+
+		traceStr := ""
+		if len(trace) > 0 {
+			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
+		}
+
+		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", req.AppID, traceStr)
+	}
+
+	// 5. Validate that all file paths in manifest are decrypted
+	for _, f := range loadedManifest.Files {
+		if util.IsEncryptedBase64Path(f.Path) {
+			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
+		}
+	}
+
+	// 6. Discover and rank SteamPipe CDN edge servers
+	cdnHosts, err := fetchCDNServers(ctx, httpClient)
+	if err != nil {
+		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
+		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
+	}
+	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
+
+	if req.OnStage != nil {
+		req.OnStage("Streaming Depot Chunks", fmt.Sprintf("Downloading %d files to %s", len(loadedManifest.Files), targetDir))
+	}
+
+	// 7. Stream file chunks
+	return streamDepotFiles(ctx, loadedManifest, absTargetDir, req, httpClient, rankedHosts)
+}
+
+// DownloadGame orchestrates key resolution, manifest persistence, and depot chunk downloading for an AppID (convenience wrapper).
+func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions) (*Result, error) {
+	hubcapKey := ""
+	if cfg != nil {
+		hubcapKey = cfg.HubcapAPIKey
+	}
+
+	req := DownloadRequest{
+		AppID:        opts.AppID,
+		TargetDir:    opts.TargetDir,
+		Platform:     opts.Platform,
+		LuaPath:      opts.LuaPath,
+		HubcapAPIKey: hubcapKey,
+		WorkerLimit:  opts.WorkerLimit,
+		DryRun:       opts.DryRun,
+		HTTPClient:   opts.HTTPClient,
+	}
+
+	if opts.ByteProgressCallback != nil || opts.ProgressCallback != nil {
+		req.OnProgress = func(p ProgressUpdate) {
+			if opts.ByteProgressCallback != nil {
+				opts.ByteProgressCallback(p.DownloadedBytes, p.TotalBytes, p.SpeedBps, p.ETASeconds, p.Percent, p.Item)
+			}
+			if opts.ProgressCallback != nil {
+				opts.ProgressCallback(p.CurrentItems, p.TotalItems, p.Item)
+			}
+		}
+	}
+
+	return Download(ctx, req)
+}
+
+// DownloadOrUpdateGame compares local files in targetDir against the manifest and downloads missing or updated file chunks.
+// Retained for low-level manifest testing and direct execution.
+func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts DownloadOptions) (*Result, error) {
+	if m == nil {
+		return nil, fmt.Errorf("manifest cannot be nil")
+	}
+
+	targetDir := opts.TargetDir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	absTargetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve target directory: %w", err)
+	}
+
+	if len(m.Files) == 0 {
+		loadedManifest, err := manifest.LoadManifestFromDirWithKeys(absTargetDir, opts.AppID, m.DepotKeys)
+		if err == nil && loadedManifest != nil && len(loadedManifest.Files) > 0 {
+			m.Files = loadedManifest.Files
+			if m.DepotID == 0 {
+				m.DepotID = loadedManifest.DepotID
+			}
+			if len(m.DepotKeys) == 0 && len(loadedManifest.DepotKeys) > 0 {
+				m.DepotKeys = loadedManifest.DepotKeys
+			}
+			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID)
+		}
+	}
+
+	if len(m.Files) == 0 {
+		trace := opts.AuditTrace
+		manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
+		if entries, err := os.ReadDir(manifestsDir); err == nil {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d files found, 0 valid .manifest file entries", manifestsDir, len(entries)))
+		} else {
+			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
+		}
+
+		traceStr := ""
+		if len(trace) > 0 {
+			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
+		}
+
+		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", opts.AppID, traceStr)
+	}
+
+	for _, f := range m.Files {
+		if util.IsEncryptedBase64Path(f.Path) {
+			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
+		}
+	}
+
+	httpClient := opts.HTTPClient
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+
+	cdnHosts, err := fetchCDNServers(ctx, httpClient)
+	if err != nil {
+		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
+		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
+	}
+	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
+
+	req := DownloadRequest{
+		AppID:       opts.AppID,
+		TargetDir:   absTargetDir,
+		Platform:    opts.Platform,
+		WorkerLimit: opts.WorkerLimit,
+		DryRun:      opts.DryRun,
+		HTTPClient:  httpClient,
+	}
+
+	if opts.ByteProgressCallback != nil || opts.ProgressCallback != nil {
+		req.OnProgress = func(p ProgressUpdate) {
+			if opts.ByteProgressCallback != nil {
+				opts.ByteProgressCallback(p.DownloadedBytes, p.TotalBytes, p.SpeedBps, p.ETASeconds, p.Percent, p.Item)
+			}
+			if opts.ProgressCallback != nil {
+				opts.ProgressCallback(p.CurrentItems, p.TotalItems, p.Item)
+			}
+		}
+	}
+
+	return streamDepotFiles(ctx, m, absTargetDir, req, httpClient, rankedHosts)
+}
+
+func isDirectoryEntry(entry manifest.ManifestFileEntry) bool {
+	return (entry.Flags&0x40) != 0 || strings.HasSuffix(entry.Path, "/") || strings.HasSuffix(entry.Path, "\\")
+}
+
+func detectSingleRootPrefix(files []manifest.ManifestFileEntry, targetDirName string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	var firstRoot string
+	for _, f := range files {
+		clean := manifest.NormalizePath(f.Path)
+		if clean == "" || clean == "." {
+			continue
+		}
+		parts := strings.Split(clean, "/")
+		if len(parts) <= 1 {
+			if !isDirectoryEntry(f) {
+				return ""
+			}
+			continue
+		}
+		root := parts[0]
+		if firstRoot == "" {
+			firstRoot = root
+		} else if firstRoot != root {
+			return ""
+		}
+	}
+
+	if firstRoot != "" && targetDirName != "" {
+		sanitizedRoot := util.SanitizeInstallDir(firstRoot)
+		sanitizedTarget := util.SanitizeInstallDir(targetDirName)
+		if strings.EqualFold(sanitizedRoot, sanitizedTarget) || strings.EqualFold(firstRoot, targetDirName) {
+			return firstRoot
+		}
+	}
+	return ""
+}
+
+func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir string, req DownloadRequest, httpClient *http.Client, rankedHosts []string) (*Result, error) {
+	workerLimit := req.WorkerLimit
+	if workerLimit <= 0 {
+		workerLimit = 10
+	}
+
+	slog.Info("Starting direct game download/update",
+		"appID", m.AppID,
+		"depotID", m.DepotID,
+		"files", len(m.Files),
+		"targetDir", absTargetDir,
+		"cdnHosts", len(rankedHosts),
+		"dryRun", req.DryRun,
+	)
+
+	result := &Result{
+		TotalFiles: len(m.Files),
+	}
+
+	manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
+	checkpointFile := filepath.Join(manifestsDir, ".gamux-checkpoint.json")
+	cp := loadCheckpoint(checkpointFile)
+
+	targetBase := filepath.Base(absTargetDir)
+	singleRoot := detectSingleRootPrefix(m.Files, targetBase)
+	if singleRoot != "" {
+		slog.Info("Detected common root wrapper in manifest; normalizing paths", "rootPrefix", singleRoot)
+	}
+
+	normalizeEntryPath := func(p string) string {
+		norm := manifest.NormalizePath(p)
+		if singleRoot != "" {
+			if norm == singleRoot {
+				return ""
+			}
+			norm = strings.TrimPrefix(norm, singleRoot+"/")
+		}
+		return norm
+	}
+
+	if !req.DryRun {
+		if err := os.MkdirAll(absTargetDir, 0755); err != nil {
+			return nil, fmt.Errorf("create target directory %s: %w", absTargetDir, err)
+		}
+		_ = os.MkdirAll(manifestsDir, 0755)
+
+		// Pre-create all directories sequentially on main thread
+		for _, entry := range m.Files {
+			relPath := normalizeEntryPath(entry.Path)
+			if relPath == "" {
+				continue
+			}
+			p := filepath.Join(absTargetDir, relPath)
+			if isDirectoryEntry(entry) {
+				if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+					_ = os.Remove(p)
+				}
+				_ = os.MkdirAll(p, 0755)
+			} else {
+				parent := filepath.Dir(p)
+				if fi, err := os.Stat(parent); err == nil && !fi.IsDir() {
+					_ = os.Remove(parent)
+				}
+				_ = os.MkdirAll(parent, 0755)
+			}
+		}
+	}
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(workerLimit)
+
+	var totalDepotBytes int64
+	for _, f := range m.Files {
+		if f.Size > 0 && !isDirectoryEntry(f) {
+			totalDepotBytes += int64(f.Size)
+		}
+	}
+
+	var downloadedBytes int64
+	var networkTransferredBytes int64
+	var processedCount int32
+	var processedUpdated int32
+	totalFiles := len(m.Files)
+	startTime := time.Now()
+
+	reportTelemetry := func(item string) {
+		if req.OnProgress == nil {
+			return
+		}
+		curr := atomic.LoadInt64(&downloadedBytes)
+		netBytes := atomic.LoadInt64(&networkTransferredBytes)
+		itemsDone := int(atomic.LoadInt32(&processedCount))
+		elapsed := time.Since(startTime).Seconds()
+		speed := float64(0)
+		eta := 0
+		if elapsed > 0.5 {
+			speed = float64(netBytes) / elapsed
+			if speed > 0 && totalDepotBytes > curr {
+				eta = int(float64(totalDepotBytes-curr) / speed)
+			}
+		}
+		pct := float64(0)
+		if totalDepotBytes > 0 {
+			pct = float64(curr) / float64(totalDepotBytes) * 100.0
+			if pct > 100 {
+				pct = 100
+			}
+		}
+
+		req.OnProgress(ProgressUpdate{
+			DownloadedBytes: curr,
+			TotalBytes:      totalDepotBytes,
+			CurrentItems:    itemsDone,
+			TotalItems:      totalFiles,
+			SpeedBps:        speed,
+			ETASeconds:      eta,
+			Percent:         pct,
+			Item:            item,
+		})
+	}
+
+	for _, fileEntry := range m.Files {
+		entry := fileEntry
+		relPath := normalizeEntryPath(entry.Path)
+		if relPath == "" && isDirectoryEntry(entry) {
+			continue
+		}
+		filePath := filepath.Join(absTargetDir, relPath)
+
+		g.Go(func() error {
+			if req.CheckCancel != nil {
+				if err := req.CheckCancel(); err != nil {
+					return err
+				}
+			}
+
+			atomic.AddInt32(&processedCount, 1)
+			reportTelemetry(entry.Path)
+
+			// Skip directory entries in download loop
+			if isDirectoryEntry(entry) {
+				return nil
+			}
+
+			// Filter out mismatched platform files if specific platform selected
+			normPath := strings.ToLower(entry.Path)
+			plat := strings.ToLower(req.Platform)
+			if plat == "linux" {
+				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".dylib") || strings.HasSuffix(normPath, ".app") {
+					slog.Debug("Filtering out non-Linux file for Linux target", "path", entry.Path)
+					return nil
+				}
+			} else if plat == "win64" || plat == "win32" {
+				if strings.HasSuffix(normPath, ".so") || strings.HasSuffix(normPath, ".dylib") {
+					slog.Debug("Filtering out non-Windows library for Windows PE target", "path", entry.Path)
+					return nil
+				}
+			} else if plat == "osx" || plat == "macos" {
+				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".so") {
+					slog.Debug("Filtering out non-macOS file for macOS target", "path", entry.Path)
+					return nil
+				}
+			}
+
+			needsDownload := false
+
+			// Check if file exists and hash matches
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				if uint64(info.Size()) != entry.Size {
+					slog.Debug("File size mismatch, redownloading", "path", filePath, "actual", info.Size(), "expected", entry.Size)
+					needsDownload = true
+				} else if entry.SHA1 != "" {
+					localHash, err := util.GetSHA1Hash(filePath)
+					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
+						slog.Debug("File hash mismatch, redownloading", "path", filePath, "actual", localHash, "expected", entry.SHA1)
+						needsDownload = true
+					}
+				} else if len(entry.Chunks) > 0 {
+					allChunksDone := true
+					for _, ch := range entry.Chunks {
+						if !cp.isCompleted(ch.ChunkID) {
+							allChunksDone = false
+							break
+						}
+					}
+					if !allChunksDone {
+						slog.Debug("File chunks incomplete in checkpoint, downloading missing chunks", "path", filePath)
+						needsDownload = true
+					}
+				}
+			} else {
+				slog.Debug("New file, needs download", "path", filePath)
+				needsDownload = true
+			}
+
+			if !needsDownload {
+				slog.Debug("File is up-to-date", "path", filePath)
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportTelemetry(entry.Path)
+				return nil
+			}
+
+			if req.DryRun {
+				slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
+				atomic.AddInt32(&processedUpdated, 1)
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportTelemetry(entry.Path)
+				return nil
+			}
+
+			parentDir := filepath.Dir(filePath)
+			if fi, err := os.Stat(parentDir); err == nil && !fi.IsDir() {
+				_ = os.Remove(parentDir)
+			}
+			if err := os.MkdirAll(parentDir, 0755); err != nil {
+				return fmt.Errorf("create directory for %s: %w", filePath, err)
+			}
+
+			// If a directory exists at filePath by mistake, remove it
+			if fi, err := os.Stat(filePath); err == nil && fi.IsDir() {
+				_ = os.RemoveAll(filePath)
+			}
+
+			// Download chunks or file payload
+			if len(entry.Chunks) == 0 {
+				f, err := os.Create(filePath)
+				if err != nil {
+					return fmt.Errorf("create file %s: %w", filePath, err)
+				}
+				if entry.Size > 0 {
+					_ = f.Truncate(int64(entry.Size))
+				}
+				f.Close()
+				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
+				reportTelemetry(entry.Path)
+			} else {
+				fileFlags := os.O_CREATE | os.O_RDWR
+				f, err := os.OpenFile(filePath, fileFlags, 0644)
+				if err != nil {
+					return fmt.Errorf("open target file %s: %w", filePath, err)
+				}
+				_ = f.Truncate(int64(entry.Size))
+
+				for _, chunk := range entry.Chunks {
+					if req.CheckCancel != nil {
+						if err := req.CheckCancel(); err != nil {
+							f.Close()
+							return err
+						}
+					}
+
+					if cp.isCompleted(chunk.ChunkID) {
+						slog.Debug("Chunk already completed in checkpoint, skipping", "chunkID", chunk.ChunkID)
+						atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+						reportTelemetry(entry.Path)
+						continue
+					}
+
+					depotID := entry.DepotID
+					if depotID == 0 {
+						depotID = m.DepotID
+					}
+					decKey := m.GetDecryptionKey(depotID)
+					if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, f); err != nil {
+						f.Close()
+						return fmt.Errorf("download chunk for %s (depot %d): %w", filePath, depotID, err)
+					}
+
+					if req.Throttle != nil {
+						_ = req.Throttle(int(chunk.UncompressedSize))
+					}
+
+					atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+					atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
+					reportTelemetry(entry.Path)
+					cp.markCompleted(checkpointFile, chunk.ChunkID)
+				}
+				f.Close()
+			}
+
+			slog.Debug("Successfully updated file", "path", filePath)
+			atomic.AddInt32(&processedUpdated, 1)
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("download execution failed: %w", err)
+	}
+
+	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
+	result.DownloadedBytes = uint64(atomic.LoadInt64(&downloadedBytes))
+
+	// Remove checkpoint file and sweep for any remaining VSZa compressed files on successful completion
+	if !req.DryRun {
+		_ = os.Remove(checkpointFile)
+		if count, err := util.DecompressVSZaInDir(absTargetDir); err == nil && count > 0 {
+			slog.Info("Post-download VSZa file decompression completed", "count", count)
+		}
+	}
+
+	slog.Debug("Direct game download/update completed",
+		"totalFiles", result.TotalFiles,
+		"updatedFiles", result.UpdatedFiles,
+		"bytes", result.DownloadedBytes,
+	)
+
+	return result, nil
 }
 
 // rankCDNEdges measures HTTP round-trip latency to candidate edge hosts concurrently and returns hosts ordered by speed.
@@ -114,6 +758,7 @@ func rankCDNEdges(ctx context.Context, client *http.Client, hosts []string) []st
 	seen := make(map[string]bool)
 	for _, r := range responsive {
 		ranked = append(ranked, r.host)
+		seen[r.host] = true
 	}
 	for _, h := range hosts {
 		if !seen[h] {
@@ -166,326 +811,6 @@ func fetchCDNServers(ctx context.Context, client *http.Client) ([]string, error)
 	}
 
 	return rankCDNEdges(ctx, client, hosts), nil
-}
-
-// DownloadOrUpdateGame compares local files in targetDir against the manifest and downloads missing or updated file chunks.
-func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts DownloadOptions) (*Result, error) {
-	if m == nil {
-		return nil, fmt.Errorf("manifest cannot be nil")
-	}
-
-	targetDir := opts.TargetDir
-	if targetDir == "" {
-		targetDir = "."
-	}
-
-	absTargetDir, err := filepath.Abs(targetDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolve target directory: %w", err)
-	}
-
-	if len(m.Files) == 0 {
-		loadedManifest, err := manifest.LoadManifestFromDirWithKeys(absTargetDir, opts.AppID, m.DepotKeys)
-		if err == nil && loadedManifest != nil && len(loadedManifest.Files) > 0 {
-			m.Files = loadedManifest.Files
-			if m.DepotID == 0 {
-				m.DepotID = loadedManifest.DepotID
-			}
-			if len(m.DepotKeys) == 0 && len(loadedManifest.DepotKeys) > 0 {
-				m.DepotKeys = loadedManifest.DepotKeys
-			}
-			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID)
-		}
-	}
-
-	if len(m.Files) == 0 {
-		trace := opts.AuditTrace
-		manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
-		if entries, err := os.ReadDir(manifestsDir); err == nil {
-			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d files found, 0 valid .manifest file entries", manifestsDir, len(entries)))
-		} else {
-			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
-		}
-
-		traceStr := ""
-		if len(trace) > 0 {
-			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
-		}
-
-		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", opts.AppID, traceStr)
-	}
-
-	// Validate that paths in manifest are decrypted
-	for _, f := range m.Files {
-		if util.IsEncryptedBase64Path(f.Path) {
-			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
-		}
-	}
-
-	workerLimit := opts.WorkerLimit
-	if workerLimit <= 0 {
-		workerLimit = 10
-	}
-
-	httpClient := opts.HTTPClient
-	if httpClient == nil {
-		httpClient = DefaultHTTPClient
-	}
-
-	cdnHosts, err := fetchCDNServers(ctx, httpClient)
-	if err != nil {
-		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
-		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
-	}
-	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
-
-	slog.Info("Starting direct game download/update",
-		"appID", m.AppID,
-		"depotID", m.DepotID,
-		"files", len(m.Files),
-		"targetDir", absTargetDir,
-		"cdnHosts", len(rankedHosts),
-		"dryRun", opts.DryRun,
-	)
-
-	result := &Result{
-		TotalFiles: len(m.Files),
-	}
-
-	manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
-	checkpointFile := filepath.Join(manifestsDir, ".gamux-checkpoint.json")
-	cp := loadCheckpoint(checkpointFile)
-
-	if !opts.DryRun {
-		if err := os.MkdirAll(absTargetDir, 0755); err != nil {
-			return nil, fmt.Errorf("create target directory %s: %w", absTargetDir, err)
-		}
-		_ = os.MkdirAll(manifestsDir, 0755)
-
-		// Pre-create all directories sequentially on main thread
-		for _, entry := range m.Files {
-			p := filepath.Join(absTargetDir, manifest.NormalizePath(entry.Path))
-			if entry.Size == 0 || (entry.Flags&0x40) != 0 {
-				if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-					_ = os.Remove(p)
-				}
-				_ = os.MkdirAll(p, 0755)
-			} else {
-				parent := filepath.Dir(p)
-				if fi, err := os.Stat(parent); err == nil && !fi.IsDir() {
-					_ = os.Remove(parent)
-				}
-				_ = os.MkdirAll(parent, 0755)
-			}
-		}
-	}
-
-	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(workerLimit)
-
-	var totalDepotBytes int64
-	for _, f := range m.Files {
-		if f.Size > 0 && (f.Flags&0x40) == 0 {
-			totalDepotBytes += int64(f.Size)
-		}
-	}
-
-	var downloadedBytes int64
-	var networkTransferredBytes int64
-	startTime := time.Now()
-
-	reportBytes := func(item string) {
-		if opts.ByteProgressCallback == nil || opts.DryRun {
-			return
-		}
-		curr := atomic.LoadInt64(&downloadedBytes)
-		netBytes := atomic.LoadInt64(&networkTransferredBytes)
-		elapsed := time.Since(startTime).Seconds()
-		speed := float64(0)
-		eta := 0
-		if elapsed > 0.5 {
-			speed = float64(netBytes) / elapsed
-			if speed > 0 && totalDepotBytes > curr {
-				eta = int(float64(totalDepotBytes-curr) / speed)
-			}
-		}
-		pct := float64(0)
-		if totalDepotBytes > 0 {
-			pct = float64(curr) / float64(totalDepotBytes) * 100.0
-			if pct > 100 {
-				pct = 100
-			}
-		}
-		opts.ByteProgressCallback(curr, totalDepotBytes, speed, eta, pct, item)
-	}
-
-	var processedCount int32
-	var processedUpdated int32
-	totalFiles := len(m.Files)
-
-	for _, fileEntry := range m.Files {
-		entry := fileEntry
-		filePath := filepath.Join(absTargetDir, manifest.NormalizePath(entry.Path))
-
-		g.Go(func() error {
-			curr := atomic.AddInt32(&processedCount, 1)
-			if !opts.DryRun && opts.ProgressCallback != nil {
-				opts.ProgressCallback(int(curr), totalFiles, entry.Path)
-			}
-			reportBytes(entry.Path)
-
-			// Skip directory entries in download loop
-			if entry.Size == 0 || (entry.Flags&0x40) != 0 {
-				return nil
-			}
-
-			// Filter out mismatched platform files if specific platform selected
-			normPath := strings.ToLower(entry.Path)
-			plat := strings.ToLower(opts.Platform)
-			if plat == "linux" {
-				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".dylib") || strings.HasSuffix(normPath, ".app") {
-					slog.Debug("Filtering out non-Linux file for Linux target", "path", entry.Path)
-					return nil
-				}
-			} else if plat == "win64" || plat == "win32" {
-				if strings.HasSuffix(normPath, ".so") || strings.HasSuffix(normPath, ".dylib") {
-					slog.Debug("Filtering out non-Windows library for Windows PE target", "path", entry.Path)
-					return nil
-				}
-			} else if plat == "osx" || plat == "macos" {
-				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".so") {
-					slog.Debug("Filtering out non-macOS file for macOS target", "path", entry.Path)
-					return nil
-				}
-			}
-
-			needsDownload := false
-
-			// Check if file exists and hash matches
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				if uint64(info.Size()) != entry.Size {
-					slog.Debug("File size mismatch, redownloading", "path", filePath, "actual", info.Size(), "expected", entry.Size)
-					needsDownload = true
-				} else if entry.SHA1 != "" {
-					localHash, err := util.GetSHA1Hash(filePath)
-					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
-						slog.Debug("File hash mismatch, redownloading", "path", filePath, "actual", localHash, "expected", entry.SHA1)
-						needsDownload = true
-					}
-				} else if len(entry.Chunks) > 0 {
-					// Check if all chunks were completed in checkpoint
-					allChunksDone := true
-					for _, ch := range entry.Chunks {
-						if !cp.isCompleted(ch.ChunkID) {
-							allChunksDone = false
-							break
-						}
-					}
-					if !allChunksDone {
-						slog.Debug("File chunks incomplete in checkpoint, downloading missing chunks", "path", filePath)
-						needsDownload = true
-					}
-				}
-			} else {
-				slog.Debug("New file, needs download", "path", filePath)
-				needsDownload = true
-			}
-
-			if !needsDownload {
-				slog.Debug("File is up-to-date", "path", filePath)
-				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
-				reportBytes(entry.Path)
-				return nil
-			}
-
-			if opts.DryRun {
-				slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
-				atomic.AddInt32(&processedUpdated, 1)
-				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
-				reportBytes(entry.Path)
-				return nil
-			}
-
-			parentDir := filepath.Dir(filePath)
-			if fi, err := os.Stat(parentDir); err == nil && !fi.IsDir() {
-				_ = os.Remove(parentDir)
-			}
-			if err := os.MkdirAll(parentDir, 0755); err != nil {
-				return fmt.Errorf("create directory for %s: %w", filePath, err)
-			}
-
-			// Download chunks or file payload
-			if len(entry.Chunks) == 0 {
-				// Empty file
-				f, err := os.Create(filePath)
-				if err != nil {
-					return fmt.Errorf("create file %s: %w", filePath, err)
-				}
-				_ = f.Truncate(int64(entry.Size))
-				f.Close()
-				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
-				reportBytes(entry.Path)
-			} else {
-				// Open file for chunk assembly
-				fileFlags := os.O_CREATE | os.O_RDWR
-				f, err := os.OpenFile(filePath, fileFlags, 0644)
-				if err != nil {
-					return fmt.Errorf("open target file %s: %w", filePath, err)
-				}
-				_ = f.Truncate(int64(entry.Size))
-
-				for _, chunk := range entry.Chunks {
-					if cp.isCompleted(chunk.ChunkID) {
-						slog.Debug("Chunk already completed in checkpoint, skipping", "chunkID", chunk.ChunkID)
-						atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
-						reportBytes(entry.Path)
-						continue
-					}
-
-					depotID := entry.DepotID
-					if depotID == 0 {
-						depotID = m.DepotID
-					}
-					decKey := m.GetDecryptionKey(depotID)
-					if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, f); err != nil {
-						f.Close()
-						return fmt.Errorf("download chunk for %s (depot %d): %w", filePath, depotID, err)
-					}
-
-					atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
-					atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
-					reportBytes(entry.Path)
-					cp.markCompleted(checkpointFile, chunk.ChunkID)
-				}
-				f.Close()
-			}
-
-			slog.Debug("Successfully updated file", "path", filePath)
-			atomic.AddInt32(&processedUpdated, 1)
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, fmt.Errorf("download execution failed: %w", err)
-	}
-
-	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
-
-	// Remove checkpoint file and sweep for any remaining VSZa compressed files on 100% successful completion
-	if !opts.DryRun {
-		_ = os.Remove(checkpointFile)
-		if count, err := util.DecompressVSZaInDir(absTargetDir); err == nil && count > 0 {
-			slog.Info("Post-download VSZa file decompression completed", "count", count)
-		}
-	}
-
-	slog.Debug("Direct game download/update completed",
-		"totalFiles", result.TotalFiles,
-		"updatedFiles", result.UpdatedFiles,
-	)
-
-	return result, nil
 }
 
 func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {
@@ -593,58 +918,4 @@ func (cp *Checkpoint) markCompleted(path string, chunkID string) {
 			_ = os.Rename(tmpPath, path)
 		}
 	}
-}
-
-// DownloadGame orchestrates key resolution, manifest persistence, and depot chunk downloading for an AppID.
-func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions) (*Result, error) {
-	if cfg == nil {
-		cfg = config.DefaultConfig()
-	}
-	hubcapKey := cfg.HubcapAPIKey
-
-	parsedLua, err := manifest.ResolveKeys(ctx, opts.AppID, opts.LuaPath, hubcapKey)
-	if err != nil {
-		return nil, fmt.Errorf("resolve keys and manifests for AppID %d: %w", opts.AppID, err)
-	}
-
-	opts.AppID = parsedLua.AppID
-	if opts.TargetDir == "" {
-		opts.TargetDir = "."
-	}
-
-	if !opts.DryRun && len(parsedLua.ManifestFiles) > 0 {
-		manifestsDir := filepath.Join(opts.TargetDir, "[Manifests]")
-		_ = os.MkdirAll(manifestsDir, 0755)
-		for fname, fcontent := range parsedLua.ManifestFiles {
-			parts := strings.Split(fname, "_")
-			if len(parts) >= 2 {
-				prefix := parts[0] + "_"
-				if existingEntries, err := os.ReadDir(manifestsDir); err == nil {
-					for _, ee := range existingEntries {
-						if !ee.IsDir() && strings.HasPrefix(ee.Name(), prefix) && strings.HasSuffix(ee.Name(), ".manifest") && ee.Name() != fname {
-							_ = os.Remove(filepath.Join(manifestsDir, ee.Name()))
-						}
-					}
-				}
-			}
-			outPath := filepath.Join(manifestsDir, fname)
-			_ = os.WriteFile(outPath, fcontent, 0644)
-			slog.Info("Saved manifest file", "path", outPath)
-		}
-	}
-
-	dummyManifest := &manifest.Manifest{
-		AppID:     opts.AppID,
-		DepotKeys: make(map[uint32]string),
-	}
-	for _, d := range parsedLua.Depots {
-		dummyManifest.DepotKeys[d.DepotID] = d.DecryptionKey
-	}
-	if len(parsedLua.Depots) > 0 {
-		dummyManifest.DepotID = parsedLua.Depots[0].DepotID
-		dummyManifest.DecryptionKey = parsedLua.Depots[0].DecryptionKey
-	}
-
-	opts.AuditTrace = parsedLua.AuditTrace
-	return DownloadOrUpdateGame(ctx, dummyManifest, opts)
 }

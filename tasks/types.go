@@ -25,7 +25,6 @@ const (
 	TypeToolUpdate TaskType = "tool_update"
 	TypeWorkshop   TaskType = "workshop"
 	TypeNormalize  TaskType = "normalize"
-	TypeMigrate    TaskType = "migrate"
 	TypeRollback   TaskType = "rollback"
 	TypeCustom     TaskType = "custom"
 )

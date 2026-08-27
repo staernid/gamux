@@ -305,7 +305,7 @@ export class GamuxDevBridge {
         this.emit('gamux:task-event', {
           type: 'task:completed',
           task_id: taskId,
-          details: 'Game applied successfully with GBE and Lutris configuration.'
+          details: 'Game applied successfully with GBE configuration.'
         });
 
         return { scenario: scenarioName, taskId, status: 'completed' };

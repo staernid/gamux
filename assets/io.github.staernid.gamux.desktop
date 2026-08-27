@@ -6,6 +6,6 @@ Icon=io.github.staernid.gamux
 Terminal=false
 Type=Application
 Categories=Game;Utility;
-Keywords=steam;games;lutris;goldberg;manager;
+Keywords=steam;games;proton;wine;goldberg;manager;
 StartupWMClass=gamux-gui
 MimeType=x-scheme-handler/gamux;

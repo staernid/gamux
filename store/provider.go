@@ -54,6 +54,12 @@ type ArtworkCandidateProvider interface {
 	QueryArtworkCandidates(ctx context.Context, query ArtworkQuery) ([]ArtworkOption, error)
 }
 
+// StoreProvider is an optional interface implemented by game catalog providers (Steam, GOG) that support game purchases/downloads.
+type StoreProvider interface {
+	Provider
+	IsGameStore() bool
+}
+
 // Provider represents a store backend seam providing game discovery, metadata, and asset queries.
 type Provider interface {
 	// ID returns the canonical identifier for the store (e.g. "steam", "gog").
@@ -107,6 +113,24 @@ func (r *Registry) List() []Provider {
 	return list
 }
 
+// SearchStores queries only registered downloadable game catalog store providers (e.g. Steam, GOG), excluding artwork-only databases.
+func (r *Registry) SearchStores(ctx context.Context, query string) ([]SearchResult, error) {
+	r.mu.RLock()
+	providers := make([]Provider, 0, len(r.providers))
+	for _, p := range r.providers {
+		if sp, ok := p.(StoreProvider); ok {
+			if sp.IsGameStore() {
+				providers = append(providers, p)
+			}
+		} else if p.ID() != "steamgriddb" {
+			providers = append(providers, p)
+		}
+	}
+	r.mu.RUnlock()
+
+	return r.searchProviders(ctx, query, providers)
+}
+
 // SearchAll queries all registered providers concurrently for game matches.
 func (r *Registry) SearchAll(ctx context.Context, query string) ([]SearchResult, error) {
 	r.mu.RLock()
@@ -115,6 +139,14 @@ func (r *Registry) SearchAll(ctx context.Context, query string) ([]SearchResult,
 		providers = append(providers, p)
 	}
 	r.mu.RUnlock()
+
+	return r.searchProviders(ctx, query, providers)
+}
+
+func (r *Registry) searchProviders(ctx context.Context, query string, providers []Provider) ([]SearchResult, error) {
+	if len(providers) == 0 {
+		return nil, nil
+	}
 
 	type searchOutcome struct {
 		results []SearchResult

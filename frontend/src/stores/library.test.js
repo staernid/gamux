@@ -16,6 +16,8 @@ import {
   sortBy,
   filteredGames,
   stats,
+  cycleSortOrder,
+  getSortLabel,
 } from './library.js';
 
 describe('Decoupled Library Stores', () => {
@@ -79,7 +81,6 @@ describe('Decoupled Library Stores', () => {
       app_id: '100',
       game_dir: '/games/alpha',
       is_patched: true,
-      lutris_registered: true,
       disk_size_bytes: 1000,
     };
     const gameB = {
@@ -87,7 +88,6 @@ describe('Decoupled Library Stores', () => {
       app_id: '200',
       game_dir: '/games/beta',
       is_patched: false,
-      lutris_registered: false,
       disk_size_bytes: 5000,
     };
 
@@ -117,7 +117,42 @@ describe('Decoupled Library Stores', () => {
     expect(s.totalCount).toBe(2);
     expect(s.patchedCount).toBe(1);
     expect(s.cleanCount).toBe(1);
-    expect(s.lutrisCount).toBe(1);
     expect(s.totalBytes).toBe(6000);
+  });
+
+  it('cycles sort order between Name A-Z and Size and updates filteredGames', () => {
+    const gameSmall = {
+      name: 'Zeta Game',
+      app_id: '100',
+      game_dir: '/games/zeta',
+      is_patched: true,
+      disk_size_bytes: 100,
+    };
+    const gameLarge = {
+      name: 'Alpha Game',
+      app_id: '200',
+      game_dir: '/games/alpha',
+      is_patched: false,
+      disk_size_bytes: 9000,
+    };
+
+    updateGameInStore(gameSmall);
+    updateGameInStore(gameLarge);
+
+    // Initial: name_asc (Alpha Game first)
+    expect(get(sortBy)).toBe('name_asc');
+    expect(get(filteredGames)[0].name).toBe('Alpha Game');
+
+    // Cycle sort -> size_desc (Alpha Game is larger so still first, but test sorting)
+    const next = cycleSortOrder();
+    expect(next).toBe('size_desc');
+    expect(get(sortBy)).toBe('size_desc');
+    expect(getSortLabel('size_desc')).toBe('Size (Largest)');
+    expect(getSortLabel('name_asc')).toBe('Name (A-Z)');
+
+    // Cycle back -> name_asc
+    const next2 = cycleSortOrder();
+    expect(next2).toBe('name_asc');
+    expect(get(sortBy)).toBe('name_asc');
   });
 });

@@ -6,7 +6,7 @@ Steam game manager and downloader for Linux.
 
 - **Direct Depot Downloads**: Download game depots and updates directly from Steam.
 - **Automated DRM Emulation**: Streamline Goldberg Steam Emulator setup for downloaded games.
-- **Ecosystem Integration**: Register games automatically with Lutris (YAML configuration & `pga.db` database integration).
+- **Standalone Execution**: Launch games directly via UMU, Wine, Proton, or Linux native runners with custom prefixes and overlays (MangoHud).
 - **File Safety**: Provide non-destructive setup with atomic backups, rollback support, and dry-run previews.
 - **Zero-Friction UX**: Deliver an intuitive, self-guiding CLI experience requiring minimal manual configuration.
 

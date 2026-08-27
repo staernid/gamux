@@ -4,10 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/events"
+	"github.com/staernid/gamux/util"
 )
 
 func TestResolveEffectiveOptions(t *testing.T) {
@@ -153,19 +157,19 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Loader mode should redirect target executable to steamclient_loader_x64.exe
-	var foundLoader bool
+	// Direct executable should be launched rather than delegating to loader subprocess
+	var foundGameExe bool
 	for _, arg := range cmd.Args {
-		if arg == loaderExe {
-			foundLoader = true
+		if arg == gameExe {
+			foundGameExe = true
 			break
 		}
 	}
-	if cmd.Path == loaderExe {
-		foundLoader = true
+	if cmd.Path == gameExe {
+		foundGameExe = true
 	}
-	if !foundLoader {
-		t.Errorf("expected command args or path to contain loader %s, got path: %s, args: %v", loaderExe, cmd.Path, cmd.Args)
+	if !foundGameExe {
+		t.Errorf("expected command args or path to contain direct game exe %s, got path: %s, args: %v", gameExe, cmd.Path, cmd.Args)
 	}
 
 	var hasFSR, hasNVAPI, hasDXVK, hasLoaderDisable, hasLargeAddr, hasSDL, hasEsync, hasFsync, hasShaderCache, hasWineDebug bool
@@ -362,4 +366,468 @@ func TestManager_LifecycleAndEvents(t *testing.T) {
 		t.Errorf("expected game to no longer be running")
 	}
 }
+
+func TestGetLog_AndPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "log_game.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\necho \"Hello from Game STDOUT\"\necho \"Warning from Game STDERR\" >&2\n"), 0755)
+
+	mgr := NewManager()
+	events := make(chan ProcessEvent, 5)
+	mgr.Subscribe(func(ev ProcessEvent) {
+		events <- ev
+	})
+
+	cfg := config.DefaultConfig()
+	cfg.GbeDir = tmpDir
+	opts := LaunchOptions{
+		GameDir:  tmpDir,
+		ExePath:  scriptPath,
+		Name:     "Test Logging Game",
+		AppID:    "999999",
+		Platform: "linux",
+		Runner:   RunnerLinux,
+		CustomEnv: map[string]string{
+			"LD_PRELOAD": "",
+		},
+	}
+
+
+	_, err := mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("failed to start game: %v", err)
+	}
+
+	// Wait for process stop event
+	timeout := time.After(3 * time.Second)
+	stopped := false
+	for !stopped {
+		select {
+		case ev := <-events:
+			if ev.GameDir == tmpDir && !ev.IsRunning {
+				stopped = true
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for game process to stop")
+		}
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	logContent, err := GetLog(tmpDir, "Test Logging Game", "999999")
+	if err != nil {
+		t.Fatalf("failed to get log: %v", err)
+	}
+
+	if logContent == "" {
+		t.Fatalf("expected non-empty log content")
+	}
+
+	if !strings.Contains(logContent, "=== Gamux Launch Log ===") {
+		t.Errorf("expected header in log, got: %s", logContent)
+	}
+	if !strings.Contains(logContent, "Hello from Game STDOUT") {
+		t.Errorf("expected stdout in log, got: %s", logContent)
+	}
+	if !strings.Contains(logContent, "Warning from Game STDERR") {
+		t.Errorf("expected stderr in log, got: %s", logContent)
+	}
+	if !strings.Contains(logContent, "=== Process Finished ===") {
+		t.Errorf("expected footer in log, got: %s", logContent)
+	}
+}
+
+func TestLaunchProfile_FallbackHydration(t *testing.T) {
+	tmpDir := t.TempDir()
+	settingsDir := filepath.Join(tmpDir, "steam_settings")
+	_ = os.MkdirAll(settingsDir, 0755)
+
+	_ = os.WriteFile(filepath.Join(settingsDir, "steam_appid.txt"), []byte("999888\n"), 0644)
+	_ = os.WriteFile(filepath.Join(settingsDir, "force_language.txt"), []byte("german\n"), 0644)
+
+	realExe := filepath.Join(tmpDir, "MyGame.exe")
+	_ = os.WriteFile(realExe, []byte("exe"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "ColdClientLoader.ini"), []byte("[Loader]\nExe = MyGame.exe\n"), 0644)
+
+	p, err := LoadLaunchProfile(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadLaunchProfile failed: %v", err)
+	}
+
+	if p.AppID != "999888" {
+		t.Errorf("expected fallback AppID 999888, got %s", p.AppID)
+	}
+	if p.Language != "german" {
+		t.Errorf("expected fallback Language german, got %s", p.Language)
+	}
+	if p.ExePath != realExe {
+		t.Errorf("expected fallback ExePath %s, got %s", realExe, p.ExePath)
+	}
+}
+
+func TestLaunchProfile_Sync(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.DefaultConfig()
+
+	realExe := filepath.Join(tmpDir, "ActionGame.exe")
+	_ = os.WriteFile(realExe, []byte("exe"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "ColdClientLoader.ini"), []byte("[Loader]\nExe = old.exe\n"), 0644)
+
+	p := &LaunchProfile{
+		GameDir:       tmpDir,
+		AppID:         "777",
+		Name:          "Action Game",
+		ExePath:       realExe,
+		Language:      "spanish",
+		OperatingMode: ModeStandalone,
+		Runner:        RunnerWine,
+	}
+
+	if err := SyncLaunchProfile(context.Background(), p, cfg); err != nil {
+		t.Fatalf("SyncLaunchProfile failed: %v", err)
+	}
+
+	// Verify steam_appid.txt synced
+	appIDData, err := os.ReadFile(filepath.Join(tmpDir, "steam_settings", "steam_appid.txt"))
+	if err != nil || strings.TrimSpace(string(appIDData)) != "777" {
+		t.Errorf("expected steam_appid.txt 777, got %s (err: %v)", string(appIDData), err)
+	}
+
+	// Verify force_language.txt synced
+	langData, err := os.ReadFile(filepath.Join(tmpDir, "steam_settings", "force_language.txt"))
+	if err != nil || strings.TrimSpace(string(langData)) != "spanish" {
+		t.Errorf("expected force_language.txt spanish, got %s (err: %v)", string(langData), err)
+	}
+
+	// Verify ColdClientLoader.ini Exe replaced
+	iniData, err := os.ReadFile(filepath.Join(tmpDir, "ColdClientLoader.ini"))
+	if err != nil || !strings.Contains(string(iniData), "ActionGame.exe") {
+		t.Errorf("expected ColdClientLoader.ini to contain ActionGame.exe, got: %s", string(iniData))
+	}
+
+	// Now set Language to "" and re-sync: force_language.txt should be removed
+	p.Language = ""
+	if err := SyncLaunchProfile(context.Background(), p, cfg); err != nil {
+		t.Fatalf("SyncLaunchProfile failed on language reset: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "steam_settings", "force_language.txt")); !os.IsNotExist(err) {
+		t.Errorf("expected force_language.txt to be removed when Language is empty")
+	}
+}
+
+func TestLaunchProfile_Reset(t *testing.T) {
+	tmpDir := t.TempDir()
+	p := &LaunchProfile{
+		GameDir: tmpDir,
+		Name:    "To Reset",
+		ExePath: "game.exe",
+	}
+
+	if err := SaveProfile(p); err != nil {
+		t.Fatalf("SaveProfile failed: %v", err)
+	}
+
+	profilePath := filepath.Join(tmpDir, "steam_settings", "launch_profile.json")
+	if !util.FileExists(profilePath) {
+		t.Fatalf("expected profile to exist before reset")
+	}
+
+	if err := ResetLaunchProfile(tmpDir); err != nil {
+		t.Fatalf("ResetLaunchProfile failed: %v", err)
+	}
+
+	if util.FileExists(profilePath) {
+		t.Errorf("expected launch_profile.json to be deleted after reset")
+	}
+}
+
+func TestLaunchProfile_ResolveEffective(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.OperatingMode = ModeStandalone
+	cfg.DefaultRunner = RunnerUMU
+	cfg.WinePrefix = "~/.default_wine"
+	cfg.GlobalEnv = map[string]string{
+		"GLOBAL_VAR": "global",
+		"OVERRIDDEN": "from_global",
+	}
+
+	p := LaunchOptions{
+		Platform: "win64",
+		CustomEnv: map[string]string{
+			"OVERRIDDEN": "from_profile",
+			"LOCAL_VAR":  "local",
+		},
+	}
+
+	eff := ResolveEffectiveOptions(cfg, p)
+	if eff.OperatingMode != ModeStandalone {
+		t.Errorf("expected OperatingMode standalone, got %s", eff.OperatingMode)
+	}
+	if eff.Runner != RunnerUMU {
+		t.Errorf("expected Runner umu, got %s", eff.Runner)
+	}
+	if eff.WinePrefix != "~/.default_wine" {
+		t.Errorf("expected WinePrefix ~/.default_wine, got %s", eff.WinePrefix)
+	}
+	if eff.CustomEnv["GLOBAL_VAR"] != "global" {
+		t.Errorf("expected GLOBAL_VAR=global, got %s", eff.CustomEnv["GLOBAL_VAR"])
+	}
+	if eff.CustomEnv["OVERRIDDEN"] != "from_profile" {
+		t.Errorf("expected OVERRIDDEN=from_profile, got %s", eff.CustomEnv["OVERRIDDEN"])
+	}
+	if eff.CustomEnv["LOCAL_VAR"] != "local" {
+		t.Errorf("expected LOCAL_VAR=local, got %s", eff.CustomEnv["LOCAL_VAR"])
+	}
+}
+
+func TestManager_BusEventDispatch(t *testing.T) {
+	bus := events.NewBus()
+	chLaunch, unsubLaunch := bus.Subscribe(events.EventGameLaunched)
+	defer unsubLaunch()
+	chExit, unsubExit := bus.Subscribe(events.EventGameExited)
+	defer unsubExit()
+
+	mgr := NewManager(bus)
+
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "dummy_game.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := LaunchOptions{
+		GameDir:  tmpDir,
+		ExePath:  scriptPath,
+		Runner:   RunnerLinux,
+		Platform: "linux",
+		Name:     "Telemetry Game",
+		AppID:    "77777",
+	}
+
+	cmd, err := mgr.Start(context.Background(), nil, opts)
+	if err != nil {
+		t.Fatalf("mgr.Start failed: %v", err)
+	}
+	if cmd == nil || cmd.Process == nil {
+		t.Fatalf("expected active process handle")
+	}
+
+	// Verify EventGameLaunched
+	select {
+	case ev := <-chLaunch:
+		if ev.Type != events.EventGameLaunched {
+			t.Errorf("expected EventGameLaunched, got %s", ev.Type)
+		}
+		if ev.GameDir != tmpDir {
+			t.Errorf("expected GameDir %s, got %s", tmpDir, ev.GameDir)
+		}
+		if ev.GameName != "Telemetry Game" {
+			t.Errorf("expected GameName 'Telemetry Game', got %s", ev.GameName)
+		}
+		if ev.AppID != "77777" {
+			t.Errorf("expected AppID 77777, got %s", ev.AppID)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for EventGameLaunched")
+	}
+
+	// Verify EventGameExited
+	select {
+	case ev := <-chExit:
+		if ev.Type != events.EventGameExited {
+			t.Errorf("expected EventGameExited, got %s", ev.Type)
+		}
+		if ev.GameDir != tmpDir {
+			t.Errorf("expected GameDir %s, got %s", tmpDir, ev.GameDir)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for EventGameExited")
+	}
+}
+
+func TestResolveEffectiveOptions_CascadingProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	trueVal := true
+	profile := LaunchOptions{
+		GameDir:           tmpDir,
+		ExePath:           filepath.Join(tmpDir, "SavedGame.exe"),
+		AppID:             "88888",
+		Name:              "Cascaded Game",
+		Platform:          "win64",
+		OperatingMode:     ModeStandalone,
+		Runner:            RunnerWine,
+		WinePrefix:        "~/.wine-cascaded",
+		MangoHud:          &trueVal,
+		WineFullscreenFSR: &trueVal,
+		DXVKHud:           "fps",
+		CustomEnv: map[string]string{
+			"CASCADED_VAR": "profile_val",
+		},
+	}
+	if err := SaveLaunchProfile(tmpDir, profile); err != nil {
+		t.Fatalf("SaveLaunchProfile failed: %v", err)
+	}
+
+	cfg := config.DefaultConfig()
+	opts := LaunchOptions{
+		GameDir: tmpDir, // ExePath and other fields omitted
+	}
+
+	resolved := ResolveEffectiveOptions(cfg, opts)
+	if resolved.Name != "Cascaded Game" {
+		t.Errorf("expected Name 'Cascaded Game', got %s", resolved.Name)
+	}
+	if resolved.AppID != "88888" {
+		t.Errorf("expected AppID 88888, got %s", resolved.AppID)
+	}
+	if resolved.ExePath != filepath.Join(tmpDir, "SavedGame.exe") {
+		t.Errorf("expected ExePath %s, got %s", filepath.Join(tmpDir, "SavedGame.exe"), resolved.ExePath)
+	}
+	if resolved.Runner != RunnerWine {
+		t.Errorf("expected Runner %s, got %s", RunnerWine, resolved.Runner)
+	}
+	if resolved.WinePrefix != "~/.wine-cascaded" {
+		t.Errorf("expected WinePrefix ~/.wine-cascaded, got %s", resolved.WinePrefix)
+	}
+	if resolved.MangoHud == nil || !*resolved.MangoHud {
+		t.Errorf("expected MangoHud true")
+	}
+	if resolved.CustomEnv["CASCADED_VAR"] != "profile_val" {
+		t.Errorf("expected custom env CASCADED_VAR=profile_val, got %s", resolved.CustomEnv["CASCADED_VAR"])
+	}
+}
+
+func TestResolveEffectiveOptions_CandidateFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameExe := filepath.Join(tmpDir, "MainBinary.exe")
+	_ = os.WriteFile(gameExe, []byte("MZ...fake-pe"), 0755)
+
+	cfg := config.DefaultConfig()
+	opts := LaunchOptions{
+		GameDir: tmpDir,
+	}
+
+	resolved := ResolveEffectiveOptions(cfg, opts)
+	if resolved.ExePath != gameExe {
+		t.Errorf("expected discovered ExePath %s, got %s", gameExe, resolved.ExePath)
+	}
+	if resolved.Platform != "win64" {
+		t.Errorf("expected platform win64 from MZ magic bytes, got %s", resolved.Platform)
+	}
+}
+
+func TestDetectBinaryPlatform(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	elfBin := filepath.Join(tmpDir, "linux_bin")
+	_ = os.WriteFile(elfBin, []byte("\x7fELFfakebinary"), 0755)
+
+	peBin := filepath.Join(tmpDir, "win_bin.exe")
+	_ = os.WriteFile(peBin, []byte("MZfakebinary"), 0755)
+
+	txtFile := filepath.Join(tmpDir, "text.txt")
+	_ = os.WriteFile(txtFile, []byte("plain text"), 0644)
+
+	if p := detectBinaryPlatform(elfBin); p != "linux" {
+		t.Errorf("expected linux for ELF, got %s", p)
+	}
+	if p := detectBinaryPlatform(peBin); p != "win64" {
+		t.Errorf("expected win64 for PE, got %s", p)
+	}
+	if p := detectBinaryPlatform(txtFile); p != "" {
+		t.Errorf("expected empty platform for text, got %s", p)
+	}
+}
+
+func TestManager_LaunchGameDomain(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "domain_game.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nexit 0\n"), 0755)
+
+	mgr := NewManager()
+	cfg := config.DefaultConfig()
+
+	game := &domain.Game{
+		Name:          "Domain Game",
+		AppID:         "11111",
+		GameDir:       tmpDir,
+		ExePath:       scriptPath,
+		Platform:      "linux",
+		OperatingMode: ModeStandalone,
+		Runner:        RunnerLinux,
+	}
+
+	events := make(chan ProcessEvent, 5)
+	mgr.Subscribe(func(ev ProcessEvent) {
+		events <- ev
+	})
+
+	cmd, err := mgr.Launch(context.Background(), cfg, game)
+	if err != nil {
+		t.Fatalf("mgr.Launch failed: %v", err)
+	}
+	if cmd == nil || cmd.Process == nil {
+		t.Fatalf("expected non-nil process")
+	}
+
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			if ev.GameDir == tmpDir && !ev.IsRunning {
+				return
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for domain game exit")
+		}
+	}
+}
+
+func TestBuildCommand_DllOverrides(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.exe",
+		Platform:      "win64",
+		Runner:        RunnerWine,
+		DllOverrides:  "steam_api64=n,b;d3d11=n,b",
+		OperatingMode: ModeLoader,
+	}
+
+	cmd, err := BuildCommand(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	var foundOverride string
+	for _, env := range cmd.Env {
+		if strings.HasPrefix(env, "WINEDLLOVERRIDES=") {
+			foundOverride = strings.TrimPrefix(env, "WINEDLLOVERRIDES=")
+			break
+		}
+	}
+
+	if foundOverride == "" {
+		t.Fatalf("expected WINEDLLOVERRIDES in env, got none")
+	}
+
+	if !strings.Contains(foundOverride, "steam_api64=n,b") {
+		t.Errorf("expected steam_api64=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
+	}
+	if !strings.Contains(foundOverride, "d3d11=n,b") {
+		t.Errorf("expected d3d11=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
+	}
+	if !strings.Contains(foundOverride, "steamclient,steamclient64=n,b") {
+		t.Errorf("expected loader redirection steamclient,steamclient64=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
+	}
+}
+
+
+
+
+
 

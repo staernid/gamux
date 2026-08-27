@@ -11,9 +11,94 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/domain"
-	"github.com/staernid/gamux/lutris"
 	"github.com/staernid/gamux/util"
 )
+
+type assetSpec struct {
+	AssetType           string
+	CacheFilename       string
+	LocalCandidates     []string
+	SteamCDNURL         func(appID string) string
+	SteamCDNFallbackURL func(appID string) string
+	ArtworkGetter       func(art *Artwork) string
+}
+
+var canonicalAssetSpecs = []assetSpec{
+	{
+		AssetType:     domain.AssetCover,
+		CacheFilename: "cover.jpg",
+		LocalCandidates: []string{
+			"cover.jpg", "cover.png", "poster.jpg", "poster.png",
+			filepath.Join(".gamux", "art", "cover.jpg"),
+			filepath.Join(".gamux", "art", "cover.png"),
+		},
+		SteamCDNURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", appID)
+		},
+		SteamCDNFallbackURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", appID)
+		},
+		ArtworkGetter: func(art *Artwork) string {
+			return art.CoverURL
+		},
+	},
+	{
+		AssetType:     domain.AssetBanner,
+		CacheFilename: "banner.jpg",
+		LocalCandidates: []string{
+			"banner.jpg", "banner.png", "header.jpg",
+			filepath.Join(".gamux", "art", "banner.jpg"),
+		},
+		SteamCDNURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID)
+		},
+		ArtworkGetter: func(art *Artwork) string {
+			return art.BannerURL
+		},
+	},
+	{
+		AssetType:     domain.AssetHero,
+		CacheFilename: "hero.jpg",
+		LocalCandidates: []string{
+			"hero.jpg", "hero.png", "library_hero.jpg",
+			filepath.Join(".gamux", "art", "hero.jpg"),
+		},
+		SteamCDNURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_hero.jpg", appID)
+		},
+		ArtworkGetter: func(art *Artwork) string {
+			return art.HeroURL
+		},
+	},
+	{
+		AssetType:     domain.AssetLogo,
+		CacheFilename: "logo.png",
+		LocalCandidates: []string{
+			"logo.png", "logo.jpg",
+			filepath.Join(".gamux", "art", "logo.png"),
+		},
+		SteamCDNURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/logo.png", appID)
+		},
+		ArtworkGetter: func(art *Artwork) string {
+			return art.LogoURL
+		},
+	},
+	{
+		AssetType:     domain.AssetIcon,
+		CacheFilename: "icon.jpg",
+		LocalCandidates: []string{
+			"icon.jpg", "icon.png",
+			filepath.Join(".gamux", "art", "icon.jpg"),
+		},
+		SteamCDNURL: func(appID string) string {
+			return fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", appID)
+		},
+		ArtworkGetter: func(art *Artwork) string {
+			return art.IconURL
+		},
+	},
+}
 
 // ArtworkService provides high-level multi-tier artwork resolution, caching, and runner export.
 type ArtworkService struct {
@@ -83,93 +168,19 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 		return nil, fmt.Errorf("game cannot be nil")
 	}
 
-	slug := lutris.Slugify(game.Name)
+	slug := util.Slugify(game.Name)
 	if slug == "" {
 		slug = "game-" + game.AppID
 	}
 
 	gameArtDir := filepath.Join(s.cacheDir, slug)
-	cachedCover := filepath.Join(gameArtDir, "cover.jpg")
-	cachedBanner := filepath.Join(gameArtDir, "banner.jpg")
 
-	// 0. Check custom/locked artwork preference first
-	if game.CustomCoverURL == "none" {
-		game.LocalCover = ""
-		game.LocalCoverURL = ""
-		game.CoverURL = ""
-	} else if game.CustomCoverURL != "" {
-		if strings.HasPrefix(game.CustomCoverURL, "http://") || strings.HasPrefix(game.CustomCoverURL, "https://") {
-			if !util.FileExists(cachedCover) || game.LocalCover == "" {
-				_ = s.DownloadFile(ctx, game.CustomCoverURL, cachedCover)
-			}
-			game.LocalCover = cachedCover
-			game.CoverURL = game.CustomCoverURL
-		} else if util.FileExists(game.CustomCoverURL) {
-			game.LocalCover = game.CustomCoverURL
-		}
+	// Step 1: Fast local checks (Custom overrides, game folder candidates, disk cache)
+	for _, spec := range canonicalAssetSpecs {
+		s.resolveLocalAsset(ctx, game, spec, gameArtDir)
 	}
 
-	if game.CustomBannerURL == "none" {
-		game.LocalBanner = ""
-		game.LocalBannerURL = ""
-		game.BannerURL = ""
-	} else if game.CustomBannerURL != "" {
-		if strings.HasPrefix(game.CustomBannerURL, "http://") || strings.HasPrefix(game.CustomBannerURL, "https://") {
-			if !util.FileExists(cachedBanner) || game.LocalBanner == "" {
-				_ = s.DownloadFile(ctx, game.CustomBannerURL, cachedBanner)
-			}
-			game.LocalBanner = cachedBanner
-			game.BannerURL = game.CustomBannerURL
-		} else if util.FileExists(game.CustomBannerURL) {
-			game.LocalBanner = game.CustomBannerURL
-		}
-	}
-
-	// 1. Check local game folder first for custom/bundled artwork
-	if game.GameDir != "" {
-		if game.CustomCoverURL != "none" {
-			candidates := []string{
-				"cover.jpg", "cover.png", "poster.jpg", "poster.png",
-				filepath.Join(".gamux", "art", "cover.jpg"),
-				filepath.Join(".gamux", "art", "cover.png"),
-			}
-			for _, c := range candidates {
-				p := filepath.Join(game.GameDir, c)
-				if util.FileExists(p) {
-					if game.LocalCover == "" {
-						game.LocalCover = p
-					}
-					break
-				}
-			}
-		}
-		if game.CustomBannerURL != "none" {
-			bannerCandidates := []string{
-				"banner.jpg", "banner.png", "hero.jpg", "hero.png", "header.jpg",
-				filepath.Join(".gamux", "art", "banner.jpg"),
-				filepath.Join(".gamux", "art", "hero.jpg"),
-			}
-			for _, c := range bannerCandidates {
-				p := filepath.Join(game.GameDir, c)
-				if util.FileExists(p) {
-					if game.LocalBanner == "" {
-						game.LocalBanner = p
-					}
-					break
-				}
-			}
-		}
-	}
-
-	// 2. If cached artwork exists on disk, reuse it
-	if game.CustomCoverURL != "none" && game.LocalCover == "" && util.FileExists(cachedCover) {
-		game.LocalCover = cachedCover
-	}
-	if game.CustomBannerURL != "none" && game.LocalBanner == "" && util.FileExists(cachedBanner) {
-		game.LocalBanner = cachedBanner
-	}
-
-	// 3. Strategy: Steam CDN (if Steam AppID is present and artwork not locked)
+	// Step 2: Steam CDN direct resolution for Steam titles
 	steamID, hasSteamID := game.SteamAppID()
 	if !hasSteamID && game.AppID != "" && game.AppID != "0" {
 		steamID, hasSteamID = util.ParseAppID(game.AppID)
@@ -177,190 +188,214 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 
 	if hasSteamID && steamID > 0 && !game.LockedArtwork {
 		idStr := fmt.Sprintf("%d", steamID)
-		if game.CustomCoverURL != "none" {
-			if game.CoverURL == "" {
-				game.CoverURL = fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", idStr)
-			}
-			if game.LocalCover == "" {
-				if err := s.DownloadFile(ctx, game.CoverURL, cachedCover); err == nil {
-					game.LocalCover = cachedCover
-				} else {
-					// Fallback to 1x poster or header
-					fallbackURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", idStr)
-					if err := s.DownloadFile(ctx, fallbackURL, cachedCover); err == nil {
-						game.LocalCover = cachedCover
-					}
-				}
-			}
-		}
-		if game.CustomBannerURL != "none" {
-			if game.BannerURL == "" {
-				game.BannerURL = fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr)
-			}
-			if game.LocalBanner == "" {
-				if err := s.DownloadFile(ctx, game.BannerURL, cachedBanner); err == nil {
-					game.LocalBanner = cachedBanner
-				}
-			}
-		}
-		if game.HeroURL == "" {
-			game.HeroURL = fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_hero.jpg", idStr)
-		}
-		if game.LogoURL == "" {
-			game.LogoURL = fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/logo.png", idStr)
-		}
-		if game.IconURL == "" {
-			game.IconURL = fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", idStr)
+		for _, spec := range canonicalAssetSpecs {
+			s.resolveSteamCDN(ctx, game, spec, idStr, gameArtDir)
 		}
 	}
 
-	// 4. Strategy: SteamGridDB (if configured and artwork is missing)
-	if s.registry != nil && !game.LockedArtwork && ((game.CustomCoverURL != "none" && game.LocalCover == "") || (game.CustomBannerURL != "none" && game.LocalBanner == "")) {
-		if p, ok := s.registry.Get("steamgriddb"); ok {
-			var sgdbID string
-			if hasSteamID && steamID > 0 {
-				if cp, ok := p.(*SGDBProvider); ok {
-					if id, _, err := cp.GetGameBySteamAppID(ctx, steamID); err == nil {
-						sgdbID = id
-					}
-				}
-			}
-			if sgdbID == "" && game.Name != "" {
-				if results, err := p.Search(ctx, game.Name); err == nil && len(results) > 0 {
-					sgdbID = results[0].ID
-				}
-			}
-
-			if sgdbID != "" {
-				game.SGDBID = sgdbID
-				if art, err := p.GetArtwork(ctx, sgdbID); err == nil && art != nil {
-					if game.CoverURL == "" && art.CoverURL != "" {
-						game.CoverURL = art.CoverURL
-					}
-					if game.BannerURL == "" && art.BannerURL != "" {
-						game.BannerURL = art.BannerURL
-					}
-					if game.HeroURL == "" && art.HeroURL != "" {
-						game.HeroURL = art.HeroURL
-					}
-					if game.LogoURL == "" && art.LogoURL != "" {
-						game.LogoURL = art.LogoURL
-					}
-					if game.IconURL == "" && art.IconURL != "" {
-						game.IconURL = art.IconURL
-					}
-
-					if game.LocalCover == "" && art.CoverURL != "" {
-						if err := s.DownloadFile(ctx, art.CoverURL, cachedCover); err == nil {
-							game.LocalCover = cachedCover
-						}
-					}
-					if game.LocalBanner == "" && art.BannerURL != "" {
-						if err := s.DownloadFile(ctx, art.BannerURL, cachedBanner); err == nil {
-							game.LocalBanner = cachedBanner
-						}
-					}
-				}
-			}
+	// Step 3: Lazy Provider queries (SteamGridDB & GOG) for remaining missing assets
+	if s.registry != nil && !game.LockedArtwork {
+		if s.hasMissingAssets(game) {
+			s.resolveFromSGDB(ctx, game, steamID, hasSteamID, gameArtDir)
+		}
+		if s.hasMissingAssets(game) && game.GOGID != "" {
+			s.resolveFromGOG(ctx, game, gameArtDir)
 		}
 	}
 
-	// 5. Strategy: GOG CDN (if GOG ID is present)
-	if s.registry != nil && !game.LockedArtwork && (game.LocalCover == "" || game.LocalBanner == "") && game.GOGID != "" {
-		if p, ok := s.registry.Get("gog"); ok {
-			if art, err := p.GetArtwork(ctx, game.GOGID); err == nil && art != nil {
-				if game.CoverURL == "" && art.CoverURL != "" {
-					game.CoverURL = art.CoverURL
-				}
-				if game.BannerURL == "" && art.BannerURL != "" {
-					game.BannerURL = art.BannerURL
-				}
-				if game.LocalCover == "" && art.CoverURL != "" {
-					if err := s.DownloadFile(ctx, art.CoverURL, cachedCover); err == nil {
-						game.LocalCover = cachedCover
-					}
-				}
-				if game.LocalBanner == "" && art.BannerURL != "" {
-					if err := s.DownloadFile(ctx, art.BannerURL, cachedBanner); err == nil {
-						game.LocalBanner = cachedBanner
-					}
-				}
-			}
-		}
+	// Step 4: Finalize local URLs & cache synchronization
+	for _, spec := range canonicalAssetSpecs {
+		s.finalizeAsset(game, spec, slug, gameArtDir)
 	}
-
-	// 6. Set local web-accessible URLs
-	if game.LocalCover != "" && util.FileExists(game.LocalCover) {
-		if game.LocalCover != cachedCover {
-			_ = os.MkdirAll(gameArtDir, 0755)
-			_ = util.CopyFile(game.LocalCover, cachedCover)
-		}
-		var mtime int64 = 1
-		if fi, err := os.Stat(cachedCover); err == nil {
-			mtime = fi.ModTime().Unix()
-		}
-		game.LocalCoverURL = fmt.Sprintf("/art/%s/cover.jpg?t=%d", slug, mtime)
-	} else if util.FileExists(cachedCover) {
-		var mtime int64 = 1
-		if fi, err := os.Stat(cachedCover); err == nil {
-			mtime = fi.ModTime().Unix()
-		}
-		game.LocalCover = cachedCover
-		game.LocalCoverURL = fmt.Sprintf("/art/%s/cover.jpg?t=%d", slug, mtime)
-	}
-
-	if game.LocalBanner != "" && util.FileExists(game.LocalBanner) {
-		if game.LocalBanner != cachedBanner {
-			_ = os.MkdirAll(gameArtDir, 0755)
-			_ = util.CopyFile(game.LocalBanner, cachedBanner)
-		}
-		var mtime int64 = 1
-		if fi, err := os.Stat(cachedBanner); err == nil {
-			mtime = fi.ModTime().Unix()
-		}
-		game.LocalBannerURL = fmt.Sprintf("/art/%s/banner.jpg?t=%d", slug, mtime)
-	} else if util.FileExists(cachedBanner) {
-		var mtime int64 = 1
-		if fi, err := os.Stat(cachedBanner); err == nil {
-			mtime = fi.ModTime().Unix()
-		}
-		game.LocalBanner = cachedBanner
-		game.LocalBannerURL = fmt.Sprintf("/art/%s/banner.jpg?t=%d", slug, mtime)
-	}
-
-	// 7. Sync / Export to Lutris directories if local artwork is available
-	s.exportToLutris(slug, game.LocalCover, game.LocalBanner)
 
 	return &game.GameArtwork, nil
 }
 
-func (s *ArtworkService) exportToLutris(slug, coverPath, bannerPath string) {
-	if slug == "" {
-		return
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+func (s *ArtworkService) resolveLocalAsset(ctx context.Context, game *domain.Game, spec assetSpec, gameArtDir string) {
+	loc := game.GetAsset(spec.AssetType)
+	cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
+
+	// 1. Check custom override
+	if loc.CustomURL == "none" {
+		loc.LocalPath = ""
+		loc.LocalURL = ""
+		loc.RemoteURL = ""
+		game.SetAsset(spec.AssetType, loc)
 		return
 	}
 
-	lutrisCoverDir := filepath.Join(home, ".cache", "lutris", "coverart")
-	lutrisBannerDir := filepath.Join(home, ".cache", "lutris", "banners")
+	if loc.CustomURL != "" {
+		if strings.HasPrefix(loc.CustomURL, "http://") || strings.HasPrefix(loc.CustomURL, "https://") {
+			if !util.FileExists(cachedPath) || loc.LocalPath == "" {
+				_ = s.DownloadFile(ctx, loc.CustomURL, cachedPath)
+			}
+			loc.LocalPath = cachedPath
+			loc.RemoteURL = loc.CustomURL
+		} else if util.FileExists(loc.CustomURL) {
+			loc.LocalPath = loc.CustomURL
+		}
+		game.SetAsset(spec.AssetType, loc)
+		return
+	}
 
-	if coverPath != "" && util.FileExists(coverPath) {
-		_ = os.MkdirAll(lutrisCoverDir, 0755)
-		target := filepath.Join(lutrisCoverDir, slug+".jpg")
-		if !util.FileExists(target) {
-			_ = util.CopyFile(coverPath, target)
+	// 2. Check local game folder candidates
+	if game.GameDir != "" && loc.LocalPath == "" {
+		for _, candidate := range spec.LocalCandidates {
+			p := filepath.Join(game.GameDir, candidate)
+			if util.FileExists(p) {
+				loc.LocalPath = p
+				break
+			}
 		}
 	}
 
-	if bannerPath != "" && util.FileExists(bannerPath) {
-		_ = os.MkdirAll(lutrisBannerDir, 0755)
-		target := filepath.Join(lutrisBannerDir, slug+".jpg")
-		if !util.FileExists(target) {
-			_ = util.CopyFile(bannerPath, target)
+	// 3. Check disk cache
+	if loc.LocalPath == "" && util.FileExists(cachedPath) {
+		loc.LocalPath = cachedPath
+	}
+
+	game.SetAsset(spec.AssetType, loc)
+}
+
+func (s *ArtworkService) resolveSteamCDN(ctx context.Context, game *domain.Game, spec assetSpec, idStr string, gameArtDir string) {
+	loc := game.GetAsset(spec.AssetType)
+	if loc.CustomURL == "none" || spec.SteamCDNURL == nil {
+		return
+	}
+
+	cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
+
+	if loc.RemoteURL == "" {
+		loc.RemoteURL = spec.SteamCDNURL(idStr)
+	}
+
+	if loc.LocalPath == "" && spec.AssetType != domain.AssetIcon {
+		if err := s.DownloadFile(ctx, loc.RemoteURL, cachedPath); err == nil {
+			loc.LocalPath = cachedPath
+		} else if spec.SteamCDNFallbackURL != nil {
+			fallbackURL := spec.SteamCDNFallbackURL(idStr)
+			if err := s.DownloadFile(ctx, fallbackURL, cachedPath); err == nil {
+				loc.LocalPath = cachedPath
+			}
 		}
 	}
+
+	game.SetAsset(spec.AssetType, loc)
+}
+
+func (s *ArtworkService) hasMissingAssets(game *domain.Game) bool {
+	for _, spec := range canonicalAssetSpecs {
+		if spec.AssetType == domain.AssetIcon {
+			continue
+		}
+		loc := game.GetAsset(spec.AssetType)
+		if loc.CustomURL != "none" && loc.LocalPath == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ArtworkService) resolveFromSGDB(ctx context.Context, game *domain.Game, steamID uint32, hasSteamID bool, gameArtDir string) {
+	p, ok := s.registry.Get("steamgriddb")
+	if !ok {
+		return
+	}
+
+	var sgdbID string
+	if hasSteamID && steamID > 0 {
+		if cp, ok := p.(*SGDBProvider); ok {
+			if id, _, err := cp.GetGameBySteamAppID(ctx, steamID); err == nil {
+				sgdbID = id
+			}
+		}
+	}
+	if sgdbID == "" && game.Name != "" {
+		if results, err := p.Search(ctx, game.Name); err == nil && len(results) > 0 {
+			for _, res := range results {
+				if isTitleMatch(res.Name, game.Name) {
+					sgdbID = res.ID
+					break
+				}
+			}
+		}
+	}
+
+	if sgdbID == "" {
+		return
+	}
+
+	game.SGDBID = sgdbID
+	art, err := p.GetArtwork(ctx, sgdbID)
+	if err != nil || art == nil {
+		return
+	}
+
+	s.applyProviderArtwork(ctx, game, art, gameArtDir)
+}
+
+func (s *ArtworkService) resolveFromGOG(ctx context.Context, game *domain.Game, gameArtDir string) {
+	p, ok := s.registry.Get("gog")
+	if !ok {
+		return
+	}
+
+	art, err := p.GetArtwork(ctx, game.GOGID)
+	if err != nil || art == nil {
+		return
+	}
+
+	s.applyProviderArtwork(ctx, game, art, gameArtDir)
+}
+
+func (s *ArtworkService) applyProviderArtwork(ctx context.Context, game *domain.Game, art *Artwork, gameArtDir string) {
+	for _, spec := range canonicalAssetSpecs {
+		loc := game.GetAsset(spec.AssetType)
+		if loc.CustomURL == "none" {
+			continue
+		}
+		providerURL := spec.ArtworkGetter(art)
+		if providerURL == "" {
+			continue
+		}
+
+		if loc.RemoteURL == "" {
+			loc.RemoteURL = providerURL
+		}
+		if loc.LocalPath == "" && spec.AssetType != domain.AssetIcon {
+			cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
+			if err := s.DownloadFile(ctx, providerURL, cachedPath); err == nil {
+				loc.LocalPath = cachedPath
+			}
+		}
+		game.SetAsset(spec.AssetType, loc)
+	}
+}
+
+func (s *ArtworkService) finalizeAsset(game *domain.Game, spec assetSpec, slug, gameArtDir string) {
+	loc := game.GetAsset(spec.AssetType)
+	cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
+
+	if loc.LocalPath != "" && util.FileExists(loc.LocalPath) {
+		if loc.LocalPath != cachedPath {
+			_ = os.MkdirAll(gameArtDir, 0755)
+			_ = util.CopyFile(loc.LocalPath, cachedPath)
+		}
+		var mtime int64 = 1
+		if fi, err := os.Stat(cachedPath); err == nil {
+			mtime = fi.ModTime().Unix()
+		}
+		loc.LocalURL = fmt.Sprintf("/art/%s/%s?t=%d", slug, spec.CacheFilename, mtime)
+	} else if util.FileExists(cachedPath) {
+		var mtime int64 = 1
+		if fi, err := os.Stat(cachedPath); err == nil {
+			mtime = fi.ModTime().Unix()
+		}
+		loc.LocalPath = cachedPath
+		loc.LocalURL = fmt.Sprintf("/art/%s/%s?t=%d", slug, spec.CacheFilename, mtime)
+	}
+
+	game.SetAsset(spec.AssetType, loc)
 }
 
 // ApplyCustomArtwork saves a chosen image URL or local file to the game's cache and updates GameArtwork.
@@ -372,7 +407,7 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 		return nil, fmt.Errorf("image source cannot be empty")
 	}
 
-	slug := lutris.Slugify(game.Name)
+	slug := util.Slugify(game.Name)
 	if slug == "" {
 		slug = "game-" + game.AppID
 	}
@@ -383,52 +418,25 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 	}
 
 	fileName := "cover.jpg"
-	switch assetType {
-	case "cover":
-		fileName = "cover.jpg"
-		game.CustomCoverURL = imageSource
-	case "banner":
-		fileName = "banner.jpg"
-		game.CustomBannerURL = imageSource
-	case "hero":
-		fileName = "hero.jpg"
-		game.CustomHeroURL = imageSource
-	case "logo":
-		fileName = "logo.png"
-		game.CustomLogoURL = imageSource
-	case "icon":
-		fileName = "icon.jpg"
-		game.CustomIconURL = imageSource
-	default:
-		fileName = "cover.jpg"
-		game.CustomCoverURL = imageSource
+	for _, spec := range canonicalAssetSpecs {
+		if strings.EqualFold(spec.AssetType, assetType) {
+			fileName = spec.CacheFilename
+			break
+		}
 	}
 
 	targetPath := filepath.Join(gameArtDir, fileName)
 
 	// Handle clearing artwork / forcing fallback
 	if imageSource == "none" || imageSource == "clear" {
-		_ = os.Remove(targetPath)
 		game.LockedArtwork = true
-		if assetType == "cover" {
-			game.CustomCoverURL = "none"
-			game.LocalCover = ""
-			game.LocalCoverURL = ""
-			game.CoverURL = ""
-		} else if assetType == "banner" || assetType == "hero" {
-			game.CustomBannerURL = "none"
-			game.LocalBanner = ""
-			game.LocalBannerURL = ""
-			game.BannerURL = ""
-		} else if assetType == "logo" {
-			game.CustomLogoURL = "none"
-			game.LogoURL = ""
-		} else if assetType == "icon" {
-			game.CustomIconURL = "none"
-			game.LocalIcon = ""
-			game.IconURL = ""
+		loc := domain.AssetLocation{
+			CustomURL: "none",
+			LocalPath: "",
+			LocalURL:  "",
+			RemoteURL: "",
 		}
-		s.exportToLutris(slug, game.LocalCover, game.LocalBanner)
+		game.SetAsset(assetType, loc)
 		return &game.GameArtwork, nil
 	}
 
@@ -452,17 +460,15 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 	}
 
 	game.LockedArtwork = true
-	if assetType == "cover" {
-		game.LocalCover = targetPath
-		game.LocalCoverURL = fmt.Sprintf("/art/%s/%s?t=%d", slug, fileName, mtime)
-		game.CoverURL = imageSource
-	} else if assetType == "banner" || assetType == "hero" {
-		game.LocalBanner = targetPath
-		game.LocalBannerURL = fmt.Sprintf("/art/%s/%s?t=%d", slug, fileName, mtime)
-		game.BannerURL = imageSource
+	loc := domain.AssetLocation{
+		CustomURL: imageSource,
+		LocalPath: targetPath,
+		LocalURL:  fmt.Sprintf("/art/%s/%s?t=%d", slug, fileName, mtime),
+		RemoteURL: imageSource,
 	}
+	game.SetAsset(assetType, loc)
 
-	s.exportToLutris(slug, game.LocalCover, game.LocalBanner)
 	return &game.GameArtwork, nil
 }
+
 

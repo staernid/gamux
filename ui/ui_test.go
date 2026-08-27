@@ -26,7 +26,7 @@ func TestRenderStepsAndSuccess(t *testing.T) {
 	RenderStep(1, 3, "Detecting Game")
 	RenderSubStep("✓", "Detected AppID 12345")
 	RenderSubStep("!", "Warning message test")
-	RenderSuccess("Setup Complete", "All operations finished cleanly.", []string{"Launch via Steam", "Check Lutris"})
+	RenderSuccess("Setup Complete", "All operations finished cleanly.", []string{"Launch via Gamux", "Check Status"})
 	RenderErrorHelp(errors.New("sample error"), []string{"Check file permissions", "Verify game path"})
 }
 

@@ -1,6 +1,7 @@
 package github
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -217,3 +218,56 @@ func TestUpdateUMUAssets(t *testing.T) {
 		t.Errorf("expected downloaded umu-run file, got err: %v, data: %s", err, string(data))
 	}
 }
+
+func TestUpdateUMUAssets_TarZipapp(t *testing.T) {
+	tmpDir := t.TempDir()
+	jsonResponse := `{
+		"tag_name": "1.4.4",
+		"updated_at": "2026-08-01T00:00:00Z",
+		"assets": [
+			{"name": "python3-umu-launcher_1.4.4.deb", "browser_download_url": "https://example.com/deb"},
+			{"name": "umu-launcher-1.4.4-zipapp.tar", "browser_download_url": "https://example.com/zipapp.tar"}
+		]
+	}`
+
+	// Create valid tar in memory with umu/umu-run
+	var tarBuf bytes.Buffer
+	tw := tar.NewWriter(&tarBuf)
+	scriptContent := []byte("#!/usr/bin/env python3\n# umu standalone zipapp\n")
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "umu/umu-run",
+		Mode: 0755,
+		Size: int64(len(scriptContent)),
+	})
+	_, _ = tw.Write(scriptContent)
+	_ = tw.Close()
+
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.String(), "api.github.com") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResponse)),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(bytes.NewReader(tarBuf.Bytes())),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err := UpdateUMUAssets(ctx, nil, tmpDir)
+	if err != nil {
+		t.Fatalf("UpdateUMUAssets failed with tar: %v", err)
+	}
+
+	downloaded := filepath.Join(tmpDir, "umu-run")
+	if data, err := os.ReadFile(downloaded); err != nil || !strings.Contains(string(data), "umu standalone zipapp") {
+		t.Errorf("expected extracted umu-run from zipapp.tar, got err: %v, data: %s", err, string(data))
+	}
+}
+

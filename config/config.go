@@ -12,7 +12,6 @@ type Config struct {
 	LibraryPaths  []string `json:"library_paths,omitempty"`
 	GbeDir        string   `json:"gbe_dir,omitempty"`
 	SteamlessDir  string   `json:"steamless_dir,omitempty"`
-	LutrisDir     string   `json:"lutris_dir,omitempty"`
 	SteamUserdata string   `json:"steam_userdata,omitempty"`
 
 	// API Keys
@@ -29,7 +28,6 @@ type Config struct {
 	DefaultRunner      string            `json:"default_runner,omitempty"`
 	ProtonPath         string            `json:"proton_path,omitempty"`
 	GbeMode            string            `json:"gbe_mode,omitempty"`
-	Lutris             bool              `json:"lutris"`
 	Steamless          bool              `json:"steamless"`
 	Achievements       bool              `json:"achievements"`
 	Normalize          bool              `json:"normalize"`
@@ -45,6 +43,12 @@ type Config struct {
 	Language       string `json:"language,omitempty"`
 	DisableOverlay bool   `json:"disable_overlay,omitempty"`
 	OfflineMode    bool   `json:"offline_mode,omitempty"`
+
+	// Save & Backup Settings
+	AutoBackupSaves      bool   `json:"auto_backup_saves"`
+	BackupRetentionCount int    `json:"backup_retention_count,omitempty"`
+	BackupDir            string `json:"backup_dir,omitempty"`
+	SaveManifestURL      string `json:"save_manifest_url,omitempty"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -71,11 +75,6 @@ func DefaultConfig() *Config {
 		steamlessPath = filepath.Join(dataHome, "steamless")
 	}
 
-	lutrisPath := ".config/lutris/games"
-	if configHome != "" {
-		lutrisPath = filepath.Join(configHome, "lutris", "games")
-	}
-
 	steamUserDataPath := ".local/share/Steam/userdata"
 	if dataHome != "" {
 		steamUserDataPath = filepath.Join(dataHome, "Steam", "userdata")
@@ -86,28 +85,34 @@ func DefaultConfig() *Config {
 		artworkPath = filepath.Join(dataHome, "gamux", "art")
 	}
 
+	backupPath := ".local/share/gamux/backups"
+	if dataHome != "" {
+		backupPath = filepath.Join(dataHome, "gamux", "backups")
+	}
+
 	return &Config{
-		LibraryPaths:       nil,
-		GbeDir:             gbePath,
-		SteamlessDir:       steamlessPath,
-		LutrisDir:          lutrisPath,
-		SteamUserdata:      steamUserDataPath,
-		ArtworkDir:         artworkPath,
-		SteamWebAPIKey:     "",
-		HubcapAPIKey:       "",
-		SteamGridDBAPIKey:  "",
-		EnableLaunchNotify: true,
-		OperatingMode:      "standalone",
-		DefaultRunner:      "umu",
-		GbeMode:            "loader",
-		Lutris:             true,
-		Steamless:          true,
-		Achievements:       true,
-		Normalize:          true,
-		WinePrefix:         "",
-		MangoHud:           false,
-		WineFullscreenFSR:  false,
-		ProtonNVAPI:        false,
+		LibraryPaths:         nil,
+		GbeDir:               gbePath,
+		SteamlessDir:         steamlessPath,
+		SteamUserdata:        steamUserDataPath,
+		ArtworkDir:           artworkPath,
+		BackupDir:            backupPath,
+		BackupRetentionCount: 5,
+		AutoBackupSaves:      false,
+		SteamWebAPIKey:       "",
+		HubcapAPIKey:         "",
+		SteamGridDBAPIKey:    "",
+		EnableLaunchNotify:   true,
+		OperatingMode:        "standalone",
+		DefaultRunner:        "umu",
+		GbeMode:              "loader",
+		Steamless:            true,
+		Achievements:         true,
+		Normalize:            true,
+		WinePrefix:           "",
+		MangoHud:             false,
+		WineFullscreenFSR:    false,
+		ProtonNVAPI:          false,
 	}
 }
 
@@ -161,7 +166,7 @@ func hydrateAPIKeys(cfg *Config) {
 		if envKey := os.Getenv("STEAMGRIDDB_API_KEY"); envKey != "" {
 			cfg.SteamGridDBAPIKey = envKey
 		} else if home, err := os.UserHomeDir(); err == nil {
-			keyFile := filepath.Join(home, ".config", "lutris_art_apikey.txt")
+			keyFile := filepath.Join(home, ".config", "gamux", "steamgriddb_key.txt")
 			if data, err := os.ReadFile(keyFile); err == nil {
 				cfg.SteamGridDBAPIKey = string(data)
 			}

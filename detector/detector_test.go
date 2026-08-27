@@ -291,6 +291,86 @@ func TestDetect_EngineTopologies(t *testing.T) {
 			t.Errorf("expected EpicApp Sugar, got %s", info.EpicApp)
 		}
 	})
+
+	t.Run("SinglePass Complete Hydration", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "CompleteHydrationGame")
+		manifestsDir := filepath.Join(gameDir, "[Manifests]")
+		settingsDir := filepath.Join(gameDir, "steam_settings")
+		_ = os.MkdirAll(manifestsDir, 0755)
+		_ = os.MkdirAll(settingsDir, 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "Game.exe"), []byte("MZGame"), 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("MZDLL"), 0644)
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll.ORIGINAL"), []byte("MZOrig"), 0644)
+		_ = os.WriteFile(filepath.Join(manifestsDir, "appmanifest_98765.acf"), []byte("\"AppState\"\n{\n\t\"appid\"\t\"98765\"\n\t\"name\"\t\"HydrationGame\"\n}"), 0644)
+		_ = os.WriteFile(filepath.Join(manifestsDir, "depot_12345.manifest"), []byte("manifest binary data"), 0644)
+		_ = os.WriteFile(filepath.Join(settingsDir, "force_language.txt"), []byte("japanese\n"), 0644)
+		_ = os.WriteFile(filepath.Join(settingsDir, "launch_profile.json"), []byte("{\"custom_cover_url\": \"http://test/cover.png\", \"dxvk_hud\": \"fps\"}"), 0644)
+
+		info, err := Inspect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Inspect failed: %v", err)
+		}
+
+		if info.AppID != "98765" || info.NumericAppID != 98765 {
+			t.Errorf("expected AppID 98765, got %s (numeric %d)", info.AppID, info.NumericAppID)
+		}
+		if info.Name != "HydrationGame" {
+			t.Errorf("expected Name 'HydrationGame', got %s", info.Name)
+		}
+		if info.Platform != "win64" {
+			t.Errorf("expected Platform 'win64', got %s", info.Platform)
+		}
+		if info.FileCount < 5 {
+			t.Errorf("expected at least 5 files, got %d", info.FileCount)
+		}
+		if info.DiskSizeBytes <= 0 {
+			t.Errorf("expected positive disk size, got %d", info.DiskSizeBytes)
+		}
+		if len(info.OriginalBackups) != 1 {
+			t.Errorf("expected 1 original backup, got %d", len(info.OriginalBackups))
+		}
+		if !info.SettingsDirExists {
+			t.Errorf("expected SettingsDirExists to be true")
+		}
+		if info.CurrentLanguage != "japanese" {
+			t.Errorf("expected CurrentLanguage 'japanese', got %s", info.CurrentLanguage)
+		}
+		if info.ManifestID != "12345" {
+			t.Errorf("expected ManifestID '12345', got %s", info.ManifestID)
+		}
+		if info.CustomCoverURL != "http://test/cover.png" {
+			t.Errorf("expected CustomCoverURL 'http://test/cover.png', got %s", info.CustomCoverURL)
+		}
+		if info.State != "Portable-Patched" || !info.IsPortable || !info.IsPatched {
+			t.Errorf("expected Portable-Patched state, got State=%s, IsPortable=%v, IsPatched=%v", info.State, info.IsPortable, info.IsPatched)
+		}
+		if !info.IsReady {
+			t.Errorf("expected IsReady to be true")
+		}
+	})
 }
+
+func TestDetect_UnrelatedDirectoryNameRejectsSteamSearch(t *testing.T) {
+	tmpDir := t.TempDir()
+	umuDir := filepath.Join(tmpDir, "umu")
+	if err := os.MkdirAll(filepath.Join(umuDir, "steam_settings"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := Detect(context.Background(), umuDir)
+	if err != nil {
+		t.Fatalf("Detect failed: %v", err)
+	}
+
+	if info.Name != "umu" {
+		t.Errorf("expected game name to remain 'umu', got %q", info.Name)
+	}
+	if info.AppID != "" && info.AppID != "0" {
+		t.Errorf("expected empty AppID, got %q", info.AppID)
+	}
+}
+
 
 

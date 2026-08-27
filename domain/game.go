@@ -21,7 +21,6 @@ const (
 	ModePortable   = "portable"
 	ModeLoader     = "loader"
 	ModeNative     = "native"
-	ModeLutris     = "lutris"
 	ModeStandalone = "standalone"
 )
 
@@ -32,7 +31,6 @@ const (
 	RunnerWine   = "wine"
 	RunnerProton = "proton"
 	RunnerLinux  = "linux"
-	RunnerLutris = "lutris"
 )
 
 // LaunchCandidate represents an executable or configured launch target in a game directory.
@@ -88,8 +86,8 @@ type LaunchProfile struct {
 	Platform          string            `json:"platform,omitempty"`       // "linux", "win64", "win32"
 	ExePath           string            `json:"exe_path"`
 	ExeArgs           string            `json:"exe_args,omitempty"`
-	OperatingMode     string            `json:"operating_mode,omitempty"` // "lutris" | "standalone"
-	Runner            string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "lutris"
+	OperatingMode     string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native"
+	Runner            string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
 	WinePrefix        string            `json:"wine_prefix,omitempty"`
 	ProtonPath        string            `json:"proton_path,omitempty"`
 	Language          string            `json:"language,omitempty"`
@@ -97,6 +95,7 @@ type LaunchProfile struct {
 	DXVKHud           string            `json:"dxvk_hud,omitempty"`
 	WineFullscreenFSR *bool             `json:"wine_fullscreen_fsr,omitempty"`
 	ProtonNVAPI       *bool             `json:"proton_nvapi,omitempty"`
+	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
 	CustomEnv         map[string]string `json:"custom_env,omitempty"`
 	WorkingDir        string            `json:"working_dir,omitempty"`
 
@@ -125,7 +124,6 @@ type InspectionResult struct {
 	OriginalBackups    []string `json:"original_backups,omitempty"`
 	SettingsDirExists  bool     `json:"settings_dir_exists"`
 	SteamAppIDTxtFound bool     `json:"steam_appid_txt_found"`
-	LutrisRegistered   bool     `json:"lutris_registered"`
 	CurrentLanguage    string   `json:"current_language,omitempty"`
 	SupportedLanguages []string `json:"supported_languages,omitempty"`
 	DiskSizeBytes      int64    `json:"disk_size_bytes"`
@@ -187,6 +185,23 @@ type ExternalIDs struct {
 	IGDBID     string `json:"igdb_id,omitempty"`
 }
 
+// Canonical asset types
+const (
+	AssetCover  = "cover"
+	AssetBanner = "banner"
+	AssetHero   = "hero"
+	AssetLogo   = "logo"
+	AssetIcon   = "icon"
+)
+
+// AssetLocation encapsulates paths and URLs for a specific graphical asset.
+type AssetLocation struct {
+	RemoteURL string `json:"remote_url,omitempty"`
+	LocalPath string `json:"local_path,omitempty"`
+	LocalURL  string `json:"local_url,omitempty"`
+	CustomURL string `json:"custom_url,omitempty"`
+}
+
 // GameArtwork stores remote URLs and local file paths for graphical assets.
 type GameArtwork struct {
 	CoverURL        string `json:"cover_url,omitempty"`
@@ -196,9 +211,13 @@ type GameArtwork struct {
 	IconURL         string `json:"icon_url,omitempty"`
 	LocalCover      string `json:"local_cover,omitempty"`
 	LocalBanner     string `json:"local_banner,omitempty"`
+	LocalHero       string `json:"local_hero,omitempty"`
+	LocalLogo       string `json:"local_logo,omitempty"`
 	LocalIcon       string `json:"local_icon,omitempty"`
 	LocalCoverURL   string `json:"local_cover_url,omitempty"`
 	LocalBannerURL  string `json:"local_banner_url,omitempty"`
+	LocalHeroURL    string `json:"local_hero_url,omitempty"`
+	LocalLogoURL    string `json:"local_logo_url,omitempty"`
 	CustomCoverURL  string `json:"custom_cover_url,omitempty"`
 	CustomBannerURL string `json:"custom_banner_url,omitempty"`
 	CustomHeroURL   string `json:"custom_hero_url,omitempty"`
@@ -228,6 +247,7 @@ type Game struct {
 	OperatingMode    string            `json:"operating_mode,omitempty"`
 	Runner           string            `json:"runner,omitempty"`
 	WinePrefix       string            `json:"wine_prefix,omitempty"`
+	DllOverrides     string            `json:"dll_overrides,omitempty"`
 
 	// Detection & patching
 	TargetLibPath  string `json:"target_lib_path,omitempty"`
@@ -336,17 +356,125 @@ func (g *Game) RequiresSteamEmulator() bool {
 func (g *Game) RecomputeState() {
 	if len(g.OriginalBackups) > 0 {
 		g.State = "Portable-Patched"
-	} else if g.SettingsDirExists || g.SteamAppIDTxtFound {
+	} else if g.SettingsDirExists || g.SteamAppIDTxtFound || g.OperatingMode == string(ModeLoader) {
 		g.State = "Loader-Configured"
+	} else if g.State == "" {
+		g.State = "Original"
 	}
 
 	g.IsPortable = g.State == "Portable-Patched"
 	g.IsPatched = g.IsPortable || g.State == "Loader-Configured" || g.SettingsDirExists
 	g.HasUpdatesOrIssues = g.IsSteam() && (g.HasUpdate || len(g.ModifiedFiles) > 0 || len(g.MissingFiles) > 0)
+	g.IsReady = g.IsPatched || g.ExePath != ""
+}
 
-	if g.OperatingMode == string(ModeLutris) {
-		g.IsReady = g.LutrisRegistered
-	} else {
-		g.IsReady = g.IsPatched || g.ExePath != ""
+// GetAsset returns the location information for a specific asset type.
+func (g *Game) GetAsset(assetType string) AssetLocation {
+	switch strings.ToLower(assetType) {
+	case AssetCover:
+		return AssetLocation{
+			RemoteURL: g.CoverURL,
+			LocalPath: g.LocalCover,
+			LocalURL:  g.LocalCoverURL,
+			CustomURL: g.CustomCoverURL,
+		}
+	case AssetBanner:
+		return AssetLocation{
+			RemoteURL: g.BannerURL,
+			LocalPath: g.LocalBanner,
+			LocalURL:  g.LocalBannerURL,
+			CustomURL: g.CustomBannerURL,
+		}
+	case AssetHero:
+		return AssetLocation{
+			RemoteURL: g.HeroURL,
+			LocalPath: g.LocalHero,
+			LocalURL:  g.LocalHeroURL,
+			CustomURL: g.CustomHeroURL,
+		}
+	case AssetLogo:
+		return AssetLocation{
+			RemoteURL: g.LogoURL,
+			LocalPath: g.LocalLogo,
+			LocalURL:  g.LocalLogoURL,
+			CustomURL: g.CustomLogoURL,
+		}
+	case AssetIcon:
+		return AssetLocation{
+			RemoteURL: g.IconURL,
+			LocalPath: g.LocalIcon,
+			CustomURL: g.CustomIconURL,
+		}
+	default:
+		return AssetLocation{}
 	}
 }
+
+// SetAsset updates the fields corresponding to the specified asset type.
+func (g *Game) SetAsset(assetType string, loc AssetLocation) {
+	switch strings.ToLower(assetType) {
+	case AssetCover:
+		if loc.RemoteURL != "" {
+			g.CoverURL = loc.RemoteURL
+		}
+		if loc.LocalPath != "" {
+			g.LocalCover = loc.LocalPath
+		}
+		if loc.LocalURL != "" {
+			g.LocalCoverURL = loc.LocalURL
+		}
+		if loc.CustomURL != "" {
+			g.CustomCoverURL = loc.CustomURL
+		}
+	case AssetBanner:
+		if loc.RemoteURL != "" {
+			g.BannerURL = loc.RemoteURL
+		}
+		if loc.LocalPath != "" {
+			g.LocalBanner = loc.LocalPath
+		}
+		if loc.LocalURL != "" {
+			g.LocalBannerURL = loc.LocalURL
+		}
+		if loc.CustomURL != "" {
+			g.CustomBannerURL = loc.CustomURL
+		}
+	case AssetHero:
+		if loc.RemoteURL != "" {
+			g.HeroURL = loc.RemoteURL
+		}
+		if loc.LocalPath != "" {
+			g.LocalHero = loc.LocalPath
+		}
+		if loc.LocalURL != "" {
+			g.LocalHeroURL = loc.LocalURL
+		}
+		if loc.CustomURL != "" {
+			g.CustomHeroURL = loc.CustomURL
+		}
+	case AssetLogo:
+		if loc.RemoteURL != "" {
+			g.LogoURL = loc.RemoteURL
+		}
+		if loc.LocalPath != "" {
+			g.LocalLogo = loc.LocalPath
+		}
+		if loc.LocalURL != "" {
+			g.LocalLogoURL = loc.LocalURL
+		}
+		if loc.CustomURL != "" {
+			g.CustomLogoURL = loc.CustomURL
+		}
+	case AssetIcon:
+		if loc.RemoteURL != "" {
+			g.IconURL = loc.RemoteURL
+		}
+		if loc.LocalPath != "" {
+			g.LocalIcon = loc.LocalPath
+		}
+		if loc.CustomURL != "" {
+			g.CustomIconURL = loc.CustomURL
+		}
+	}
+}
+

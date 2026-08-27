@@ -1,14 +1,40 @@
 <script>
   import { onMount } from 'svelte';
-  import { activeView, libraryPaths, addLibraryPath, removeLibraryPath, scanLibrary, games, queueMigrateOperatingMode, batchApplyCleanGames } from '../../stores/library.js';
+  import { activeView, libraryPaths, addLibraryPath, removeLibraryPath, scanLibrary, games, batchApplyCleanGames } from '../../stores/library.js';
   import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { AppAPI } from '../../api/app.js';
 
   let localCfg = {};
-  let currentScale = 16;
-  let activeTab = 'system'; // 'system' | 'emu' | 'paths' | 'integrations' | 'tools'
-  let cleanLutrisOnStandalone = false;
+  let currentScale = 18;
+  let activeTab = 'system'; // 'system' | 'emu' | 'paths' | 'integrations' | 'tools' | 'logs'
+
+  let logFilter = 'all'; // 'all' | 'error' | 'warning' | 'info' | 'success'
+  const notifItems = notificationStore.items;
+
+  $: filteredLogs = ($notifItems || []).filter(item => {
+    if (logFilter === 'all') return true;
+    return item.type === logFilter;
+  });
+
+  function copyLogsToClipboard() {
+    if (!$notifItems || $notifItems.length === 0) return;
+    const text = $notifItems.map(item => {
+      const time = new Date(item.timestamp).toISOString();
+      const level = (item.type || 'info').toUpperCase().padEnd(7);
+      const title = item.title ? `[${item.title}] ` : '';
+      const game = item.gameName ? `(${item.gameName}) ` : '';
+      const details = item.details ? ` - ${item.details}` : '';
+      return `${time} ${level} ${title}${game}${item.message || ''}${details}`;
+    }).join('\n');
+
+    navigator.clipboard?.writeText(text);
+    notificationStore.items.add({
+      type: 'success',
+      title: 'Logs Copied',
+      message: `Copied ${$notifItems.length} log lines to clipboard.`
+    });
+  }
 
   let gbeStatus = null;
   let toolStatuses = [];
@@ -40,7 +66,7 @@
     
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
-    if (tabParam && ['system', 'emu', 'paths', 'integrations', 'tools'].includes(tabParam)) {
+    if (tabParam && ['system', 'emu', 'paths', 'integrations', 'tools', 'logs'].includes(tabParam)) {
       activeTab = tabParam;
     }
 
@@ -117,7 +143,6 @@
       }
     }
     localCfg.global_env = envObj;
-    localCfg.lutris = localCfg.operating_mode === 'lutris';
 
     const [ok] = await Promise.all([
       configStore.save(localCfg),
@@ -141,12 +166,10 @@
       localCfg = {
         gbe_dir: '~/.local/share/gbe_fork',
         steamless_dir: '~/.local/share/steamless',
-        lutris_dir: '~/.config/lutris/games',
         steam_userdata: '~/.local/share/Steam/userdata',
         operating_mode: 'standalone',
         default_runner: 'umu',
         gbe_mode: 'loader',
-        lutris: true,
         steamless: true,
         achievements: true,
         normalize: true,
@@ -167,7 +190,7 @@
   }
 </script>
 
-<div class="flex-1 overflow-y-auto p-6 sm:p-10 max-w-3xl mx-auto w-full space-y-6 text-xs sm:text-sm animate-fade-in">
+<div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-6 sm:px-10 pb-10 max-w-3xl mx-auto w-full space-y-6 text-xs sm:text-sm animate-fade-in">
   <!-- Header -->
   <div class="border-b border-[#20202c] pb-4 flex items-center justify-between">
     <div>
@@ -179,41 +202,69 @@
   <!-- Settings Panel -->
   <div class="bg-[#121218] border border-[#242434] rounded-2xl overflow-hidden shadow-xl">
     <!-- 5 Tabs: System, Emu, Paths, Integrations, Tools -->
-    <div class="border-b border-[#20202c] bg-[#0f0f15] px-6 flex space-x-6 text-xs font-bold">
+    <!-- Tab Bar -->
+    <div class="border-b border-[#20202c] bg-[#0f0f15] px-6 flex space-x-6 text-xs font-bold overflow-x-auto">
       <button
         type="button"
         on:click={() => { activeTab = 'system'; }}
-        class="py-3 transition-colors {activeTab === 'system' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'system' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
       >
-        System
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+        <span>System</span>
       </button>
       <button
         type="button"
         on:click={() => { activeTab = 'emu'; }}
-        class="py-3 transition-colors {activeTab === 'emu' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'emu' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
       >
-        Emu
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+        <span>Emu</span>
       </button>
       <button
         type="button"
         on:click={() => { activeTab = 'paths'; }}
-        class="py-3 transition-colors {activeTab === 'paths' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'paths' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
       >
-        Paths
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+        <span>Paths</span>
       </button>
       <button
         type="button"
         on:click={() => { activeTab = 'integrations'; }}
-        class="py-3 transition-colors {activeTab === 'integrations' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'integrations' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
       >
-        Integrations
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="2" y="6" width="20" height="12" rx="4" stroke-width="2" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12h4m-2-2v4m7-1h.01m3 2h.01" />
+        </svg>
+        <span>Integrations</span>
       </button>
       <button
         type="button"
         on:click={() => { activeTab = 'tools'; }}
-        class="py-3 transition-colors {activeTab === 'tools' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'tools' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
       >
-        Tools
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>Tools</span>
+      </button>
+      <button
+        type="button"
+        on:click={() => { activeTab = 'logs'; }}
+        class="py-3 transition-colors flex items-center space-x-2 {activeTab === 'logs' ? 'text-white border-b-2 border-white font-black' : 'text-slate-400 hover:text-slate-200'}"
+      >
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span>Logs</span>
       </button>
     </div>
 
@@ -228,10 +279,11 @@
                 Display Scale
               </label>
               <select id="setUiScale" bind:value={currentScale} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
-                <option value={14}>Compact (14px)</option>
-                <option value={16}>Standard (16px)</option>
-                <option value={18}>Large (18px)</option>
-                <option value={20}>Extra Large / Handheld (20px)</option>
+                <option value={16}>Compact (16px)</option>
+                <option value={18}>Standard (18px)</option>
+                <option value={20}>Large (20px)</option>
+                <option value={22}>Handheld / Steam Deck (22px)</option>
+                <option value={24}>Extra Large / 4K TV (24px)</option>
               </select>
             </div>
             <div>
@@ -239,7 +291,7 @@
                 Launch Notifications
               </label>
               <select id="setLaunchNotify" bind:value={localCfg.enable_launch_notify} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
-                <option value={true}>Enabled (Check updates on launch)</option>
+                <option value={true}>Enabled</option>
                 <option value={false}>Disabled</option>
               </select>
             </div>
@@ -394,7 +446,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label for="setGbeMode" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
-                DEFAULT MODE
+                Emulation Mode
               </label>
               <select id="setGbeMode" bind:value={localCfg.gbe_mode} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
                 <option value="loader">Loader Mode (ColdClientLoader)</option>
@@ -572,16 +624,6 @@
             </div>
 
             <div>
-              <label for="setLutrisDir" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
-                Lutris Configs Path
-              </label>
-              <div class="flex space-x-2">
-                <input id="setLutrisDir" type="text" bind:value={localCfg.lutris_dir} class="flex-1 bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs" />
-                <button type="button" on:click={() => browseFolder('lutris_dir', 'Select Lutris Directory')} class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244] text-xs">Browse</button>
-              </div>
-            </div>
-
-            <div>
               <label for="setSteamlessDir" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
                 Steamless Binary Path
               </label>
@@ -596,32 +638,20 @@
       {:else if activeTab === 'integrations'}
         <!-- INTEGRATIONS TAB -->
         <div class="space-y-4">
-          <!-- Primary Operating Mode -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-[#09090d] p-3.5 rounded-xl border border-[#202030]">
-            <div>
-              <label for="setOpMode" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
-                Primary Operating Mode
-              </label>
-              <select id="setOpMode" bind:value={localCfg.operating_mode} class="w-full bg-[#121218] border border-[#2c2c3e] rounded-xl px-3 py-2 text-slate-100 outline-none font-bold">
-                <option value="standalone">Standalone Launcher Mode (Direct - Default)</option>
-                <option value="lutris">Lutris Helper Mode</option>
-              </select>
-              <p class="text-[10px] text-slate-400 mt-1">
-                {localCfg.operating_mode === 'standalone' ? 'Launches games directly using umu-run / Wine / Proton without opening Lutris.' : 'Registers games and delegates execution to Lutris.'}
-              </p>
-            </div>
-
+          <!-- Primary Runner Configuration -->
+          <div class="bg-[#09090d] p-3.5 rounded-xl border border-[#202030]">
             <div>
               <label for="setDefaultRunner" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
-                Default Standalone Runner
+                Default Compatibility Runner
               </label>
               <select id="setDefaultRunner" bind:value={localCfg.default_runner} class="w-full bg-[#121218] border border-[#2c2c3e] rounded-xl px-3 py-2 text-slate-100 outline-none">
                 <option value="umu">UMU Launcher (umu-run - Recommended)</option>
                 <option value="wine">Wine Direct (wine)</option>
-                <option value="proton">Proton Direct (proton run)</option>
+                <option value="proton">Proton Direct (proton)</option>
+                <option value="linux">Linux Native Executable</option>
               </select>
               <p class="text-[10px] text-slate-400 mt-1">
-                Runner used when launching Windows games directly in Standalone Mode.
+                Compatibility runner used for launching Windows games directly on Linux.
               </p>
             </div>
           </div>
@@ -776,44 +806,6 @@
             </div>
           </div>
 
-          <!-- Library Mode Migration -->
-          <div class="bg-[#0b0b10] border border-[#242436] rounded-xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <div>
-                <strong class="text-white font-bold block text-sm">⚡ Library Mode Migration</strong>
-                <p class="text-[11px] text-slate-400">
-                  Switch the operating mode across all titles in your library at once.
-                </p>
-              </div>
-              <span class="text-[10px] font-mono bg-[#161622] text-slate-300 border border-[#2a2a3e] px-2 py-0.5 rounded-md">
-                {$games.length} total games
-              </span>
-            </div>
-
-            <!-- Standalone cleanup toggle -->
-            <label class="flex items-center space-x-2 text-[11px] text-slate-300 cursor-pointer select-none bg-[#12121c] p-2.5 rounded-lg border border-[#1f1f2e]">
-              <input type="checkbox" bind:checked={cleanLutrisOnStandalone} class="w-3.5 h-3.5 rounded bg-black border-slate-700" />
-              <span>Remove entries from Lutris when migrating to Standalone</span>
-            </label>
-
-            <div class="flex items-center space-x-2 pt-1">
-              <button
-                type="button"
-                on:click={() => queueMigrateOperatingMode('standalone', cleanLutrisOnStandalone)}
-                class="flex-1 bg-[#181824] hover:bg-[#222232] text-slate-200 hover:text-white font-bold text-xs py-2.5 px-3 rounded-xl border border-[#2c2c40] transition-colors flex items-center justify-center space-x-1.5"
-              >
-                <span>Migrate All to Standalone</span>
-              </button>
-              <button
-                type="button"
-                on:click={() => queueMigrateOperatingMode('lutris', false)}
-                class="flex-1 bg-[#181824] hover:bg-[#222232] text-slate-200 hover:text-white font-bold text-xs py-2.5 px-3 rounded-xl border border-[#2c2c40] transition-colors flex items-center justify-center space-x-1.5"
-              >
-                <span>Migrate All to Lutris</span>
-              </button>
-            </div>
-          </div>
-
           <!-- Batch Apply Clean Titles -->
           <div class="bg-[#0b0b10] border border-[#242436] rounded-xl p-4 space-y-3">
             <div class="flex items-center justify-between">
@@ -836,6 +828,91 @@
             >
               <span>Apply Setup to All Unpatched Games ({$games.filter(g => !g.isPatched).length})</span>
             </button>
+          </div>
+        </div>
+      {:else if activeTab === 'logs'}
+        <!-- LOGS & DIAGNOSTICS TAB -->
+        <div class="space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-[#20202c]">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-xs uppercase tracking-wider">System Logs & Activity</span>
+              <span class="text-[10px] font-mono bg-[#08080c] text-slate-400 px-2 py-0.5 rounded-full border border-[#20202c]">
+                {$notifItems.length} entries
+              </span>
+            </div>
+
+            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+              <!-- Filter Chips -->
+              <div class="flex items-center space-x-1 bg-[#0c0c10] p-1 rounded-xl border border-[#242434] text-[11px] font-mono">
+                {#each ['all', 'error', 'warning', 'info', 'success'] as f}
+                  <button
+                    type="button"
+                    on:click={() => { logFilter = f; }}
+                    class="px-2 py-0.5 rounded-lg capitalize transition-colors {logFilter === f ? 'bg-[#222232] text-white font-bold' : 'text-slate-500 hover:text-slate-300'}"
+                  >
+                    {f}
+                  </button>
+                {/each}
+              </div>
+
+              {#if $notifItems.length > 0}
+                <button
+                  type="button"
+                  on:click={copyLogsToClipboard}
+                  class="text-[11px] font-bold bg-[#181824] hover:bg-[#222232] text-slate-300 px-2.5 py-1 rounded-xl border border-[#2c2c3e] transition-colors flex items-center space-x-1"
+                  title="Copy log to clipboard"
+                >
+                  <span>📋 Copy</span>
+                </button>
+                <button
+                  type="button"
+                  on:click={() => notificationStore.items.clearAll()}
+                  class="text-[11px] font-bold bg-[#181824] hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 px-2.5 py-1 rounded-xl border border-[#2c2c3e] hover:border-rose-900/50 transition-colors"
+                >
+                  Clear
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          <!-- Monospace Terminal Log Stream -->
+          <div class="bg-[#08080c] border border-[#1e1e2c] rounded-xl p-3 sm:p-4 max-h-[440px] overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
+            {#if filteredLogs.length === 0}
+              <div class="py-12 text-center text-slate-500 text-xs">
+                <span>No log entries recorded.</span>
+              </div>
+            {:else}
+              {#each filteredLogs as item (item.id || item.timestamp)}
+                <div class="flex items-start space-x-2.5 py-1 border-b border-[#14141d] last:border-0 hover:bg-[#0e0e14] px-1.5 rounded transition-colors">
+                  <span class="text-slate-600 text-[10px] select-none pt-0.5 whitespace-nowrap">
+                    {new Date(item.timestamp).toLocaleTimeString()}
+                  </span>
+
+                  <!-- Level Badge -->
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider flex-shrink-0 {item.type === 'error' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : item.type === 'warning' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : item.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'}">
+                    {item.type || 'INFO'}
+                  </span>
+
+                  <!-- Content -->
+                  <div class="min-w-0 flex-1 space-y-0.5">
+                    <div class="flex items-center space-x-1.5 flex-wrap">
+                      <strong class="text-slate-200 font-bold">{item.title}</strong>
+                      {#if item.gameName}
+                        <span class="text-[10px] text-cyan-400 bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-900/50">
+                          {item.gameName}
+                        </span>
+                      {/if}
+                    </div>
+                    {#if item.message}
+                      <p class="text-slate-400 text-[11px] break-words">{item.message}</p>
+                    {/if}
+                    {#if item.details}
+                      <p class="text-slate-500 text-[10px] break-words">{item.details}</p>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            {/if}
           </div>
         </div>
       {/if}

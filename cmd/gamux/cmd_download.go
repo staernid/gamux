@@ -91,6 +91,8 @@ var downloadCommand = &cli.Command{
 		}
 
 		eng := engine.New(activeConfig)
+		sc := eng.ServiceContext
+		game := eng.GameService
 
 		var applyOpts *engine.ProcessOptions
 		if c.Bool("setup") {
@@ -113,7 +115,7 @@ var downloadCommand = &cli.Command{
 
 		ui.RenderStep(1, 1, fmt.Sprintf("Downloading AppID %d (%s) to %s", appID, platform, targetDir))
 		var res *downloader.Result
-		err := eng.Tasks.RunSync(c.Context, tasks.TaskSpec{
+		err := sc.Tasks.RunSync(c.Context, tasks.TaskSpec{
 			Type:         tasks.TypeDownload,
 			Title:        fmt.Sprintf("Download AppID %d", appID),
 			AppID:        fmt.Sprintf("%d", appID),
@@ -121,7 +123,7 @@ var downloadCommand = &cli.Command{
 			Capabilities: tasks.CapCancellable | tasks.CapBandwidthLimit,
 			Run: func(ctx context.Context, ctrl *tasks.Controller) error {
 				var dlErr error
-				res, dlErr = eng.DownloadGame(ctx, dlOpts)
+				res, dlErr = game.DownloadGame(ctx, dlOpts)
 				return dlErr
 			},
 		})
@@ -138,11 +140,11 @@ var downloadCommand = &cli.Command{
 		nextSteps := []string{}
 		if !c.Bool("setup") {
 			nextSteps = append(nextSteps,
-				fmt.Sprintf("Run 'gamux apply %s' to set up Goldberg Emulator & Lutris", targetDir),
+				fmt.Sprintf("Run 'gamux apply %s' to set up Goldberg Emulator", targetDir),
 				fmt.Sprintf("Or run 'gamux status %s' to inspect game state", targetDir),
 			)
 		} else {
-			nextSteps = append(nextSteps, fmt.Sprintf("Launch via Lutris or run 'gamux status %s'", targetDir))
+			nextSteps = append(nextSteps, fmt.Sprintf("Run 'gamux launch %s' or 'gamux status %s'", targetDir, targetDir))
 		}
 		if res != nil {
 			ui.RenderSuccess(fmt.Sprintf("Download complete (%d files updated)", res.UpdatedFiles), "", nextSteps)

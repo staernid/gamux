@@ -23,7 +23,14 @@ func TestMain(m *testing.M) {
 
 
 func TestApplyGBE_InvalidPlatform(t *testing.T) {
-	err := ApplyGBE(context.Background(), config.DefaultConfig(), ".", "invalid_platform", "123", true, false, "", "")
+	err := Apply(context.Background(), Options{
+		Config:    config.DefaultConfig(),
+		TargetDir: ".",
+		Platform:  "invalid_platform",
+		AppID:     "123",
+		DryRun:    true,
+		Portable:  false,
+	})
 	if err == nil {
 		t.Fatal("expected error for invalid platform")
 	}
@@ -68,11 +75,18 @@ func TestApplyGBE_ExplicitTargetDirectory(t *testing.T) {
 	}
 	ctx := steam.WithHTTPClient(context.Background(), mockClient)
 
-	// Run ApplyGBE targeting gameDir in portable mode with dry-run
-	err := ApplyGBE(ctx, cfg, gameDir, "linux", "12345", true, true, "", "")
+	// Run Apply targeting gameDir in portable mode with dry-run
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "linux",
+		AppID:     "12345",
+		DryRun:    true,
+		Portable:  true,
+	})
 
 	if err != nil {
-		t.Fatalf("ApplyGBE failed: %v", err)
+		t.Fatalf("Apply failed: %v", err)
 	}
 
 	// Verify original file remained intact due to dry-run
@@ -190,3 +204,148 @@ func TestConfigureCustomSettings_AutoLanguage(t *testing.T) {
 		t.Errorf("expected force_language.txt to be removed on auto language")
 	}
 }
+
+func TestRevert_PortableMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	linuxGbe := filepath.Join(gbeDir, "linux_release", "experimental", "x64")
+	_ = os.MkdirAll(linuxGbe, 0755)
+
+	_ = os.WriteFile(filepath.Join(linuxGbe, "libsteam_api.so"), []byte("emulated_gbe_so"), 0755)
+
+	gameDir := filepath.Join(tmpDir, "PortableGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	targetLib := filepath.Join(gameDir, "libsteam_api.so")
+	_ = os.WriteFile(targetLib, []byte("original_unpatched_so"), 0755)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
+	// Apply in portable mode
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "linux",
+		AppID:     "11111",
+		Portable:  true,
+		DryRun:    false,
+	})
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Verify replacement occurred
+	appliedData, _ := os.ReadFile(targetLib)
+	if string(appliedData) != "emulated_gbe_so" {
+		t.Fatalf("expected emulated lib, got %s", string(appliedData))
+	}
+	backups, _ := filepath.Glob(targetLib + "*.ORIGINAL")
+	if len(backups) == 0 {
+		t.Fatalf("expected .ORIGINAL backup file matching %s*.ORIGINAL", targetLib)
+	}
+
+	// Revert
+	restored, err := Revert(gameDir, false)
+	if err != nil {
+		t.Fatalf("Revert failed: %v", err)
+	}
+	if restored != 1 {
+		t.Errorf("expected 1 restored file, got %d", restored)
+	}
+
+	// Verify restored to original
+	restoredData, _ := os.ReadFile(targetLib)
+	if string(restoredData) != "original_unpatched_so" {
+		t.Errorf("expected original content after revert, got %s", string(restoredData))
+	}
+	backupsAfter, _ := filepath.Glob(targetLib + "*.ORIGINAL")
+	if len(backupsAfter) != 0 {
+		t.Errorf("expected .ORIGINAL backups to be removed after revert")
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steam_settings")); !os.IsNotExist(err) {
+		t.Errorf("expected steam_settings to be deleted after revert")
+	}
+}
+
+func TestRevert_LoaderMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	winGbe := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.MkdirAll(winGbe, 0755)
+
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient_loader_x64.exe"), []byte("loader_binary"), 0755)
+	_ = os.WriteFile(filepath.Join(winGbe, "steam_api64.dll"), []byte("emulated_dll"), 0644)
+
+	gameDir := filepath.Join(tmpDir, "LoaderGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "Game.exe"), []byte("original_exe"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("original_dll"), 0644)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
+	// Apply in loader mode
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "win64",
+		AppID:     "22222",
+		Portable:  false,
+		ExePath:   filepath.Join(gameDir, "Game.exe"),
+		DryRun:    false,
+	})
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Verify loader artifacts created
+	if _, err := os.Stat(filepath.Join(gameDir, "ColdClientLoader.ini")); err != nil {
+		t.Fatalf("expected ColdClientLoader.ini")
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient_loader_x64.exe")); err != nil {
+		t.Fatalf("expected steamclient_loader_x64.exe")
+	}
+
+	// Revert
+	_, err = Revert(gameDir, false)
+	if err != nil {
+		t.Fatalf("Revert failed: %v", err)
+	}
+
+	// Verify loader artifacts removed
+	if _, err := os.Stat(filepath.Join(gameDir, "ColdClientLoader.ini")); !os.IsNotExist(err) {
+		t.Errorf("expected ColdClientLoader.ini to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient_loader_x64.exe")); !os.IsNotExist(err) {
+		t.Errorf("expected steamclient_loader_x64.exe to be removed")
+	}
+
+	// Original files remain intact
+	data, _ := os.ReadFile(filepath.Join(gameDir, "Game.exe"))
+	if string(data) != "original_exe" {
+		t.Errorf("Game.exe corrupted")
+	}
+}
+

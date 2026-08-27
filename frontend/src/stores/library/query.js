@@ -1,5 +1,6 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { games } from './catalog.js';
+import { notificationStore } from '../notifications.js';
 
 export const sortBy = writable(
   (typeof localStorage !== 'undefined' && localStorage.getItem('gamux_sort_by')) || 'name_asc'
@@ -13,6 +14,33 @@ if (typeof localStorage !== 'undefined') {
   });
 }
 
+export function getSortLabel(sortKey) {
+  switch (sortKey) {
+    case 'size_desc':
+      return 'Size (Largest)';
+    case 'size_asc':
+      return 'Size (Smallest)';
+    case 'name_desc':
+      return 'Name (Z-A)';
+    case 'status':
+      return 'Status (Ready First)';
+    case 'appid':
+      return 'App ID';
+    case 'name_asc':
+    default:
+      return 'Name (A-Z)';
+  }
+}
+
+export function cycleSortOrder() {
+  const current = get(sortBy);
+  // Cycle between name_asc and size_desc
+  const next = current === 'name_asc' ? 'size_desc' : 'name_asc';
+  sortBy.set(next);
+  notificationStore.osd(`Sort: ${getSortLabel(next)}`);
+  return next;
+}
+
 export const filteredGames = derived(
   [games, activeFilter, searchQuery, sortBy],
   ([$games, $activeFilter, $searchQuery, $sortBy]) => {
@@ -23,8 +51,6 @@ export const filteredGames = derived(
       list = list.filter(g => g.isPatched);
     } else if ($activeFilter === 'clean') {
       list = list.filter(g => !g.isPatched);
-    } else if ($activeFilter === 'lutris') {
-      list = list.filter(g => g.lutrisRegistered);
     } else if ($activeFilter === 'updates') {
       list = list.filter(g => g.hasUpdatesOrIssues);
     }
@@ -65,13 +91,11 @@ export const filteredGames = derived(
 export const stats = derived(games, $games => {
   let patchedCount = 0;
   let cleanCount = 0;
-  let lutrisCount = 0;
   let updatesCount = 0;
   let totalBytes = 0;
 
   for (const g of $games) {
     totalBytes += g.diskSizeBytes || 0;
-    if (g.lutrisRegistered) lutrisCount++;
     if (g.hasUpdatesOrIssues) updatesCount++;
     if (g.isPatched) patchedCount++;
     else cleanCount++;
@@ -81,7 +105,6 @@ export const stats = derived(games, $games => {
     totalCount: $games.length,
     patchedCount,
     cleanCount,
-    lutrisCount,
     updatesCount,
     totalBytes,
   };

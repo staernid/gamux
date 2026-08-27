@@ -28,4 +28,12 @@ describe('ArtworkPickerModal Component', () => {
     await fireEvent.click(bannerBtn);
     expect(bannerBtn.className).toContain('bg-sky-600');
   });
+
+  it('renders Done button to close modal', async () => {
+    render(ArtworkPickerModal, { props: { game: mockGame } });
+
+    const doneBtn = screen.getByText(/^Done$/i);
+    expect(doneBtn).toBeInTheDocument();
+    await fireEvent.click(doneBtn);
+  });
 });

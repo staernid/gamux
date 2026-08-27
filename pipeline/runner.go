@@ -35,7 +35,7 @@ func ForGame(game *domain.Game) *Pipeline {
 	return NewSteamPipeline()
 }
 
-// NewSteamPipeline builds the complete pipeline for Steam titles (Scan, Manifest, Normalize, Steamless, GBE, Lutris).
+// NewSteamPipeline builds the complete pipeline for Steam titles (Scan, Manifest, Normalize, Steamless, GBE).
 func NewSteamPipeline() *Pipeline {
 	return New(
 		&ScanStage{},
@@ -43,25 +43,22 @@ func NewSteamPipeline() *Pipeline {
 		&NormalizeStage{},
 		&SteamlessStage{},
 		&GBEStage{},
-		&LutrisStage{},
 	)
 }
 
-// NewGOGPipeline builds the setup pipeline for GOG titles (Scan, Normalize, Lutris).
+// NewGOGPipeline builds the setup pipeline for GOG titles (Scan, Normalize).
 func NewGOGPipeline() *Pipeline {
 	return New(
 		&ScanStage{},
 		&NormalizeStage{},
-		&LutrisStage{},
 	)
 }
 
-// NewStandalonePipeline builds the setup pipeline for standalone/native titles (Scan, Normalize, Lutris).
+// NewStandalonePipeline builds the setup pipeline for standalone/native titles (Scan, Normalize).
 func NewStandalonePipeline() *Pipeline {
 	return New(
 		&ScanStage{},
 		&NormalizeStage{},
-		&LutrisStage{},
 	)
 }
 
@@ -107,6 +104,10 @@ func (p *Pipeline) Execute(ctx context.Context, pctx *Context) error {
 		if rb, ok := stage.(RollbackableStage); ok {
 			executedStages = append(executedStages, rb)
 		}
+	}
+
+	if pctx.Game != nil {
+		pctx.Game.RecomputeState()
 	}
 
 	return nil

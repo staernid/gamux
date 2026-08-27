@@ -32,7 +32,7 @@ export async function scanLibrary(pathOverride = '') {
       if (current && normalized.some(g => isSamePath(g.gameDir, current.gameDir))) {
         return normalized.find(g => isSamePath(g.gameDir, current.gameDir));
       }
-      return normalized.length > 0 ? normalized[0] : null;
+      return normalized.length > 0 ? normalized[Math.floor(normalized.length / 2)] : null;
     });
   } catch (err) {
     notificationStore.error('Scan Failed', err);
@@ -104,7 +104,6 @@ export async function queueApplyGame(game, customOpts = null) {
   const defaultOpts = {
     path: game.gameDir,
     apply_gbe: true,
-    add_lutris: true,
     portable: false,
     normalize_dir: true,
     no_steamless: false,
@@ -135,35 +134,5 @@ export function batchApplyCleanGames() {
 
   cleanGames.forEach(g => {
     queueApplyGame(g);
-  });
-}
-
-export async function queueMigrateOperatingMode(targetMode, unregisterLutris = false) {
-  let allGames = [];
-  games.subscribe(v => { allGames = v; })();
-  if (allGames.length === 0) {
-    notificationStore.items.add({
-      type: 'warning',
-      title: 'No Games Found',
-      message: 'Library is empty. Add a library path first.'
-    });
-    return;
-  }
-
-  const modeLabel = targetMode === 'standalone' ? 'Standalone Launcher' : 'Lutris Helper';
-  for (const g of allGames) {
-    const gDir = g.gameDir;
-    if (gDir) {
-      try {
-        await AppAPI.submitMigrateMode(gDir, targetMode, unregisterLutris);
-      } catch (e) {
-        console.warn(`Failed to submit migration for ${g.name}:`, e);
-      }
-    }
-  }
-  notificationStore.items.add({
-    type: 'info',
-    title: 'Migration Enqueued',
-    message: `Enqueued migration for ${allGames.length} titles to ${modeLabel} Mode`
   });
 }

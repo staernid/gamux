@@ -25,6 +25,10 @@ func (s *SteamProvider) DisplayName() string {
 	return "Steam"
 }
 
+func (s *SteamProvider) IsGameStore() bool {
+	return true
+}
+
 func (s *SteamProvider) Search(ctx context.Context, query string) ([]SearchResult, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {

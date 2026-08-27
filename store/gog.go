@@ -31,6 +31,10 @@ func (g *GOGProvider) DisplayName() string {
 	return "GOG.com"
 }
 
+func (g *GOGProvider) IsGameStore() bool {
+	return true
+}
+
 type gogProduct struct {
 	ID        int    `json:"id"`
 	Title     string `json:"title"`

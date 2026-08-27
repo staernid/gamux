@@ -9,11 +9,9 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/detector"
-	"github.com/staernid/gamux/gamecfg"
 	"github.com/staernid/gamux/gbe"
-	"github.com/staernid/gamux/lutris"
 	"github.com/staernid/gamux/manifest"
-	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/steamless"
 	"github.com/staernid/gamux/util"
 )
@@ -37,20 +35,12 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 		}
 	}
 
-	info, err := detector.Detect(ctx, targetPath)
+	info, err := detector.Inspect(ctx, targetPath)
 	if err != nil {
 		return fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
 	}
 
-	pctx.Game.Name = info.Name
-	pctx.Game.AppID = info.AppID
-	numID, _ := util.ParseAppID(info.AppID)
-	pctx.Game.NumericAppID = numID
-	pctx.Game.GameDir = info.GameDir
-	pctx.Game.Platform = info.Platform
-	pctx.Game.ExePath = info.ExePath
-	pctx.Game.ExeArgs = info.ExeArgs
-	pctx.Game.Store = info.Store
+	*pctx.Game = *info
 
 	if pctx.ExePath != "" {
 		if filepath.IsAbs(pctx.ExePath) {
@@ -119,7 +109,9 @@ func ConsolidateManifestsInDir(gameDir, manifestPath string, rawDepotLayout bool
 }
 
 // ManifestStage consolidates and synthesizes 1:1 ACF manifests in [Manifests].
-type ManifestStage struct{}
+type ManifestStage struct {
+	synthesizedACF string
+}
 
 func (s *ManifestStage) Name() string {
 	return "Consolidate & Synthesize Manifests"
@@ -196,6 +188,7 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 				if err := os.WriteFile(targetACF, []byte(content), 0644); err != nil {
 					return fmt.Errorf("write ACF manifest: %w", err)
 				}
+				s.synthesizedACF = targetACF
 				slog.Info("Synthesized 1:1 ACF manifest", "path", targetACF, "appID", pctx.Game.AppID)
 			}
 			pctx.ACFSynthesized = true
@@ -205,8 +198,20 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 	return nil
 }
 
+func (s *ManifestStage) Rollback(ctx context.Context, pctx *Context) error {
+	if s.synthesizedACF != "" && util.FileExists(s.synthesizedACF) {
+		slog.Info("Removing synthesized ACF manifest during rollback", "path", s.synthesizedACF)
+		_ = os.Remove(s.synthesizedACF)
+		pctx.ACFSynthesized = false
+	}
+	return nil
+}
+
 // NormalizeStage normalizes the game directory name to match official Steam InstallDir.
-type NormalizeStage struct{}
+type NormalizeStage struct {
+	originalDir string
+	renamedDir  string
+}
 
 func (s *NormalizeStage) Name() string {
 	return "Normalize Game Directory"
@@ -243,6 +248,9 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 		return fmt.Errorf("rename directory from %s to %s: %w", currentDir, targetDir, err)
 	}
 
+	s.originalDir = currentDir
+	s.renamedDir = targetDir
+
 	slog.Info("Successfully normalized game directory name", "from", currentDir, "to", targetDir)
 	pctx.DirectoryNormalized = true
 	pctx.Game.GameDir = targetDir
@@ -254,16 +262,47 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 
 	// Re-base persisted launch profile paths if present
-	if prof, err := gamecfg.Load(targetDir); err == nil && prof != nil {
+	if prof, err := runner.LoadLaunchProfile(targetDir); err == nil && prof != nil {
 		prof.GameDir = targetDir
 		if prof.ExePath != "" {
 			if relProfExe, err := filepath.Rel(currentDir, prof.ExePath); err == nil && !strings.HasPrefix(relProfExe, "..") {
 				prof.ExePath = filepath.Join(targetDir, relProfExe)
 			}
 		}
-		_ = gamecfg.Save(prof)
+		_ = runner.SaveProfile(prof)
 	}
 
+	return nil
+}
+
+func (s *NormalizeStage) Rollback(ctx context.Context, pctx *Context) error {
+	if s.originalDir == "" || s.renamedDir == "" {
+		return nil
+	}
+	if !util.FileExists(s.renamedDir) {
+		return nil
+	}
+	slog.Info("Rolling back game directory normalization", "from", s.renamedDir, "to", s.originalDir)
+	if err := os.Rename(s.renamedDir, s.originalDir); err != nil {
+		return fmt.Errorf("rollback rename directory from %s to %s: %w", s.renamedDir, s.originalDir, err)
+	}
+	pctx.Game.GameDir = s.originalDir
+	if pctx.Game.ExePath != "" {
+		relExe, err := filepath.Rel(s.renamedDir, pctx.Game.ExePath)
+		if err == nil && !strings.HasPrefix(relExe, "..") {
+			pctx.Game.ExePath = filepath.Join(s.originalDir, relExe)
+		}
+	}
+	if prof, err := runner.LoadLaunchProfile(s.originalDir); err == nil && prof != nil {
+		prof.GameDir = s.originalDir
+		if prof.ExePath != "" {
+			if relProfExe, err := filepath.Rel(s.renamedDir, prof.ExePath); err == nil && !strings.HasPrefix(relProfExe, "..") {
+				prof.ExePath = filepath.Join(s.originalDir, relProfExe)
+			}
+		}
+		_ = runner.SaveProfile(prof)
+	}
+	pctx.DirectoryNormalized = false
 	return nil
 }
 
@@ -317,7 +356,16 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 		gbeCfg = &cloned
 	}
 
-	err := gbe.ApplyGBE(ctx, gbeCfg, pctx.Game.GameDir, pctx.Game.Platform, pctx.Game.AppID, pctx.DryRun, pctx.Portable, pctx.WinePrefix, pctx.Game.ExePath)
+	err := gbe.Apply(ctx, gbe.Options{
+		Config:     gbeCfg,
+		TargetDir:  pctx.Game.GameDir,
+		Platform:   pctx.Game.Platform,
+		AppID:      pctx.Game.AppID,
+		DryRun:     pctx.DryRun,
+		Portable:   pctx.Portable,
+		WinePrefix: pctx.WinePrefix,
+		ExePath:    pctx.Game.ExePath,
+	})
 	if err != nil {
 		slog.Warn("GBE application warning/error", "error", err)
 		pctx.Errors = append(pctx.Errors, fmt.Sprintf("gbe patch: %v", err))
@@ -339,103 +387,8 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 }
 
 func (s *GBEStage) Rollback(ctx context.Context, pctx *Context) error {
-	// Restore any .ORIGINAL backups
-	return filepath.Walk(pctx.Game.GameDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(path, ".ORIGINAL") {
-			target := strings.TrimSuffix(path, ".ORIGINAL")
-			slog.Info("Restoring original file from backup during rollback", "target", target)
-			_ = os.Rename(path, target)
-		}
-		return nil
-	})
+	_, err := gbe.Revert(pctx.Game.GameDir, pctx.DryRun)
+	return err
 }
 
-// LutrisStage registers game in Lutris database and writes YAML configuration.
-type LutrisStage struct{}
 
-func (s *LutrisStage) Name() string {
-	return "Lutris Integration"
-}
-
-func (s *LutrisStage) Execute(ctx context.Context, pctx *Context) error {
-	if !pctx.AddLutris {
-		return nil
-	}
-
-	if strings.TrimSpace(pctx.Game.ExePath) == "" {
-		return fmt.Errorf("%w: no executable detected in %s", detector.ErrNoExecutableFound, pctx.Game.GameDir)
-	}
-
-	runnerName := pctx.Runner
-	if runnerName == "" {
-		if pctx.Game.Platform == "linux" {
-			runnerName = "linux"
-		} else {
-			runnerName = "wine"
-		}
-	}
-
-	gamePath := pctx.Game.ExePath
-	env := make(map[string]string)
-
-	if pctx.Game.Platform != "linux" {
-		loaderX64 := filepath.Join(pctx.Game.GameDir, "steamclient_loader_x64.exe")
-		loaderX86 := filepath.Join(pctx.Game.GameDir, "steamclient_loader_x86.exe")
-		coldIni := filepath.Join(pctx.Game.GameDir, "ColdClientLoader.ini")
-
-		if util.FileExists(coldIni) || (!pctx.Portable && pctx.ApplyGBE) {
-			if pctx.Game.Platform == "win32" && util.FileExists(loaderX86) {
-				gamePath = loaderX86
-				env["PROTON_DISABLE_LSTEAMCLIENT"] = "1"
-			} else if util.FileExists(loaderX64) {
-				gamePath = loaderX64
-				env["PROTON_DISABLE_LSTEAMCLIENT"] = "1"
-			}
-		}
-	}
-
-	var sysConfig *lutris.SystemConfig
-	if pctx.Config != nil && pctx.Config.EnableLaunchNotify {
-		if gamuxBin, err := os.Executable(); err == nil {
-			sysConfig = &lutris.SystemConfig{
-				PreLaunchScript: gamuxBin,
-				PreLaunchArg:    fmt.Sprintf("notify-launch --path %q", pctx.Game.GameDir),
-				PreLaunchWait:   true,
-			}
-		}
-	}
-
-	lcfg := lutris.Config{
-		Name:                  pctx.Game.Name,
-		GamePath:              gamePath,
-		Args:                  pctx.Game.ExeArgs,
-		Runner:                runnerName,
-		PrefixPath:            pctx.WinePrefix,
-		Env:                   env,
-		System:                sysConfig,
-		CreateMenuShortcut:    false,
-		CreateDesktopShortcut: false,
-	}
-
-	if pctx.DryRun {
-		slog.Info("[DRY RUN] Would write Lutris config & register in database", "name", pctx.Game.Name)
-		pctx.LutrisAdded = true
-		return nil
-	}
-
-	targetDir := ""
-	if pctx.Config != nil {
-		targetDir = util.ExpandPath(pctx.Config.LutrisDir)
-	}
-
-	if err := lutris.Write(lcfg, targetDir); err != nil {
-		return fmt.Errorf("write Lutris config: %w", err)
-	}
-
-	_, _ = steam.FetchLutrisArtwork(ctx, pctx.Game.AppID, lutris.Slugify(pctx.Game.Name), false)
-	pctx.LutrisAdded = true
-	return nil
-}

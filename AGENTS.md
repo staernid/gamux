@@ -4,7 +4,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ## Project Overview & Architecture
 
-`gamux` is a post-download Steam game manager for Linux (DRM removal via Goldberg Emulator, Lutris registration, and artwork management).
+`gamux` is a post-download Steam game manager for Linux (DRM removal via Goldberg Emulator, direct host runners via UMU/Wine/Proton, and artwork management).
 
 ### Package Layout
 - [`cache`](file:///home/staernid/projects/gamux/cache): Fast disk and in-memory TTL caching for Steam game metadata, AppIDs, and patch note changelogs.
@@ -17,17 +17,16 @@ Essential guidelines, architecture patterns, and conventions for development on 
 - [`engine`](file:///home/staernid/projects/gamux/engine): High-level orchestrator coordinating game scanning, pipeline stage dispatching, and library queries.
 - [`events`](file:///home/staernid/projects/gamux/events): Thread-safe pub/sub broker (`events.Bus`) distributing typed lifecycle events (`task:started`, `task:progress`, `task:stage_change`, `task:completed`, `task:failed`, `task:cancelled`).
 - [`frontend`](file:///home/staernid/projects/gamux/frontend): Svelte 5 / Vite desktop UI with reactive task queues, Steam Deck-optimized navigation, and Vitest test suite.
-- [`gamecfg`](file:///home/staernid/projects/gamux/gamecfg): Per-game configuration persistence (`steam_settings/launch_profile.json`).
 - [`gbe`](file:///home/staernid/projects/gamux/gbe): Goldberg Steam Emulator setup (DLL/SO patching, loader env vars, DLC configuration, steam_settings generation).
 - [`github`](file:///home/staernid/projects/gamux/github): GitHub API client for fetching and updating GBE fork release assets.
-- [`gui`](file:///home/staernid/projects/gamux/gui): Wails desktop bridge adapter communicating between Go engine/events/jobs and the WebKit frontend.
-- [`jobs`](file:///home/staernid/projects/gamux/jobs): Background task supervisor (`jobs.Manager`) managing concurrency limits, job lifecycles, and cooperative context cancellation.
-- [`lutris`](file:///home/staernid/projects/gamux/lutris): Lutris game registration (YAML configuration generation and SQLite database updates).
+- [`gui`](file:///home/staernid/projects/gamux/gui): Wails desktop bridge adapter communicating between Go engine/events/tasks and the WebKit frontend.
+- [`tasks`](file:///home/staernid/projects/gamux/tasks): Unified background task supervisor (`tasks.Manager`) managing concurrency limits, task lifecycles, and cooperative context cancellation.
 - [`manifest`](file:///home/staernid/projects/gamux/manifest): Depot manifest parsing, Lua/RevoBD/SteamDepotDB key resolution, file checksum verification, and integrity reporting.
 - [`pipeline`](file:///home/staernid/projects/gamux/pipeline): Composable game setup pipeline and stages (`pipeline.Stage`, `pipeline.Pipeline`, `pipeline.Context`).
-- [`runner`](file:///home/staernid/projects/gamux/runner): Subprocess management, runner construction (Wine, Proton, UMU, Linux native), and process supervision.
+- [`runner`](file:///home/staernid/projects/gamux/runner): Subprocess management, launch profile persistence (`steam_settings/launch_profile.json`), runner construction (Wine, Proton, UMU, Linux native), and process supervision.
 - [`steam`](file:///home/staernid/projects/gamux/steam): Steam Web & Store API client for AppID searching, DLC metadata fetching, changelogs, and grid artwork downloads.
 - [`steamless`](file:///home/staernid/projects/gamux/steamless): Steamless-rs automated extraction and SteamStub DRM executable unpacking.
+- [`store`](file:///home/staernid/projects/gamux/store): Store catalog registry, multi-tier artwork waterfall, and provider adapters.
 - [`tools`](file:///home/staernid/projects/gamux/tools): Modular post-processing tool manager and update inspector.
 - [`ui`](file:///home/staernid/projects/gamux/ui): CLI dashboards, guided wizards, help formatters, and terminal progress indicators.
 - [`util`](file:///home/staernid/projects/gamux/util): File utilities (backup & atomic replacement, archive extraction, hash calculation, process execution).
@@ -46,7 +45,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 ┌──────────────────────────────────────────────┴──────────────┐
 │                    Orchestration Layer                      │
 │  • Engine (engine/engine.go)  • Wails Bridge (gui/app.go)   │
-│  • Job Supervisor (jobs/manager.go - Concurrency & Worker)  │
+│  • Task Supervisor (tasks/manager.go - Concurrency & Worker)│
 │  • Pub/Sub Broker (events/events.go - Typed Telemetry)      │
 └──────────────┬──────────────────────────────────────────────┘
                │ Dispatches Context
@@ -55,14 +54,14 @@ Essential guidelines, architecture patterns, and conventions for development on 
 │                 Domain & Pipeline Execution                 │
 │  • Pipeline Runner (pipeline/runner.go)                     │
 │  • Composable Stages (pipeline/stages_impl.go)              │
-│    [Scan] ➔ [Manifest] ➔ [Normalize] ➔ [Steamless] ➔ [GBE] ➔ [Lutris]
+│    [Scan] ➔ [Manifest] ➔ [Normalize] ➔ [Steamless] ➔ [GBE]
 │  • Canonical Domain Entity (domain.Game)                    │
 └──────────────┬──────────────────────────────────────────────┘
                │ Operates On
                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 Low-Level Adapters & Services               │
-│  • gbe  • steamless  • lutris  • downloader  • manifest     │
+│  • gbe  • steamless  • store  • downloader  • manifest      │
 │  • steam (Store/Web API)  • github (Releases)  • runner     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -97,23 +96,23 @@ func (s *MyCustomStage) Rollback(ctx context.Context, pctx *Context) error {
 }
 ```
 
-### Recipe 2: Submitting a Background Asynchronous Job
-Instantiate a `jobs.Job` and submit it to the supervisor via `e.JobManager`:
+### Recipe 2: Submitting a Background Asynchronous Task
+Submit a `tasks.TaskSpec` to the supervisor via `e.Tasks`:
 
 ```go
-job := jobs.NewJob(
-    jobs.OpDownload,
-    "Download Cyberpunk 2077",
-    "Cyberpunk 2077",
-    targetDir,
-    "1091500",
-    func(ctx context.Context, reporter *jobs.ProgressReporter) error {
-        reporter.UpdateStage("Downloading Chunks", "Connecting to Steam CDN...")
-        reporter.UpdateProgress(50.0, 10485760, 5, 100, 200, 5000000, 10)
+taskID, err := e.Tasks.Submit(tasks.TaskSpec{
+    Type:         tasks.TypeDownload,
+    Title:        "Download Cyberpunk 2077",
+    GameName:     "Cyberpunk 2077",
+    GameDir:      targetDir,
+    AppID:        "1091500",
+    Capabilities: tasks.CapCancellable | tasks.CapPausable | tasks.CapBandwidthLimit,
+    Run: func(ctx context.Context, ctrl *tasks.Controller) error {
+        ctrl.ReportStage("Downloading Chunks", "Connecting to Steam CDN...")
+        ctrl.ReportProgress(10485760, 209715200, 5, 100, 5000000, 40, 5.0)
         return nil
     },
-)
-e.JobManager.Submit(job)
+})
 ```
 
 ### Recipe 3: Testing Network Clients Safely

@@ -25,7 +25,6 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderSectionHeader("📁 Storage & Directory Paths")
 	renderConfigRow("gbe_dir", cfg.GbeDir, defaults.GbeDir)
 	renderConfigRow("steamless_dir", cfg.SteamlessDir, defaults.SteamlessDir)
-	renderConfigRow("lutris_dir", cfg.LutrisDir, defaults.LutrisDir)
 	renderConfigRow("steam_userdata", cfg.SteamUserdata, defaults.SteamUserdata)
 
 	renderSectionHeader("🔑 API Keys & Authentication")
@@ -36,7 +35,6 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderConfigRow("operating_mode", fallback(cfg.OperatingMode, defaults.OperatingMode), defaults.OperatingMode)
 	renderConfigRow("default_runner", fallback(cfg.DefaultRunner, defaults.DefaultRunner), defaults.DefaultRunner)
 	renderConfigRow("gbe_mode", fallback(cfg.GbeMode, "(prompt when applying setup)"), defaults.GbeMode)
-	renderConfigRow("lutris", fmt.Sprintf("%t", cfg.Lutris), fmt.Sprintf("%t", defaults.Lutris))
 	renderConfigRow("steamless", fmt.Sprintf("%t", cfg.Steamless), fmt.Sprintf("%t", defaults.Steamless))
 	renderConfigRow("achievements", fmt.Sprintf("%t", cfg.Achievements), fmt.Sprintf("%t", defaults.Achievements))
 	renderConfigRow("normalize", fmt.Sprintf("%t", cfg.Normalize), fmt.Sprintf("%t", defaults.Normalize))
@@ -96,7 +94,6 @@ func RunConfigWizard(cfg *config.Config, configPath string) error {
 	fmt.Printf("%s\n", bold("📁 CATEGORY 1: Storage & Directory Paths"))
 	cfg.GbeDir = promptString(reader, "Goldberg Emulator Assets Directory [gbe_dir]", cfg.GbeDir, defaults.GbeDir)
 	cfg.SteamlessDir = promptString(reader, "Steamless Binaries Directory [steamless_dir]", cfg.SteamlessDir, defaults.SteamlessDir)
-	cfg.LutrisDir = promptString(reader, "Lutris Games Config Directory [lutris_dir]", cfg.LutrisDir, defaults.LutrisDir)
 	cfg.SteamUserdata = promptString(reader, "Steam User Data Directory [steam_userdata]", cfg.SteamUserdata, defaults.SteamUserdata)
 
 	// Section 2: API Keys
@@ -106,10 +103,9 @@ func RunConfigWizard(cfg *config.Config, configPath string) error {
 
 	// Section 3: Operational Settings
 	fmt.Printf("\n%s\n", bold("⚡ CATEGORY 3: Operational Settings"))
-	cfg.OperatingMode = promptString(reader, "Primary Operating Mode (standalone, lutris) [operating_mode]", cfg.OperatingMode, defaults.OperatingMode)
+	cfg.OperatingMode = promptString(reader, "Primary Operating Mode (standalone, loader, portable) [operating_mode]", cfg.OperatingMode, defaults.OperatingMode)
 	cfg.DefaultRunner = promptString(reader, "Default Standalone Runner (umu, wine, proton) [default_runner]", cfg.DefaultRunner, defaults.DefaultRunner)
 	cfg.GbeMode = promptString(reader, "Goldberg Emulation Mode (loader, portable, or empty for prompt) [gbe_mode]", cfg.GbeMode, defaults.GbeMode)
-	cfg.Lutris = promptBool(reader, "Auto-register games in Lutris? [lutris]", cfg.Lutris)
 	cfg.Steamless = promptBool(reader, "Enable automatic Steamless DRM unpacking? [steamless]", cfg.Steamless)
 	cfg.Achievements = promptBool(reader, "Fetch achievement schema & icon assets? [achievements]", cfg.Achievements)
 	cfg.Normalize = promptBool(reader, "Normalize directory names to official 1:1 Steam install dir? [normalize]", cfg.Normalize)

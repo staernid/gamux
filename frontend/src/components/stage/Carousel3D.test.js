@@ -53,13 +53,24 @@ describe('Carousel3D Component', () => {
     expect(screen.getByText('Astroneer')).toBeInTheDocument();
   });
 
-  it('quantizes wheel scroll events', async () => {
-    const { container } = render(Carousel3D);
-    const region = container.querySelector('[role="region"]');
-    expect(region).toBeTruthy();
+  it('renders status badges for patched and clean titles', () => {
+    render(Carousel3D);
 
-    // Fire mouse wheel event
-    await fireEvent.wheel(region, { deltaY: 120, deltaMode: 0 });
-    // Wheel event should not throw and should prevent default
+    // Initial mock has clean/patched games
+    expect(screen.getAllByText(/Ready|Unconfigured|Running/i).length).toBeGreaterThan(0);
+  });
+
+  it('allows stepping left and right smoothly without getting locked', () => {
+    const { component } = render(Carousel3D);
+
+    component.step(1);
+    expect(component.getCurrentPos()).toBeDefined();
+
+    component.step(-1);
+    expect(component.getCurrentPos()).toBeDefined();
+
+    component.addRotaryDelta(1.5);
+    expect(component.getCurrentPos()).toBeDefined();
   });
 });
+

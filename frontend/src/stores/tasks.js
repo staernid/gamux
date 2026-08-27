@@ -4,12 +4,15 @@ import { notificationStore } from './notifications.js';
 
 export function isDownloadTask(t) {
   if (!t) return false;
-  return (
-    t.type === 'download' ||
-    t.operation === 'download' ||
-    Boolean(t.app_id || t.appID) ||
-    (typeof t.id === 'string' && (t.id.startsWith('download_') || t.id.startsWith('transfer_') || t.id.startsWith('dl_')))
-  );
+  if (t.type === 'download' || t.operation === 'download') return true;
+  if (typeof t.id === 'string' && (t.id.startsWith('download_') || t.id.startsWith('transfer_') || t.id.startsWith('dl_') || t.id.startsWith('tr_mock_'))) return true;
+  if (t.type && ['apply', 'verify', 'update', 'tool_update', 'normalize', 'rollback', 'workshop'].includes(t.type)) {
+    return false;
+  }
+  if (t.operation && ['apply', 'verify', 'update', 'tool_update', 'normalize', 'rollback', 'workshop'].includes(t.operation)) {
+    return false;
+  }
+  return Boolean(t.bytes_downloaded || (t.speed_bps && t.speed_bps > 0) || (t.depots && t.depots.length > 0));
 }
 
 function normalizeTask(t) {
@@ -25,11 +28,12 @@ function normalizeTask(t) {
   const totItems = prog.total_items ?? t.total_items ?? 0;
   const gameName = t.game_name || t.title || 'Task';
   const isDl = isDownloadTask(t);
+  const taskType = t.type || (isDl ? 'download' : (t.operation || 'operation'));
 
   return {
     ...t,
     id: t.id || t.task_id,
-    type: isDl ? 'download' : (t.type || 'operation'),
+    type: taskType,
     gameName,
     game_name: gameName,
     game_dir: t.game_dir || '',
@@ -136,7 +140,7 @@ function createTasksStore() {
 
   function handleTaskEvent(ev) {
     if (!ev || !ev.type) return;
-    const taskID = ev.task_id || ev.id;
+    const taskID = ev.task_id || ev.taskId || (typeof ev.id === 'string' && (ev.id.startsWith('task_') || ev.id.startsWith('dl_') || ev.id.startsWith('transfer_') || ev.id.startsWith('op_')) ? ev.id : null);
     if (!taskID) {
       if (ev.stage || ev.details || ev.progress) {
         items.update((list) => {

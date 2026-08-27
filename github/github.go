@@ -1,7 +1,9 @@
 package github
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -247,9 +249,6 @@ func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		}
 	} else if fi, err := os.Stat(filepath.Join(umuHome, "umu-run")); err == nil && fi.Size() > 0 {
 		installedTag = "Installed"
-		hasUpdate = false
-	} else if lutrisUMU := filepath.Join(home, ".local", "share", "lutris", "runtime", "umu", "umu-run"); util.FileExists(lutrisUMU) {
-		installedTag = "Installed (Lutris Runtime)"
 		hasUpdate = false
 	}
 
@@ -557,20 +556,43 @@ func UpdateUMUAssets(ctx context.Context, cfg *config.Config, destDir string) er
 	}
 
 	var umuAsset *ReleaseAsset
+
+	// 1. Search for standalone zipapp tar or tar.gz (preferred official distribution)
 	for _, asset := range release.Assets {
-		if asset.Name == "umu-run" || asset.Name == "umu_run" || asset.Name == "umu-run.zip" || strings.HasPrefix(asset.Name, "umu-run") {
+		name := strings.ToLower(asset.Name)
+		if strings.Contains(name, "zipapp") && (strings.HasSuffix(name, ".tar") || strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tgz")) {
 			a := asset
 			umuAsset = &a
 			break
 		}
 	}
 
-	if umuAsset == nil && len(release.Assets) > 0 {
-		umuAsset = &release.Assets[0]
+	// 2. Search for direct umu-run executable or zipapp.zip
+	if umuAsset == nil {
+		for _, asset := range release.Assets {
+			name := strings.ToLower(asset.Name)
+			if name == "umu-run" || name == "umu_run" || name == "umu-run.zip" || strings.HasSuffix(name, "-zipapp.zip") {
+				a := asset
+				umuAsset = &a
+				break
+			}
+		}
+	}
+
+	// 3. Search for any tar archive that is NOT a distro package (.deb/.rpm)
+	if umuAsset == nil {
+		for _, asset := range release.Assets {
+			name := strings.ToLower(asset.Name)
+			if !strings.HasSuffix(name, ".deb") && !strings.HasSuffix(name, ".rpm") && (strings.HasSuffix(name, ".tar") || strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".zip")) {
+				a := asset
+				umuAsset = &a
+				break
+			}
+		}
 	}
 
 	if umuAsset == nil {
-		return fmt.Errorf("no suitable umu-run asset found in latest GitHub release")
+		return fmt.Errorf("no suitable standalone umu-run or zipapp.tar found in latest GitHub release")
 	}
 
 	destPath := filepath.Join(destDir, "umu-run")
@@ -590,7 +612,21 @@ func UpdateUMUAssets(ctx context.Context, cfg *config.Config, destDir string) er
 		return fmt.Errorf("failed to download asset %s: HTTP %s", umuAsset.Name, resp.Status)
 	}
 
-	if strings.HasSuffix(umuAsset.Name, ".zip") && umuAsset.Name != "umu-run" {
+	assetName := strings.ToLower(umuAsset.Name)
+	if strings.HasSuffix(assetName, ".tar.gz") || strings.HasSuffix(assetName, ".tgz") {
+		gzr, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed creating gzip reader: %w", err)
+		}
+		defer gzr.Close()
+		if err := extractTarArchive(gzr, destDir); err != nil {
+			return fmt.Errorf("failed extracting umu tar.gz: %w", err)
+		}
+	} else if strings.HasSuffix(assetName, ".tar") {
+		if err := extractTarArchive(resp.Body, destDir); err != nil {
+			return fmt.Errorf("failed extracting umu tar: %w", err)
+		}
+	} else if strings.HasSuffix(assetName, ".zip") {
 		tmpFile, err := os.CreateTemp("", "umu-*.zip")
 		if err != nil {
 			return err
@@ -616,7 +652,10 @@ func UpdateUMUAssets(ctx context.Context, cfg *config.Config, destDir string) er
 		}
 	}
 
-	_ = os.Chmod(destPath, 0755)
+	// Ensure destDir/umu-run is executable
+	if util.FileExists(destPath) {
+		_ = os.Chmod(destPath, 0755)
+	}
 
 	timestampFile := filepath.Join(destDir, ".umu_timestamp")
 	tag := release.TagName
@@ -627,6 +666,74 @@ func UpdateUMUAssets(ctx context.Context, cfg *config.Config, destDir string) er
 
 	slog.Info("umu-launcher asset updated successfully in", "dir", destDir)
 	return nil
+}
+
+func extractTarArchive(r io.Reader, destDir string) error {
+	tarReader := tar.NewReader(r)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		cleanName := filepath.Clean(header.Name)
+		if strings.HasPrefix(cleanName, "..") {
+			continue
+		}
+
+		targetPath := filepath.Join(destDir, cleanName)
+		if header.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, header.FileInfo().Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return err
+		}
+
+		if header.Typeflag == tar.TypeSymlink {
+			_ = os.Remove(targetPath)
+			_ = os.Symlink(header.Linkname, targetPath)
+			continue
+		}
+
+		outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, header.FileInfo().Mode())
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(outFile, tarReader); err != nil {
+			outFile.Close()
+			return err
+		}
+		outFile.Close()
+	}
+
+	// If umu/umu-run was extracted to destDir/umu/umu-run, copy or symlink it to destDir/umu-run as well
+	nestedUmu := filepath.Join(destDir, "umu", "umu-run")
+	rootUmu := filepath.Join(destDir, "umu-run")
+	if util.FileExists(nestedUmu) {
+		_ = os.Chmod(nestedUmu, 0755)
+		if !util.FileExists(rootUmu) || isInvalidHeader(rootUmu) {
+			_ = util.CopyFile(nestedUmu, rootUmu)
+			_ = os.Chmod(rootUmu, 0755)
+		}
+	}
+
+	return nil
+}
+
+func isInvalidHeader(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) < 7 {
+		return true
+	}
+	// Detect !<arch> (ar archive / deb)
+	return strings.HasPrefix(string(data), "!<arch>")
 }
 
 func extractZipArchive(zipPath, destDir string) error {
@@ -663,3 +770,4 @@ func extractZipArchive(zipPath, destDir string) error {
 	}
 	return nil
 }
+

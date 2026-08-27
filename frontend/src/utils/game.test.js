@@ -38,7 +38,6 @@ describe('Game Data Model & Normalization Helpers', () => {
       dlc_count: 3,
       achievement_count: 44,
       state: 'Portable-Patched',
-      lutris_registered: true,
       LaunchCandidates: [
         { Name: 'Main Game', Executable: 'bin/x64/Cyberpunk2077.exe', Arguments: '-vulkan' },
         { Name: 'Technical Loader', Executable: 'steamclient_loader.exe', Arguments: '' }
@@ -46,7 +45,7 @@ describe('Game Data Model & Normalization Helpers', () => {
       LaunchProfile: {
         exe_path: 'bin/x64/Cyberpunk2077.exe',
         exe_args: '-vulkan',
-        operating_mode: 'lutris',
+        operating_mode: 'standalone',
         runner: 'wine',
         wine_prefix: '~/.wine'
       }
@@ -65,12 +64,11 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.isPatched).toBe(true);
     expect(normalized.isPortable).toBe(true);
     expect(normalized.isReady).toBe(true);
-    expect(normalized.lutrisRegistered).toBe(true);
     expect(normalized.diskSizeBytes).toBe(73014444032);
     expect(normalized.fileCount).toBe(1420);
     expect(normalized.dlcCount).toBe(3);
     expect(normalized.achievementCount).toBe(44);
-    expect(normalized.operatingMode).toBe('lutris');
+    expect(normalized.operatingMode).toBe('standalone');
     expect(normalized.runner).toBe('wine');
     expect(normalized.winePrefix).toBe('~/.wine');
 

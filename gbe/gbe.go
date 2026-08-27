@@ -41,19 +41,43 @@ var PlatformConfig = map[string]struct {
 	},
 }
 
-// ApplyGBE applies the GBE emulator.
-// If portable is true, it performs direct DLL/SO replacement (copying emulated libraries into the game dir).
-// If portable is false (loader mode), it leaves original game libraries untouched and sets up Wine registry/loader config.
-func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appID string, dryRun, portable bool, winePrefix string, exePath string) error {
+// Options specifies configuration and target paths for applying Goldberg Steam Emulator.
+type Options struct {
+	Config     *config.Config
+	TargetDir  string
+	Platform   string
+	AppID      string
+	DryRun     bool
+	Portable   bool
+	WinePrefix string
+	ExePath    string
+}
 
+// ApplyGBE applies the Goldberg Steam Emulator to the target game directory (alias for Apply).
+func ApplyGBE(ctx context.Context, opts Options) error {
+	return Apply(ctx, opts)
+}
 
+// Apply applies the Goldberg Steam Emulator to the target game directory.
+// If opts.Portable is true, it performs direct DLL/SO replacement (copying emulated libraries into the game dir).
+// If opts.Portable is false (loader mode), it leaves original game libraries untouched and sets up Wine registry/loader config.
+func Apply(ctx context.Context, opts Options) error {
+	cfg := opts.Config
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
 
+	targetDir := opts.TargetDir
 	if targetDir == "" {
 		targetDir = "."
 	}
+
+	platform := opts.Platform
+	appID := opts.AppID
+	dryRun := opts.DryRun
+	portable := opts.Portable
+	winePrefix := opts.WinePrefix
+	exePath := opts.ExePath
 
 	absTargetDir, err := filepath.Abs(targetDir)
 	if err != nil {
@@ -195,6 +219,26 @@ func ApplyGBE(ctx context.Context, cfg *config.Config, targetDir, platform, appI
 		steamSettingsDir := filepath.Join(filepath.Dir(file), "steam_settings")
 		if err := ConfigureCustomSettings(steamSettingsDir, cfg, supportedLangs, dryRun); err != nil {
 			slog.Warn("Failed to configure custom emulator settings", "dir", steamSettingsDir, "error", err)
+		}
+	}
+
+	// Ensure steam_appid.txt exists in root directory, steam_settings, and alongside library
+	if appID != "" && appID != "0" {
+		appidDirs := []string{
+			absTargetDir,
+			filepath.Join(absTargetDir, "steam_settings"),
+		}
+		for _, file := range targetFiles {
+			appidDirs = append(appidDirs, filepath.Dir(file))
+			appidDirs = append(appidDirs, filepath.Join(filepath.Dir(file), "steam_settings"))
+		}
+		for _, dir := range appidDirs {
+			if dryRun {
+				slog.Info("[DRY RUN] Would ensure steam_appid.txt", "dir", dir, "appID", appID)
+			} else {
+				_ = os.MkdirAll(dir, 0755)
+				_ = os.WriteFile(filepath.Join(dir, "steam_appid.txt"), []byte(appID+"\n"), 0644)
+			}
 		}
 	}
 
@@ -353,9 +397,14 @@ func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, dry
 		}
 	}
 
+	exeRunDir := ""
+	if dir := filepath.Dir(relExe); dir != "." && dir != "" && dir != "/" {
+		exeRunDir = dir
+	}
+
 	iniContent := fmt.Sprintf(`[SteamClient]
 Exe=%s
-ExeRunDir=
+ExeRunDir=%s
 ExeCommandLine=
 AppId=%s
 SteamClientDll=steamclient.dll
@@ -366,7 +415,7 @@ ForceInjectSteamClient=1
 ForceInjectGameOverlayRenderer=0
 IgnoreInjectionError=0
 IgnoreLoaderArchDifference=0
-`, relExe, appID)
+`, relExe, exeRunDir, appID)
 
 	iniPath := filepath.Join(absTargetDir, "ColdClientLoader.ini")
 	if dryRun {
@@ -437,5 +486,109 @@ func GenerateAchievementsJSON(ctx context.Context, appID uint32, apiKey string, 
 
 	return nil
 }
+
+// Rollback restores original backup files and cleans up Goldberg emulator artifacts (alias for Revert).
+func Rollback(targetDir string, dryRun bool) (int, error) {
+	return Revert(targetDir, dryRun)
+}
+
+// Revert restores all original backup files and cleans up Goldberg emulator artifacts in targetDir.
+func Revert(targetDir string, dryRun bool) (int, error) {
+	absTargetDir := util.CanonicalPath(targetDir)
+	if absTargetDir == "" {
+		return 0, fmt.Errorf("target directory cannot be empty")
+	}
+
+	if _, err := os.Stat(absTargetDir); os.IsNotExist(err) {
+		return 0, fmt.Errorf("target directory not found: %s", absTargetDir)
+	}
+
+	slog.Info("Starting Goldberg emulator revert", "dir", absTargetDir, "dryRun", dryRun)
+
+	var restoredCount int
+	walkErr := filepath.WalkDir(absTargetDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+
+		name := d.Name()
+		if strings.Contains(name, ".ORIGINAL") {
+			idx := strings.Index(path, ".20")
+			origPath := path
+			if idx != -1 {
+				origPath = path[:idx]
+			} else {
+				origPath = strings.TrimSuffix(path, ".ORIGINAL")
+			}
+
+			if dryRun {
+				slog.Info("[DRY RUN] Would restore original file", "from", path, "to", origPath)
+			} else {
+				if err := os.Rename(path, origPath); err != nil {
+					slog.Error("Failed to restore original file", "from", path, "to", origPath, "error", err)
+				} else {
+					slog.Info("Restored original file", "restored", origPath)
+					restoredCount++
+				}
+			}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return restoredCount, fmt.Errorf("walk directory for backup restoration: %w", walkErr)
+	}
+
+	// Clean up loader helper binaries and artifacts
+	loaderFiles := []string{
+		"ColdClientLoader.ini",
+		"steamclient_loader_x64.exe",
+		"steamclient_loader_x86.exe",
+		"steamclient64.dll",
+		"steamclient.dll",
+		"GameOverlayRenderer64.dll",
+		"GameOverlayRenderer.dll",
+		"steam_interfaces.txt",
+		".steam_interfaces.hash",
+	}
+
+	for _, fname := range loaderFiles {
+		p := filepath.Join(absTargetDir, fname)
+		if util.FileExists(p) {
+			if dryRun {
+				slog.Info("[DRY RUN] Would remove loader file", "path", p)
+			} else {
+				_ = os.Remove(p)
+				slog.Info("Removed loader file", "path", p)
+			}
+		}
+	}
+
+	// Clean up steam_settings directory
+	steamSettingsDir := filepath.Join(absTargetDir, "steam_settings")
+	if _, err := os.Stat(steamSettingsDir); err == nil {
+		if dryRun {
+			slog.Info("[DRY RUN] Would remove steam_settings directory", "path", steamSettingsDir)
+		} else {
+			if err := os.RemoveAll(steamSettingsDir); err == nil {
+				slog.Info("Removed steam_settings directory", "path", steamSettingsDir)
+			}
+		}
+	}
+
+	// Clean up root steam_appid.txt
+	appIDTxt := filepath.Join(absTargetDir, "steam_appid.txt")
+	if util.FileExists(appIDTxt) {
+		if dryRun {
+			slog.Info("[DRY RUN] Would remove steam_appid.txt", "path", appIDTxt)
+		} else {
+			_ = os.Remove(appIDTxt)
+			slog.Info("Removed steam_appid.txt", "path", appIDTxt)
+		}
+	}
+
+	slog.Info("Goldberg emulator revert completed", "restoredFiles", restoredCount)
+	return restoredCount, nil
+}
+
 
 

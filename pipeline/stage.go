@@ -14,18 +14,17 @@ import (
 type Options struct {
 	Path              string `json:"path"`
 	ApplyGBE          bool   `json:"apply_gbe"`
-	AddLutris         bool   `json:"add_lutris"`
 	Portable          bool   `json:"portable"`
 	NormalizeDir      bool   `json:"normalize_dir"`
 	DryRun            bool   `json:"dry_run"`
 	AutoYes           bool   `json:"auto_yes"`
 	NoSteamless       bool   `json:"no_steamless"`
 	FetchAchievements bool   `json:"fetch_achievements"`
-	Language          string `json:"language,omitempty"`
-	WinePrefix        string `json:"wine_prefix,omitempty"`
-	Runner            string `json:"runner,omitempty"`
-	ExePath           string `json:"exe_path,omitempty"`
-	ExeArgs           string `json:"exe_args,omitempty"`
+	Language          string                 `json:"language,omitempty"`
+	WinePrefix        string                 `json:"wine_prefix,omitempty"`
+	ExePath           string                 `json:"exe_path,omitempty"`
+	ExeArgs           string                 `json:"exe_args,omitempty"`
+	Reporter          tasks.ProgressReporter `json:"-"`
 }
 
 // Context encapsulates execution state, options, and results passed across pipeline stages.
@@ -40,7 +39,6 @@ type Context struct {
 	ACFSynthesized      bool
 	SteamlessUnpacked   bool
 	Patched             bool
-	LutrisAdded         bool
 	Errors              []string
 	Mutations           []string
 

@@ -1,6 +1,6 @@
 # Gamux Domain Context
 
-Gamux is a post-download Steam game manager for Linux, orchestrating depot acquisition, DRM removal (Goldberg Emulator & Steamless), directory normalization, and Lutris registration.
+Gamux is a post-download Steam game manager for Linux, orchestrating depot acquisition, DRM removal (Goldberg Emulator & Steamless), directory normalization, and standalone execution.
 
 ## Language
 
@@ -24,28 +24,16 @@ _Avoid_: Non-portable mode, injection mode
 Goldberg Steam Emulator execution mode that backs up original `steam_api.dll`/`libsteam_api.so` to `.ORIGINAL` and replaces them in-place in the game folder.
 _Avoid_: Direct mode, patch mode
 
-**Lutris Registration**:
-Generating Lutris game configuration YAML files, updating Lutris's SQLite database (`pga.db`), and creating desktop/application menu shortcuts.
-_Avoid_: Desktop shortcutting, runner configuration
-
 **Steamless**:
 Automated SteamStub DRM executable unpacker that strips DRM wrappers and preserves original binaries.
 _Avoid_: DRM cracker, patcher
 
-**Operating Mode**:
-The top-level operational strategy for a game: `Lutris Helper` (companion mode generating Lutris configs and delegating launch to Lutris) or `Standalone Launcher` (direct game execution bypassing Lutris).
-_Avoid_: Execution style, play mode
-
 **Standalone Launcher**:
-An operating mode that executes games directly on Linux using `umu-launcher` (`umu-run`), Wine, Proton, or native binaries, managing child process lifecycles and runtime environments.
+The primary execution engine executing games directly on Linux using `umu-launcher` (`umu-run`), Wine, Proton, or native binaries, managing child process lifecycles and runtime environments.
 _Avoid_: Direct play, custom runner
 
-**Lutris Helper**:
-An operating mode acting as a companion to Lutris: generating Lutris YAML configs, updating the Lutris SQLite database, and delegating execution to `lutris lutris:rungame/<slug>`.
-_Avoid_: Lutris bridge, Lutris runner mode
-
 **UMU Runner**:
-The Unified Linux Wine Game Launcher (`umu-run` from Open-Wine-Components) used in Standalone Launcher mode for Proton/Wine compatibility, Wine prefix management, and environment setup.
+The Unified Linux Wine Game Launcher (`umu-run` from Open-Wine-Components) used for Proton/Wine compatibility, Wine prefix management, and environment setup.
 _Avoid_: UMU wrapper, GE launcher
 
 **Launch Profile**:
@@ -57,7 +45,7 @@ An ordered, sequential executor coordinating game processing through composable,
 _Avoid_: Task runner, workflow, script
 
 **Stage**:
-A discrete, single-responsibility step within the setup pipeline (e.g. Scan, Manifest, Normalize, Steamless, GBE, Lutris) that mutates or inspects a `Game` entity.
+A discrete, single-responsibility step within the setup pipeline (e.g. Scan, Manifest, Normalize, Steamless, GBE) that mutates or inspects a `Game` entity.
 _Avoid_: Step, action, middleware
 
 **Job**:

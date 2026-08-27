@@ -17,8 +17,6 @@ import (
 
 func commonSetupFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: "lutris", Usage: "Enable Lutris library registration"},
-		&cli.BoolFlag{Name: "no-lutris", Usage: "Disable Lutris library registration"},
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Automatic yes to all prompts (non-interactive mode)"},
 		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder"},
 		&cli.BoolFlag{Name: "loader", Usage: "Perform loader mode setup without modifying game DLLs"},
@@ -41,9 +39,7 @@ func commonDownloadFlags() []cli.Flag {
 		&cli.StringFlag{Name: "platform", Usage: "Target platform architecture (win64, linux, all; default: win64)"},
 		&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Non-interactive mode (use defaults without prompting)"},
 		&cli.BoolFlag{Name: "dry-run", Usage: "Show what would be downloaded without writing files"},
-		&cli.BoolFlag{Name: "setup", Usage: "Automatically run post-download GBE & Lutris setup after downloading"},
-		&cli.BoolFlag{Name: "lutris", Usage: "Enable Lutris library registration during post-download setup"},
-		&cli.BoolFlag{Name: "no-lutris", Usage: "Disable Lutris library registration during post-download setup"},
+		&cli.BoolFlag{Name: "setup", Usage: "Automatically run post-download GBE setup after downloading"},
 		&cli.BoolFlag{Name: "portable", Usage: "Perform direct DLL/SO replacement in game folder during setup"},
 		&cli.BoolFlag{Name: "loader", Usage: "Perform loader mode setup without modifying game DLLs during setup"},
 		&cli.BoolFlag{Name: "no-gbe", Usage: "Disable Goldberg Emulator patching during post-download setup"},
@@ -147,15 +143,7 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 		}
 	}
 
-	// 2. Lutris Integration Resolution
-	addLutris := cfg.OperatingMode == "lutris" || cfg.Lutris
-	if c.IsSet("no-lutris") {
-		addLutris = false
-	} else if c.IsSet("lutris") {
-		addLutris = c.Bool("lutris")
-	}
-
-	// 3. Operational Toggles
+	// 2. Operational Toggles
 	normalize := cfg.Normalize
 	if c.IsSet("normalize") {
 		normalize = c.Bool("normalize")
@@ -169,11 +157,6 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	fetchAchievements := cfg.Achievements
 	if c.IsSet("achievements") {
 		fetchAchievements = c.Bool("achievements")
-	}
-
-	runner := cfg.DefaultRunner
-	if c.IsSet("runner") && c.String("runner") != "" {
-		runner = c.String("runner")
 	}
 
 	winePrefix := cfg.WinePrefix
@@ -195,8 +178,6 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	return engine.ProcessOptions{
 		Path:              path,
 		ApplyGBE:          applyGBE,
-		AddLutris:         addLutris,
-		Runner:            runner,
 		WinePrefix:        winePrefix,
 		Portable:          portable,
 		NormalizeDir:      normalize,

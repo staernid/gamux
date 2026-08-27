@@ -16,7 +16,7 @@ import (
 var applyCommand = &cli.Command{
 	Name:      "apply",
 	Category:  "Step 2: Setup & Integration",
-	Usage:     "Apply Goldberg Emulator setup, folder normalization, and Lutris integration for a game",
+	Usage:     "Apply Goldberg Emulator setup and folder normalization for a game",
 	ArgsUsage: "[path]",
 	Flags:     commonSetupFlags(),
 	Action: func(c *cli.Context) error {
@@ -25,10 +25,10 @@ var applyCommand = &cli.Command{
 			return nil
 		}
 		path := extractPath(c)
-		eng := engine.New(activeConfig)
+		sc, lib, game, _ := engine.NewServices(activeConfig)
 
 		var status *engine.GameStatus
-		if st, err := eng.InspectStatus(c.Context, path); err == nil {
+		if st, err := lib.InspectStatus(c.Context, path); err == nil {
 			status = st
 		}
 
@@ -62,7 +62,6 @@ var applyCommand = &cli.Command{
 				RemoteManifestID:  status.RemoteManifestID,
 				DLCCount:          status.DLCCount,
 				AchievementCount:  status.AchievementCount,
-				LutrisRegistered:  status.LutrisRegistered,
 				RecentPatchNote:   status.RecentPatchNote,
 			})
 		}
@@ -102,14 +101,14 @@ var applyCommand = &cli.Command{
 
 		ui.RenderStep(1, 1, "Applying configuration for "+opts.Path)
 		var res *engine.ProcessResult
-		err := eng.Tasks.RunSync(c.Context, tasks.TaskSpec{
+		err := sc.Tasks.RunSync(c.Context, tasks.TaskSpec{
 			Type:         tasks.TypeApply,
 			Title:        fmt.Sprintf("Apply %s", opts.Path),
 			GameDir:      opts.Path,
 			Capabilities: tasks.CapCancellable,
 			Run: func(ctx context.Context, ctrl *tasks.Controller) error {
 				var applyErr error
-				res, applyErr = eng.ApplyGame(ctx, opts)
+				res, applyErr = game.ApplyGame(ctx, opts)
 				return applyErr
 			},
 		})
@@ -118,11 +117,10 @@ var applyCommand = &cli.Command{
 			return err
 		}
 
-		nextSteps := []string{}
-		if opts.AddLutris {
-			nextSteps = append(nextSteps, "Launch game via Lutris or application menu")
+		nextSteps := []string{
+			fmt.Sprintf("Run 'gamux launch %s' to start the game", opts.Path),
+			fmt.Sprintf("Run 'gamux status %s' to view mod files & update status", opts.Path),
 		}
-		nextSteps = append(nextSteps, fmt.Sprintf("Run 'gamux status %s' to view mod files & update status", opts.Path))
 
 		ui.RenderSuccess("Setup applied successfully for "+res.Info.Name, "", nextSteps)
 		return nil

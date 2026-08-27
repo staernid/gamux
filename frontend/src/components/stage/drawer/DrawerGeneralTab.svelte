@@ -1,83 +1,92 @@
 <script>
   import { modalStore } from '../../../stores/modal.js';
+  import { drawerDraft, computeEnvEntries } from '../../../stores/drawerDraft.js';
+  import StepperRow from '../../common/StepperRow.svelte';
 
   export let game = null;
   export let candidates = [];
-  export let customExe = '';
-  export let customArgs = '';
-  export let envEntries = [];
-  export let onSelectCandidate = () => {};
-  export let onBrowseExecutable = () => {};
+  export let globalCfg = {};
   export let onUpdateGame = () => {};
-  export let envActions = {
-    add: () => {},
-    update: () => {},
-    override: () => {},
-    revert: () => {},
-    delete: () => {}
-  };
+
+  $: envEntries = computeEnvEntries($drawerDraft.customEnv, globalCfg.global_env || {});
+
+  $: candidateOptions = [
+    ...candidates.map(c => ({
+      value: c.executable,
+      label: c.name ? `${c.name} (${c.executable})` : c.executable
+    })),
+    ...(game?.exePath && !candidates.some(c => c.executable === game.exePath) ? [{ value: game.exePath, label: `${game.exePath} (Detected)` }] : []),
+    { value: '__custom__', label: 'Custom Executable Path...' }
+  ];
+
+  function handleCandidateSelect(val) {
+    if (val === '__custom__') return;
+    const found = candidates.find(c => c.executable === val);
+    if (found) {
+      drawerDraft.selectCandidate(found);
+    } else if (val) {
+      drawerDraft.setField('exePath', val);
+    }
+  }
 </script>
 
-<div class="space-y-4">
-  <!-- Launch Executable & Candidate Picker -->
-  <div class="space-y-2">
-    <label for="drawerMainExe" class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">
-      Target Executable
+<div class="space-y-3">
+  <!-- Game Title -->
+  <div class="space-y-1.5 p-3 bg-[#0d0d12] border border-[#222230] rounded-xl focus-within:border-sky-500 transition-all">
+    <label for="drawerGameName" class="block font-bold text-slate-200 text-xs">
+      Game Title
     </label>
-    <div class="flex space-x-2">
-      <select
-        id="drawerMainExe"
-        on:change={onSelectCandidate}
-        value={candidates.some(c => c.executable === customExe) ? customExe : '__custom__'}
-        class="flex-1 bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs focus:border-white"
-      >
-        {#if candidates.length > 0}
-          {#each candidates as cand}
-            <option value={cand.executable}>
-              {cand.name ? `${cand.name} (${cand.executable})` : cand.executable}
-            </option>
-          {/each}
-        {:else if game?.exePath}
-          <option value={game.exePath}>{game.exePath} (Auto-detected)</option>
-        {/if}
-        <option value="__custom__">Custom Executable Path...</option>
-      </select>
+    <input
+      id="drawerGameName"
+      type="text"
+      bind:value={$drawerDraft.name}
+      placeholder={game?.name || "Game Title"}
+      class="w-full bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-lg px-3 py-2 text-slate-100 outline-none font-sans text-xs transition-colors"
+    />
+  </div>
 
+  <!-- Target Executable -->
+  <div class="space-y-2">
+    <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+      Launch Configuration
+    </span>
+
+    <StepperRow
+      label="Target Executable"
+      options={candidateOptions}
+      value={candidates.some(c => c.executable === $drawerDraft.exePath) ? $drawerDraft.exePath : '__custom__'}
+      on:change={(e) => handleCandidateSelect(e.detail)}
+    />
+
+    <div class="flex items-center space-x-2">
+      <input
+        type="text"
+        bind:value={$drawerDraft.exePath}
+        placeholder="Relative path (e.g. Binaries/Win64/Game.exe)"
+        class="flex-1 bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs outline-none transition-colors"
+      />
       <button
         type="button"
-        on:click={onBrowseExecutable}
+        on:click={async () => { await drawerDraft.browseExecutable(game?.gameDir); }}
         class="bg-[#20202c] hover:bg-[#2a2a3a] text-slate-200 px-3.5 py-2 rounded-xl font-bold border border-[#323244] text-xs flex-shrink-0"
       >
         Browse
       </button>
     </div>
-
-    <input
-      type="text"
-      bind:value={customExe}
-      placeholder="Relative path (e.g. Binaries/Win64/Game.exe)"
-      class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-1.5 text-slate-200 font-mono outline-none focus:border-white text-xs"
-    />
   </div>
 
-  <!-- Launch Flags -->
-  <div>
-    <label for="drawerArgs" class="block text-slate-300 font-bold uppercase tracking-wider text-[10px] mb-1">
-      Custom Launch Flags
+  <!-- Custom Launch Flags -->
+  <div class="space-y-1.5 p-3 bg-[#0d0d12] border border-[#222230] rounded-xl focus-within:border-sky-500 transition-all">
+    <label for="drawerArgs" class="block font-bold text-slate-200 text-xs">
+      Launch Flags
     </label>
     <input
       id="drawerArgs"
       type="text"
-      bind:value={customArgs}
-      placeholder="-dx11 -fullscreen -novid"
-      class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs focus:border-white"
+      bind:value={$drawerDraft.exeArgs}
+      placeholder="e.g. -dx11 -fullscreen -novid"
+      class="w-full bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-lg px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
     />
-  </div>
-
-  <!-- Directory Information Card -->
-  <div class="bg-[#0b0b10] border border-[#202030] p-3 rounded-xl space-y-1">
-    <span class="block text-slate-400 font-bold text-[10px] uppercase tracking-wider">Installed Directory</span>
-    <p class="font-mono text-slate-300 text-xs truncate">{game?.gameDir || ''}</p>
   </div>
 
   <!-- Update Available Banner -->
@@ -98,7 +107,7 @@
   {/if}
 
   <!-- Store & Artwork Identity Card -->
-  <div class="bg-[#0b0b10] border border-[#202030] p-3 rounded-xl flex items-center justify-between gap-3">
+  <div class="bg-[#0d0d12] border border-[#222230] p-3 rounded-xl flex items-center justify-between gap-3">
     <div class="space-y-0.5 min-w-0">
       <span class="block text-slate-400 font-bold text-[10px] uppercase tracking-wider">Store & Artwork Identity</span>
       <p class="font-mono text-slate-300 text-xs truncate">
@@ -118,25 +127,25 @@
         on:click={() => modalStore.open('artwork-picker', { game })}
         class="bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-sky-800/50 transition-colors"
       >
-        🎨 Change Artwork
+        Artwork
       </button>
     </div>
   </div>
 
   <!-- Environment Variables -->
-  <div class="space-y-2 pt-3 border-t border-[#20202c]">
+  <div class="space-y-2 pt-2 border-t border-[#20202c]">
     <div class="flex items-center justify-between">
       <div>
         <span class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">
           Environment Variables
         </span>
         <span class="text-[10px] text-slate-500">
-          Unified hierarchy: Global defaults with per-game overrides.
+          Global defaults with per-game overrides.
         </span>
       </div>
       <button
         type="button"
-        on:click={envActions.add}
+        on:click={() => { drawerDraft.addCustomEnv(globalCfg.global_env || {}); }}
         class="bg-[#20202c] hover:bg-[#2c2c3c] text-white text-[11px] font-bold px-3 py-1 rounded-lg border border-[#343446] transition-colors"
       >
         + Add Variable
@@ -173,7 +182,7 @@
                 <input
                   type="text"
                   value={entry.value}
-                  on:input={(e) => envActions.update(entry.key, e.target.value)}
+                  on:input={(e) => drawerDraft.updateCustomEnv(entry.key, e.target.value)}
                   placeholder="Value"
                   class="w-full bg-[#0c0c10] border border-[#262636] rounded-lg px-2 py-1 text-slate-100 font-mono text-xs outline-none focus:border-white"
                 />
@@ -184,7 +193,7 @@
               {#if entry.isInherited}
                 <button
                   type="button"
-                  on:click={() => envActions.override(entry.key, entry.value)}
+                  on:click={() => { drawerDraft.overrideEnv(entry.key, entry.value); }}
                   class="bg-[#1e1e2a] hover:bg-[#282838] text-slate-300 text-[10px] font-bold px-2 py-1 rounded-md border border-[#303044] transition-colors"
                   title="Override for this title"
                 >
@@ -193,7 +202,7 @@
               {:else if entry.isOverriding}
                 <button
                   type="button"
-                  on:click={() => envActions.revert(entry.key)}
+                  on:click={() => { drawerDraft.revertEnv(entry.key); }}
                   class="bg-[#241c20] hover:bg-[#34242c] text-amber-300 text-[10px] font-bold px-2 py-1 rounded-md border border-amber-900/50 transition-colors"
                   title="Revert to inherited global value"
                 >
@@ -202,7 +211,7 @@
               {:else}
                 <button
                   type="button"
-                  on:click={() => envActions.delete(entry.key)}
+                  on:click={() => { drawerDraft.deleteCustomEnv(entry.key); }}
                   class="p-1 rounded bg-[#20202c] hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-[#303042] transition-colors"
                   title="Delete Variable"
                 >

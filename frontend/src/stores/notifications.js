@@ -27,31 +27,49 @@ function createNotificationStore() {
     } catch {}
   }
 
-  function addNotif({ type = 'info', title, message, gameName, details }) {
+  function addNotif({
+    type = 'info',
+    title,
+    message,
+    gameName,
+    details,
+    position = 'bottom-right',
+    duration = 4500,
+    transient = false,
+    icon = '',
+  }) {
     const notif = {
       id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      type, // 'success' | 'error' | 'warning' | 'info'
-      title: title || 'Notification',
+      type, // 'success' | 'error' | 'warning' | 'info' | 'osd'
+      title: title || '',
       message: message || '',
       gameName: gameName || '',
       details: details || '',
+      position, // 'top-center' | 'bottom-center' | 'bottom-right'
+      duration,
+      transient,
+      icon,
       timestamp: Date.now(),
       read: false,
     };
 
-    items.update(list => {
-      const updated = [notif, ...list];
-      if (updated.length > 60) updated.pop();
-      save(updated);
-      return updated;
-    });
+    if (!transient) {
+      items.update(list => {
+        const updated = [notif, ...list];
+        if (updated.length > 60) updated.pop();
+        save(updated);
+        return updated;
+      });
+    }
 
     // Add to active toast list
     const toastId = notif.id;
     toasts.update(t => [...t, { ...notif, id: toastId }]);
-    setTimeout(() => {
-      toasts.update(t => t.filter(x => x.id !== toastId));
-    }, 4500);
+    if (duration > 0) {
+      setTimeout(() => {
+        toasts.update(t => t.filter(x => x.id !== toastId));
+      }, duration);
+    }
   }
 
   return {
@@ -77,6 +95,20 @@ function createNotificationStore() {
       }
     },
     unreadCount: derived(items, $items => $items.filter(i => !i.read).length),
+
+    // Fast transient HUD on-screen display (OSD) pill
+    osd(message, opts = {}) {
+      addNotif({
+        type: 'osd',
+        message,
+        title: opts.title || '',
+        position: opts.position || 'top-center',
+        duration: opts.duration || 1400,
+        transient: true,
+        icon: opts.icon || 'sort',
+        ...opts,
+      });
+    },
 
     // Convenience 1-liner helpers
     error(title, err, gameName = '') {

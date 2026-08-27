@@ -14,20 +14,20 @@ export function CancelTask(arg1) {
   return window['go']['gui']['App']['CancelTask'](arg1);
 }
 
-export function CheckLibraryUpdates(arg1) {
-  return window['go']['gui']['App']['CheckLibraryUpdates'](arg1);
-}
-
 export function ClearFinishedTasks() {
   return window['go']['gui']['App']['ClearFinishedTasks']();
 }
 
-export function DetectGame(arg1) {
-  return window['go']['gui']['App']['DetectGame'](arg1);
+export function CreateSaveBackup(arg1, arg2) {
+  return window['go']['gui']['App']['CreateSaveBackup'](arg1, arg2);
 }
 
-export function EnsureDirectoryExists(arg1) {
-  return window['go']['gui']['App']['EnsureDirectoryExists'](arg1);
+export function DeleteSaveBackup(arg1, arg2) {
+  return window['go']['gui']['App']['DeleteSaveBackup'](arg1, arg2);
+}
+
+export function DetectGame(arg1) {
+  return window['go']['gui']['App']['DetectGame'](arg1);
 }
 
 export function FetchNews(arg1, arg2) {
@@ -42,8 +42,24 @@ export function GetConfig() {
   return window['go']['gui']['App']['GetConfig']();
 }
 
+export function GetDiskSpace(arg1) {
+  return window['go']['gui']['App']['GetDiskSpace'](arg1);
+}
+
 export function GetGSEUserConfig() {
   return window['go']['gui']['App']['GetGSEUserConfig']();
+}
+
+export function GetGameBackups(arg1) {
+  return window['go']['gui']['App']['GetGameBackups'](arg1);
+}
+
+export function GetGameLog(arg1) {
+  return window['go']['gui']['App']['GetGameLog'](arg1);
+}
+
+export function GetGameSaveLocations(arg1) {
+  return window['go']['gui']['App']['GetGameSaveLocations'](arg1);
 }
 
 export function GetLaunchProfile(arg1) {
@@ -90,10 +106,6 @@ export function ListTasks() {
   return window['go']['gui']['App']['ListTasks']();
 }
 
-export function MigrateOperatingMode(arg1, arg2, arg3) {
-  return window['go']['gui']['App']['MigrateOperatingMode'](arg1, arg2, arg3);
-}
-
 export function OpenDirectory(arg1) {
   return window['go']['gui']['App']['OpenDirectory'](arg1);
 }
@@ -104,6 +116,10 @@ export function PauseTask(arg1) {
 
 export function QueryArtworkOptions(arg1) {
   return window['go']['gui']['App']['QueryArtworkOptions'](arg1);
+}
+
+export function QuickPlay(arg1) {
+  return window['go']['gui']['App']['QuickPlay'](arg1);
 }
 
 export function RemoveTask(arg1) {
@@ -120,6 +136,10 @@ export function ResetLaunchProfile(arg1) {
 
 export function ResolveArtwork(arg1) {
   return window['go']['gui']['App']['ResolveArtwork'](arg1);
+}
+
+export function RestoreSaveBackup(arg1, arg2) {
+  return window['go']['gui']['App']['RestoreSaveBackup'](arg1, arg2);
 }
 
 export function ResumeTask(arg1) {
@@ -170,10 +190,6 @@ export function SubmitApply(arg1) {
   return window['go']['gui']['App']['SubmitApply'](arg1);
 }
 
-export function SubmitMigrateMode(arg1, arg2, arg3) {
-  return window['go']['gui']['App']['SubmitMigrateMode'](arg1, arg2, arg3);
-}
-
 export function SubmitNormalize(arg1) {
   return window['go']['gui']['App']['SubmitNormalize'](arg1);
 }
@@ -188,6 +204,10 @@ export function SubmitUpdate(arg1) {
 
 export function SubmitVerify(arg1) {
   return window['go']['gui']['App']['SubmitVerify'](arg1);
+}
+
+export function UpdateSaveManifest() {
+  return window['go']['gui']['App']['UpdateSaveManifest']();
 }
 
 export function UpdateTool(arg1) {

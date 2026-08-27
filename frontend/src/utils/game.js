@@ -46,11 +46,10 @@ export function normalizeGame(g) {
   const store = g.store || g.Store || 'Steam';
   const platform = g.platform || g.Platform || 'win64';
   const exeArgs = launchProfile?.exe_args || g.exe_args || g.ExeArgs || '';
-  const isPatched = Boolean(g.is_patched ?? (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists));
-  const isPortable = Boolean(g.is_portable ?? (g.state === 'Portable-Patched'));
-  const isReady = Boolean(g.is_ready ?? (isPatched && (g.lutris_registered || g.operating_mode === 'standalone')));
-  const hasUpdatesOrIssues = Boolean(g.has_updates_or_issues ?? (store === 'Steam' && (g.has_update || (g.modified_files && g.modified_files.length > 0) || (g.missing_files && g.missing_files.length > 0))));
-  const lutrisRegistered = Boolean(g.lutris_registered ?? false);
+  const isPatched = Boolean(g.is_patched ?? g.isPatched ?? g.IsPatched ?? (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists || g.SettingsDirExists));
+  const isPortable = Boolean(g.is_portable ?? g.isPortable ?? g.IsPortable ?? (g.state === 'Portable-Patched'));
+  const isReady = Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!exePath));
+  const hasUpdatesOrIssues = Boolean(g.has_updates_or_issues ?? g.hasUpdatesOrIssues ?? g.HasUpdatesOrIssues ?? (store === 'Steam' && (g.has_update || g.HasUpdate || (g.modified_files && g.modified_files.length > 0) || (g.missing_files && g.missing_files.length > 0))));
   const diskSizeBytes = Number(g.disk_size_bytes ?? g.DiskSizeBytes ?? 0);
   const fileCount = Number(g.file_count ?? g.FileCount ?? 0);
   const officialFileCount = Number(g.official_file_count ?? g.OfficialFileCount ?? 0);
@@ -72,6 +71,12 @@ export function normalizeGame(g) {
   const newsItems = g.news_items || g.NewsItems || [];
   const coverUrl = g.cover_url || g.coverUrl || g.custom_cover_url || '';
   const localCoverUrl = g.local_cover_url || g.localCoverUrl || g.local_cover || '';
+  const heroUrl = g.hero_url || g.heroUrl || g.custom_hero_url || '';
+  const localHeroUrl = g.local_hero_url || g.localHeroUrl || g.local_hero || '';
+  const bannerUrl = g.banner_url || g.bannerUrl || g.custom_banner_url || '';
+  const localBannerUrl = g.local_banner_url || g.localBannerUrl || g.local_banner || '';
+  const logoUrl = g.logo_url || g.logoUrl || g.custom_logo_url || '';
+  const localLogoUrl = g.local_logo_url || g.localLogoUrl || g.local_logo || '';
 
   return {
     ...g,
@@ -89,7 +94,6 @@ export function normalizeGame(g) {
     isPortable,
     isReady,
     hasUpdatesOrIssues,
-    lutrisRegistered,
     diskSizeBytes,
     fileCount,
     officialFileCount,
@@ -111,6 +115,12 @@ export function normalizeGame(g) {
     newsItems,
     coverUrl,
     localCoverUrl,
+    heroUrl,
+    localHeroUrl,
+    bannerUrl,
+    localBannerUrl,
+    logoUrl,
+    localLogoUrl,
 
     // Aliases for seamless backwards compatibility
     Name: name,
@@ -132,7 +142,6 @@ export function normalizeGame(g) {
     is_portable: isPortable,
     is_ready: isReady,
     has_updates_or_issues: hasUpdatesOrIssues,
-    lutris_registered: lutrisRegistered,
     DiskSizeBytes: diskSizeBytes,
     disk_size_bytes: diskSizeBytes,
     FileCount: fileCount,
@@ -171,6 +180,13 @@ export function normalizeGame(g) {
     NewsItems: newsItems,
     news_items: newsItems,
     custom_cover_url: coverUrl,
+    custom_hero_url: heroUrl,
+    custom_banner_url: bannerUrl,
+    custom_logo_url: logoUrl,
+    local_cover_url: localCoverUrl,
+    local_hero_url: localHeroUrl,
+    local_banner_url: localBannerUrl,
+    local_logo_url: localLogoUrl,
   };
 }
 
@@ -228,3 +244,150 @@ export function getPlatformColors(game) {
       };
   }
 }
+
+// In-memory cache for extracted dominant cover colors
+const coverColorCache = new Map();
+
+export function hexToRgb(hex) {
+  if (!hex) return { r: 26, g: 159, b: 255 };
+  let c = hex.replace('#', '');
+  if (c.length === 3) {
+    c = c.split('').map(x => x + x).join('');
+  }
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return { r: 26, g: 159, b: 255 };
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
+}
+
+export function parseColorToRgba(colorStr, alpha = 1) {
+  if (!colorStr) return `rgba(26, 159, 255, ${alpha})`;
+  if (colorStr.startsWith('#')) {
+    const { r, g, b } = hexToRgb(colorStr);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  if (colorStr.startsWith('rgb')) {
+    const match = colorStr.match(/\d+/g);
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`;
+    }
+  }
+  return `rgba(26, 159, 255, ${alpha})`;
+}
+
+const coverPaletteCache = new Map();
+
+/**
+ * Extracts a palette of 1-3 dominant vibrant colors from an image URL.
+ * Results are cached in memory for instant O(1) lookup during carousel browsing.
+ */
+export function extractCoverColorPalette(url) {
+  if (!url || typeof url !== 'string' || typeof document === 'undefined') {
+    return Promise.resolve([]);
+  }
+  if (coverPaletteCache.has(url)) {
+    return Promise.resolve(coverPaletteCache.get(url));
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const size = 12;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          resolve([]);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+
+        // Sample pixels, score by saturation and vibrancy
+        const samples = [];
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+          if (a < 128) continue;
+
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const brightness = (r + g + b) / 3;
+          const saturation = max === 0 ? 0 : (max - min) / max;
+
+          // Skip completely dark or blown out pixels
+          if (brightness < 18 || brightness > 245) continue;
+
+          samples.push({ r, g, b, saturation, brightness, score: saturation * 1.5 + (brightness / 255) });
+        }
+
+        if (samples.length === 0) {
+          const fallback = ['rgb(26, 159, 255)'];
+          coverPaletteCache.set(url, fallback);
+          resolve(fallback);
+          return;
+        }
+
+        // Sort by vibrant score descending
+        samples.sort((a, b) => b.score - a.score);
+
+        // Select up to 3 distinct color clusters
+        const palette = [];
+        for (const s of samples) {
+          let { r, g, b } = s;
+          const maxVal = Math.max(r, g, b);
+          if (maxVal > 0 && maxVal < 130) {
+            const boost = Math.min(2.2, 140 / maxVal);
+            r = Math.min(255, Math.round(r * boost));
+            g = Math.min(255, Math.round(g * boost));
+            b = Math.min(255, Math.round(b * boost));
+          }
+
+          // Check color difference with already selected palette items (Euclidean RGB distance > 65)
+          const isDistinct = palette.every(p => {
+            const dr = p.r - r;
+            const dg = p.g - g;
+            const db = p.b - b;
+            return Math.sqrt(dr * dr + dg * dg + db * db) > 65;
+          });
+
+          if (isDistinct) {
+            palette.push({ r, g, b, str: `rgb(${r}, ${g}, ${b})` });
+            if (palette.length >= 3) break;
+          }
+        }
+
+        const result = palette.length > 0 ? palette.map(p => p.str) : [`rgb(${samples[0].r}, ${samples[0].g}, ${samples[0].b})`];
+        coverPaletteCache.set(url, result);
+        resolve(result);
+      } catch {
+        resolve([]);
+      }
+    };
+    img.onerror = () => resolve([]);
+    img.src = url;
+  });
+}
+
+export function getCachedCoverPalette(url) {
+  if (!url || typeof url !== 'string') return null;
+  return coverPaletteCache.get(url) || null;
+}
+
+export function extractCoverColor(url) {
+  return extractCoverColorPalette(url).then(palette => (palette && palette.length > 0 ? palette[0] : null));
+}
+
+export function getCachedCoverColor(url) {
+  const pal = getCachedCoverPalette(url);
+  return pal && pal.length > 0 ? pal[0] : null;
+}
+

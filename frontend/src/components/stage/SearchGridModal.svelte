@@ -118,8 +118,8 @@
         on:click={() => dispatch('close')}
         class="px-3 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white transition-colors flex items-center space-x-1.5"
       >
-        <span>ESC</span>
-        <span class="text-slate-500">Close</span>
+        <span class="px-1.5 py-0.5 rounded bg-[#161622] border border-[#262638] text-slate-400 font-bold text-[10px]">Esc / B</span>
+        <span class="text-slate-400">Close</span>
       </button>
     </div>
   </div>

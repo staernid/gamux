@@ -78,6 +78,7 @@ func buildApp() *cli.App {
 			applyCommand,
 			batchCommand,
 			statusCommand,
+			savesCommand,
 			newsCommand,
 			rollbackCommand,
 			updateGBECommand,

@@ -55,7 +55,6 @@ func TestApp_GetAndSaveConfig(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.GbeDir = "/custom/gbe"
-	cfg.LutrisDir = "/custom/lutris"
 
 	app := NewApp(cfg)
 
@@ -104,7 +103,6 @@ func TestApp_GameOperations(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.GbeDir = tmpDir
-	cfg.LutrisDir = tmpDir
 
 	app := NewApp(cfg)
 
@@ -132,12 +130,6 @@ func TestApp_GameOperations(t *testing.T) {
 	}
 	if _, err := app.SubmitRollback("", false); err == nil {
 		t.Error("SubmitRollback(\"\") expected error, got nil")
-	}
-	if _, err := app.CheckLibraryUpdates(""); err == nil {
-		t.Error("CheckLibraryUpdates(\"\") expected error, got nil")
-	}
-	if _, err := app.EnsureDirectoryExists(""); err == nil {
-		t.Error("EnsureDirectoryExists(\"\") expected error, got nil")
 	}
 
 	// 3. Inspect Game (with news count 0 and >0)
@@ -189,12 +181,6 @@ func TestApp_GameOperations(t *testing.T) {
 	if rollbackTaskID == "" {
 		t.Error("SubmitRollback returned empty task ID")
 	}
-
-	// 6. EnsureDirectoryExists
-	created, err := app.EnsureDirectoryExists(filepath.Join(tmpDir, "new_sub_dir"))
-	if err != nil || !created {
-		t.Errorf("EnsureDirectoryExists() failed: created=%v, err=%v", created, err)
-	}
 }
 
 func TestApp_StartupAndNotifier(t *testing.T) {
@@ -204,13 +190,13 @@ func TestApp_StartupAndNotifier(t *testing.T) {
 	// Verify Startup doesn't panic
 	app.Startup(context.Background())
 
-	if app.Engine.Notifier == nil {
-		t.Fatal("Engine.Notifier not configured after Startup")
+	if app.SC.Notifier == nil {
+		t.Fatal("SC.Notifier not configured after Startup")
 	}
 
 	// Calling notifier with dummy ctx should not fail
-	if err := app.Engine.Notifier(context.Background(), "Test Alert", "Sample Message"); err != nil {
-		t.Errorf("app.Engine.Notifier returned error: %v", err)
+	if err := app.SC.Notifier(context.Background(), "Test Alert", "Sample Message"); err != nil {
+		t.Errorf("app.SC.Notifier returned error: %v", err)
 	}
 }
 
@@ -349,9 +335,6 @@ func TestApp_SubmitTasks(t *testing.T) {
 	}
 	if _, err := app.SubmitRollback("", false); err == nil {
 		t.Error("SubmitRollback(\"\") expected error, got nil")
-	}
-	if _, err := app.SubmitMigrateMode("", "standalone", false); err == nil {
-		t.Error("SubmitMigrateMode(\"\") expected error, got nil")
 	}
 	if _, err := app.SubmitVerify(""); err == nil {
 		t.Error("SubmitVerify(\"\") expected error, got nil")

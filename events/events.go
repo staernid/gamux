@@ -283,3 +283,68 @@ func NewTaskCancelled(taskID string) Event {
 		Details: fmt.Sprintf("Task %s cancelled by user", taskID),
 	}
 }
+
+// NewNotification creates a system notification event.
+func NewNotification(title, message string) Event {
+	return Event{
+		Type:    EventNotification,
+		Stage:   title,
+		Details: message,
+		Metadata: map[string]string{
+			"title":   title,
+			"message": message,
+		},
+	}
+}
+
+// NewGameLaunched creates an event representing a newly started game process.
+func NewGameLaunched(gameDir, gameName, appID string, pid int) Event {
+	return Event{
+		Type:     EventGameLaunched,
+		GameDir:  gameDir,
+		GameName: gameName,
+		AppID:    appID,
+		Metadata: map[string]string{
+			"pid": fmt.Sprintf("%d", pid),
+		},
+	}
+}
+
+// NewGameExited creates an event representing a finished game process.
+func NewGameExited(gameDir, gameName, appID string, exitErr error) Event {
+	errStr := ""
+	if exitErr != nil {
+		errStr = exitErr.Error()
+	}
+	return Event{
+		Type:     EventGameExited,
+		GameDir:  gameDir,
+		GameName: gameName,
+		AppID:    appID,
+		Error:    errStr,
+	}
+}
+
+// NewStepProgress creates an event representing granular step progress.
+func NewStepProgress(step, total int, title, details string) Event {
+	pct := 0.0
+	if total > 0 {
+		pct = float64(step) / float64(total) * 100
+	}
+	return Event{
+		Type:    EventTaskProgress,
+		Stage:   title,
+		Details: details,
+		Progress: TaskProgress{
+			CurrentItems: step,
+			TotalItems:   total,
+			Percent:      pct,
+		},
+		Metadata: map[string]string{
+			"step":  fmt.Sprintf("%d", step),
+			"total": fmt.Sprintf("%d", total),
+		},
+	}
+}
+
+

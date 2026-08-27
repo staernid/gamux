@@ -15,8 +15,8 @@
   let isLoading = false;
   let customUrl = '';
   let isApplying = false;
-  let selectedOption = null;
   let failedUrls = new Set();
+  let appliedMap = {};
 
   $: appId = game?.appId || '';
   $: numericSteamAppId = (() => {
@@ -25,6 +25,23 @@
   })();
   $: gameName = game?.name || '';
   $: gameDir = game?.gameDir || '';
+
+  $: currentActiveUrl = (() => {
+    if (appliedMap[assetType]) return appliedMap[assetType];
+    if (!game) return '';
+    switch (assetType) {
+      case 'cover':
+        return game.coverUrl || game.localCoverUrl || '';
+      case 'hero':
+        return game.heroUrl || game.localHeroUrl || '';
+      case 'banner':
+        return game.bannerUrl || game.localBannerUrl || '';
+      case 'logo':
+        return game.logoUrl || game.localLogoUrl || '';
+      default:
+        return '';
+    }
+  })();
 
   onMount(() => {
     query = gameName || (appId ? String(appId) : '');
@@ -71,14 +88,25 @@
     isApplying = true;
     try {
       const updated = await AppAPI.applyCustomArtwork(gameDir, assetType, imageUrlOrPath);
+      appliedMap[assetType] = imageUrlOrPath;
+      appliedMap = { ...appliedMap };
+
       notificationStore.items.add({
         type: 'success',
-        title: 'Artwork Updated',
-        message: `Updated ${assetType} artwork for ${gameName}`
+        title: 'Artwork Applied',
+        message: `Set ${assetType} artwork for ${gameName}`
       });
+
       if (updated) {
         const coverUrl = updated.cover_url ?? updated.CoverURL ?? updated.custom_cover_url ?? '';
         const localCoverUrl = updated.local_cover_url ?? updated.LocalCoverURL ?? updated.local_cover ?? '';
+        const heroUrl = updated.hero_url ?? updated.HeroURL ?? updated.custom_hero_url ?? '';
+        const localHeroUrl = updated.local_hero_url ?? updated.LocalHeroURL ?? updated.local_hero ?? '';
+        const bannerUrl = updated.banner_url ?? updated.BannerURL ?? updated.custom_banner_url ?? '';
+        const localBannerUrl = updated.local_banner_url ?? updated.LocalBannerURL ?? updated.local_banner ?? '';
+        const logoUrl = updated.logo_url ?? updated.LogoURL ?? updated.custom_logo_url ?? '';
+        const localLogoUrl = updated.local_logo_url ?? updated.LocalLogoURL ?? updated.local_logo ?? '';
+
         const patch = {
           local_cover: updated.local_cover ?? updated.LocalCover,
           local_cover_url: localCoverUrl,
@@ -86,11 +114,26 @@
           cover_url: coverUrl,
           coverUrl,
           custom_cover_url: coverUrl,
+          local_hero: updated.local_hero ?? updated.LocalHero,
+          local_hero_url: localHeroUrl,
+          localHeroUrl,
+          hero_url: heroUrl,
+          heroUrl,
+          custom_hero_url: heroUrl,
           local_banner: updated.local_banner ?? updated.LocalBanner,
-          local_banner_url: updated.local_banner_url ?? updated.LocalBannerURL,
-          banner_url: updated.banner_url ?? updated.BannerURL,
-          custom_banner_url: updated.custom_banner_url ?? updated.CustomBannerURL,
+          local_banner_url: localBannerUrl,
+          localBannerUrl,
+          banner_url: bannerUrl,
+          bannerUrl,
+          custom_banner_url: bannerUrl,
+          local_logo: updated.local_logo ?? updated.LocalLogo,
+          local_logo_url: localLogoUrl,
+          localLogoUrl,
+          logo_url: logoUrl,
+          logoUrl,
+          custom_logo_url: logoUrl,
         };
+
         selectedGame.update(current => {
           if (!current || !isSamePath(current.gameDir, gameDir)) return current;
           return { ...current, ...patch };
@@ -103,7 +146,6 @@
         }));
       }
       dispatch('updated', updated);
-      dispatch('close');
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
@@ -162,24 +204,24 @@
         on:click={() => handleApply('none')}
         disabled={isApplying}
         class="px-3.5 py-1.5 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-700/50 text-amber-300 hover:text-amber-200 text-xs font-bold transition-colors flex items-center space-x-1.5 shadow-sm"
-        title="Remove custom artwork and force fallback monogram tile"
+        title="Reset this artwork type to default fallback"
       >
-        <span>🔤 Reset to Monogram</span>
+        <span>Reset to Monogram</span>
       </button>
       <button
         type="button"
         on:click={handleBrowseLocal}
         class="px-3.5 py-1.5 rounded-xl bg-[#1e1e2c] hover:bg-[#2a2a3e] border border-[#34344c] text-white text-xs font-bold transition-colors flex items-center space-x-1.5 shadow-sm"
       >
-        <span>📁 Browse Local File...</span>
+        <span>Browse Local File...</span>
       </button>
       <button
         type="button"
         on:click={() => dispatch('close')}
-        class="px-3 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5"
+        class="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors flex items-center space-x-1.5 shadow-md"
       >
-        <span>ESC</span>
-        <span class="text-slate-500">Close</span>
+        <span class="text-[10px] text-sky-200 font-mono font-bold">Esc / B</span>
+        <span>Done</span>
       </button>
     </div>
   </div>
@@ -270,9 +312,9 @@
     {:else}
       <div class="grid {assetType === 'cover' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'} gap-4 pb-8">
         {#each options.filter(o => !failedUrls.has(o.url) && !failedUrls.has(o.thumb_url)) as opt, index (opt.url || index)}
-          {@const isSelected = selectedOption?.url === opt.url}
+          {@const isActive = Boolean(currentActiveUrl && (currentActiveUrl === opt.url || currentActiveUrl.includes(opt.url) || opt.url.includes(currentActiveUrl)))}
           <div
-            class="group relative rounded-2xl overflow-hidden bg-[#14141e] border transition-all duration-200 flex flex-col {isSelected ? 'border-sky-500 ring-2 ring-sky-500/40 scale-[1.02]' : 'border-[#262638] hover:border-slate-400'}"
+            class="group relative rounded-2xl overflow-hidden bg-[#14141e] border transition-all duration-200 flex flex-col {isActive ? 'border-emerald-500 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/10' : 'border-[#262638] hover:border-slate-400'}"
           >
             <!-- Image Card -->
             <div class="relative w-full {assetType === 'cover' ? 'aspect-[2/3]' : assetType === 'banner' ? 'aspect-[460/215]' : assetType === 'hero' ? 'aspect-[16/9]' : 'aspect-video p-4 flex items-center justify-center'} bg-black/40 overflow-hidden">
@@ -291,6 +333,13 @@
                 {opt.provider === 'steam' ? 'Steam Official' : 'SteamGridDB'}
               </div>
 
+              <!-- Active Badge -->
+              {#if isActive}
+                <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-600 shadow-md flex items-center space-x-1">
+                  <span>✓ Active</span>
+                </div>
+              {/if}
+
               <!-- Dimensions Tag -->
               {#if opt.width && opt.height}
                 <div class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[9px] font-mono text-slate-300 border border-white/10 font-bold">
@@ -305,10 +354,10 @@
               <button
                 type="button"
                 on:click={() => handleApply(opt.url)}
-                disabled={isApplying}
-                class="px-3 py-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-xs rounded-lg transition-colors shadow"
+                disabled={isApplying || isActive}
+                class="px-3 py-1 font-bold text-xs rounded-lg transition-colors shadow {isActive ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 cursor-default' : 'bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white'}"
               >
-                {isApplying ? 'Applying...' : 'Select'}
+                {isActive ? 'Applied' : isApplying ? 'Applying...' : 'Select'}
               </button>
             </div>
           </div>

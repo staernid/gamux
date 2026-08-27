@@ -4,10 +4,10 @@ import { notificationStore } from './notifications.js';
 
 function createConfigStore() {
   const config = writable(null);
-  const uiScale = writable(parseInt(localStorage.getItem('gamux_ui_scale') || '17', 10));
+  const uiScale = writable(parseInt(localStorage.getItem('gamux_ui_scale') || '18', 10));
 
   function setScale(size) {
-    const sz = Math.min(32, Math.max(12, parseInt(size, 10) || 17));
+    const sz = Math.min(32, Math.max(12, parseInt(size, 10) || 18));
     document.documentElement.style.fontSize = `${sz}px`;
     localStorage.setItem('gamux_ui_scale', String(sz));
     uiScale.set(sz);

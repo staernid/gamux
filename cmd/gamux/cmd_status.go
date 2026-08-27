@@ -30,10 +30,10 @@ var statusCommand = &cli.Command{
 			return nil
 		}
 		path := extractPath(c)
-		eng := engine.New(activeConfig)
+		_, lib, _, _ := engine.NewServices(activeConfig)
 
 		if c.Bool("terse") {
-			statuses, err := eng.BatchInspect(c.Context, path)
+			statuses, err := lib.BatchInspect(c.Context, path)
 			if err == nil && len(statuses) > 0 {
 				if c.Bool("json") {
 					enc := json.NewEncoder(os.Stdout)
@@ -42,7 +42,7 @@ var statusCommand = &cli.Command{
 				}
 
 				ui.RenderTerseHeader(path, len(statuses))
-				var loaderCount, cleanCount, updatesAvail, lutrisCount int
+				var loaderCount, cleanCount, updatesAvail int
 				for _, s := range statuses {
 					if strings.Contains(strings.ToLower(s.State), "original") {
 						cleanCount++
@@ -51,9 +51,6 @@ var statusCommand = &cli.Command{
 					}
 					if s.HasUpdate || len(s.ModifiedFiles) > 0 || len(s.MissingFiles) > 0 {
 						updatesAvail++
-					}
-					if s.LutrisRegistered {
-						lutrisCount++
 					}
 
 					ui.RenderTerseStatus(ui.DetectionInfoSummary{
@@ -68,10 +65,9 @@ var statusCommand = &cli.Command{
 						UntrackedFiles:   s.UntrackedFiles,
 						HasUpdate:        s.HasUpdate,
 						RemoteManifestID: s.RemoteManifestID,
-						LutrisRegistered: s.LutrisRegistered,
 					})
 				}
-				ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail, lutrisCount)
+				ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail)
 				return nil
 			}
 		}
@@ -81,7 +77,7 @@ var statusCommand = &cli.Command{
 			newsCount = 5
 		}
 
-		status, err := eng.InspectStatusEx(c.Context, path, newsCount)
+		status, err := lib.InspectStatusEx(c.Context, path, newsCount)
 		if err != nil {
 			renderCLIError(err, "Ensure path points to a valid game directory")
 			return err
@@ -134,7 +130,6 @@ var statusCommand = &cli.Command{
 			RemoteManifestID:  status.RemoteManifestID,
 			DLCCount:          status.DLCCount,
 			AchievementCount:  status.AchievementCount,
-			LutrisRegistered:  status.LutrisRegistered,
 			RecentPatchNote:   status.RecentPatchNote,
 			NewsItems:         newsItems,
 		})
@@ -193,8 +188,8 @@ var newsCommand = &cli.Command{
 			}
 		}
 
-		eng := engine.New(activeConfig)
-		item, gameName, err := eng.GetPatchNote(c.Context, targetPath, index)
+		_, lib, _, _ := engine.NewServices(activeConfig)
+		item, gameName, err := lib.GetPatchNote(c.Context, targetPath, index)
 		if err != nil {
 			renderCLIError(err, "Verify AppID or game directory path", "Check network connectivity")
 			return err
@@ -208,18 +203,18 @@ var newsCommand = &cli.Command{
 var launchCommand = &cli.Command{
 	Name:      "launch",
 	Category:  "Step 3: Inspection & Maintenance",
-	Usage:     "Run pre-launch update checks and launch game (via UMU/Wine/Proton or Lutris)",
+	Usage:     "Run pre-launch update checks and launch game (via UMU/Wine/Proton or Linux native)",
 	ArgsUsage: "[path]",
 	Aliases:   []string{"run", "play"},
 	Flags: []cli.Flag{
-		&cli.StringFlag{Name: "mode", Usage: "Operating mode override ('standalone' or 'lutris')"},
-		&cli.StringFlag{Name: "runner", Usage: "Runner override ('umu', 'wine', 'proton', 'linux', 'lutris')"},
+		&cli.StringFlag{Name: "runner", Usage: "Runner override ('umu', 'wine', 'proton', 'linux')"},
 		&cli.StringFlag{Name: "prefix", Usage: "Custom Wine prefix path"},
 		&cli.StringFlag{Name: "proton-path", Usage: "Custom Proton compatibility tool path"},
 		&cli.BoolFlag{Name: "mangohud", Usage: "Enable MangoHud performance overlay (MANGOHUD=1)"},
 		&cli.StringFlag{Name: "dxvk-hud", Usage: "Set DXVK HUD overlay elements (e.g. fps,compiler)"},
 		&cli.BoolFlag{Name: "fsr", Usage: "Enable Wine fullscreen AMD FSR scaling"},
 		&cli.BoolFlag{Name: "nvapi", Usage: "Enable Proton NVAPI support (DLSS)"},
+		&cli.BoolFlag{Name: "setup", Usage: "Auto-apply GBE setup before launching if game is unconfigured"},
 		&cli.BoolFlag{Name: "no-notify", Usage: "Disable pre-launch update notification check"},
 	},
 	Action: func(c *cli.Context) error {
@@ -228,16 +223,36 @@ var launchCommand = &cli.Command{
 			return nil
 		}
 		targetPath := extractPath(c)
-		eng := engine.New(activeConfig)
-		eng.Notifier = ui.NotifyIssue
+		sc, lib, game, _ := engine.NewServices(activeConfig)
+		sc.Notifier = ui.NotifyIssue
 		if !c.Bool("no-notify") {
-			if err := eng.NotifyLaunch(c.Context, targetPath); err != nil {
+			if err := game.NotifyLaunch(c.Context, targetPath); err != nil {
 				slog.Warn("Pre-launch notification check failed", "error", err)
 			}
 		}
-		status, err := eng.InspectStatus(c.Context, targetPath)
+		status, err := lib.InspectStatus(c.Context, targetPath)
 		if err != nil {
 			return fmt.Errorf("detect game: %w", err)
+		}
+
+		if c.Bool("setup") || status.IsClean() || !status.IsReady {
+			if status.IsClean() || !status.IsReady {
+				ui.RenderStep(1, 2, fmt.Sprintf("Auto-applying setup for %s before launch...", status.Name))
+				applyOpts := engine.ProcessOptions{
+					Path:       targetPath,
+					ApplyGBE:   true,
+					Portable:   true,
+					WinePrefix: status.WinePrefix,
+					ExePath:    status.ExePath,
+					ExeArgs:    status.ExeArgs,
+				}
+				if _, applyErr := game.ApplyGame(c.Context, applyOpts); applyErr != nil {
+					slog.Warn("Auto-apply before launch encountered warning", "error", applyErr)
+				}
+				if refreshed, rErr := lib.InspectStatus(c.Context, targetPath); rErr == nil && refreshed != nil {
+					status = refreshed
+				}
+			}
 		}
 
 		launchOpts := runner.LaunchOptions{
@@ -257,9 +272,6 @@ var launchCommand = &cli.Command{
 		}
 
 		// Apply CLI flag overrides if explicitly specified
-		if c.IsSet("mode") {
-			launchOpts.OperatingMode = c.String("mode")
-		}
 		if c.IsSet("runner") {
 			launchOpts.Runner = c.String("runner")
 		}
@@ -286,13 +298,9 @@ var launchCommand = &cli.Command{
 		}
 
 		effectiveOpts := runner.ResolveEffectiveOptions(activeConfig, launchOpts)
+		ui.RenderStep(1, 1, fmt.Sprintf("Launching %s (runner: %s)...", status.Name, effectiveOpts.Runner))
 
-		modeDesc := "Standalone Launcher"
-		if effectiveOpts.OperatingMode == runner.ModeLutris {
-			modeDesc = "Lutris Helper"
-		}
-		ui.RenderStep(1, 1, fmt.Sprintf("Launching %s (%s, runner: %s)...", status.Name, modeDesc, effectiveOpts.Runner))
-
-		return eng.RunGame(c.Context, effectiveOpts)
+		return game.RunGame(c.Context, effectiveOpts)
 	},
 }
+

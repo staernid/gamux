@@ -129,3 +129,36 @@ func TestBus_ConcurrentPublish(t *testing.T) {
 		}
 	}
 }
+
+func TestBus_TypedLifecycleConstructors(t *testing.T) {
+	evLaunched := NewGameLaunched("/games/Cyberpunk2077", "Cyberpunk 2077", "1091500", 12345)
+	if evLaunched.Type != EventGameLaunched {
+		t.Errorf("expected EventGameLaunched, got %s", evLaunched.Type)
+	}
+	if evLaunched.Metadata["pid"] != "12345" {
+		t.Errorf("expected pid metadata '12345', got %s", evLaunched.Metadata["pid"])
+	}
+	if evLaunched.GameDir != "/games/Cyberpunk2077" {
+		t.Errorf("expected GameDir '/games/Cyberpunk2077', got %s", evLaunched.GameDir)
+	}
+
+	evExited := NewGameExited("/games/Cyberpunk2077", "Cyberpunk 2077", "1091500", nil)
+	if evExited.Type != EventGameExited {
+		t.Errorf("expected EventGameExited, got %s", evExited.Type)
+	}
+	if evExited.Error != "" {
+		t.Errorf("expected empty error, got %s", evExited.Error)
+	}
+
+	evStep := NewStepProgress(2, 5, "Hashing Files", "Processing chunk 2")
+	if evStep.Type != EventTaskProgress {
+		t.Errorf("expected EventTaskProgress, got %s", evStep.Type)
+	}
+	if evStep.Progress.CurrentItems != 2 || evStep.Progress.TotalItems != 5 {
+		t.Errorf("expected items 2/5, got %d/%d", evStep.Progress.CurrentItems, evStep.Progress.TotalItems)
+	}
+	if evStep.Progress.Percent != 40.0 {
+		t.Errorf("expected percent 40.0, got %f", evStep.Progress.Percent)
+	}
+}
+

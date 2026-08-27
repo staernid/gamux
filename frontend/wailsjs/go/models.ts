@@ -4,7 +4,6 @@ export namespace config {
 	    library_paths?: string[];
 	    gbe_dir?: string;
 	    steamless_dir?: string;
-	    lutris_dir?: string;
 	    steam_userdata?: string;
 	    steam_web_api_key?: string;
 	    hubcap_api_key?: string;
@@ -15,7 +14,6 @@ export namespace config {
 	    default_runner?: string;
 	    proton_path?: string;
 	    gbe_mode?: string;
-	    lutris: boolean;
 	    steamless: boolean;
 	    achievements: boolean;
 	    normalize: boolean;
@@ -29,6 +27,10 @@ export namespace config {
 	    language?: string;
 	    disable_overlay?: boolean;
 	    offline_mode?: boolean;
+	    auto_backup_saves: boolean;
+	    backup_retention_count?: number;
+	    backup_dir?: string;
+	    save_manifest_url?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -39,7 +41,6 @@ export namespace config {
 	        this.library_paths = source["library_paths"];
 	        this.gbe_dir = source["gbe_dir"];
 	        this.steamless_dir = source["steamless_dir"];
-	        this.lutris_dir = source["lutris_dir"];
 	        this.steam_userdata = source["steam_userdata"];
 	        this.steam_web_api_key = source["steam_web_api_key"];
 	        this.hubcap_api_key = source["hubcap_api_key"];
@@ -50,7 +51,6 @@ export namespace config {
 	        this.default_runner = source["default_runner"];
 	        this.proton_path = source["proton_path"];
 	        this.gbe_mode = source["gbe_mode"];
-	        this.lutris = source["lutris"];
 	        this.steamless = source["steamless"];
 	        this.achievements = source["achievements"];
 	        this.normalize = source["normalize"];
@@ -64,6 +64,10 @@ export namespace config {
 	        this.language = source["language"];
 	        this.disable_overlay = source["disable_overlay"];
 	        this.offline_mode = source["offline_mode"];
+	        this.auto_backup_saves = source["auto_backup_saves"];
+	        this.backup_retention_count = source["backup_retention_count"];
+	        this.backup_dir = source["backup_dir"];
+	        this.save_manifest_url = source["save_manifest_url"];
 	    }
 	}
 
@@ -167,6 +171,7 @@ export namespace domain {
 	    dxvk_hud?: string;
 	    wine_fullscreen_fsr?: boolean;
 	    proton_nvapi?: boolean;
+	    dll_overrides?: string;
 	    custom_env?: Record<string, string>;
 	    working_dir?: string;
 	    store?: string;
@@ -201,6 +206,7 @@ export namespace domain {
 	        this.dxvk_hud = source["dxvk_hud"];
 	        this.wine_fullscreen_fsr = source["wine_fullscreen_fsr"];
 	        this.proton_nvapi = source["proton_nvapi"];
+	        this.dll_overrides = source["dll_overrides"];
 	        this.custom_env = source["custom_env"];
 	        this.working_dir = source["working_dir"];
 	        this.store = source["store"];
@@ -249,6 +255,7 @@ export namespace domain {
 	    operating_mode?: string;
 	    runner?: string;
 	    wine_prefix?: string;
+	    dll_overrides?: string;
 	    target_lib_path?: string;
 	    manifest_path?: string;
 	    raw_depot_layout?: boolean;
@@ -264,9 +271,13 @@ export namespace domain {
 	    icon_url?: string;
 	    local_cover?: string;
 	    local_banner?: string;
+	    local_hero?: string;
+	    local_logo?: string;
 	    local_icon?: string;
 	    local_cover_url?: string;
 	    local_banner_url?: string;
+	    local_hero_url?: string;
+	    local_logo_url?: string;
 	    custom_cover_url?: string;
 	    custom_banner_url?: string;
 	    custom_hero_url?: string;
@@ -276,7 +287,6 @@ export namespace domain {
 	    original_backups?: string[];
 	    settings_dir_exists: boolean;
 	    steam_appid_txt_found: boolean;
-	    lutris_registered: boolean;
 	    current_language?: string;
 	    supported_languages?: string[];
 	    disk_size_bytes: number;
@@ -322,6 +332,7 @@ export namespace domain {
 	        this.operating_mode = source["operating_mode"];
 	        this.runner = source["runner"];
 	        this.wine_prefix = source["wine_prefix"];
+	        this.dll_overrides = source["dll_overrides"];
 	        this.target_lib_path = source["target_lib_path"];
 	        this.manifest_path = source["manifest_path"];
 	        this.raw_depot_layout = source["raw_depot_layout"];
@@ -337,9 +348,13 @@ export namespace domain {
 	        this.icon_url = source["icon_url"];
 	        this.local_cover = source["local_cover"];
 	        this.local_banner = source["local_banner"];
+	        this.local_hero = source["local_hero"];
+	        this.local_logo = source["local_logo"];
 	        this.local_icon = source["local_icon"];
 	        this.local_cover_url = source["local_cover_url"];
 	        this.local_banner_url = source["local_banner_url"];
+	        this.local_hero_url = source["local_hero_url"];
+	        this.local_logo_url = source["local_logo_url"];
 	        this.custom_cover_url = source["custom_cover_url"];
 	        this.custom_banner_url = source["custom_banner_url"];
 	        this.custom_hero_url = source["custom_hero_url"];
@@ -349,7 +364,6 @@ export namespace domain {
 	        this.original_backups = source["original_backups"];
 	        this.settings_dir_exists = source["settings_dir_exists"];
 	        this.steam_appid_txt_found = source["steam_appid_txt_found"];
-	        this.lutris_registered = source["lutris_registered"];
 	        this.current_language = source["current_language"];
 	        this.supported_languages = source["supported_languages"];
 	        this.disk_size_bytes = source["disk_size_bytes"];
@@ -401,9 +415,13 @@ export namespace domain {
 	    icon_url?: string;
 	    local_cover?: string;
 	    local_banner?: string;
+	    local_hero?: string;
+	    local_logo?: string;
 	    local_icon?: string;
 	    local_cover_url?: string;
 	    local_banner_url?: string;
+	    local_hero_url?: string;
+	    local_logo_url?: string;
 	    custom_cover_url?: string;
 	    custom_banner_url?: string;
 	    custom_hero_url?: string;
@@ -424,9 +442,13 @@ export namespace domain {
 	        this.icon_url = source["icon_url"];
 	        this.local_cover = source["local_cover"];
 	        this.local_banner = source["local_banner"];
+	        this.local_hero = source["local_hero"];
+	        this.local_logo = source["local_logo"];
 	        this.local_icon = source["local_icon"];
 	        this.local_cover_url = source["local_cover_url"];
 	        this.local_banner_url = source["local_banner_url"];
+	        this.local_hero_url = source["local_hero_url"];
+	        this.local_logo_url = source["local_logo_url"];
 	        this.custom_cover_url = source["custom_cover_url"];
 	        this.custom_banner_url = source["custom_banner_url"];
 	        this.custom_hero_url = source["custom_hero_url"];
@@ -485,26 +507,6 @@ export namespace engine {
 		    }
 		    return a;
 		}
-	}
-	export class LibraryUpdateStatus {
-	    GameTitle: string;
-	    AppID: string;
-	    GameDir: string;
-	    LocalManifestID: string;
-	    HasUpdate: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new LibraryUpdateStatus(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.GameTitle = source["GameTitle"];
-	        this.AppID = source["AppID"];
-	        this.GameDir = source["GameDir"];
-	        this.LocalManifestID = source["LocalManifestID"];
-	        this.HasUpdate = source["HasUpdate"];
-	    }
 	}
 
 }
@@ -566,7 +568,6 @@ export namespace pipeline {
 	export class Options {
 	    path: string;
 	    apply_gbe: boolean;
-	    add_lutris: boolean;
 	    portable: boolean;
 	    normalize_dir: boolean;
 	    dry_run: boolean;
@@ -575,7 +576,6 @@ export namespace pipeline {
 	    fetch_achievements: boolean;
 	    language?: string;
 	    wine_prefix?: string;
-	    runner?: string;
 	    exe_path?: string;
 	    exe_args?: string;
 	
@@ -587,7 +587,6 @@ export namespace pipeline {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.apply_gbe = source["apply_gbe"];
-	        this.add_lutris = source["add_lutris"];
 	        this.portable = source["portable"];
 	        this.normalize_dir = source["normalize_dir"];
 	        this.dry_run = source["dry_run"];
@@ -596,10 +595,120 @@ export namespace pipeline {
 	        this.fetch_achievements = source["fetch_achievements"];
 	        this.language = source["language"];
 	        this.wine_prefix = source["wine_prefix"];
-	        this.runner = source["runner"];
 	        this.exe_path = source["exe_path"];
 	        this.exe_args = source["exe_args"];
 	    }
+	}
+
+}
+
+export namespace saves {
+	
+	export class BackupInfo {
+	    id: string;
+	    zip_path: string;
+	    app_id?: string;
+	    game_title: string;
+	    created_at: number;
+	    created_by: string;
+	    note?: string;
+	    file_count: number;
+	    size_bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.zip_path = source["zip_path"];
+	        this.app_id = source["app_id"];
+	        this.game_title = source["game_title"];
+	        this.created_at = source["created_at"];
+	        this.created_by = source["created_by"];
+	        this.note = source["note"];
+	        this.file_count = source["file_count"];
+	        this.size_bytes = source["size_bytes"];
+	    }
+	}
+	export class SaveLocation {
+	    path: string;
+	    display_path: string;
+	    category: string;
+	    tags?: string[];
+	    exists: boolean;
+	    is_dir: boolean;
+	    file_count: number;
+	    size_bytes: number;
+	    source: string;
+	    shared_with?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveLocation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.display_path = source["display_path"];
+	        this.category = source["category"];
+	        this.tags = source["tags"];
+	        this.exists = source["exists"];
+	        this.is_dir = source["is_dir"];
+	        this.file_count = source["file_count"];
+	        this.size_bytes = source["size_bytes"];
+	        this.source = source["source"];
+	        this.shared_with = source["shared_with"];
+	    }
+	}
+	export class SaveLocationsResult {
+	    game_dir: string;
+	    game_name: string;
+	    app_id?: string;
+	    platform?: string;
+	    locations: SaveLocation[];
+	    total_save_bytes: number;
+	    total_config_files: number;
+	    has_cloud_saves: boolean;
+	    primary_save_path?: string;
+	    primary_config_path?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveLocationsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.game_dir = source["game_dir"];
+	        this.game_name = source["game_name"];
+	        this.app_id = source["app_id"];
+	        this.platform = source["platform"];
+	        this.locations = this.convertValues(source["locations"], SaveLocation);
+	        this.total_save_bytes = source["total_save_bytes"];
+	        this.total_config_files = source["total_config_files"];
+	        this.has_cloud_saves = source["has_cloud_saves"];
+	        this.primary_save_path = source["primary_save_path"];
+	        this.primary_config_path = source["primary_config_path"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -748,6 +857,29 @@ export namespace tools {
 	        this.release_url = source["release_url"];
 	        this.published_at = source["published_at"];
 	        this.has_update = source["has_update"];
+	    }
+	}
+
+}
+
+export namespace util {
+	
+	export class DiskSpaceInfo {
+	    path: string;
+	    total_bytes: number;
+	    free_bytes: number;
+	    used_bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiskSpaceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.total_bytes = source["total_bytes"];
+	        this.free_bytes = source["free_bytes"];
+	        this.used_bytes = source["used_bytes"];
 	    }
 	}
 

@@ -315,10 +315,11 @@ async function handleSnapshots(chromeBin) {
 
   const views = [
     { name: '01_library_hero.png', path: '?view=library' },
-    { name: '02_downloads_view.png', path: '?view=downloads' },
-    { name: '03_settings_view.png', path: '?view=settings' },
-    { name: '04_game_drawer.png', path: '?view=library&drawer=1' },
-    { name: '05_settings_emu.png', path: '?view=settings&tab=emu' },
+    { name: '02_game_hub.png', path: '?view=game-hub' },
+    { name: '03_game_properties.png', path: '?view=game-hub&drawer=1' },
+    { name: '04_downloads_view.png', path: '?view=downloads' },
+    { name: '05_settings_view.png', path: '?view=settings' },
+    { name: '05_settings_logs.png', path: '?view=settings&tab=logs' },
     { name: '06_search_grid.png', path: '?view=library&search=1' },
   ];
 

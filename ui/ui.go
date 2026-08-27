@@ -98,7 +98,7 @@ func RenderHeader(version string) {
 	fmt.Println()
 	fmt.Println(bold(cyan("========================================================================")))
 	fmt.Printf("  🎮 %s - Linux Steam Game Manager (%s)\n", bold("gamux"), cyan(version))
-	fmt.Println(dim("  Automated Goldberg Emulation, Lutris Integration & Steam Shortcuts"))
+	fmt.Println(dim("  Automated Goldberg Emulation & Game Execution Management"))
 	fmt.Println(bold(cyan("========================================================================")))
 	fmt.Println()
 }
@@ -473,7 +473,6 @@ type DetectionInfoSummary struct {
 	RemoteManifestID  string
 	DLCCount          int
 	AchievementCount  int
-	LutrisRegistered  bool
 	RecentPatchNote   string
 	NewsItems         []NewsItemSummary
 }
@@ -566,18 +565,8 @@ func RenderTerseStatus(info DetectionInfoSummary) {
 		drmBadge = yellow("[Emu Loader]")
 	}
 
-
-	// Lutris Badge (only render when registered to reduce noise)
-	lutrisBadge := ""
-	if info.LutrisRegistered {
-		lutrisBadge = green("[Lutris ✓]")
-	}
-
 	// Line 1: Title and inline state badges
 	badges := []string{storeBadge, drmBadge}
-	if lutrisBadge != "" {
-		badges = append(badges, lutrisBadge)
-	}
 
 	fmt.Printf("  %s  %s\n",
 		bold(title),
@@ -617,20 +606,15 @@ func RenderTerseStatus(info DetectionInfoSummary) {
 	fmt.Printf("  %s %s\n\n", dim("└─"), dim(detailStr))
 }
 
-
-
-
-
 // RenderTerseSummary prints summary stats after batch inspection.
-func RenderTerseSummary(total, loaderCount, cleanCount, updatesAvail, lutrisCount int) {
+func RenderTerseSummary(total, loaderCount, cleanCount, updatesAvail int) {
 	fmt.Println(dim("----------------------------------------------------------------------------------------------------"))
-	fmt.Printf("  %s Summary: %d total | %s Emu | %s Clean | %s Updates | %s Lutris\n\n",
+	fmt.Printf("  %s Summary: %d total | %s Emu | %s Clean | %s Updates\n\n",
 		yellow("💡"),
 		total,
 		yellow(fmt.Sprintf("%d", loaderCount)),
 		green(fmt.Sprintf("%d", cleanCount)),
 		cyan(fmt.Sprintf("%d", updatesAvail)),
-		green(fmt.Sprintf("%d", lutrisCount)),
 	)
 }
 
@@ -717,13 +701,6 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 		fmt.Printf("    • Steam Depot: %s\n", dim("[No Local Manifest]"))
 	}
 
-
-	if info.LutrisRegistered {
-		fmt.Printf("    • Lutris:     %s\n", green("[Registered]"))
-	} else {
-		fmt.Printf("    • Lutris:     %s\n", dim("[Not Registered]"))
-	}
-
 	if len(info.UntrackedFiles) > 0 {
 		fmt.Printf("    • Untracked/Mods: %s\n", yellow(fmt.Sprintf("[%d files detected]", len(info.UntrackedFiles))))
 		for i, mod := range info.UntrackedFiles {
@@ -762,7 +739,7 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 
 	if strings.Contains(strings.ToLower(info.State), "original") {
 		fmt.Println()
-		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux apply \"%s\"' to set up GBE emulator & Lutris integration.", info.GameDir)))
+		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux apply \"%s\"' to set up GBE emulator.", info.GameDir)))
 	}
 
 

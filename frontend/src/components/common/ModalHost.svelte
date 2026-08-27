@@ -5,6 +5,7 @@
   import SearchGridModal from '../stage/SearchGridModal.svelte';
   import ArtworkPickerModal from '../stage/ArtworkPickerModal.svelte';
   import MetadataLinkModal from '../stage/MetadataLinkModal.svelte';
+  import GamePropertiesModal from '../stage/GamePropertiesModal.svelte';
 
   async function handleUpdated(e) {
     const gameDir = $modalStore?.props?.game?.gameDir || $selectedGame?.gameDir;
@@ -36,6 +37,12 @@
     />
   {:else if $modalStore.type === 'metadata-link'}
     <MetadataLinkModal
+      {...$modalStore.props}
+      on:updated={handleUpdated}
+      on:close={handleClose}
+    />
+  {:else if $modalStore.type === 'game-properties'}
+    <GamePropertiesModal
       {...$modalStore.props}
       on:updated={handleUpdated}
       on:close={handleClose}

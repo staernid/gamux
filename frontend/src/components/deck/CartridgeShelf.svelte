@@ -10,7 +10,6 @@
     { id: 'all', label: 'All', countKey: 'totalCount' },
     { id: 'patched', label: 'Ready', countKey: 'patchedCount' },
     { id: 'clean', label: 'Original', countKey: 'cleanCount' },
-    { id: 'lutris', label: 'Lutris', countKey: 'lutrisCount' },
     { id: 'updates', label: 'Updates', countKey: 'updatesCount' },
   ];
 

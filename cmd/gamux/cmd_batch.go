@@ -32,10 +32,10 @@ var batchCommand = &cli.Command{
 			parentDir = c.Args().Get(1)
 		}
 
-		eng := engine.New(activeConfig)
+		_, lib, game, _ := engine.NewServices(activeConfig)
 
 		if verb == "status" {
-			statuses, err := eng.BatchInspect(c.Context, parentDir)
+			statuses, err := lib.BatchInspect(c.Context, parentDir)
 			if err != nil {
 				renderCLIError(err, "Verify directory exists")
 				return err
@@ -48,7 +48,7 @@ var batchCommand = &cli.Command{
 			}
 
 			ui.RenderTerseHeader(parentDir, len(statuses))
-			var loaderCount, cleanCount, updatesAvail, lutrisCount int
+			var loaderCount, cleanCount, updatesAvail int
 			for _, s := range statuses {
 				if strings.Contains(strings.ToLower(s.State), "original") {
 					cleanCount++
@@ -57,9 +57,6 @@ var batchCommand = &cli.Command{
 				}
 				if s.HasUpdate || len(s.ModifiedFiles) > 0 || len(s.MissingFiles) > 0 {
 					updatesAvail++
-				}
-				if s.LutrisRegistered {
-					lutrisCount++
 				}
 
 				ui.RenderTerseStatus(ui.DetectionInfoSummary{
@@ -75,10 +72,9 @@ var batchCommand = &cli.Command{
 					UntrackedFiles:   s.UntrackedFiles,
 					HasUpdate:        s.HasUpdate,
 					RemoteManifestID: s.RemoteManifestID,
-					LutrisRegistered: s.LutrisRegistered,
 				})
 			}
-			ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail, lutrisCount)
+			ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail)
 			return nil
 		}
 
@@ -86,7 +82,7 @@ var batchCommand = &cli.Command{
 		if !c.Bool("json") {
 			ui.RenderStep(1, 1, "Scanning parent directory: "+parentDir)
 		}
-		results, err := eng.BatchProcess(c.Context, parentDir, opts)
+		results, err := game.BatchProcess(c.Context, parentDir, opts)
 		if err != nil {
 			renderCLIError(err, "Verify directory exists")
 			return err

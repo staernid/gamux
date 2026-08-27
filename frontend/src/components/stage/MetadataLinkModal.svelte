@@ -113,8 +113,8 @@
         on:click={() => dispatch('close')}
         class="px-3 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5"
       >
-        <span>ESC</span>
-        <span class="text-slate-500">Close</span>
+        <span class="px-1.5 py-0.5 rounded bg-[#161622] border border-[#262638] text-slate-400 font-bold text-[10px]">Esc / B</span>
+        <span class="text-slate-400">Close</span>
       </button>
     </div>
   </div>
@@ -153,8 +153,10 @@
       <!-- Standalone Explanation Card -->
       <div class="bg-[#12121c] border border-[#262638] p-6 rounded-2xl space-y-4">
         <div class="flex items-start space-x-3.5">
-          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0 text-xl">
-            ⚡
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
           </div>
           <div class="space-y-1">
             <h3 class="text-base font-bold text-white">Standalone / Custom Non-Store Configuration</h3>

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bodgit/sevenzip"
@@ -138,6 +139,18 @@ func CanonicalPath(path string) string {
 		return filepath.Clean(abs)
 	}
 	return filepath.Clean(expanded)
+}
+
+// DisplayPath replaces the user's home directory prefix with ~ for concise display.
+func DisplayPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" && strings.HasPrefix(path, home) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
 }
 
 // NormalizeRelativePath standardizes slashes and cleans relative paths, removing leading slashes and Windows drive letters if present.
@@ -373,6 +386,71 @@ func SanitizeInstallDir(title string) string {
 		return "Game"
 	}
 	return clean
+}
+
+// Slugify converts a string into a URL/filesystem friendly kebab-case slug.
+func Slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastDash = false
+		} else if !lastDash && b.Len() > 0 {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	res := strings.Trim(b.String(), "-")
+	return res
+}
+
+// CleanGameTitle normalizes title strings (removes trademarks, editions, extra punctuation) for fuzzy comparison.
+func CleanGameTitle(title string) string {
+	t := strings.ToLower(title)
+	replacer := strings.NewReplacer(
+		"™", "", "®", "", "©", "",
+		":", " ", "-", " ", "_", " ",
+		".", " ", "(", " ", ")", " ",
+		"[", " ", "]", " ", "'", "",
+		"\"", "",
+	)
+	t = replacer.Replace(t)
+	words := strings.Fields(t)
+	var filtered []string
+	for _, w := range words {
+		if w == "the" || w == "edition" || w == "collection" || w == "remastered" || w == "goty" || w == "game" || w == "of" || w == "year" {
+			continue
+		}
+		filtered = append(filtered, w)
+	}
+	return strings.Join(filtered, " ")
+}
+
+// IsTitleMatch checks if two game title strings match reasonably.
+func IsTitleMatch(candidateName, targetTitle string) bool {
+	c := CleanGameTitle(candidateName)
+	t := CleanGameTitle(targetTitle)
+	if c == "" || t == "" {
+		return false
+	}
+	if c == t {
+		return true
+	}
+	if strings.Contains(c, t) || strings.Contains(t, c) {
+		diff := len(c) - len(t)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= 8 || (len(c) > 0 && float64(diff)/float64(len(c)) < 0.35) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsEncryptedBase64Path checks if a filename or path contains raw un-decrypted AES base64 output.
@@ -647,6 +725,58 @@ func DecompressVSZaInDir(dirPath string) (int, error) {
 		slog.Info("Decompressed VSZa files in directory", "dir", dirPath, "count", count)
 	}
 	return count, nil
+}
+
+// DiskSpaceInfo represents disk usage metrics for a filesystem volume.
+type DiskSpaceInfo struct {
+	Path       string `json:"path"`
+	TotalBytes uint64 `json:"total_bytes"`
+	FreeBytes  uint64 `json:"free_bytes"`
+	UsedBytes  uint64 `json:"used_bytes"`
+}
+
+// GetDiskSpace inspects the filesystem volume containing the given directory path.
+func GetDiskSpace(path string) (*DiskSpaceInfo, error) {
+	cleanPath := ExpandPath(path)
+	if cleanPath == "" {
+		var err error
+		cleanPath, err = os.UserHomeDir()
+		if err != nil {
+			cleanPath = "/"
+		}
+	}
+
+	// If path doesn't exist, ascend to the nearest existing parent
+	target := cleanPath
+	for {
+		if _, err := os.Stat(target); err == nil {
+			break
+		}
+		parent := filepath.Dir(target)
+		if parent == target {
+			break
+		}
+		target = parent
+	}
+
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(target, &stat); err != nil {
+		return nil, fmt.Errorf("statfs failed for %s: %w", target, err)
+	}
+
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bavail * uint64(stat.Bsize)
+	used := uint64(0)
+	if total >= free {
+		used = total - free
+	}
+
+	return &DiskSpaceInfo{
+		Path:       target,
+		TotalBytes: total,
+		FreeBytes:  free,
+		UsedBytes:  used,
+	}, nil
 }
 
 

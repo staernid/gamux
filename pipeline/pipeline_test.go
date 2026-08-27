@@ -95,7 +95,6 @@ func TestPipeline_ConcreteStages_DryRun(t *testing.T) {
 		&ManifestStage{},
 		&NormalizeStage{},
 		&GBEStage{},
-		&LutrisStage{},
 	)
 
 	cfg := config.DefaultConfig()
@@ -104,7 +103,6 @@ func TestPipeline_ConcreteStages_DryRun(t *testing.T) {
 			DryRun:       true,
 			NormalizeDir: true,
 			ApplyGBE:     true,
-			AddLutris:    true,
 		},
 		Game:     game,
 		Config:   cfg,
@@ -125,9 +123,6 @@ func TestPipeline_ConcreteStages_DryRun(t *testing.T) {
 	if !pctx.Patched {
 		t.Error("expected Patched to be true")
 	}
-	if !pctx.LutrisAdded {
-		t.Error("expected LutrisAdded to be true")
-	}
 }
 
 func TestPipeline_NonSteamGame_CleanExecution(t *testing.T) {
@@ -145,15 +140,13 @@ func TestPipeline_NonSteamGame_CleanExecution(t *testing.T) {
 		&NormalizeStage{},
 		&SteamlessStage{},
 		&GBEStage{},
-		&LutrisStage{},
 	)
 
 	cfg := config.DefaultConfig()
 	pctx := &Context{
 		Options: Options{
-			DryRun:    true,
-			ApplyGBE:  true,
-			AddLutris: true,
+			DryRun:   true,
+			ApplyGBE: true,
 		},
 		Game:   game,
 		Config: cfg,
@@ -168,5 +161,75 @@ func TestPipeline_NonSteamGame_CleanExecution(t *testing.T) {
 	manifestsDir := filepath.Join(gameDir, "[Manifests]")
 	if _, statErr := os.Stat(manifestsDir); !os.IsNotExist(statErr) {
 		t.Errorf("expected [Manifests] directory not to be created for non-Steam game")
+	}
+}
+
+func TestPipeline_NormalizeStage_Rollback(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := filepath.Join(tmpDir, "My Game Folder (Unclean)")
+	_ = os.MkdirAll(originalDir, 0755)
+	_ = os.WriteFile(filepath.Join(originalDir, "game.exe"), []byte("exe"), 0755)
+
+	game := domain.NewGame("My Game", originalDir, "12345", "win64")
+	normStage := &NormalizeStage{}
+	failStage := &mockStage{name: "Failing Downstream", fail: true}
+
+	pipe := New(normStage, failStage)
+	pctx := &Context{
+		Options: Options{
+			NormalizeDir: true,
+			DryRun:       false,
+		},
+		Game:   game,
+		Config: config.DefaultConfig(),
+	}
+
+	err := pipe.Execute(context.Background(), pctx)
+	if err == nil {
+		t.Fatal("expected pipeline to fail")
+	}
+
+	// Verify directory was rolled back to original name
+	if _, err := os.Stat(originalDir); os.IsNotExist(err) {
+		t.Errorf("expected original directory to be restored after rollback: %s", originalDir)
+	}
+	if pctx.Game.GameDir != originalDir {
+		t.Errorf("expected pctx.Game.GameDir to be restored to %s, got %s", originalDir, pctx.Game.GameDir)
+	}
+	if pctx.DirectoryNormalized {
+		t.Error("expected DirectoryNormalized to be false after rollback")
+	}
+}
+
+func TestPipeline_ManifestStage_Rollback(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "TestGame")
+	_ = os.MkdirAll(gameDir, 0755)
+
+	game := domain.NewGame("TestGame", gameDir, "99999", "linux")
+	manifestStage := &ManifestStage{}
+	failStage := &mockStage{name: "Failing Downstream", fail: true}
+
+	pipe := New(manifestStage, failStage)
+	pctx := &Context{
+		Options: Options{
+			DryRun: false,
+		},
+		Game:   game,
+		Config: config.DefaultConfig(),
+	}
+
+	err := pipe.Execute(context.Background(), pctx)
+	if err == nil {
+		t.Fatal("expected pipeline to fail")
+	}
+
+	// Synthesized ACF manifest should be removed after rollback
+	targetACF := filepath.Join(gameDir, "[Manifests]", "appmanifest_99999.acf")
+	if _, err := os.Stat(targetACF); !os.IsNotExist(err) {
+		t.Errorf("expected synthesized ACF to be removed during rollback: %s", targetACF)
+	}
+	if pctx.ACFSynthesized {
+		t.Error("expected ACFSynthesized to be false after rollback")
 	}
 }

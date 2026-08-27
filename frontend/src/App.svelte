@@ -3,9 +3,8 @@
   import TopBar from './components/header/TopBar.svelte';
   import Carousel3D from './components/stage/Carousel3D.svelte';
   import ModalHost from './components/common/ModalHost.svelte';
-  import GameDrawer from './components/stage/GameDrawer.svelte';
+  import GameHubView from './components/views/GameHubView.svelte';
   import DownloadsView from './components/views/DownloadsView.svelte';
-  import ActivityView from './components/views/ActivityView.svelte';
   import SettingsView from './components/views/SettingsView.svelte';
   import Toast from './components/common/Toast.svelte';
 
@@ -13,14 +12,16 @@
     libraryPath,
     scanLibrary,
     activeView,
-    showInspector,
     pathPopover,
     filteredGames,
     selectedGame,
     queueApplyGame,
     setGameRunning,
     refreshGame,
-    renameGameInStore
+    renameGameInStore,
+    sortBy,
+    cycleSortOrder,
+    getSortLabel
   } from './stores/library.js';
   import { tasksStore } from './stores/tasks.js';
   import { modalStore } from './stores/modal.js';
@@ -28,7 +29,8 @@
   import { configStore } from './stores/config.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
   import { formatBytes } from './utils/format.js';
-  import { getPlatformColors, getPlatformType } from './utils/game.js';
+  import { getPlatformColors, getPlatformType, isSamePath } from './utils/game.js';
+  import { GamepadTracker } from './input/gamepad.js';
   import { gamuxDev } from './debug/debugBridge.js';
 
   let carouselRef;
@@ -36,48 +38,29 @@
   $: activeColors = $selectedGame ? getPlatformColors($selectedGame) : null;
   $: platformType = $selectedGame ? getPlatformType($selectedGame) : '';
 
-  const views = ['library', 'downloads', 'activity', 'settings'];
+  const views = ['library', 'tasks', 'settings'];
 
   function cycleView(dir) {
     let curr = 'library';
     activeView.subscribe(v => { curr = v; })();
-    const idx = views.indexOf(curr);
+    const currentBase = curr === 'game-hub' ? 'library' : (curr === 'downloads' || curr === 'transfers' ? 'tasks' : curr);
+    const idx = views.indexOf(currentBase);
     let next = idx + dir;
     if (next < 0) next = views.length - 1;
     if (next >= views.length) next = 0;
     activeView.set(views[next]);
   }
 
-  function executePrimaryAction(targetGame) {
+  function openSelectedGameHub(targetGame = null) {
     const game = targetGame || $selectedGame;
     if (!game) return;
-
-    const isReady = game.isReady || (game.isPatched && (game.lutrisRegistered || game.operatingMode === 'standalone'));
-    if (isReady) {
-      AppAPI.launchGame({
-        game_dir: game.gameDir,
-        name: game.name,
-        app_id: game.appId,
-        platform: game.platform,
-        exe_path: game.exePath,
-        exe_args: game.exeArgs,
-        operating_mode: game.operatingMode,
-        runner: game.runner,
-      });
-    } else {
-      queueApplyGame(game);
-    }
+    if (targetGame) selectedGame.set(targetGame);
+    $activeView = 'game-hub';
   }
 
   function openCurrentDirectory() {
     if ($selectedGame?.gameDir) {
       AppAPI.openDirectory($selectedGame.gameDir);
-    }
-  }
-
-  function toggleInspector() {
-    if ($selectedGame) {
-      $showInspector = !$showInspector;
     }
   }
 
@@ -100,7 +83,7 @@
 
   onMount(() => {
     // 1. Initialize UI scale
-    const savedScale = localStorage.getItem('gamux_ui_scale') || '16';
+    const savedScale = localStorage.getItem('gamux_ui_scale') || '18';
     configStore.setScale(savedScale);
 
     // 2. Setup runtime event bridges
@@ -146,11 +129,18 @@
     // 3. Check URL query parameters for view / drawer previewing
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
-    if (viewParam && ['library', 'downloads', 'activity', 'settings'].includes(viewParam)) {
-      activeView.set(viewParam);
+    if (viewParam && ['library', 'game-hub', 'tasks', 'downloads', 'transfers', 'settings'].includes(viewParam)) {
+      activeView.set(viewParam === 'downloads' || viewParam === 'transfers' ? 'tasks' : viewParam);
+    } else if (viewParam === 'activity') {
+      activeView.set('settings');
     }
-    if (urlParams.get('drawer') === '1' || urlParams.get('drawer') === 'true') {
-      showInspector.set(true);
+    if (urlParams.get('properties') === '1' || urlParams.get('properties') === 'true' || urlParams.get('drawer') === '1') {
+      const unsub = selectedGame.subscribe(g => {
+        if (g) {
+          modalStore.open('game-properties', { game: g });
+          setTimeout(() => unsub(), 0);
+        }
+      });
     }
     if (urlParams.get('search') === '1' || urlParams.get('search') === 'true') {
       modalStore.open('search-grid');
@@ -171,8 +161,6 @@
       } else if (e.key === 'Escape') {
         if ($modalStore) {
           modalStore.close();
-        } else if ($showInspector) {
-          $showInspector = false;
         } else if ($pathPopover) {
           $pathPopover = false;
         } else if ($activeView !== 'library') {
@@ -192,132 +180,93 @@
         } else if (e.key === '1') {
           $activeView = 'library';
         } else if (e.key === '2') {
-          $activeView = 'downloads';
+          $activeView = 'tasks';
         } else if (e.key === '3') {
-          $activeView = 'activity';
-        } else if (e.key === '4') {
           $activeView = 'settings';
-        } else if ((e.key === 'x' || e.key === 'X') && $activeView === 'library' && $selectedGame) {
-          toggleInspector();
-        } else if ((e.key === 'y' || e.key === 'Y' || e.key === 'f' || e.key === 'F' || e.key === 'o' || e.key === 'O') && $activeView === 'library') {
+        } else if ((e.key === 'y' || e.key === 'Y') && $activeView === 'library') {
+          cycleSortOrder();
+        } else if ((e.key === 'f' || e.key === 'F' || e.key === 'o' || e.key === 'O') && $activeView === 'library') {
           openCurrentDirectory();
-        } else if ((e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') && $activeView === 'library' && !$showInspector) {
+        } else if ((e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') && $activeView === 'library') {
           e.preventDefault();
           if (carouselRef) carouselRef.step(1);
           else stepGameSelection(1);
-        } else if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && $activeView === 'library' && !$showInspector) {
+        } else if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && $activeView === 'library') {
           e.preventDefault();
           if (carouselRef) carouselRef.step(-1);
           else stepGameSelection(-1);
-        } else if ((e.key === 'Enter' || e.key === ' ') && $activeView === 'library' && !$showInspector && $selectedGame) {
+        } else if ((e.key === 'Enter' || e.key === ' ') && $activeView === 'library' && $selectedGame) {
           e.preventDefault();
-          executePrimaryAction();
+          openSelectedGameHub();
         }
       }
     }
 
     // 6. Gamepad API Polling Loop
-    let lastPadStates = {};
+    const gamepadTracker = new GamepadTracker();
     let padLoopId = null;
 
     function pollGamepad() {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       const pad = Array.from(pads).find(p => p && p.connected);
 
-      if (pad) {
-        const isPressed = (idx) => pad.buttons[idx]?.pressed;
-        const wasPressed = (idx) => lastPadStates[idx];
-        const justPressed = (idx) => isPressed(idx) && !wasPressed(idx);
-
-        let inspectorOpen = false;
-        showInspector.subscribe(v => { inspectorOpen = v; })();
-
+      const actions = gamepadTracker.process(pad);
+      if (actions) {
         let currView = 'library';
         activeView.subscribe(v => { currView = v; })();
         let modalActive = false;
         modalStore.subscribe(v => { modalActive = !!v; })();
 
-        // Button A (0): Launch / Prepare or Select
-        if (justPressed(0) && currView === 'library' && !inspectorOpen && !modalActive) {
-          executePrimaryAction();
-        }
-
-        // Button B (1): Close Modal / Inspector / Escape
-        if (justPressed(1)) {
-          if (modalActive) {
+        // 1. If a Modal is open, handle Back/Close
+        if (modalActive) {
+          if (actions.actionBack) {
             modalStore.close();
-          } else if (inspectorOpen) {
-            showInspector.set(false);
-          } else if (currView !== 'library') {
-            activeView.set('library');
           }
+          padLoopId = requestAnimationFrame(pollGamepad);
+          return;
         }
 
-        // Button X (2): Toggle Inspector
-        if (justPressed(2) && currView === 'library' && !modalActive) {
-          showInspector.set(!inspectorOpen);
-        }
+        // 2. Main Shelf Navigation
+        if (currView === 'library') {
+          // Primary Action (A / Enter) -> Open Game Hub
+          if (actions.actionPrimary) {
+            openSelectedGameHub();
+          }
 
-        // Button Y (3): Open Folder
-        if (justPressed(3) && currView === 'library' && !modalActive) {
-          openCurrentDirectory();
-        }
+          // Secondary (Y) -> Cycle Sort Order
+          if (actions.actionFiles) {
+            cycleSortOrder();
+          }
 
-        // LB (4) / RB (5): Cycle Views
-        if (justPressed(4)) cycleView(-1);
-        if (justPressed(5)) cycleView(1);
-
-        // D-Pad Left (14) / Right (15) & Left Analog Stick
-        const stickX = pad.axes[0] || 0;
-        const wasStickLeft = lastPadStates['stick_left'] || false;
-        const wasStickRight = lastPadStates['stick_right'] || false;
-        const isStickLeft = stickX < -0.55;
-        const isStickRight = stickX > 0.55;
-
-        if (currView === 'library' && !inspectorOpen && !modalActive) {
-          if (justPressed(14) || (isStickLeft && !wasStickLeft)) {
+          // Directional Navigation (D-Pad or Left Analog Stick)
+          if (actions.navLeft) {
             if (carouselRef) carouselRef.step(-1);
             else stepGameSelection(-1);
           }
-          if (justPressed(15) || (isStickRight && !wasStickRight)) {
+          if (actions.navRight) {
             if (carouselRef) carouselRef.step(1);
             else stepGameSelection(1);
           }
-        }
 
-        lastPadStates['stick_left'] = isStickLeft;
-        lastPadStates['stick_right'] = isStickRight;
-
-        // Right Analog Stick Rotary Wheel (iPod Click Wheel on Right Stick only)
-        const rx = pad.axes[2] || 0;
-        const ry = pad.axes[3] || 0;
-        const rMag = Math.sqrt(rx * rx + ry * ry);
-        if (currView === 'library' && !inspectorOpen && !modalActive) {
-          if (rMag >= 0.30) {
-            const angle = Math.atan2(ry, rx);
-            if (lastPadStates['stick_angle_r'] !== undefined && lastPadStates['stick_angle_r'] !== null) {
-              let d = angle - lastPadStates['stick_angle_r'];
-              while (d > Math.PI) d -= 2 * Math.PI;
-              while (d < -Math.PI) d += 2 * Math.PI;
-
-              if (Math.abs(d) <= Math.PI * 0.7 && Math.abs(d) > 0.001) {
-                // 1 full rotation (2*PI) scrolls 7 cards
-                const scrollStep = d * (7.0 / (2 * Math.PI));
-                if (carouselRef) {
-                  carouselRef.addRotaryDelta(scrollStep);
-                }
-              }
+          // Rotary Wheel Scrubbing
+          if (actions.rotaryDelta !== 0) {
+            if (carouselRef) {
+              carouselRef.addRotaryDelta(actions.rotaryDelta);
             }
-            lastPadStates['stick_angle_r'] = angle;
-          } else {
-            lastPadStates['stick_angle_r'] = null;
+          }
+        } else if (currView === 'game-hub') {
+          // Game Hub Navigation
+          if (actions.actionBack) {
+            activeView.set('library');
+          }
+          if (actions.actionFiles) {
+            openCurrentDirectory();
           }
         }
 
-        // Record button states
-        for (let i = 0; i < pad.buttons.length; i++) {
-          lastPadStates[i] = pad.buttons[i]?.pressed;
-        }
+        // Cycle Views (LB / RB)
+        if (actions.prevView) cycleView(-1);
+        if (actions.nextView) cycleView(1);
       }
 
       padLoopId = requestAnimationFrame(pollGamepad);
@@ -341,55 +290,40 @@
   {#if $activeView === 'library'}
     <div class="flex-1 flex flex-col min-h-0 relative items-center justify-between">
       <!-- Center 3D 5-Item Carousel -->
-      <Carousel3D bind:this={carouselRef} on:launch={(e) => executePrimaryAction(e.detail)} />
+      <Carousel3D bind:this={carouselRef} on:launch={(e) => openSelectedGameHub(e.detail)} />
 
-      <!-- Bottom HUD: Left Command Glossary & Right Game Details (Subtle & Barely Noticeable) -->
+      <!-- Bottom HUD: Left Command Glossary & Right Game Details -->
       <div class="w-full px-8 pb-6 flex items-end justify-between z-20 flex-shrink-0">
         <!-- Bottom Left: Command Glossary (Clickable & Controller-Mapped) -->
         <div class="flex flex-col space-y-1.5 text-xs text-slate-500 font-mono select-none">
-          <!-- Line 1: Primary Actions -->
+          <!-- Library Shelf Mode Glossary -->
           <div class="flex items-center space-x-3">
-            <!-- Launch -->
+            <!-- Details / Hub -->
             <button
               type="button"
-              on:click={() => executePrimaryAction()}
+              on:click={() => openSelectedGameHub()}
               class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
-              title="Launch selected game (A or Enter)"
+              title="Open Game Hub (A or Enter)"
             >
               <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
                 A / ↵
               </span>
-              <span class="group-hover:text-slate-300">Launch</span>
+              <span class="group-hover:text-slate-300">Game Hub</span>
             </button>
 
             <span class="text-slate-700">·</span>
 
-            <!-- Options -->
+            <!-- Sort Cycling via (Y) -->
             <button
               type="button"
-              on:click={toggleInspector}
+              on:click={() => cycleSortOrder()}
               class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
-              title="Open per-game settings drawer (X)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
-                X
-              </span>
-              <span class="group-hover:text-slate-300">Options</span>
-            </button>
-
-            <span class="text-slate-700">·</span>
-
-            <!-- Files -->
-            <button
-              type="button"
-              on:click={openCurrentDirectory}
-              class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
-              title="Open game directory in file manager (Y)"
+              title="Cycle library sort order (Y)"
             >
               <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
                 Y
               </span>
-              <span class="group-hover:text-slate-300">Files</span>
+              <span class="group-hover:text-slate-300">Sort: {getSortLabel($sortBy)}</span>
             </button>
           </div>
 
@@ -409,7 +343,7 @@
           </div>
         </div>
 
-        <!-- Bottom Right: Game Details (Subtle & Barely Noticeable) -->
+        <!-- Bottom Right: Game Details -->
         {#if $selectedGame}
           <div class="flex flex-col items-end space-y-0.5 text-[11px] text-slate-500 font-mono text-right max-w-xs sm:max-w-sm truncate">
             <div>
@@ -429,15 +363,12 @@
           </div>
         {/if}
       </div>
-
-      <!-- Per-game Drawer Inspector -->
-      <GameDrawer />
     </div>
-  {:else if $activeView === 'downloads' || $activeView === 'downloader' || $activeView === 'transfers'}
+  {:else if $activeView === 'game-hub'}
+    <GameHubView />
+  {:else if $activeView === 'tasks' || $activeView === 'downloads' || $activeView === 'downloader' || $activeView === 'transfers' || $activeView === 'operations'}
     <DownloadsView />
-  {:else if $activeView === 'activity'}
-    <ActivityView />
-  {:else if $activeView === 'settings'}
+  {:else if $activeView === 'settings' || $activeView === 'activity'}
     <SettingsView />
   {/if}
 
