@@ -1020,6 +1020,82 @@ func TestRevertCompatibility(t *testing.T) {
 	}
 }
 
+func TestBuildCommand_UMUProtonfixesAndSharedPrefix(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "Cyberpunk2077.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	// 1. Steam title with AppID -> should set GAMEID=1091500, STORE=steam, and default shared WINEPREFIX
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "Cyberpunk2077.exe",
+		AppID:         "1091500",
+		Platform:      "win64",
+		OperatingMode: domain.ModeLoader,
+		Runner:        RunnerUMU,
+	}
+
+	cmd, err := BuildCommand(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	envMap := make(map[string]string)
+	for _, env := range cmd.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["GAMEID"] != "1091500" {
+		t.Errorf("expected GAMEID '1091500', got %s", envMap["GAMEID"])
+	}
+	if envMap["STORE"] != "steam" {
+		t.Errorf("expected STORE 'steam', got %s", envMap["STORE"])
+	}
+	if envMap["SteamAppId"] != "1091500" {
+		t.Errorf("expected SteamAppId '1091500', got %s", envMap["SteamAppId"])
+	}
+	if !strings.HasSuffix(envMap["WINEPREFIX"], "Games/umu/1091500") {
+		t.Errorf("expected WINEPREFIX to end with Games/umu/1091500, got %s", envMap["WINEPREFIX"])
+	}
+	if !strings.HasSuffix(envMap["STEAM_COMPAT_DATA_PATH"], "Games/umu/1091500") {
+		t.Errorf("expected STEAM_COMPAT_DATA_PATH to end with Games/umu/1091500, got %s", envMap["STEAM_COMPAT_DATA_PATH"])
+	}
+
+	// 2. Standalone / non-Steam title without AppID -> should fallback to GAMEID=umu-default, STORE=none
+	standaloneOpts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "Cyberpunk2077.exe",
+		AppID:         "",
+		Platform:      "win64",
+		OperatingMode: domain.ModeStandalone,
+		Runner:        RunnerUMU,
+	}
+
+	standaloneCmd, err := BuildCommand(context.Background(), cfg, standaloneOpts)
+	if err != nil {
+		t.Fatalf("BuildCommand for standalone failed: %v", err)
+	}
+
+	standaloneEnv := make(map[string]string)
+	for _, env := range standaloneCmd.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			standaloneEnv[parts[0]] = parts[1]
+		}
+	}
+
+	if standaloneEnv["GAMEID"] != "umu-default" {
+		t.Errorf("expected standalone GAMEID 'umu-default', got %s", standaloneEnv["GAMEID"])
+	}
+	if standaloneEnv["STORE"] != "none" {
+		t.Errorf("expected standalone STORE 'none', got %s", standaloneEnv["STORE"])
+	}
+}
+
 
 
 

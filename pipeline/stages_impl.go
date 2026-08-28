@@ -8,11 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/manifest"
-	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/steamless"
 	"github.com/staernid/gamux/util"
 )
@@ -45,6 +46,12 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 
 	*pctx.Game = *info
+
+	if pctx.Game.NumericAppID > 0 && (pctx.Game.Name == "" || pctx.Game.Name == pctx.Game.AppID || pctx.Game.Name == filepath.Base(targetPath)) {
+		if name, err := steam.FetchAppName(ctx, pctx.Game.AppID); err == nil && name != "" {
+			pctx.Game.Name = name
+		}
+	}
 
 	if pctx.Options.ExePath != "" {
 		if filepath.IsAbs(pctx.Options.ExePath) {
@@ -271,14 +278,14 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 
 	// Re-base persisted launch profile paths if present
-	if prof, err := runner.LoadLaunchProfile(targetDir); err == nil && prof != nil {
+	if prof, err := compat.LoadProfile(targetDir); err == nil && prof != nil {
 		prof.GameDir = targetDir
 		if prof.ExePath != "" {
 			if relProfExe, err := filepath.Rel(currentDir, prof.ExePath); err == nil && !strings.HasPrefix(relProfExe, "..") {
 				prof.ExePath = filepath.Join(targetDir, relProfExe)
 			}
 		}
-		_ = runner.SaveProfile(prof)
+		_ = compat.SaveProfile(prof)
 	}
 
 	return nil
@@ -302,14 +309,14 @@ func (s *NormalizeStage) Rollback(ctx context.Context, pctx *Context) error {
 			pctx.Game.ExePath = filepath.Join(s.originalDir, relExe)
 		}
 	}
-	if prof, err := runner.LoadLaunchProfile(s.originalDir); err == nil && prof != nil {
+	if prof, err := compat.LoadProfile(s.originalDir); err == nil && prof != nil {
 		prof.GameDir = s.originalDir
 		if prof.ExePath != "" {
 			if relProfExe, err := filepath.Rel(s.renamedDir, prof.ExePath); err == nil && !strings.HasPrefix(relProfExe, "..") {
 				prof.ExePath = filepath.Join(s.originalDir, relProfExe)
 			}
 		}
-		_ = runner.SaveProfile(prof)
+		_ = compat.SaveProfile(prof)
 	}
 	pctx.Results.DirectoryNormalized = false
 	return nil
@@ -364,7 +371,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
 	if !pctx.Game.RequiresSteamEmulator() || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
 		if pctx.Game.HasBackups() || pctx.Game.SettingsDirExists {
-			_, _ = runner.RevertCompatibility(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
+			_, _ = compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
 		}
 		return nil
 	}
@@ -390,7 +397,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 		}
 	}
 
-	err := runner.ApplyCompatibility(ctx, pctx.Config, pctx.Game, profile, pctx.Options.DryRun)
+	err := compat.Apply(ctx, pctx.Config, pctx.Game, profile, pctx.Options.DryRun)
 	if err != nil {
 		slog.Warn("Compatibility & DRM application warning/error", "error", err)
 		pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("gbe patch: %v", err))
@@ -412,7 +419,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 }
 
 func (s *GBEStage) Rollback(ctx context.Context, pctx *Context) error {
-	_, err := runner.RevertCompatibility(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
+	_, err := compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
 	return err
 }
 

@@ -269,24 +269,21 @@ func (r *Resolver) resolveEffectiveWinePrefix(customPrefix, appID, gameName stri
 	home, _ := os.UserHomeDir()
 
 	if customPrefix != "" {
-		exp := util.ExpandPath(customPrefix)
-		if util.FileExists(exp) {
-			return exp
-		}
+		return util.ExpandPath(customPrefix)
 	}
 
-	// 1. Shared standard UMU prefix
-	umuDefault := filepath.Join(home, "Games", "umu", "umu-default")
-	if util.FileExists(umuDefault) {
-		return umuDefault
-	}
-
-	// 2. Per-game UMU prefix
+	// 1. Per-game UMU prefix
 	if appID != "" && appID != "0" {
 		umuApp := filepath.Join(home, "Games", "umu", appID)
 		if util.FileExists(umuApp) {
 			return umuApp
 		}
+	}
+
+	// 2. Shared standard UMU prefix
+	umuDefault := filepath.Join(home, "Games", "umu", "umu-default")
+	if util.FileExists(umuDefault) {
+		return umuDefault
 	}
 
 	// 3. Standard Wine prefixes directory

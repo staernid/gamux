@@ -4,17 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/gbe"
-	"github.com/staernid/gamux/runner"
-	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
@@ -358,30 +356,8 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	// 6. Resolve Title
-	if info.AppID != "" && (info.Name == "" || info.Name == info.AppID) {
-		if name, err := steam.FetchAppName(ctx, info.AppID); err == nil && name != "" {
-			info.Name = name
-		}
-	}
-	if info.Name == "" {
+	if info.Name == "" || info.Name == info.AppID {
 		info.Name = filepath.Base(info.GameDir)
-	}
-	if (info.Store == domain.StoreSteam || info.Source == domain.SourceSteam) && info.AppID == "" && info.Name != "" {
-		if appID, searchName, err := steam.SearchAppID(ctx, info.Name); err == nil && appID != "" {
-			if util.IsTitleMatch(searchName, info.Name) {
-				info.AppID = appID
-				if num, ok := util.ParseAppID(appID); ok && num > 0 {
-					info.NumericAppID = num
-					info.ExternalIDs.SteamAppID = num
-				}
-				if searchName != "" {
-					info.Name = searchName
-				}
-				slog.Debug("Auto-discovered AppID via Steam Store search", "title", info.Name, "appID", info.AppID)
-			} else {
-				slog.Debug("Steam search candidate rejected due to title mismatch", "query", info.Name, "candidate", searchName, "candidateAppID", appID)
-			}
-		}
 	}
 
 	// 7. Resolve InstallDir
@@ -429,7 +405,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	// 9. Load custom LaunchProfile if present
 	launchProfilePath := filepath.Join(info.GameDir, "steam_settings", "launch_profile.json")
 	launchProfileExists := util.FileExists(launchProfilePath)
-	if profile, err := runner.LoadLaunchProfile(info.GameDir); err == nil && profile != nil {
+	if profile, err := compat.LoadProfile(info.GameDir); err == nil && profile != nil {
 		info.LaunchProfile = profile
 		if profile.SourceOverride != "" {
 			info.Source = profile.SourceOverride

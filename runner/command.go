@@ -10,8 +10,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
-	"github.com/staernid/gamux/tools"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
 )
 
@@ -24,7 +25,7 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 
 	// 1. Cascading Profile Load: if GameDir is provided, load on-disk profile for missing fields
 	if res.GameDir != "" {
-		if profile, err := LoadLaunchProfile(res.GameDir); err == nil && profile != nil {
+		if profile, err := compat.LoadProfile(res.GameDir); err == nil && profile != nil {
 			if res.Name == "" && profile.Name != "" {
 				res.Name = profile.Name
 			}
@@ -163,7 +164,6 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 	}
 	resolved := ResolveEffectiveOptions(cfg, opts)
 
-	// Standalone Launcher Mode
 	if resolved.ExePath == "" {
 		return nil, fmt.Errorf("executable path is required for standalone launch")
 	}
@@ -187,33 +187,48 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		}
 	}
 
-	// Steam / UMU / AppID identification
+	// Steam / UMU / AppID identification & Protonfixes mapping
 	if resolved.AppID != "" && resolved.AppID != "0" {
 		envMap["SteamAppId"] = resolved.AppID
 		envMap["SteamGameId"] = resolved.AppID
-	}
-
-	if resolved.Runner == RunnerUMU || resolved.Runner == RunnerAuto || resolved.Runner == "" {
-		if _, exists := envMap["GAMEID"]; !exists {
-			envMap["GAMEID"] = "umu-default"
-		}
-		if _, exists := envMap["UMU_ID"]; !exists {
-			envMap["UMU_ID"] = "umu-default"
-		}
-	} else if resolved.AppID != "" && resolved.AppID != "0" {
 		if _, exists := envMap["GAMEID"]; !exists {
 			envMap["GAMEID"] = resolved.AppID
 		}
 		if _, exists := envMap["UMU_ID"]; !exists {
 			envMap["UMU_ID"] = resolved.AppID
 		}
+		if _, exists := envMap["STORE"]; !exists {
+			envMap["STORE"] = "steam"
+		}
+	} else {
+		if _, exists := envMap["GAMEID"]; !exists {
+			envMap["GAMEID"] = "umu-default"
+		}
+		if _, exists := envMap["UMU_ID"]; !exists {
+			envMap["UMU_ID"] = "umu-default"
+		}
+		if _, exists := envMap["STORE"]; !exists {
+			envMap["STORE"] = "none"
+		}
 	}
 
-	// Wine prefix
-	if resolved.WinePrefix != "" {
-		expandedPrefix := util.ExpandPath(resolved.WinePrefix)
-		envMap["WINEPREFIX"] = expandedPrefix
-		envMap["STEAM_COMPAT_DATA_PATH"] = expandedPrefix
+	// Wine / Proton prefix isolation with central Syncthing user data symlinking
+	if resolved.Platform != "linux" || resolved.Runner == RunnerWine || resolved.Runner == RunnerProton || resolved.Runner == RunnerUMU {
+		numAppID, _ := util.ParseAppID(resolved.AppID)
+		gameStub := &domain.Game{
+			GameRecord: domain.GameRecord{
+				Name:         resolved.Name,
+				AppID:        resolved.AppID,
+				NumericAppID: numAppID,
+				Platform:     resolved.Platform,
+				GameDir:      resolved.GameDir,
+			},
+		}
+		prefixDir, pErr := compat.EnsurePrefix(ctx, cfg, gameStub, resolved.WinePrefix)
+		if pErr == nil && prefixDir != "" {
+			envMap["WINEPREFIX"] = prefixDir
+			envMap["STEAM_COMPAT_DATA_PATH"] = prefixDir
+		}
 	}
 
 	// Proton path override
@@ -339,71 +354,14 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		}
 	}
 
-	var cmd *exec.Cmd
-	var cmdBinary string
-	var cmdArgs []string
-
-	switch resolved.Runner {
-	case RunnerLinux:
-		cmdBinary = targetExe
-		cmdArgs = exeArgs
-
-	case RunnerUMU:
-		umuBin, err := FindUMUBinary()
-		if err != nil {
-			slog.Info("umu-run not found locally, auto-bootstrapping from GitHub release")
-			if booted, bErr := tools.NewUMUTool(cfg).EnsureAvailable(ctx); bErr == nil && util.FileExists(booted) {
-				umuBin = booted
-			} else {
-				return nil, fmt.Errorf("runner 'umu' selected: %w (auto-bootstrap failed: %v)", err, bErr)
-			}
-		}
-		cmdBinary = umuBin
-		cmdArgs = append([]string{targetExe}, exeArgs...)
-
-	case RunnerProton:
-		protonBin, err := exec.LookPath("proton")
-		if err != nil {
-			if resolved.ProtonPath != "" {
-				customProton := filepath.Join(resolved.ProtonPath, "proton")
-				if util.FileExists(customProton) {
-					protonBin = customProton
-				}
-			}
-		}
-		if protonBin == "" {
-			return nil, fmt.Errorf("proton binary not found in PATH or configured proton path")
-		}
-		cmdBinary = protonBin
-		cmdArgs = append([]string{"run", targetExe}, exeArgs...)
-
-	case RunnerWine:
-		wineBin, err := exec.LookPath("wine")
-		if err != nil {
-			return nil, fmt.Errorf("wine binary not found in PATH: %w", err)
-		}
-		cmdBinary = wineBin
-		cmdArgs = append([]string{targetExe}, exeArgs...)
-
-	default:
-		// Fallback based on platform
-		if resolved.Platform == "linux" {
-			cmdBinary = targetExe
-			cmdArgs = exeArgs
-		} else {
-			umuBin, err := FindUMUBinary()
-			if err != nil {
-				slog.Info("umu-run not found locally, auto-bootstrapping from GitHub release")
-				if booted, bErr := tools.NewUMUTool(cfg).EnsureAvailable(ctx); bErr == nil && util.FileExists(booted) {
-					umuBin = booted
-				} else {
-					return nil, fmt.Errorf("no suitable runner found for platform %s: %w", resolved.Platform, err)
-				}
-			}
-			cmdBinary = umuBin
-			cmdArgs = append([]string{targetExe}, exeArgs...)
-		}
+	// Use polymorphic Runner adapter to resolve binary and args
+	runnerAdapter := ResolveRunner(resolved.Runner, resolved.Platform)
+	cmdBinary, cmdArgs, err := runnerAdapter.BuildArgs(ctx, cfg, targetExe, exeArgs, resolved)
+	if err != nil {
+		return nil, fmt.Errorf("build runner args (%s): %w", runnerAdapter.Name(), err)
 	}
+
+	var cmd *exec.Cmd
 
 	// For Windows runners, apply gamemoderun and mangohud wrappers when available
 	if resolved.Platform != "linux" || resolved.Runner != RunnerLinux {
@@ -434,7 +392,7 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 
 	slog.Info("Constructed launch command",
 		"mode", resolved.OperatingMode,
-		"runner", resolved.Runner,
+		"runner", runnerAdapter.Name(),
 		"targetExe", targetExe,
 		"workingDir", workingDir,
 	)

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
@@ -189,15 +190,15 @@ func (eng *Engine) RunGame(ctx context.Context, opts runner.LaunchOptions) error
 }
 
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.
-func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*runner.LaunchOptions, error) {
-	return runner.LoadLaunchProfile(gameDir)
+func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*domain.LaunchProfile, error) {
+	return compat.LoadProfile(gameDir)
 }
 
 // SaveLaunchProfile persists custom launch configuration and synchronizes on-disk integrations.
 func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts runner.LaunchOptions) error {
 	opts.GameDir = gameDir
 	game, _ := eng.InspectLocal(ctx, gameDir)
-	return runner.ApplyCompatibility(ctx, eng.Config, game, &opts, false)
+	return compat.Apply(ctx, eng.Config, game, &opts, false)
 }
 
 // GetGameDepots retrieves the structured inventory of all content depots for a game directory.
@@ -231,7 +232,7 @@ func (eng *Engine) UninstallDepot(ctx context.Context, gameDir string, depotID u
 // and automatically switches the runner and primary executable.
 func (eng *Engine) SwitchGamePlatform(ctx context.Context, gameDir string, targetPlatform string) error {
 	ctx = eng.WrapContext(ctx)
-	profile, err := runner.LoadLaunchProfile(gameDir)
+	profile, err := compat.LoadProfile(gameDir)
 	if err != nil || profile == nil {
 		profile = &runner.LaunchOptions{GameDir: gameDir}
 	}
@@ -274,11 +275,11 @@ func (eng *Engine) SwitchGamePlatform(ctx context.Context, gameDir string, targe
 
 // ResetLaunchProfile removes custom launch configuration from <gameDir>/steam_settings/launch_profile.json and synchronizes default DRM state.
 func (eng *Engine) ResetLaunchProfile(ctx context.Context, gameDir string) error {
-	if err := runner.ResetLaunchProfile(gameDir); err != nil {
+	if err := compat.ResetProfile(gameDir); err != nil {
 		return err
 	}
 	game, _ := eng.InspectLocal(ctx, gameDir)
-	return runner.ApplyCompatibility(ctx, eng.Config, game, nil, false)
+	return compat.Apply(ctx, eng.Config, game, nil, false)
 }
 
 // NotifyLaunch inspects a game directory for updates or configuration issues, and triggers a console/desktop notification if found.
@@ -362,7 +363,7 @@ func (eng *Engine) GetGameAchievements(ctx context.Context, gameDir string) ([]d
 
 	// Fallback to launch_profile.json
 	if appID == 0 {
-		if prof, err := runner.LoadLaunchProfile(gameDir); err == nil && prof != nil && prof.AppID != "" {
+		if prof, err := compat.LoadProfile(gameDir); err == nil && prof != nil && prof.AppID != "" {
 			if parsed, ok := util.ParseAppID(prof.AppID); ok && parsed > 0 {
 				appID = parsed
 			}

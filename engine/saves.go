@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
-	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/saves"
 	"github.com/staernid/gamux/util"
 )
@@ -34,7 +34,7 @@ func (eng *Engine) resolveGameParams(ctx context.Context, gameDir string) (saves
 	}
 
 	// Check if launch profile overrides wine prefix or platform
-	if profile, err := runner.LoadLaunchProfile(absGameDir); err == nil && profile != nil {
+	if profile, err := compat.LoadProfile(absGameDir); err == nil && profile != nil {
 		if profile.WinePrefix != "" {
 			opts.WinePrefix = profile.WinePrefix
 		}

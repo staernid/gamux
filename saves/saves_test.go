@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -227,5 +228,24 @@ func TestBackupCreationAndRestoration(t *testing.T) {
 	listAfterDelete, _ := bm.ListBackups("Valheim", "999999")
 	if len(listAfterDelete) != 0 {
 		t.Errorf("expected 0 backups after delete, got %d", len(listAfterDelete))
+	}
+}
+
+func TestResolveEffectiveWinePrefix_DefaultSharedUMU(t *testing.T) {
+	tmpDir := t.TempDir()
+	mgr := NewManifestManager(tmpDir, "", nil)
+	resolver := NewResolver(mgr)
+
+	// 1. Explicit custom prefix
+	customPrefix := filepath.Join(tmpDir, "custom-prefix")
+	p1 := resolver.resolveEffectiveWinePrefix(customPrefix, "1091500", "Cyberpunk 2077")
+	if p1 != customPrefix {
+		t.Errorf("expected custom prefix %s, got %s", customPrefix, p1)
+	}
+
+	// 2. Unset prefix -> defaults to Games/umu/umu-default
+	p2 := resolver.resolveEffectiveWinePrefix("", "1091500", "Cyberpunk 2077")
+	if !strings.HasSuffix(p2, filepath.Join("Games", "umu", "umu-default")) {
+		t.Errorf("expected default shared prefix ending in Games/umu/umu-default, got %s", p2)
 	}
 }

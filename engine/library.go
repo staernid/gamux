@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/manifest"
@@ -105,8 +106,13 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 		return nil, err
 	}
 
-	// Fetch remote Steam news and languages if AppID is present
+	// Fetch remote Steam title, news, and languages if AppID is present
 	if status.AppID != "" && status.AppID != "0" {
+		if status.Name == "" || status.Name == status.AppID || status.Name == filepath.Base(status.GameDir) {
+			if name, err := steam.FetchAppName(ctx, status.AppID); err == nil && name != "" {
+				status.Name = name
+			}
+		}
 		if news, err := steam.FetchAppNews(ctx, status.AppID); err == nil {
 			status.RecentPatchNote = news
 		}
@@ -347,7 +353,7 @@ func (eng *Engine) ApplyCustomArtwork(ctx context.Context, gameDir string, asset
 	}
 
 	// Persist to launch profile
-	profile, err := runner.LoadLaunchProfile(gameDir)
+	profile, err := compat.LoadProfile(gameDir)
 	if err != nil {
 		profile = &domain.LaunchProfile{GameDir: gameDir}
 	}
@@ -364,7 +370,7 @@ func (eng *Engine) ApplyCustomArtwork(ctx context.Context, gameDir string, asset
 		profile.CustomIconURL = imageSource
 	}
 	profile.LockedArtwork = true
-	_ = runner.SaveProfile(profile)
+	_ = compat.SaveProfile(profile)
 
 	return art, nil
 }
@@ -372,7 +378,7 @@ func (eng *Engine) ApplyCustomArtwork(ctx context.Context, gameDir string, asset
 // LinkGameMetadata links a game installation to a specific metadata provider and ID.
 func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, storeID string) (*domain.Game, error) {
 	ctx = eng.WrapContext(ctx)
-	profile, err := runner.LoadLaunchProfile(gameDir)
+	profile, err := compat.LoadProfile(gameDir)
 	if err != nil {
 		profile = &domain.LaunchProfile{
 			GameDir: gameDir,
@@ -426,10 +432,10 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 		}
 	}
 
-	if err := runner.SaveProfile(profile); err != nil {
+	if err := compat.SaveProfile(profile); err != nil {
 		return nil, fmt.Errorf("save launch profile: %w", err)
 	}
-	_ = runner.SyncLaunchProfile(ctx, profile, eng.Config)
+	_ = compat.SyncSettings(ctx, profile, eng.Config)
 
 	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
@@ -449,7 +455,7 @@ func (eng *Engine) ListMetadataProviders(ctx context.Context) []store.ProviderDe
 // UnlinkGameMetadata removes custom metadata bindings and restores auto-detected game identity.
 func (eng *Engine) UnlinkGameMetadata(ctx context.Context, gameDir string) (*domain.Game, error) {
 	ctx = eng.WrapContext(ctx)
-	if err := runner.UnlinkMetadata(gameDir); err != nil {
+	if err := compat.UnlinkMetadata(gameDir); err != nil {
 		return nil, fmt.Errorf("unlink metadata: %w", err)
 	}
 
