@@ -43,6 +43,8 @@ func DownloadAchievementImages(ctx context.Context, appID int, imageNames []stri
 	g.SetLimit(10) // Limit concurrency
 
 	urls := []string{
+		"https://shared.fastly.steamstatic.com/community_assets/images/apps/",
+		"https://community.fastly.steamstatic.com/public/images/apps/",
 		"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/",
 		"https://cdn.akamai.steamstatic.com/steamcommunity/public/images/apps/",
 		"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/",

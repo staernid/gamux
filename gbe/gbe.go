@@ -47,6 +47,7 @@ type Options struct {
 	TargetDir  string
 	Platform   string
 	AppID      string
+	Language   string
 	DryRun     bool
 	Portable   bool
 	WinePrefix string
@@ -65,6 +66,13 @@ func Apply(ctx context.Context, opts Options) error {
 	cfg := opts.Config
 	if cfg == nil {
 		cfg = config.DefaultConfig()
+	} else {
+		// Clone to avoid mutating shared config
+		cfgCopy := *cfg
+		cfg = &cfgCopy
+	}
+	if opts.Language != "" {
+		cfg.Language = opts.Language
 	}
 
 	targetDir := opts.TargetDir
@@ -170,12 +178,15 @@ func Apply(ctx context.Context, opts Options) error {
 			}
 		} else {
 			slog.Info("[LOADER MODE] Keeping original library intact (zero file replacement)", "file", file)
+			// Restore any existing .ORIGINAL backup to ensure pristine original binary
+			RestoreOriginalBackup(file, dryRun)
+
 			if platform == "win64" || platform == "win32" {
 				targetExe := exePath
 				if targetExe == "" {
 					targetExe = file
 				}
-				if err := SetupLoaderMode(gbeBase, absTargetDir, platform, appID, targetExe, dryRun); err != nil {
+				if err := SetupLoaderMode(gbeBase, absTargetDir, platform, appID, targetExe, targetFiles, dryRun); err != nil {
 					slog.Warn("Failed to setup Goldberg loader mode", "error", err)
 				}
 				dllPath := filepath.Join(gbePath, platformCfg.Additional)
@@ -187,8 +198,15 @@ func Apply(ctx context.Context, opts Options) error {
 
 		// Determine the source original binary for interface detection
 		sourceDll := file
-		if util.FileExists(file + ".ORIGINAL") {
-			sourceDll = file + ".ORIGINAL"
+		dir := filepath.Dir(file)
+		base := filepath.Base(file)
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasPrefix(e.Name(), base) && strings.Contains(e.Name(), ".ORIGINAL") {
+					sourceDll = filepath.Join(dir, e.Name())
+					break
+				}
+			}
 		}
 
 		if dryRun {
@@ -257,7 +275,7 @@ func ConfigureCustomSettings(steamSettingsDir string, cfg *config.Config, suppor
 
 	// 1. Language Resolution
 	langFile := filepath.Join(steamSettingsDir, "force_language.txt")
-	targetLang := cfg.Language
+	targetLang := strings.TrimSpace(cfg.Language)
 	if targetLang != "" && targetLang != "auto" {
 		// Validate against supported languages if available
 		if len(supportedLanguages) > 0 {
@@ -343,88 +361,60 @@ func ConfigureWineRegistry(winePrefix, platform, dllPath string, dryRun bool) {
 	}
 }
 
-// SetupLoaderMode configures Goldberg's official helper loader (steamclient_loader_x64/x86.exe and ColdClientLoader.ini)
-// by creating relative symlinks to central GBE binaries in ~/.local/share/gbe_fork/ and generating ColdClientLoader.ini.
-func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, dryRun bool) error {
+// SetupLoaderMode configures Goldberg's Steam client emulation libraries (steamclient64/steamclient.dll and overlay renderer)
+// by creating relative symlinks to central GBE binaries in ~/.local/share/gbe_fork/ across the root, exe dir, and library dirs.
+func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, targetFiles []string, dryRun bool) error {
 	if platform != "win64" && platform != "win32" {
 		return nil
 	}
 
 	loaderDir := filepath.Join(gbeBase, "win_release", "steamclient_experimental")
-	loaderExeName := "steamclient_loader_x64.exe"
-	if platform == "win32" {
-		loaderExeName = "steamclient_loader_x86.exe"
-	}
 
 	filesToSymlink := []string{
-		loaderExeName,
 		"steamclient64.dll",
 		"steamclient.dll",
 		"GameOverlayRenderer64.dll",
 		"GameOverlayRenderer.dll",
 	}
 
-	for _, fname := range filesToSymlink {
-		src := filepath.Join(loaderDir, fname)
-		dst := filepath.Join(absTargetDir, fname)
-		if _, err := os.Stat(src); os.IsNotExist(err) {
-			slog.Warn("GBE loader asset not found", "src", src)
-			continue
+	targetDirs := map[string]bool{
+		absTargetDir: true,
+	}
+	if exePath != "" {
+		if filepath.IsAbs(exePath) {
+			targetDirs[filepath.Dir(exePath)] = true
+		} else {
+			targetDirs[filepath.Join(absTargetDir, filepath.Dir(exePath))] = true
 		}
+	}
+	for _, f := range targetFiles {
+		targetDirs[filepath.Dir(f)] = true
+	}
 
-		if dryRun {
-			slog.Info("[DRY RUN] Would symlink loader asset", "from", src, "to", dst)
-			continue
-		}
-
-		_ = os.Remove(dst)
-		if err := os.Symlink(src, dst); err != nil {
-			slog.Warn("Failed to symlink loader asset, falling back to copy", "from", src, "to", dst, "error", err)
-			if copyErr := util.CopyFile(src, dst); copyErr != nil {
-				slog.Error("Failed to copy loader asset fallback", "from", src, "to", dst, "error", copyErr)
+	for dstDir := range targetDirs {
+		for _, fname := range filesToSymlink {
+			src := filepath.Join(loaderDir, fname)
+			dst := filepath.Join(dstDir, fname)
+			if _, err := os.Stat(src); os.IsNotExist(err) {
+				slog.Warn("GBE loader asset not found", "src", src)
+				continue
 			}
-		} else {
-			slog.Info("Symlinked GBE loader asset", "file", fname, "dst", dst)
+
+			if dryRun {
+				slog.Info("[DRY RUN] Would symlink loader asset", "from", src, "to", dst)
+				continue
+			}
+
+			_ = os.Remove(dst)
+			if err := os.Symlink(src, dst); err != nil {
+				slog.Warn("Failed to symlink loader asset, falling back to copy", "from", src, "to", dst, "error", err)
+				if copyErr := util.CopyFile(src, dst); copyErr != nil {
+					slog.Error("Failed to copy loader asset fallback", "from", src, "to", dst, "error", copyErr)
+				}
+			} else {
+				slog.Info("Symlinked GBE loader asset", "file", fname, "dst", dst)
+			}
 		}
-	}
-
-	relExe := exePath
-	if filepath.IsAbs(exePath) {
-		if r, err := filepath.Rel(absTargetDir, exePath); err == nil {
-			relExe = r
-		} else {
-			relExe = filepath.Base(exePath)
-		}
-	}
-
-	exeRunDir := ""
-	if dir := filepath.Dir(relExe); dir != "." && dir != "" && dir != "/" {
-		exeRunDir = dir
-	}
-
-	iniContent := fmt.Sprintf(`[SteamClient]
-Exe=%s
-ExeRunDir=%s
-ExeCommandLine=
-AppId=%s
-SteamClientDll=steamclient.dll
-SteamClient64Dll=steamclient64.dll
-
-[Injection]
-ForceInjectSteamClient=1
-ForceInjectGameOverlayRenderer=0
-IgnoreInjectionError=0
-IgnoreLoaderArchDifference=0
-`, relExe, exeRunDir, appID)
-
-	iniPath := filepath.Join(absTargetDir, "ColdClientLoader.ini")
-	if dryRun {
-		slog.Info("[DRY RUN] Would write ColdClientLoader.ini", "path", iniPath)
-	} else {
-		if err := os.WriteFile(iniPath, []byte(iniContent), 0644); err != nil {
-			return fmt.Errorf("write ColdClientLoader.ini: %w", err)
-		}
-		slog.Info("Successfully wrote ColdClientLoader.ini", "path", iniPath, "appID", appID, "exe", relExe)
 	}
 
 	return nil
@@ -487,6 +477,35 @@ func GenerateAchievementsJSON(ctx context.Context, appID uint32, apiKey string, 
 	return nil
 }
 
+// RestoreOriginalBackup checks for any .ORIGINAL backup file corresponding to targetFile and restores it.
+func RestoreOriginalBackup(targetFile string, dryRun bool) bool {
+	dir := filepath.Dir(targetFile)
+	base := filepath.Base(targetFile)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, base) && strings.Contains(name, ".ORIGINAL") {
+			srcPath := filepath.Join(dir, name)
+			if dryRun {
+				slog.Info("[DRY RUN] Would restore original file for loader mode", "from", srcPath, "to", targetFile)
+				return true
+			}
+			_ = os.Remove(targetFile)
+			if err := os.Rename(srcPath, targetFile); err == nil {
+				slog.Info("Restored original file for loader mode", "from", srcPath, "to", targetFile)
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Rollback restores original backup files and cleans up Goldberg emulator artifacts (alias for Revert).
 func Rollback(targetDir string, dryRun bool) (int, error) {
 	return Revert(targetDir, dryRun)
@@ -505,9 +524,33 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 
 	slog.Info("Starting Goldberg emulator revert", "dir", absTargetDir, "dryRun", dryRun)
 
+	loaderFileNames := map[string]bool{
+		"ColdClientLoader.ini":        true,
+		"steamclient_loader_x64.exe":  true,
+		"steamclient_loader_x86.exe":  true,
+		"steamclient64.dll":           true,
+		"steamclient.dll":             true,
+		"GameOverlayRenderer64.dll":   true,
+		"GameOverlayRenderer.dll":     true,
+		"steam_interfaces.txt":        true,
+		".steam_interfaces.hash":      true,
+	}
+
 	var restoredCount int
 	walkErr := filepath.WalkDir(absTargetDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "steam_settings" {
+				if dryRun {
+					slog.Info("[DRY RUN] Would remove steam_settings directory", "path", path)
+				} else {
+					_ = os.RemoveAll(path)
+					slog.Info("Removed steam_settings directory", "path", path)
+				}
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -531,48 +574,18 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 					restoredCount++
 				}
 			}
+		} else if loaderFileNames[name] {
+			if dryRun {
+				slog.Info("[DRY RUN] Would remove loader artifact", "path", path)
+			} else {
+				_ = os.Remove(path)
+				slog.Info("Removed loader artifact", "path", path)
+			}
 		}
 		return nil
 	})
 	if walkErr != nil {
 		return restoredCount, fmt.Errorf("walk directory for backup restoration: %w", walkErr)
-	}
-
-	// Clean up loader helper binaries and artifacts
-	loaderFiles := []string{
-		"ColdClientLoader.ini",
-		"steamclient_loader_x64.exe",
-		"steamclient_loader_x86.exe",
-		"steamclient64.dll",
-		"steamclient.dll",
-		"GameOverlayRenderer64.dll",
-		"GameOverlayRenderer.dll",
-		"steam_interfaces.txt",
-		".steam_interfaces.hash",
-	}
-
-	for _, fname := range loaderFiles {
-		p := filepath.Join(absTargetDir, fname)
-		if util.FileExists(p) {
-			if dryRun {
-				slog.Info("[DRY RUN] Would remove loader file", "path", p)
-			} else {
-				_ = os.Remove(p)
-				slog.Info("Removed loader file", "path", p)
-			}
-		}
-	}
-
-	// Clean up steam_settings directory
-	steamSettingsDir := filepath.Join(absTargetDir, "steam_settings")
-	if _, err := os.Stat(steamSettingsDir); err == nil {
-		if dryRun {
-			slog.Info("[DRY RUN] Would remove steam_settings directory", "path", steamSettingsDir)
-		} else {
-			if err := os.RemoveAll(steamSettingsDir); err == nil {
-				slog.Info("Removed steam_settings directory", "path", steamSettingsDir)
-			}
-		}
 	}
 
 	// Clean up root steam_appid.txt

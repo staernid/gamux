@@ -28,9 +28,9 @@ var rollbackCommand = &cli.Command{
 			return nil
 		}
 		path := extractPath(c)
-		_, _, game, _ := engine.NewServices(activeConfig)
+		eng := engine.New(activeConfig)
 		ui.RenderStep(1, 1, "Rolling back changes for "+path)
-		if err := game.Rollback(c.Context, path, c.Bool("dry-run")); err != nil {
+		if err := eng.Rollback(c.Context, path, c.Bool("dry-run")); err != nil {
 			renderCLIError(err, "Check file permissions")
 			return err
 		}
@@ -47,8 +47,8 @@ var updateGBECommand = &cli.Command{
 	Usage:    "Update Goldberg Emulator release assets from GitHub",
 	Action: func(c *cli.Context) error {
 		ui.RenderStep(1, 1, "Updating Goldberg Emulator release assets from GitHub")
-		sc := engine.NewServiceContext(activeConfig)
-		if err := sc.Tools().Update(c.Context, "gbe"); err != nil {
+		eng := engine.New(activeConfig)
+		if err := eng.Tools().Update(c.Context, "gbe"); err != nil {
 			renderCLIError(err)
 			return err
 		}
@@ -65,8 +65,8 @@ var updateSteamlessCommand = &cli.Command{
 	Usage:    "Update Steamless DRM unpacker release assets from GitHub",
 	Action: func(c *cli.Context) error {
 		ui.RenderStep(1, 1, "Updating Steamless DRM unpacker release assets from GitHub")
-		sc := engine.NewServiceContext(activeConfig)
-		if err := sc.Tools().Update(c.Context, "steamless"); err != nil {
+		eng := engine.New(activeConfig)
+		if err := eng.Tools().Update(c.Context, "steamless"); err != nil {
 			renderCLIError(err)
 			return err
 		}
@@ -86,22 +86,22 @@ var toolsCommand = &cli.Command{
 		&cli.BoolFlag{Name: "json", Usage: "Output tools status in JSON format"},
 	},
 	Action: func(c *cli.Context) error {
-		sc := engine.NewServiceContext(activeConfig)
+		eng := engine.New(activeConfig)
 		arg := c.Args().First()
 		if arg == "update" || arg == "upgrade" {
 			ui.RenderStep(1, 2, "Updating Goldberg Emulator release assets...")
-			if err := sc.Tools().Update(c.Context, "gbe"); err != nil {
+			if err := eng.Tools().Update(c.Context, "gbe"); err != nil {
 				slog.Warn("GBE update failed", "error", err)
 			}
 			ui.RenderStep(2, 2, "Updating Steamless release assets...")
-			if err := sc.Tools().Update(c.Context, "steamless"); err != nil {
+			if err := eng.Tools().Update(c.Context, "steamless"); err != nil {
 				slog.Warn("Steamless update failed", "error", err)
 			}
 			ui.RenderSuccess("Tools update process finished", "", nil)
 			return nil
 		}
 
-		toolsList, err := sc.GetToolsStatus(c.Context)
+		toolsList, err := eng.GetToolsStatus(c.Context)
 		if err != nil {
 			renderCLIError(err)
 			return err
@@ -230,8 +230,8 @@ var notifyLaunchCommand = &cli.Command{
 			ui.RenderCommandHelp(c.Command, Version)
 			return nil
 		}
-		sc, _, game, _ := engine.NewServices(activeConfig)
-		sc.Notifier = ui.NotifyIssue
-		return game.NotifyLaunch(c.Context, targetPath)
+		eng := engine.New(activeConfig)
+		eng.Notifier = ui.NotifyIssue
+		return eng.NotifyLaunch(c.Context, targetPath)
 	},
 }

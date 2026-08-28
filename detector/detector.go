@@ -82,6 +82,11 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		return nil, fmt.Errorf("%w: %s", ErrGameNotFound, absPath)
 	}
 
+	// Guard against scanning runner prefix roots or system folders as games
+	if isRunnerPrefixDir(absPath) && !util.FileExists(filepath.Join(absPath, "steam_settings", "launch_profile.json")) {
+		return nil, fmt.Errorf("path %s is a runner/wine prefix directory, not a game", absPath)
+	}
+
 	var state scanState
 
 	// Single-pass filesystem traversal
@@ -94,6 +99,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		lowerName := strings.ToLower(name)
 
 		if d.IsDir() {
+			if p != absPath && (lowerName == "drive_c" || lowerName == "dosdevices" || lowerName == "pfx" || lowerName == ".git" || lowerName == ".gamux_backup" || lowerName == "node_modules") {
+				return filepath.SkipDir
+			}
 			if lowerName == "steam_settings" {
 				state.settingsDirExists = true
 			}
@@ -423,36 +431,26 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	launchProfileExists := util.FileExists(launchProfilePath)
 	if profile, err := runner.LoadLaunchProfile(info.GameDir); err == nil && profile != nil {
 		info.LaunchProfile = profile
-		if profile.ExePath != "" {
-			exePath := profile.ExePath
-			if !filepath.IsAbs(exePath) {
-				exePath = filepath.Join(info.GameDir, exePath)
-			} else {
-				exePath = util.CanonicalPath(exePath)
-			}
-			realLower := strings.ToLower(filepath.Base(exePath))
-			if util.FileExists(exePath) && !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
-				info.ExePath = exePath
-			}
+		if profile.SourceOverride != "" {
+			info.Source = profile.SourceOverride
 		}
-		if profile.ExeArgs != "" {
-			info.ExeArgs = profile.ExeArgs
-		}
-		if profile.OperatingMode != "" {
-			info.OperatingMode = profile.OperatingMode
-		}
-		if profile.Runner != "" {
-			info.Runner = profile.Runner
-		}
-		if profile.WinePrefix != "" {
-			info.WinePrefix = profile.WinePrefix
-		}
-		if profile.DllOverrides != "" {
-			info.DllOverrides = profile.DllOverrides
-		}
-		if launchProfileExists && profile.Store != "" {
+		if profile.MetadataProvider != "" {
+			info.Store = profile.MetadataProvider
+		} else if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(info.Source)) {
 			info.Store = profile.Store
-			info.Source = profile.Store
+		}
+		if profile.MetadataID != "" {
+			if strings.EqualFold(profile.MetadataProvider, "steam") {
+				info.AppID = profile.MetadataID
+				if num, ok := util.ParseAppID(profile.MetadataID); ok && num > 0 {
+					info.NumericAppID = num
+					info.ExternalIDs.SteamAppID = num
+				}
+			} else if strings.EqualFold(profile.MetadataProvider, "gog") {
+				info.ExternalIDs.GOGID = profile.MetadataID
+			} else if strings.EqualFold(profile.MetadataProvider, "rawg") {
+				info.ExternalIDs.RAWGID = profile.MetadataID
+			}
 		}
 		if launchProfileExists && profile.StoreAppID != "" {
 			info.AppID = profile.StoreAppID
@@ -460,10 +458,10 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 			info.ExternalIDs.SteamAppID = info.NumericAppID
 		}
 		if profile.GOGID != "" {
-			info.GOGID = profile.GOGID
+			info.ExternalIDs.GOGID = profile.GOGID
 		}
 		if profile.SGDBID != "" {
-			info.SGDBID = profile.SGDBID
+			info.ExternalIDs.SGDBID = profile.SGDBID
 		}
 		if profile.CustomCoverURL != "" {
 			info.CustomCoverURL = profile.CustomCoverURL
@@ -563,4 +561,16 @@ func scoreExecutable(exePath string, gameDir string, gameName string) int {
 	}
 
 	return score
+}
+
+func isRunnerPrefixDir(path string) bool {
+	baseLower := strings.ToLower(filepath.Base(path))
+	if baseLower == "umu" || baseLower == "umu-default" || baseLower == "wine" || baseLower == "proton" || baseLower == "pfx" || baseLower == "prefix" || baseLower == "prefixes" {
+		return true
+	}
+	// Prefix root check: contains drive_c and (system.reg or user.reg or dosdevices or tracked_files)
+	if util.FileExists(filepath.Join(path, "drive_c")) && (util.FileExists(filepath.Join(path, "system.reg")) || util.FileExists(filepath.Join(path, "user.reg")) || util.FileExists(filepath.Join(path, "dosdevices"))) {
+		return true
+	}
+	return false
 }

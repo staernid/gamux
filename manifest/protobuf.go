@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -268,10 +269,15 @@ func ParseBinaryManifestWithKey(data []byte, hexKey string) ([]ManifestFileEntry
 
 // LoadManifestFromDir scans targetDir/[Manifests]/ for .manifest files and returns a populated Manifest.
 func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
-	return LoadManifestFromDirWithKeys(targetDir, appID, nil)
+	return LoadManifestFromDirWithPlatform(targetDir, appID, nil, "")
 }
 
 func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[uint32]string) (*Manifest, error) {
+	return LoadManifestFromDirWithPlatform(targetDir, appID, depotKeys, "")
+}
+
+// LoadManifestFromDirWithPlatform loads depot manifests matching a specific target platform from <targetDir>/[Manifests].
+func LoadManifestFromDirWithPlatform(targetDir string, appID uint32, depotKeys map[uint32]string, platform string) (*Manifest, error) {
 	manifestsDir := filepath.Join(targetDir, "[Manifests]")
 	if _, err := os.Stat(manifestsDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("manifests directory %s does not exist", manifestsDir)
@@ -343,9 +349,6 @@ func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[u
 	var resolvedDepotID uint32
 
 	for dID, info := range depotLatestManifest {
-		if resolvedDepotID == 0 {
-			resolvedDepotID = dID
-		}
 		data, err := os.ReadFile(info.path)
 		if err != nil {
 			continue
@@ -358,6 +361,16 @@ func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[u
 
 		files, err := ParseBinaryManifestWithKey(data, hexKey)
 		if err == nil && len(files) > 0 {
+			if platform != "" && platform != "all" {
+				cat := ClassifyDepot(files)
+				if !MatchesPlatform(cat, platform) {
+					slog.Debug("Skipping depot manifest not matching platform", "depotID", dID, "category", cat, "targetPlatform", platform)
+					continue
+				}
+			}
+			if resolvedDepotID == 0 {
+				resolvedDepotID = dID
+			}
 			for idx := range files {
 				files[idx].DepotID = dID
 			}
@@ -366,7 +379,7 @@ func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[u
 	}
 
 	if len(allFiles) == 0 {
-		return nil, fmt.Errorf("no valid manifest file entries loaded from %s", manifestsDir)
+		return nil, fmt.Errorf("no valid manifest file entries matching platform %q loaded from %s", platform, manifestsDir)
 	}
 
 	return &Manifest{
@@ -376,3 +389,4 @@ func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[u
 		Files:     allFiles,
 	}, nil
 }
+

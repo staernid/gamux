@@ -19,6 +19,7 @@
     setGameRunning,
     refreshGame,
     renameGameInStore,
+    updateGameInStore,
     sortBy,
     cycleSortOrder,
     getSortLabel
@@ -29,7 +30,8 @@
   import { configStore } from './stores/config.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
   import { formatBytes } from './utils/format.js';
-  import { getPlatformColors, getPlatformType, isSamePath } from './utils/game.js';
+  import { getPlatformColors, getPlatformType, getGameSource, getMetadataInfo, isSamePath } from './utils/game.js';
+  import { playTick, playSelect, playBack, playNav } from './utils/audio.js';
   import { GamepadTracker } from './input/gamepad.js';
   import { gamuxDev } from './debug/debugBridge.js';
 
@@ -37,17 +39,20 @@
 
   $: activeColors = $selectedGame ? getPlatformColors($selectedGame) : null;
   $: platformType = $selectedGame ? getPlatformType($selectedGame) : '';
+  $: gameSource = $selectedGame ? getGameSource($selectedGame) : '';
+  $: metaInfo = $selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' };
 
   const views = ['library', 'tasks', 'settings'];
 
   function cycleView(dir) {
     let curr = 'library';
     activeView.subscribe(v => { curr = v; })();
-    const currentBase = curr === 'game-hub' ? 'library' : (curr === 'downloads' || curr === 'transfers' ? 'tasks' : curr);
+    const currentBase = curr === 'game-hub' ? 'library' : curr;
     const idx = views.indexOf(currentBase);
     let next = idx + dir;
     if (next < 0) next = views.length - 1;
     if (next >= views.length) next = 0;
+    playNav();
     activeView.set(views[next]);
   }
 
@@ -55,6 +60,7 @@
     const game = targetGame || $selectedGame;
     if (!game) return;
     if (targetGame) selectedGame.set(targetGame);
+    playSelect();
     $activeView = 'game-hub';
   }
 
@@ -65,6 +71,7 @@
   }
 
   function openSearchGrid() {
+    playNav();
     modalStore.open('search-grid');
   }
 
@@ -78,6 +85,7 @@
     const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
 
     let nextIndex = (currentIndex + dir + list.length) % list.length;
+    playTick();
     selectedGame.set(list[nextIndex]);
   }
 
@@ -91,7 +99,13 @@
       tasksStore.handleTaskEvent(ev);
       if (ev?.type === 'task:completed' || ev?.type === 'transfer:completed') {
         const gameDir = ev.game_dir || ev.gameDir;
-        if (ev.operation === 'normalize' && ev.metadata?.new_game_dir && ev.metadata?.old_game_dir) {
+        if (ev.game) {
+          if (ev.operation === 'normalize' && ev.metadata?.old_game_dir) {
+            renameGameInStore(ev.metadata.old_game_dir, ev.game);
+          } else {
+            updateGameInStore(ev.game);
+          }
+        } else if (ev.operation === 'normalize' && ev.metadata?.new_game_dir && ev.metadata?.old_game_dir) {
           refreshGame(ev.metadata.new_game_dir).then((g) => {
             if (g) renameGameInStore(ev.metadata.old_game_dir, g);
           });
@@ -121,7 +135,7 @@
       },
       onGameStatus: (data) => {
         if (data?.gameDir) {
-          setGameRunning(data.gameDir, !!data.isRunning);
+          setGameRunning(data.gameDir, !!data.isRunning, data.playtimeSeconds, data.lastPlayed);
         }
       }
     });
@@ -129,18 +143,11 @@
     // 3. Check URL query parameters for view / drawer previewing
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
-    if (viewParam && ['library', 'game-hub', 'tasks', 'downloads', 'transfers', 'settings'].includes(viewParam)) {
-      activeView.set(viewParam === 'downloads' || viewParam === 'transfers' ? 'tasks' : viewParam);
-    } else if (viewParam === 'activity') {
-      activeView.set('settings');
+    if (viewParam && ['library', 'game-hub', 'tasks', 'settings'].includes(viewParam)) {
+      activeView.set(viewParam);
     }
     if (urlParams.get('properties') === '1' || urlParams.get('properties') === 'true' || urlParams.get('drawer') === '1') {
-      const unsub = selectedGame.subscribe(g => {
-        if (g) {
-          modalStore.open('game-properties', { game: g });
-          setTimeout(() => unsub(), 0);
-        }
-      });
+      activeView.set('game-hub');
     }
     if (urlParams.get('search') === '1' || urlParams.get('search') === 'true') {
       modalStore.open('search-grid');
@@ -160,10 +167,13 @@
         openSearchGrid();
       } else if (e.key === 'Escape') {
         if ($modalStore) {
+          playBack();
           modalStore.close();
         } else if ($pathPopover) {
+          playBack();
           $pathPopover = false;
         } else if ($activeView !== 'library') {
+          playBack();
           $activeView = 'library';
         }
       } else if (!isInput && (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R')))) {
@@ -184,6 +194,7 @@
         } else if (e.key === '3') {
           $activeView = 'settings';
         } else if ((e.key === 'y' || e.key === 'Y') && $activeView === 'library') {
+          playTick();
           cycleSortOrder();
         } else if ((e.key === 'f' || e.key === 'F' || e.key === 'o' || e.key === 'O') && $activeView === 'library') {
           openCurrentDirectory();
@@ -220,6 +231,7 @@
         // 1. If a Modal is open, handle Back/Close
         if (modalActive) {
           if (actions.actionBack) {
+            playBack();
             modalStore.close();
           }
           padLoopId = requestAnimationFrame(pollGamepad);
@@ -235,6 +247,7 @@
 
           // Secondary (Y) -> Cycle Sort Order
           if (actions.actionFiles) {
+            playTick();
             cycleSortOrder();
           }
 
@@ -257,6 +270,7 @@
         } else if (currView === 'game-hub') {
           // Game Hub Navigation
           if (actions.actionBack) {
+            playBack();
             activeView.set('library');
           }
           if (actions.actionFiles) {
@@ -343,18 +357,25 @@
           </div>
         </div>
 
-        <!-- Bottom Right: Game Details -->
+        <!-- Bottom Right: Game Details & Telemetry -->
         {#if $selectedGame}
-          <div class="flex flex-col items-end space-y-0.5 text-[11px] text-slate-500 font-mono text-right max-w-xs sm:max-w-sm truncate">
+          <div class="flex flex-col items-end space-y-0.5 text-[11px] text-slate-500 font-mono text-right max-w-sm truncate">
             <div>
-              <span class="text-slate-600">Size:</span>
-              <span class="text-slate-400 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
+              <span class="text-slate-600">Source:</span>
+              <span class="text-slate-300 font-semibold">{gameSource}</span>
+              {#if metaInfo.provider && metaInfo.provider !== 'None'}
+                <span class="text-slate-600">·</span>
+                <span class="text-slate-600">Meta:</span>
+                <span class="text-sky-400 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
+              {/if}
             </div>
             <div>
               <span class="text-slate-600">Platform:</span>
-              <span class="text-slate-400 font-semibold">{platformType}</span>
+              <span class="text-slate-400 font-semibold">{$selectedGame.platform || 'Linux'}</span>
               <span class="text-slate-600">·</span>
               <span class="text-slate-400">{$selectedGame.runner || 'UMU'}</span>
+              <span class="text-slate-600">·</span>
+              <span class="text-slate-400 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
             </div>
             <div class="truncate max-w-full text-slate-600" title={$selectedGame.gameDir}>
               <span class="text-slate-600">Path:</span>
@@ -366,9 +387,9 @@
     </div>
   {:else if $activeView === 'game-hub'}
     <GameHubView />
-  {:else if $activeView === 'tasks' || $activeView === 'downloads' || $activeView === 'downloader' || $activeView === 'transfers' || $activeView === 'operations'}
+  {:else if $activeView === 'tasks'}
     <DownloadsView />
-  {:else if $activeView === 'settings' || $activeView === 'activity'}
+  {:else if $activeView === 'settings'}
     <SettingsView />
   {/if}
 

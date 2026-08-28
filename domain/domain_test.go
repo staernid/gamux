@@ -51,8 +51,10 @@ func TestNonSteamGameInvariants(t *testing.T) {
 		t.Errorf("expected GOG game without Steam AppID to not require steam emulator")
 	}
 
-	g.ExePath = "/games/cp2077/bin/x64/Cyberpunk2077.exe"
-	g.OperatingMode = string(ModeStandalone)
+	g.LaunchProfile = &LaunchProfile{
+		ExePath:       "/games/cp2077/bin/x64/Cyberpunk2077.exe",
+		OperatingMode: string(ModeStandalone),
+	}
 	g.RecomputeState()
 
 	if !g.IsReady {

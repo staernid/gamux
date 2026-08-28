@@ -30,10 +30,10 @@ var statusCommand = &cli.Command{
 			return nil
 		}
 		path := extractPath(c)
-		_, lib, _, _ := engine.NewServices(activeConfig)
+		eng := engine.New(activeConfig)
 
 		if c.Bool("terse") {
-			statuses, err := lib.BatchInspect(c.Context, path)
+			statuses, err := eng.BatchInspect(c.Context, path)
 			if err == nil && len(statuses) > 0 {
 				if c.Bool("json") {
 					enc := json.NewEncoder(os.Stdout)
@@ -53,19 +53,7 @@ var statusCommand = &cli.Command{
 						updatesAvail++
 					}
 
-					ui.RenderTerseStatus(ui.DetectionInfoSummary{
-						Name:             s.Name,
-						AppID:            s.AppID,
-						Platform:         s.Platform,
-						GameDir:          s.GameDir,
-						State:            s.State,
-						ManifestID:       s.ManifestID,
-						ModifiedFiles:    s.ModifiedFiles,
-						MissingFiles:     s.MissingFiles,
-						UntrackedFiles:   s.UntrackedFiles,
-						HasUpdate:        s.HasUpdate,
-						RemoteManifestID: s.RemoteManifestID,
-					})
+					ui.RenderTerseStatus(s)
 				}
 				ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail)
 				return nil
@@ -77,7 +65,7 @@ var statusCommand = &cli.Command{
 			newsCount = 5
 		}
 
-		status, err := lib.InspectStatusEx(c.Context, path, newsCount)
+		status, err := eng.InspectStatusEx(c.Context, path, newsCount)
 		if err != nil {
 			renderCLIError(err, "Ensure path points to a valid game directory")
 			return err
@@ -89,50 +77,7 @@ var statusCommand = &cli.Command{
 			return enc.Encode(status)
 		}
 
-		newsItems := make([]ui.NewsItemSummary, len(status.NewsItems))
-		for i, n := range status.NewsItems {
-			newsItems[i] = ui.NewsItemSummary{
-				Title:     n.Title,
-				FeedLabel: n.FeedLabel,
-				Date:      n.Date,
-				URL:       n.URL,
-			}
-		}
-
-		uiCands := make([]ui.LaunchCandidateSummary, len(status.LaunchCandidates))
-		for i, lc := range status.LaunchCandidates {
-			uiCands[i] = ui.LaunchCandidateSummary{
-				Name:        lc.Name,
-				Executable:  lc.Executable,
-				Arguments:   lc.Arguments,
-				Description: lc.Description,
-			}
-		}
-
-		ui.RenderDetectionSummary(ui.DetectionInfoSummary{
-			Name:              status.Name,
-			AppID:             status.AppID,
-			Platform:          status.Platform,
-			GameDir:           status.GameDir,
-			ExePath:           status.ExePath,
-			LaunchCandidates:  uiCands,
-			State:             status.State,
-			OriginalBackups:   len(status.OriginalBackups),
-			ManifestID:        status.ManifestID,
-			BuildID:           status.BuildID,
-			DiskSizeBytes:     status.DiskSizeBytes,
-			FileCount:         status.FileCount,
-			OfficialFileCount: status.OfficialFileCount,
-			ModifiedFiles:     status.ModifiedFiles,
-			MissingFiles:      status.MissingFiles,
-			UntrackedFiles:    status.UntrackedFiles,
-			HasUpdate:         status.HasUpdate,
-			RemoteManifestID:  status.RemoteManifestID,
-			DLCCount:          status.DLCCount,
-			AchievementCount:  status.AchievementCount,
-			RecentPatchNote:   status.RecentPatchNote,
-			NewsItems:         newsItems,
-		})
+		ui.RenderDetectionSummary(status)
 		return nil
 	},
 }
@@ -140,42 +85,32 @@ var statusCommand = &cli.Command{
 var newsCommand = &cli.Command{
 	Name:      "news",
 	Category:  "Step 3: Inspection & Maintenance",
-	Usage:     "Read full Steam patch notes and changelogs for a game",
-	ArgsUsage: "[path_or_appid] [index]",
+	Usage:     "View formatted Steam patch note or update details for a game",
+	ArgsUsage: "[path|app_id] [index]",
 	Action: func(c *cli.Context) error {
 		if c.Args().Len() == 0 {
 			ui.RenderCommandHelp(c.Command, Version)
 			return nil
 		}
-		targetPath := "."
+
+		targetPath := extractPath(c)
 		index := 1
 
 		if c.Args().Len() == 1 {
-			arg := c.Args().Get(0)
-			if num, err := strconv.Atoi(arg); err == nil {
-				if num > 100 { // Likely an AppID (e.g. 3904850)
-					targetPath = arg
-					index = 1
-				} else {
-					index = num
-					targetPath = "."
-				}
-			} else {
-				targetPath = arg
-				index = 1
-			}
+			targetPath = c.Args().Get(0)
 		} else if c.Args().Len() >= 2 {
 			arg1 := c.Args().Get(0)
 			arg2 := c.Args().Get(1)
+
 			num1, err1 := strconv.Atoi(arg1)
 			num2, err2 := strconv.Atoi(arg2)
 
 			if err1 == nil && err2 != nil {
-				// "gamux news 1 /path/to/game"
+				// "gamux news 1 <path>"
 				index = num1
 				targetPath = arg2
 			} else if err1 != nil && err2 == nil {
-				// "gamux news /path/to/game 1"
+				// "gamux news <path> 1"
 				targetPath = arg1
 				index = num2
 			} else if err1 == nil && err2 == nil {
@@ -188,8 +123,8 @@ var newsCommand = &cli.Command{
 			}
 		}
 
-		_, lib, _, _ := engine.NewServices(activeConfig)
-		item, gameName, err := lib.GetPatchNote(c.Context, targetPath, index)
+		eng := engine.New(activeConfig)
+		item, gameName, err := eng.GetPatchNote(c.Context, targetPath, index)
 		if err != nil {
 			renderCLIError(err, "Verify AppID or game directory path", "Check network connectivity")
 			return err
@@ -223,14 +158,14 @@ var launchCommand = &cli.Command{
 			return nil
 		}
 		targetPath := extractPath(c)
-		sc, lib, game, _ := engine.NewServices(activeConfig)
-		sc.Notifier = ui.NotifyIssue
+		eng := engine.New(activeConfig)
+		eng.Notifier = ui.NotifyIssue
 		if !c.Bool("no-notify") {
-			if err := game.NotifyLaunch(c.Context, targetPath); err != nil {
+			if err := eng.NotifyLaunch(c.Context, targetPath); err != nil {
 				slog.Warn("Pre-launch notification check failed", "error", err)
 			}
 		}
-		status, err := lib.InspectStatus(c.Context, targetPath)
+		status, err := eng.InspectStatus(c.Context, targetPath)
 		if err != nil {
 			return fmt.Errorf("detect game: %w", err)
 		}
@@ -242,14 +177,14 @@ var launchCommand = &cli.Command{
 					Path:       targetPath,
 					ApplyGBE:   true,
 					Portable:   true,
-					WinePrefix: status.WinePrefix,
-					ExePath:    status.ExePath,
-					ExeArgs:    status.ExeArgs,
+					WinePrefix: status.EffectiveWinePrefix(),
+					ExePath:    status.EffectiveExePath(),
+					ExeArgs:    status.EffectiveExeArgs(),
 				}
-				if _, applyErr := game.ApplyGame(c.Context, applyOpts); applyErr != nil {
+				if _, applyErr := eng.ApplyGame(c.Context, applyOpts); applyErr != nil {
 					slog.Warn("Auto-apply before launch encountered warning", "error", applyErr)
 				}
-				if refreshed, rErr := lib.InspectStatus(c.Context, targetPath); rErr == nil && refreshed != nil {
+				if refreshed, rErr := eng.InspectStatus(c.Context, targetPath); rErr == nil && refreshed != nil {
 					status = refreshed
 				}
 			}
@@ -257,14 +192,14 @@ var launchCommand = &cli.Command{
 
 		launchOpts := runner.LaunchOptions{
 			GameDir:       status.GameDir,
-			ExePath:       status.ExePath,
-			ExeArgs:       status.ExeArgs,
+			ExePath:       status.EffectiveExePath(),
+			ExeArgs:       status.EffectiveExeArgs(),
 			AppID:         status.AppID,
 			Name:          status.Name,
 			Platform:      status.Platform,
-			OperatingMode: status.OperatingMode,
-			Runner:        status.Runner,
-			WinePrefix:    status.WinePrefix,
+			OperatingMode: status.EffectiveOperatingMode(),
+			Runner:        status.EffectiveRunner(),
+			WinePrefix:    status.EffectiveWinePrefix(),
 		}
 
 		if status.LaunchProfile != nil {
@@ -300,7 +235,6 @@ var launchCommand = &cli.Command{
 		effectiveOpts := runner.ResolveEffectiveOptions(activeConfig, launchOpts)
 		ui.RenderStep(1, 1, fmt.Sprintf("Launching %s (runner: %s)...", status.Name, effectiveOpts.Runner))
 
-		return game.RunGame(c.Context, effectiveOpts)
+		return eng.RunGame(c.Context, effectiveOpts)
 	},
 }
-

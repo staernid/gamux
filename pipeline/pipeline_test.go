@@ -117,10 +117,10 @@ func TestPipeline_ConcreteStages_DryRun(t *testing.T) {
 	if pctx.Game.Name != "Cyberpunk 2077" {
 		t.Errorf("expected detected name 'Cyberpunk 2077', got %s", pctx.Game.Name)
 	}
-	if !pctx.DirectoryNormalized {
+	if !pctx.Results.DirectoryNormalized {
 		t.Error("expected DirectoryNormalized to be true")
 	}
-	if !pctx.Patched {
+	if !pctx.Results.Patched {
 		t.Error("expected Patched to be true")
 	}
 }
@@ -196,7 +196,7 @@ func TestPipeline_NormalizeStage_Rollback(t *testing.T) {
 	if pctx.Game.GameDir != originalDir {
 		t.Errorf("expected pctx.Game.GameDir to be restored to %s, got %s", originalDir, pctx.Game.GameDir)
 	}
-	if pctx.DirectoryNormalized {
+	if pctx.Results.DirectoryNormalized {
 		t.Error("expected DirectoryNormalized to be false after rollback")
 	}
 }
@@ -229,7 +229,44 @@ func TestPipeline_ManifestStage_Rollback(t *testing.T) {
 	if _, err := os.Stat(targetACF); !os.IsNotExist(err) {
 		t.Errorf("expected synthesized ACF to be removed during rollback: %s", targetACF)
 	}
-	if pctx.ACFSynthesized {
+	if pctx.Results.ACFSynthesized {
 		t.Error("expected ACFSynthesized to be false after rollback")
+	}
+}
+
+func TestPipeline_NewDefault_DynamicExecution(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "GameFolder")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("MZ"), 0755)
+
+	acfContent := "\"AppState\"\n{\n\t\"appid\"\t\"400\"\n\t\"name\"\t\"Portal\"\n}"
+	_ = os.WriteFile(filepath.Join(gameDir, "appmanifest_400.acf"), []byte(acfContent), 0644)
+
+	pipe := NewDefault()
+	pctx := &Context{
+		Options: Options{
+			Path:          gameDir,
+			OperatingMode: domain.ModeLoader,
+			DryRun:        true,
+			NormalizeDir:  true,
+		},
+		Game:   domain.NewGame("", gameDir, "", ""),
+		Config: config.DefaultConfig(),
+	}
+
+	err := pipe.Execute(context.Background(), pctx)
+	if err != nil {
+		t.Fatalf("NewDefault pipeline execution failed: %v", err)
+	}
+
+	if pctx.Game.Name != "Portal" {
+		t.Errorf("expected detected name 'Portal', got %s", pctx.Game.Name)
+	}
+	if pctx.Game.AppID != "400" {
+		t.Errorf("expected detected appID '400', got %s", pctx.Game.AppID)
+	}
+	if !pctx.Results.Patched {
+		t.Error("expected Results.Patched to be true for Steam loader game")
 	}
 }

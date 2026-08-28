@@ -239,11 +239,11 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Detect failed: %v", err)
 		}
-		if filepath.Base(info.ExePath) != "MultiExeGame_DX11.exe" {
-			t.Errorf("expected target executable MultiExeGame_DX11.exe from launch profile, got %s", filepath.Base(info.ExePath))
+		if filepath.Base(info.EffectiveExePath()) != "MultiExeGame_DX11.exe" {
+			t.Errorf("expected target executable MultiExeGame_DX11.exe from launch profile, got %s", filepath.Base(info.EffectiveExePath()))
 		}
-		if info.ExeArgs != "-dx11" {
-			t.Errorf("expected exe_args '-dx11', got %s", info.ExeArgs)
+		if info.EffectiveExeArgs() != "-dx11" {
+			t.Errorf("expected exe_args '-dx11', got %s", info.EffectiveExeArgs())
 		}
 	})
 
@@ -271,6 +271,58 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		}
 	})
 
+	t.Run("GOG Game with Steam Metadata Override", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "Witcher3_SteamMeta")
+		_ = os.MkdirAll(filepath.Join(gameDir, "steam_settings"), 0755)
+
+		gogJSON := `{"gameId": "1207664643", "name": "The Witcher 3: Wild Hunt"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "goggame-1207664643.info"), []byte(gogJSON), 0644)
+		_ = os.WriteFile(filepath.Join(gameDir, "witcher3.exe"), []byte("exe"), 0755)
+
+		lpJSON := `{"metadata_provider": "steam", "metadata_id": "292030", "store_app_id": "292030"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_settings", "launch_profile.json"), []byte(lpJSON), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Source != "GOG" {
+			t.Errorf("expected physical Source to remain 'GOG', got %s", info.Source)
+		}
+		if info.EffectiveMetadataProvider() != "steam" {
+			t.Errorf("expected EffectiveMetadataProvider 'steam', got %s", info.EffectiveMetadataProvider())
+		}
+		if info.ExternalIDs.SteamAppID != 292030 {
+			t.Errorf("expected ExternalIDs.SteamAppID 292030, got %d", info.ExternalIDs.SteamAppID)
+		}
+	})
+
+	t.Run("Standalone Game with GOG Metadata Override", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "Warcraft3")
+		_ = os.MkdirAll(filepath.Join(gameDir, "steam_settings"), 0755)
+
+		_ = os.WriteFile(filepath.Join(gameDir, "war3.exe"), []byte("exe"), 0755)
+
+		lpJSON := `{"metadata_provider": "gog", "metadata_id": "99999", "gog_id": "99999"}`
+		_ = os.WriteFile(filepath.Join(gameDir, "steam_settings", "launch_profile.json"), []byte(lpJSON), 0644)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		if info.Source != "Standalone" {
+			t.Errorf("expected physical Source 'Standalone', got %s", info.Source)
+		}
+		if info.EffectiveMetadataProvider() != "gog" {
+			t.Errorf("expected EffectiveMetadataProvider 'gog', got %s", info.EffectiveMetadataProvider())
+		}
+		if info.ExternalIDs.GOGID != "99999" {
+			t.Errorf("expected ExternalIDs.GOGID '99999', got %s", info.ExternalIDs.GOGID)
+		}
+	})
+
 	t.Run("Epic Game Detection", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		gameDir := filepath.Join(tmpDir, "EpicGame")
@@ -289,6 +341,39 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		}
 		if info.EpicApp != "Sugar" {
 			t.Errorf("expected EpicApp Sugar, got %s", info.EpicApp)
+		}
+	})
+
+	t.Run("Runner Prefix Directory Rejection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		umuDir := filepath.Join(tmpDir, "umu")
+		_ = os.MkdirAll(filepath.Join(umuDir, "drive_c", "windows", "system32"), 0755)
+		_ = os.WriteFile(filepath.Join(umuDir, "system.reg"), []byte("reg"), 0644)
+		_ = os.WriteFile(filepath.Join(umuDir, "drive_c", "windows", "explorer.exe"), []byte("exe"), 0755)
+
+		_, err := Detect(context.Background(), umuDir)
+		if err == nil {
+			t.Fatalf("expected Detect to reject runner prefix directory 'umu', but got nil error")
+		}
+	})
+
+	t.Run("Skip Drive C Subfolder During Game Inspection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gameDir := filepath.Join(tmpDir, "MySporeGame")
+		driveCDir := filepath.Join(gameDir, "drive_c", "users", "steamuser", "AppData")
+		_ = os.MkdirAll(driveCDir, 0755)
+		_ = os.WriteFile(filepath.Join(gameDir, "Spore.exe"), []byte("exe"), 0755)
+		// Put an unins000 or other exe deep inside drive_c
+		_ = os.WriteFile(filepath.Join(driveCDir, "unrelated.exe"), []byte("exe"), 0755)
+
+		info, err := Detect(context.Background(), gameDir)
+		if err != nil {
+			t.Fatalf("Detect failed: %v", err)
+		}
+		for _, cand := range info.LaunchCandidates {
+			if strings.Contains(cand.Executable, "unrelated.exe") {
+				t.Errorf("expected drive_c to be skipped, but found candidate: %s", cand.Executable)
+			}
 		}
 	})
 
@@ -354,18 +439,18 @@ func TestDetect_EngineTopologies(t *testing.T) {
 
 func TestDetect_UnrelatedDirectoryNameRejectsSteamSearch(t *testing.T) {
 	tmpDir := t.TempDir()
-	umuDir := filepath.Join(tmpDir, "umu")
-	if err := os.MkdirAll(filepath.Join(umuDir, "steam_settings"), 0755); err != nil {
+	customDir := filepath.Join(tmpDir, "UnrelatedCustomGame")
+	if err := os.MkdirAll(filepath.Join(customDir, "steam_settings"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	info, err := Detect(context.Background(), umuDir)
+	info, err := Detect(context.Background(), customDir)
 	if err != nil {
 		t.Fatalf("Detect failed: %v", err)
 	}
 
-	if info.Name != "umu" {
-		t.Errorf("expected game name to remain 'umu', got %q", info.Name)
+	if info.Name != "UnrelatedCustomGame" {
+		t.Errorf("expected game name to remain 'UnrelatedCustomGame', got %q", info.Name)
 	}
 	if info.AppID != "" && info.AppID != "0" {
 		t.Errorf("expected empty AppID, got %q", info.AppID)

@@ -11,37 +11,46 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/staernid/gamux/cache"
 )
 
-// FetchRevoBDKeys attempts to download and extract a .lua manifest key file from the RevoBD public API.
+// FetchRevoBDKeys attempts to download and extract a .lua manifest key file from the RevoBD public API with caching.
 func FetchRevoBDKeys(ctx context.Context, appID uint32) (*ParsedLua, error) {
 	if appID == 0 {
 		return nil, fmt.Errorf("invalid appID 0")
 	}
 
-	url := fmt.Sprintf("https://api.luagen.revobd.club/%d.zip", appID)
-	slog.Info("Fetching manifest keys from RevoBD API", "appID", appID, "url", url)
+	var bodyBytes []byte
+	if cachedData, ok := cache.GetRevoBDZIP(appID); ok && len(cachedData) > 0 {
+		bodyBytes = cachedData
+	} else {
+		url := fmt.Sprintf("https://api.luagen.revobd.club/%d.zip", appID)
+		slog.Info("Fetching manifest keys from RevoBD API", "appID", appID, "url", url)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create revoBD request: %w", err)
-	}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create revoBD request: %w", err)
+		}
 
-	req.Header.Set("User-Agent", "gamux/1.0")
+		req.Header.Set("User-Agent", "gamux/1.0")
 
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("revoBD request failed: %w", err)
-	}
-	defer resp.Body.Close()
+		resp, err := HTTPClientFromContext(ctx).Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("revoBD request failed: %w", err)
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("revoBD HTTP status %d", resp.StatusCode)
-	}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("revoBD HTTP status %d", resp.StatusCode)
+		}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read revoBD zip response: %w", err)
+		readBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read revoBD zip response: %w", err)
+		}
+		bodyBytes = readBytes
+		_ = cache.SaveRevoBDZIP(appID, bodyBytes)
 	}
 
 	zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes)))
@@ -91,31 +100,38 @@ func FetchRevoBDKeys(ctx context.Context, appID uint32) (*ParsedLua, error) {
 	return parsed, nil
 }
 
-// FetchSteamDepotDBKeys fetches depot decryption keys from the KoriaPolis Steam-Depot raw GitHub database.
+// FetchSteamDepotDBKeys fetches depot decryption keys from the KoriaPolis Steam-Depot raw GitHub database with caching.
 func FetchSteamDepotDBKeys(ctx context.Context, appID uint32) (*ParsedLua, error) {
-	url := "https://raw.githubusercontent.com/KoriaPolis/Steam-Depot/main/fallback_depotkeys.json"
-	slog.Info("Fetching depot keys from Steam-Depot GitHub DB", "appID", appID)
+	var bodyBytes []byte
+	if cachedData, ok := cache.GetSteamDepotDB(); ok && len(cachedData) > 0 {
+		bodyBytes = cachedData
+	} else {
+		url := "https://raw.githubusercontent.com/KoriaPolis/Steam-Depot/main/fallback_depotkeys.json"
+		slog.Info("Fetching depot keys from Steam-Depot GitHub DB", "appID", appID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create steam-depot request: %w", err)
-	}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create steam-depot request: %w", err)
+		}
 
-	req.Header.Set("User-Agent", "gamux/1.0")
+		req.Header.Set("User-Agent", "gamux/1.0")
 
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("steam-depot request failed: %w", err)
-	}
-	defer resp.Body.Close()
+		resp, err := HTTPClientFromContext(ctx).Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("steam-depot request failed: %w", err)
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("steam-depot HTTP status %d", resp.StatusCode)
-	}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("steam-depot HTTP status %d", resp.StatusCode)
+		}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read steam-depot response: %w", err)
+		readBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read steam-depot response: %w", err)
+		}
+		bodyBytes = readBytes
+		_ = cache.SaveSteamDepotDB(bodyBytes)
 	}
 
 	type DepotEntry struct {

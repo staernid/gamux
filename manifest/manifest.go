@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
 )
+
 
 // ChunkInfo represents a single file chunk in a Steam manifest.
 type ChunkInfo struct {
@@ -51,11 +54,124 @@ func (m *Manifest) GetDecryptionKey(depotID uint32) string {
 	return m.DecryptionKey
 }
 
+// DepotCategory classifies a Steam content depot's platform or payload type.
+type DepotCategory string
+
+const (
+	DepotCategoryCommon     DepotCategory = "common"
+	DepotCategoryWindows    DepotCategory = "windows"
+	DepotCategoryLinux      DepotCategory = "linux"
+	DepotCategoryMacOS      DepotCategory = "macos"
+	DepotCategorySoundtrack DepotCategory = "soundtrack"
+)
+
+// ClassifyDepot inspects manifest file entries to determine the target OS or payload category.
+func ClassifyDepot(files []ManifestFileEntry) DepotCategory {
+	if len(files) == 0 {
+		return DepotCategoryCommon
+	}
+
+	var hasWin, hasMac, hasLinux, hasExecutables, hasMediaOnly bool
+	mediaExts := map[string]bool{
+		".mp3": true, ".flac": true, ".wav": true, ".ogg": true, ".m4a": true,
+		".aac": true, ".opus": true, ".cue": true, ".log": true, ".jpg": true,
+		".jpeg": true, ".png": true, ".pdf": true,
+	}
+
+	mediaCount := 0
+	nonDirCount := 0
+
+	for _, f := range files {
+		if (f.Flags & 0x40) != 0 {
+			continue // directory
+		}
+		nonDirCount++
+		p := strings.ToLower(NormalizePath(f.Path))
+
+		// 1. macOS checks
+		if strings.Contains(p, ".app/") || strings.Contains(p, "contents/macos/") || strings.HasPrefix(p, "macos/") || strings.HasPrefix(p, "osx/") || strings.HasSuffix(p, ".dylib") {
+			hasMac = true
+		}
+
+		// 2. Linux checks
+		if strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") || strings.HasSuffix(p, ".bin.x86") || strings.HasSuffix(p, ".bin.x86_64") || strings.Contains(p, "linux_client") || strings.HasPrefix(p, "linux/") {
+			hasLinux = true
+		}
+
+		// 3. Windows checks
+		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".dll") || strings.HasSuffix(p, ".bat") || strings.HasSuffix(p, ".cmd") || strings.HasPrefix(p, "win32/") || strings.HasPrefix(p, "win64/") || strings.HasPrefix(p, "windows/") || strings.Contains(p, "_commonredist") {
+			hasWin = true
+		}
+
+		// 4. Executable / binary check
+		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".dll") || strings.HasSuffix(p, ".so") || strings.HasSuffix(p, ".dylib") || strings.HasSuffix(p, ".app") || strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") {
+			hasExecutables = true
+		}
+
+		ext := filepath.Ext(p)
+		if mediaExts[ext] {
+			mediaCount++
+		}
+	}
+
+	if nonDirCount > 0 && mediaCount == nonDirCount && !hasExecutables {
+		hasMediaOnly = true
+	}
+
+	if hasMediaOnly {
+		return DepotCategorySoundtrack
+	}
+	if hasMac && !hasWin && !hasLinux {
+		return DepotCategoryMacOS
+	}
+	if hasLinux && !hasWin && !hasMac {
+		return DepotCategoryLinux
+	}
+	if hasWin && !hasMac && !hasLinux {
+		return DepotCategoryWindows
+	}
+	if hasMac {
+		return DepotCategoryMacOS
+	}
+	if hasLinux {
+		return DepotCategoryLinux
+	}
+	if hasWin {
+		return DepotCategoryWindows
+	}
+
+	return DepotCategoryCommon
+}
+
+// MatchesPlatform tests whether a depot category matches the requested platform target.
+func MatchesPlatform(cat DepotCategory, targetPlat string) bool {
+	target := strings.ToLower(strings.TrimSpace(targetPlat))
+	if target == "" || target == "all" {
+		return true
+	}
+
+	switch cat {
+	case DepotCategoryCommon:
+		return true
+	case DepotCategoryWindows:
+		return target == "win64" || target == "win32" || target == "windows" || target == "win"
+	case DepotCategoryLinux:
+		return target == "linux" || target == "linuxnative"
+	case DepotCategoryMacOS:
+		return target == "macos" || target == "osx" || target == "darwin" || target == "mac"
+	case DepotCategorySoundtrack:
+		return target == "soundtrack" || target == "music"
+	default:
+		return true
+	}
+}
+
 // NormalizePath cleans and normalizes relative file paths for Linux/Windows cross-platform safety.
 func NormalizePath(p string) string {
 	cleaned := filepath.Clean(strings.ReplaceAll(p, "\\", "/"))
 	return strings.TrimPrefix(cleaned, "/")
 }
+
 
 // TotalSize returns the aggregate uncompressed size of all files in the manifest.
 func (m *Manifest) TotalSize() uint64 {
@@ -103,7 +219,12 @@ func IsRedistFile(relPath string) bool {
 
 // ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1 mismatches.
 func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) {
-	manifest, _ := LoadManifestFromDir(gameDir, appID)
+	return ScanDepotIntegrityWithPlatform(gameDir, appID, "")
+}
+
+// ScanDepotIntegrityWithPlatform compares files on disk against official manifest entries matching a target platform.
+func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform string) (*IntegrityReport, error) {
+	manifest, _ := LoadManifestFromDirWithPlatform(gameDir, appID, nil, platform)
 
 	// Check if manifest files are missing or encrypted
 	needsKeyOrManifest := manifest == nil || len(manifest.Files) == 0
@@ -125,11 +246,11 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 				depotKeys[pair.DepotID] = pair.DecryptionKey
 			}
 
-			// Try loading local files with resolved keys
-			if loaded, err := LoadManifestFromDirWithKeys(gameDir, appID, depotKeys); err == nil && loaded != nil && len(loaded.Files) > 0 {
+			// Try loading local files with resolved keys and platform filtering
+			if loaded, err := LoadManifestFromDirWithPlatform(gameDir, appID, depotKeys, platform); err == nil && loaded != nil && len(loaded.Files) > 0 {
 				manifest = loaded
 			} else if len(res.ManifestFiles) > 0 {
-				// Parse remote/provider manifests directly
+				// Parse remote/provider manifests directly with platform filtering
 				var allFiles []ManifestFileEntry
 				var resolvedDepotID uint32
 				for filename, data := range res.ManifestFiles {
@@ -140,12 +261,18 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 							fileDepotID = uint32(did)
 						}
 					}
-					if resolvedDepotID == 0 {
-						resolvedDepotID = fileDepotID
-					}
 					hexKey := depotKeys[fileDepotID]
 					files, err := ParseBinaryManifestWithKey(data, hexKey)
 					if err == nil && len(files) > 0 {
+						if platform != "" && platform != "all" {
+							cat := ClassifyDepot(files)
+							if !MatchesPlatform(cat, platform) {
+								continue
+							}
+						}
+						if resolvedDepotID == 0 {
+							resolvedDepotID = fileDepotID
+						}
 						for idx := range files {
 							files[idx].DepotID = fileDepotID
 						}
@@ -163,6 +290,7 @@ func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) 
 			}
 		}
 	}
+
 
 	if manifest == nil || len(manifest.Files) == 0 {
 		return nil, fmt.Errorf("no SteamPipe depot manifests or keys found for AppID %d", appID)
@@ -300,5 +428,315 @@ func hasOriginalBackup(gameDir, rel string) bool {
 	}
 	return false
 }
+
+// InspectGameDepots inspects local manifests to produce a structured inventory of all game depots.
+func InspectGameDepots(gameDir string, appID uint32) ([]domain.DepotSummary, error) {
+	manifestsDir := filepath.Join(gameDir, "[Manifests]")
+	var summaries []domain.DepotSummary
+
+	if entries, err := os.ReadDir(manifestsDir); err == nil && len(entries) > 0 {
+		depotLatest := make(map[uint32]string)
+		depotLatestManifestID := make(map[uint32]uint64)
+
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
+				parts := strings.Split(e.Name(), "_")
+				if len(parts) >= 2 {
+					var did uint32
+					var mid uint64
+					if d, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+						did = uint32(d)
+					}
+					midStr := strings.TrimSuffix(parts[1], ".manifest")
+					if m, err := strconv.ParseUint(midStr, 10, 64); err == nil {
+						mid = m
+					}
+					if mid > depotLatestManifestID[did] {
+						depotLatestManifestID[did] = mid
+						depotLatest[did] = filepath.Join(manifestsDir, e.Name())
+					}
+				}
+			}
+		}
+
+		// Read depot keys from lua if present
+		depotKeys := make(map[uint32]string)
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".lua") {
+				if content, err := os.ReadFile(filepath.Join(manifestsDir, e.Name())); err == nil {
+					if parsed, err := ParseLua(string(content)); err == nil {
+						for _, pair := range parsed.Depots {
+							depotKeys[pair.DepotID] = pair.DecryptionKey
+						}
+					}
+				}
+			}
+		}
+
+		for dID, manifestPath := range depotLatest {
+			data, err := os.ReadFile(manifestPath)
+			if err != nil {
+				continue
+			}
+			files, err := ParseBinaryManifestWithKey(data, depotKeys[dID])
+			if err != nil || len(files) == 0 {
+				continue
+			}
+
+			cat := ClassifyDepot(files)
+			var totalBytes uint64
+			fileCount := 0
+			installedCount := 0
+
+			for _, f := range files {
+				if (f.Flags & 0x40) != 0 {
+					continue
+				}
+				totalBytes += f.Size
+				fileCount++
+
+				norm := NormalizePath(f.Path)
+				if norm != "" {
+					if fi, statErr := os.Stat(filepath.Join(gameDir, norm)); statErr == nil && !fi.IsDir() {
+						installedCount++
+					}
+				}
+			}
+
+			isInstalled := fileCount > 0 && installedCount > 0 && float64(installedCount)/float64(fileCount) >= 0.5
+			depotName := fmt.Sprintf("Depot %d", dID)
+			switch cat {
+			case DepotCategoryCommon:
+				depotName = fmt.Sprintf("Base Content (%d)", dID)
+			case DepotCategoryWindows:
+				depotName = fmt.Sprintf("Windows Binaries (%d)", dID)
+			case DepotCategoryLinux:
+				depotName = fmt.Sprintf("Linux Native Binaries (%d)", dID)
+			case DepotCategoryMacOS:
+				depotName = fmt.Sprintf("macOS Bundle (%d)", dID)
+			case DepotCategorySoundtrack:
+				depotName = fmt.Sprintf("Official Soundtrack (%d)", dID)
+			}
+
+			summaries = append(summaries, domain.DepotSummary{
+				DepotID:    dID,
+				Name:       depotName,
+				Category:   string(cat),
+				Installed:  isInstalled,
+				Size:       totalBytes,
+				FileCount:  fileCount,
+				ManifestID: depotLatestManifestID[dID],
+			})
+		}
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].DepotID < summaries[j].DepotID
+	})
+
+	return summaries, nil
+}
+
+// DiscoverManifestExecutables discovers candidate launch targets directly from developer depot manifests.
+func DiscoverManifestExecutables(gameDir string, appID uint32, platform string) []domain.LaunchCandidate {
+	m, err := LoadManifestFromDirWithPlatform(gameDir, appID, nil, platform)
+	if err != nil || m == nil || len(m.Files) == 0 {
+		return nil
+	}
+
+	var candidates []domain.LaunchCandidate
+	seen := make(map[string]bool)
+
+	for _, f := range m.Files {
+		if (f.Flags & 0x40) != 0 {
+			continue
+		}
+		p := NormalizePath(f.Path)
+		pLower := strings.ToLower(p)
+
+		isExe := false
+		if strings.HasSuffix(pLower, ".exe") || strings.HasSuffix(pLower, ".bin.x86_64") || strings.HasSuffix(pLower, ".bin.x86") || strings.HasSuffix(pLower, ".x86_64") || strings.HasSuffix(pLower, ".x86") || strings.HasSuffix(pLower, ".app") || strings.Contains(pLower, ".app/contents/macos/") {
+			isExe = true
+		}
+
+		if !isExe {
+			continue
+		}
+
+		// Filter out obvious installers, crash dumpers, and redistributables
+		if strings.Contains(pLower, "_commonredist") || strings.Contains(pLower, "directx") || strings.Contains(pLower, "vcredist") || strings.Contains(pLower, "crashreport") || strings.Contains(pLower, "unins000") || strings.Contains(pLower, "uninstall") || strings.Contains(pLower, "cleanup") {
+			continue
+		}
+
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+
+		baseName := filepath.Base(p)
+		cleanName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+
+		desc := "Discovered Executable"
+		if strings.Contains(pLower, "shipping") {
+			desc = "Main Shipping Binary"
+		} else if strings.Contains(pLower, "dx11") || strings.Contains(pLower, "d3d11") {
+			desc = "DirectX 11 Mode"
+		} else if strings.Contains(pLower, "dx12") || strings.Contains(pLower, "d3d12") {
+			desc = "DirectX 12 Mode"
+		} else if strings.Contains(pLower, "vulkan") || strings.Contains(pLower, "vk") {
+			desc = "Vulkan Mode"
+		} else if strings.Contains(pLower, "server") {
+			desc = "Dedicated Server"
+		} else if strings.Contains(pLower, "config") || strings.Contains(pLower, "setup") || strings.Contains(pLower, "launcher") {
+			desc = "Launcher / Config Utility"
+		}
+
+		candidates = append(candidates, domain.LaunchCandidate{
+			Name:        cleanName,
+			Executable:  p,
+			Description: desc,
+		})
+	}
+
+	// Sort candidates: main game executables first, launcher/config utilities second
+	sort.SliceStable(candidates, func(i, j int) bool {
+		iLower := strings.ToLower(candidates[i].Executable)
+		jLower := strings.ToLower(candidates[j].Executable)
+		iIsHelper := strings.Contains(iLower, "config") || strings.Contains(iLower, "setup") || strings.Contains(iLower, "server")
+		jIsHelper := strings.Contains(jLower, "config") || strings.Contains(jLower, "setup") || strings.Contains(jLower, "server")
+		if iIsHelper != jIsHelper {
+			return !iIsHelper
+		}
+		return len(candidates[i].Executable) < len(candidates[j].Executable)
+	})
+
+	return candidates
+}
+
+// UninstallDepot removes all files on disk belonging to a specific depot ID, preserving shared files and manifests.
+// Returns the count of removed files and freed bytes.
+func UninstallDepot(gameDir string, appID uint32, depotID uint32) (int, uint64, error) {
+	manifestsDir := filepath.Join(gameDir, "[Manifests]")
+	entries, err := os.ReadDir(manifestsDir)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read manifests dir: %w", err)
+	}
+
+	var targetManifest string
+	var targetManifestID uint64
+
+	// Read depot keys from lua if present
+	depotKeys := make(map[uint32]string)
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".lua") {
+			if content, err := os.ReadFile(filepath.Join(manifestsDir, e.Name())); err == nil {
+				if parsed, err := ParseLua(string(content)); err == nil {
+					for _, pair := range parsed.Depots {
+						depotKeys[pair.DepotID] = pair.DecryptionKey
+					}
+				}
+			}
+		}
+	}
+
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
+			parts := strings.Split(e.Name(), "_")
+			if len(parts) >= 2 {
+				var did uint32
+				var mid uint64
+				if d, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+					did = uint32(d)
+				}
+				midStr := strings.TrimSuffix(parts[1], ".manifest")
+				if m, err := strconv.ParseUint(midStr, 10, 64); err == nil {
+					mid = m
+				}
+				if did == depotID && mid > targetManifestID {
+					targetManifestID = mid
+					targetManifest = filepath.Join(manifestsDir, e.Name())
+				}
+			}
+		}
+	}
+
+	if targetManifest == "" {
+		return 0, 0, fmt.Errorf("no manifest found for depot %d", depotID)
+	}
+
+	data, err := os.ReadFile(targetManifest)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read manifest %s: %w", targetManifest, err)
+	}
+
+	targetFiles, err := ParseBinaryManifestWithKey(data, depotKeys[depotID])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse manifest: %w", err)
+	}
+
+	// Collect files from other installed depots to prevent deleting shared files
+	otherDepotFiles := make(map[string]bool)
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
+			parts := strings.Split(e.Name(), "_")
+			if len(parts) >= 2 {
+				var did uint32
+				if d, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+					did = uint32(d)
+				}
+				if did != depotID {
+					otherData, err := os.ReadFile(filepath.Join(manifestsDir, e.Name()))
+					if err == nil {
+						if oFiles, err := ParseBinaryManifestWithKey(otherData, depotKeys[did]); err == nil {
+							for _, of := range oFiles {
+								norm := NormalizePath(of.Path)
+								if norm != "" {
+									otherDepotFiles[norm] = true
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	deletedCount := 0
+	var freedBytes uint64
+	var parentDirs []string
+
+	for _, f := range targetFiles {
+		if (f.Flags & 0x40) != 0 {
+			continue
+		}
+		norm := NormalizePath(f.Path)
+		if norm == "" || otherDepotFiles[norm] {
+			continue
+		}
+
+		absPath := filepath.Join(gameDir, norm)
+		fi, statErr := os.Stat(absPath)
+		if statErr == nil && !fi.IsDir() {
+			freedBytes += uint64(fi.Size())
+			if removeErr := os.Remove(absPath); removeErr == nil {
+				deletedCount++
+				parentDirs = append(parentDirs, filepath.Dir(absPath))
+			}
+		}
+	}
+
+	// Clean up empty directories
+	for _, pDir := range parentDirs {
+		curr := pDir
+		for curr != gameDir && curr != "." && curr != "/" && curr != "" {
+			_ = os.Remove(curr) // Only succeeds if directory is empty
+			curr = filepath.Dir(curr)
+		}
+	}
+
+	return deletedCount, freedBytes, nil
+}
+
+
 
 

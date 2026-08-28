@@ -6,9 +6,13 @@
   export let globalCfg = {};
   export let languageOptions = [];
 
+  $: defaultModeLabel = globalCfg.gbe_mode ? (globalCfg.gbe_mode === 'portable' ? 'Portable' : (globalCfg.gbe_mode === 'none' ? 'None' : 'Loader')) : 'Loader';
+
   $: modeOptions = [
-    { value: 'loader', label: 'Loader Mode (ColdClientLoader)' },
-    { value: 'portable', label: 'Portable Mode (Direct DLL)' }
+    { value: '', label: `Default (${defaultModeLabel})` },
+    { value: 'loader', label: 'Loader (Non-destructive)' },
+    { value: 'portable', label: 'Portable (Direct DLL/SO)' },
+    { value: 'none', label: 'None (DRM-Free / Disabled)' }
   ];
 
   $: langOptions = [
@@ -25,7 +29,7 @@
   <!-- Emulator Integration Mode -->
   <div class="space-y-2">
     <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-      Goldberg Emulator Settings
+      Steam DRM & Emulation
     </span>
 
     <StepperRow

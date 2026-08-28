@@ -11,6 +11,6 @@ Currently, `gamux workshop <url_or_id>` performs basic direct downloads into a t
    - Should `engine.ApplyGame` support automated mod structure normalization?
 2. **Workshop Update Tracking**:
    - How to track installed item versions/timestamps on disk vs. Steam Workshop API (`ISteamRemoteStorage/GetPublishedFileDetails`)?
-   - Should `engine.InspectStatus` include outdated workshop mod alerts alongside official depot updates?
+   - Should we include outdated workshop mod alerts alongside official depot updates?
 3. **GUI Integration**:
    - Visual mod manager tab in Wails desktop app for enabling/disabling, updating, and adding workshop IDs.

@@ -24,11 +24,11 @@ var savesCommand = &cli.Command{
 		&cli.BoolFlag{Name: "update-manifest", Usage: "Force re-download and re-index the Ludusavi save manifest"},
 	},
 	Action: func(c *cli.Context) error {
-		sc := engine.NewServiceContext(activeConfig)
+		eng := engine.New(activeConfig)
 
 		if c.Bool("update-manifest") {
 			fmt.Printf("Updating Ludusavi save manifest from GitHub...\n")
-			if err := sc.Saves.UpdateSaveManifest(c.Context); err != nil {
+			if err := eng.UpdateSaveManifest(c.Context); err != nil {
 				return fmt.Errorf("update save manifest: %w", err)
 			}
 			fmt.Printf("Successfully updated and indexed Ludusavi save manifest.\n")
@@ -46,7 +46,7 @@ var savesCommand = &cli.Command{
 
 		// 1. Restore Backup
 		if restoreID := c.String("restore"); restoreID != "" {
-			if err := sc.Saves.RestoreSaveBackup(c.Context, path, restoreID); err != nil {
+			if err := eng.RestoreSaveBackup(c.Context, path, restoreID); err != nil {
 				return fmt.Errorf("restore save backup: %w", err)
 			}
 			fmt.Printf("Successfully restored save backup %q for %s\n", restoreID, path)
@@ -56,7 +56,7 @@ var savesCommand = &cli.Command{
 		// 2. Create Backup Snapshot
 		if c.Bool("backup") {
 			note := c.String("note")
-			info, err := sc.Saves.CreateSaveBackup(c.Context, path, note, "cli")
+			info, err := eng.CreateSaveBackup(c.Context, path, note, "cli")
 			if err != nil {
 				return fmt.Errorf("create save backup: %w", err)
 			}
@@ -80,7 +80,7 @@ var savesCommand = &cli.Command{
 
 		// 3. List Backups
 		if c.Bool("list") {
-			backups, err := sc.Saves.ListSaveBackups(c.Context, path)
+			backups, err := eng.ListSaveBackups(c.Context, path)
 			if err != nil {
 				return fmt.Errorf("list save backups: %w", err)
 			}
@@ -107,7 +107,7 @@ var savesCommand = &cli.Command{
 		}
 
 		// 4. Default: Inspect Save Locations
-		res, err := sc.Saves.InspectSaveLocations(c.Context, path)
+		res, err := eng.InspectSaveLocations(c.Context, path)
 		if err != nil {
 			return fmt.Errorf("inspect save locations: %w", err)
 		}

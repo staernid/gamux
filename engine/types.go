@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/pipeline"
@@ -24,13 +23,13 @@ type StepProgress struct {
 
 // ProcessResult summarizes the outcome of processing a game.
 type ProcessResult struct {
-	Info                *detector.GameInfo `json:"info,omitempty"`
-	Patched             bool               `json:"patched"`
-	SteamlessUnpacked   bool               `json:"steamless_unpacked"`
-	ManifestsMoved      bool               `json:"manifests_moved"`
-	DirectoryNormalized bool               `json:"directory_normalized"`
-	ACFSynthesized      bool               `json:"acf_synthesized"`
-	Errors              []string           `json:"errors,omitempty"`
+	Info                *domain.Game `json:"info,omitempty"`
+	Patched             bool         `json:"patched"`
+	SteamlessUnpacked   bool         `json:"steamless_unpacked"`
+	ManifestsMoved      bool         `json:"manifests_moved"`
+	DirectoryNormalized bool         `json:"directory_normalized"`
+	ACFSynthesized      bool         `json:"acf_synthesized"`
+	Errors              []string     `json:"errors,omitempty"`
 }
 
 // LibraryUpdateStatus represents update availability status for a game in the library.

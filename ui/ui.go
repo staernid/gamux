@@ -13,6 +13,8 @@ import (
 	"sync"
 
 	"github.com/mattn/go-isatty"
+	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 	"github.com/urfave/cli/v2"
 )
@@ -333,26 +335,10 @@ func PromptYesNoWithExplanation(question string, explanation string, defaultYes 
 	return defaultYes
 }
 
-// NewsItemSummary holds metadata for rendering patch notes.
-type NewsItemSummary struct {
-	Title     string
-	FeedLabel string
-	Date      int64
-	URL       string
-}
-
-// LaunchCandidateSummary holds information about an executable launch option.
-type LaunchCandidateSummary struct {
-	Name        string
-	Executable  string
-	Arguments   string
-	Description string
-}
-
 // PromptSelectLaunchOption presents an interactive choice for executable / launch option selection.
-func PromptSelectLaunchOption(gameTitle string, candidates []LaunchCandidateSummary) (LaunchCandidateSummary, error) {
+func PromptSelectLaunchOption(gameTitle string, candidates []domain.LaunchCandidate) (domain.LaunchCandidate, error) {
 	if len(candidates) == 0 {
-		return LaunchCandidateSummary{}, fmt.Errorf("no launch options available")
+		return domain.LaunchCandidate{}, fmt.Errorf("no launch options available")
 	}
 	if len(candidates) == 1 {
 		return candidates[0], nil
@@ -449,34 +435,6 @@ func PromptSelectPlatform(gameTitle string, availablePlatforms []string) (string
 	return availablePlatforms[0], nil
 }
 
-// DetectionInfoSummary holds metadata for displaying a rich game status dashboard.
-type DetectionInfoSummary struct {
-	Name             string
-	AppID            string
-	Store            string
-	Platform         string
-
-	GameDir          string
-	ExePath          string
-	LaunchCandidates []LaunchCandidateSummary
-	State            string
-	OriginalBackups  int
-	ManifestID       string
-	BuildID          string
-	DiskSizeBytes     int64
-	FileCount         int
-	OfficialFileCount  int
-	ModifiedFiles     []string
-	MissingFiles      []string
-	UntrackedFiles    []string
-	HasUpdate         bool
-	RemoteManifestID  string
-	DLCCount          int
-	AchievementCount  int
-	RecentPatchNote   string
-	NewsItems         []NewsItemSummary
-}
-
 // CleanBBCode strips Steam community BBCode tags for clean terminal rendering.
 func CleanBBCode(input string) string {
 	s := input
@@ -536,7 +494,10 @@ func RenderTerseHeader(parentDir string, totalGames int) {
 }
 
 // RenderTerseStatus prints a crisp 2-line card for a game directory.
-func RenderTerseStatus(info DetectionInfoSummary) {
+func RenderTerseStatus(info *domain.Game) {
+	if info == nil {
+		return
+	}
 	// Game Title
 	title := info.Name
 
@@ -618,9 +579,11 @@ func RenderTerseSummary(total, loaderCount, cleanCount, updatesAvail int) {
 	)
 }
 
-
 // RenderDetectionSummary prints a visual preview of detected game metadata.
-func RenderDetectionSummary(info DetectionInfoSummary) {
+func RenderDetectionSummary(info *domain.Game) {
+	if info == nil {
+		return
+	}
 
 	fmt.Println()
 	fmt.Println(bold(cyan("🔍 Game Status Dashboard")))
@@ -637,8 +600,8 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 	} else {
 		fmt.Printf("  %-18s %s\n", bold("Directory:"), info.GameDir)
 	}
-	if info.ExePath != "" {
-		fmt.Printf("  %-18s %s\n", bold("Main Executable:"), info.ExePath)
+	if info.EffectiveExePath() != "" {
+		fmt.Printf("  %-18s %s\n", bold("Main Executable:"), info.EffectiveExePath())
 	}
 	if len(info.LaunchCandidates) > 1 {
 		fmt.Printf("  %-18s %s\n", bold("Launch Options:"), cyan(fmt.Sprintf("%d detected", len(info.LaunchCandidates))))
@@ -651,7 +614,7 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 				desc = filepath.Base(cand.Executable)
 			}
 			isMain := ""
-			if cand.Executable == info.ExePath {
+			if cand.Executable == info.EffectiveExePath() {
 				isMain = green(" [Active]")
 			}
 			fmt.Printf("    [%d] %-30s %s%s\n", i+1, bold(desc), dim(cand.Executable), isMain)
@@ -742,7 +705,6 @@ func RenderDetectionSummary(info DetectionInfoSummary) {
 		fmt.Printf("  💡 %s %s\n", yellow("Next Step:"), dim(fmt.Sprintf("Run 'gamux apply \"%s\"' to set up GBE emulator.", info.GameDir)))
 	}
 
-
 	fmt.Println(dim("------------------------------------------------------------------------"))
 	fmt.Println()
 }
@@ -827,16 +789,10 @@ func RenderErrorHelp(err error, suggestedActions []string) {
 	}
 }
 
-// CandidateItem holds metadata for presenting an AppID selection prompt.
-type CandidateItem struct {
-	AppID uint32
-	Name  string
-}
-
 // PromptSelectCandidate presents an interactive menu to disambiguate game title search matches.
-func PromptSelectCandidate(query string, candidates []CandidateItem) (CandidateItem, error) {
+func PromptSelectCandidate(query string, candidates []steam.AppSearchResult) (steam.AppSearchResult, error) {
 	if len(candidates) == 0 {
-		return CandidateItem{}, fmt.Errorf("no candidates to select")
+		return steam.AppSearchResult{}, fmt.Errorf("no candidates to select")
 	}
 
 	fmt.Println()

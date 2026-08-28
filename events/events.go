@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/staernid/gamux/domain"
 )
 
 // EventType represents the category of a published system or task event.
@@ -59,6 +61,7 @@ type Event struct {
 	Error        string            `json:"error,omitempty"`
 	Timestamp    int64             `json:"timestamp"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
+	Game         *domain.Game      `json:"game,omitempty"`
 }
 
 type subscription struct {

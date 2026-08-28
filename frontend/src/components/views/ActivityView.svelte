@@ -137,9 +137,12 @@
                   <button
                     type="button"
                     on:click={() => handleCancelTask(t.id)}
-                    class="text-[10px] text-slate-400 hover:text-rose-400 font-mono"
+                    class="p-1 rounded text-slate-400 hover:text-rose-400 transition-colors flex items-center justify-center"
+                    aria-label="Cancel task"
                   >
-                    ✕
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 {/if}
               </div>

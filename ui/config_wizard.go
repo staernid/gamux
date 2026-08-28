@@ -34,7 +34,6 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderSectionHeader("⚡ Operational Settings")
 	renderConfigRow("operating_mode", fallback(cfg.OperatingMode, defaults.OperatingMode), defaults.OperatingMode)
 	renderConfigRow("default_runner", fallback(cfg.DefaultRunner, defaults.DefaultRunner), defaults.DefaultRunner)
-	renderConfigRow("gbe_mode", fallback(cfg.GbeMode, "(prompt when applying setup)"), defaults.GbeMode)
 	renderConfigRow("steamless", fmt.Sprintf("%t", cfg.Steamless), fmt.Sprintf("%t", defaults.Steamless))
 	renderConfigRow("achievements", fmt.Sprintf("%t", cfg.Achievements), fmt.Sprintf("%t", defaults.Achievements))
 	renderConfigRow("normalize", fmt.Sprintf("%t", cfg.Normalize), fmt.Sprintf("%t", defaults.Normalize))
@@ -103,9 +102,8 @@ func RunConfigWizard(cfg *config.Config, configPath string) error {
 
 	// Section 3: Operational Settings
 	fmt.Printf("\n%s\n", bold("⚡ CATEGORY 3: Operational Settings"))
-	cfg.OperatingMode = promptString(reader, "Primary Operating Mode (standalone, loader, portable) [operating_mode]", cfg.OperatingMode, defaults.OperatingMode)
+	cfg.OperatingMode = promptString(reader, "Primary Operating Mode (loader, portable, standalone, native, none) [operating_mode]", cfg.OperatingMode, defaults.OperatingMode)
 	cfg.DefaultRunner = promptString(reader, "Default Standalone Runner (umu, wine, proton) [default_runner]", cfg.DefaultRunner, defaults.DefaultRunner)
-	cfg.GbeMode = promptString(reader, "Goldberg Emulation Mode (loader, portable, or empty for prompt) [gbe_mode]", cfg.GbeMode, defaults.GbeMode)
 	cfg.Steamless = promptBool(reader, "Enable automatic Steamless DRM unpacking? [steamless]", cfg.Steamless)
 	cfg.Achievements = promptBool(reader, "Fetch achievement schema & icon assets? [achievements]", cfg.Achievements)
 	cfg.Normalize = promptBool(reader, "Normalize directory names to official 1:1 Steam install dir? [normalize]", cfg.Normalize)

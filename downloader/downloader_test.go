@@ -321,35 +321,44 @@ func TestDownload_ZeroByteFilesAndDirectories(t *testing.T) {
 	}
 }
 
-func TestDownload_CommonRootPrefixStripping(t *testing.T) {
+func TestDownload_ExactPathPreservation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	m := &manifest.Manifest{
-		AppID:   4001890,
-		DepotID: 4001891,
+		AppID:   400,
+		DepotID: 401,
 		Files: []manifest.ManifestFileEntry{
 			{
-				Path:  "How to Fish",
+				Path:  "portal",
 				Size:  0,
-				Flags: 0x40, // Root Directory entry
+				Flags: 0x40, // Subdirectory entry
 			},
 			{
-				Path: "How to Fish/How to Fish.exe",
+				Path: "portal/maps/testchmb_a_00.bsp",
 				Size: 15,
 				Chunks: []manifest.ChunkInfo{
-					{ChunkID: "chk_exe", UncompressedSize: 15},
+					{ChunkID: "chk_map", UncompressedSize: 15},
 				},
 			},
 			{
-				Path:  "How to Fish/How to Fish_Data",
-				Size:  0,
-				Flags: 0x40, // Subdirectory
+				Path: "bin/engine.dll",
+				Size: 10,
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: "chk_dll", UncompressedSize: 10},
+				},
 			},
 			{
-				Path: "How to Fish/How to Fish_Data/app.info",
+				Path: "bin/libsteam_api.so",
+				Size: 10,
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: "chk_so", UncompressedSize: 10},
+				},
+			},
+			{
+				Path: "hl2.exe",
 				Size: 8,
 				Chunks: []manifest.ChunkInfo{
-					{ChunkID: "chk_info", UncompressedSize: 8},
+					{ChunkID: "chk_exe", UncompressedSize: 8},
 				},
 			},
 		},
@@ -359,16 +368,17 @@ func TestDownload_CommonRootPrefixStripping(t *testing.T) {
 		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString("testdata")),
+				Body:       io.NopCloser(bytes.NewBufferString("testdata12345678")),
 				Header:     make(http.Header),
 			}, nil
 		}),
 	}
 
-	gameDir := filepath.Join(tmpDir, "How to Fish")
+	gameDir := filepath.Join(tmpDir, "Portal")
 	opts := DownloadOptions{
 		TargetDir:   gameDir,
-		AppID:       4001890,
+		AppID:       400,
+		Platform:    "win64",
 		DryRun:      false,
 		WorkerLimit: 2,
 		HTTPClient:  mockClient,
@@ -379,15 +389,147 @@ func TestDownload_CommonRootPrefixStripping(t *testing.T) {
 		t.Fatalf("DownloadOrUpdateGame failed: %v", err)
 	}
 
-	// Verify files were normalized to gameDir directly without redundant "How to Fish/How to Fish" parent folder
-	exePath := filepath.Join(gameDir, "How to Fish.exe")
-	if !util.FileExists(exePath) {
-		t.Errorf("expected normalized exe at %s, but file does not exist", exePath)
+	// Verify nested directory structure portal/maps/testchmb_a_00.bsp was preserved 1:1
+	mapPath := filepath.Join(gameDir, "portal", "maps", "testchmb_a_00.bsp")
+	if !util.FileExists(mapPath) {
+		t.Errorf("expected map file at %s, but file does not exist (path was corrupted)", mapPath)
 	}
 
-	dataInfoPath := filepath.Join(gameDir, "How to Fish_Data", "app.info")
-	if !util.FileExists(dataInfoPath) {
-		t.Errorf("expected normalized data at %s, but file does not exist", dataInfoPath)
+	// Verify all depot files are downloaded verbatim (including .so and .dll)
+	dllPath := filepath.Join(gameDir, "bin", "engine.dll")
+	if !util.FileExists(dllPath) {
+		t.Errorf("expected dll file at %s", dllPath)
+	}
+
+	soPath := filepath.Join(gameDir, "bin", "libsteam_api.so")
+	if !util.FileExists(soPath) {
+		t.Errorf("expected so file at %s (should not be filtered out by platform)", soPath)
+	}
+
+	exePath := filepath.Join(gameDir, "hl2.exe")
+	if !util.FileExists(exePath) {
+		t.Errorf("expected exe file at %s", exePath)
 	}
 }
+
+func TestDownload_MultiPlatformDepotFiltering(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Multi-depot game simulating Torchlight
+	m := &manifest.Manifest{
+		AppID: 41500,
+		Files: []manifest.ManifestFileEntry{
+			// Depot 41501: Common Game Assets
+			{
+				DepotID: 41501,
+				Path:    "Torchlight.pak",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_pak", UncompressedSize: 16}},
+			},
+			// Depot 41502: Windows Binaries
+			{
+				DepotID: 41502,
+				Path:    "Torchlight.exe",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_winexe", UncompressedSize: 16}},
+			},
+			{
+				DepotID: 41502,
+				Path:    "steam_api.dll",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_windll", UncompressedSize: 16}},
+			},
+			// Depot 41503: macOS Bundle
+			{
+				DepotID: 41503,
+				Path:    "Torchlight.app/Contents/MacOS/Torchlight",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_macapp", UncompressedSize: 16}},
+			},
+			// Depot 41504: Linux Native
+			{
+				DepotID: 41504,
+				Path:    "Torchlight.bin.x86_64",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_linbin", UncompressedSize: 16}},
+			},
+			// Depot 41505: Soundtrack
+			{
+				DepotID: 41505,
+				Path:    "Soundtrack/01-Title.mp3",
+				Size:    16,
+				Chunks:  []manifest.ChunkInfo{{ChunkID: "chk_mp3", UncompressedSize: 16}},
+			},
+		},
+	}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString("testdata12345678")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	// 1. Download for Windows (win64) -> Should download Common (41501) + Windows (41502) ONLY
+	winGameDir := filepath.Join(tmpDir, "Torchlight_Win")
+	_, err := DownloadOrUpdateGame(context.Background(), m, DownloadOptions{
+		TargetDir:   winGameDir,
+		AppID:       41500,
+		Platform:    "win64",
+		DryRun:      false,
+		WorkerLimit: 2,
+		HTTPClient:  mockClient,
+	})
+	if err != nil {
+		t.Fatalf("Download (win64) failed: %v", err)
+	}
+
+	if !util.FileExists(filepath.Join(winGameDir, "Torchlight.pak")) {
+		t.Errorf("expected Common asset Torchlight.pak in win64 install")
+	}
+	if !util.FileExists(filepath.Join(winGameDir, "Torchlight.exe")) {
+		t.Errorf("expected Windows binary Torchlight.exe in win64 install")
+	}
+	if util.FileExists(filepath.Join(winGameDir, "Torchlight.app")) || util.FileExists(filepath.Join(winGameDir, "Torchlight.app", "Contents", "MacOS", "Torchlight")) {
+		t.Errorf("macOS .app should NOT be downloaded in win64 install")
+	}
+	if util.FileExists(filepath.Join(winGameDir, "Torchlight.bin.x86_64")) {
+		t.Errorf("Linux binary should NOT be downloaded in win64 install")
+	}
+	if util.FileExists(filepath.Join(winGameDir, "Soundtrack", "01-Title.mp3")) {
+		t.Errorf("Soundtrack should NOT be downloaded into game folder in win64 install")
+	}
+
+	// 2. Download for macOS (macos) -> Should download Common (41501) + macOS (41503) ONLY
+	macGameDir := filepath.Join(tmpDir, "Torchlight_Mac")
+	_, err = DownloadOrUpdateGame(context.Background(), m, DownloadOptions{
+		TargetDir:   macGameDir,
+		AppID:       41500,
+		Platform:    "macos",
+		DryRun:      false,
+		WorkerLimit: 2,
+		HTTPClient:  mockClient,
+	})
+	if err != nil {
+		t.Fatalf("Download (macos) failed: %v", err)
+	}
+
+	if !util.FileExists(filepath.Join(macGameDir, "Torchlight.pak")) {
+		t.Errorf("expected Common asset Torchlight.pak in macos install")
+	}
+	if !util.FileExists(filepath.Join(macGameDir, "Torchlight.app", "Contents", "MacOS", "Torchlight")) {
+		t.Errorf("expected macOS app bundle in macos install")
+	}
+	if util.FileExists(filepath.Join(macGameDir, "Torchlight.exe")) {
+		t.Errorf("Windows exe should NOT be downloaded in macos install")
+	}
+	if util.FileExists(filepath.Join(macGameDir, "Torchlight.bin.x86_64")) {
+		t.Errorf("Linux binary should NOT be downloaded in macos install")
+	}
+}
+
+
 

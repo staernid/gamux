@@ -20,23 +20,8 @@ func New(stages ...Stage) *Pipeline {
 	}
 }
 
-// ForGame dynamically constructs the optimal setup pipeline stages based on store and platform strategy.
-func ForGame(game *domain.Game) *Pipeline {
-	if game == nil {
-		return NewSteamPipeline()
-	}
-
-	if game.Store == domain.StoreGOG {
-		return NewGOGPipeline()
-	}
-	if game.Store == domain.StoreStandalone || game.Store == domain.StoreCustom {
-		return NewStandalonePipeline()
-	}
-	return NewSteamPipeline()
-}
-
-// NewSteamPipeline builds the complete pipeline for Steam titles (Scan, Manifest, Normalize, Steamless, GBE).
-func NewSteamPipeline() *Pipeline {
+// NewDefault builds the standard dynamic processing pipeline.
+func NewDefault() *Pipeline {
 	return New(
 		&ScanStage{},
 		&ManifestStage{},
@@ -46,19 +31,37 @@ func NewSteamPipeline() *Pipeline {
 	)
 }
 
-// NewGOGPipeline builds the setup pipeline for GOG titles (Scan, Normalize).
+// ForGame dynamically constructs the optimal setup pipeline stages based on store and platform strategy.
+func ForGame(game *domain.Game) *Pipeline {
+	if game == nil {
+		return NewDefault()
+	}
+
+	if game.Store == domain.StoreGOG {
+		return NewGOGPipeline()
+	}
+	if game.Store == domain.StoreStandalone || game.Store == domain.StoreCustom {
+		return NewStandalonePipeline()
+	}
+	return NewDefault()
+}
+
+// NewSteamPipeline builds the complete pipeline for Steam titles (Scan, Manifest, Normalize, Steamless, GBE).
+func NewSteamPipeline() *Pipeline {
+	return NewDefault()
+}
+
+// NewGOGPipeline builds the setup pipeline for GOG titles (Scan).
 func NewGOGPipeline() *Pipeline {
 	return New(
 		&ScanStage{},
-		&NormalizeStage{},
 	)
 }
 
-// NewStandalonePipeline builds the setup pipeline for standalone/native titles (Scan, Normalize).
+// NewStandalonePipeline builds the setup pipeline for standalone/native titles (Scan).
 func NewStandalonePipeline() *Pipeline {
 	return New(
 		&ScanStage{},
-		&NormalizeStage{},
 	)
 }
 
@@ -96,7 +99,7 @@ func (p *Pipeline) Execute(ctx context.Context, pctx *Context) error {
 		err := stage.Execute(ctx, pctx)
 		if err != nil {
 			slog.Warn("Pipeline stage failed", "stage", stageName, "error", err)
-			pctx.Errors = append(pctx.Errors, fmt.Sprintf("[%s]: %v", stageName, err))
+			pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("[%s]: %v", stageName, err))
 			p.rollback(ctx, pctx, executedStages)
 			return fmt.Errorf("stage %q failed: %w", stageName, err)
 		}
@@ -119,7 +122,7 @@ func (p *Pipeline) rollback(ctx context.Context, pctx *Context, stages []Rollbac
 		slog.Info("Rolling back pipeline stage", "stage", stage.Name())
 		if err := stage.Rollback(ctx, pctx); err != nil {
 			slog.Error("Failed to rollback stage", "stage", stage.Name(), "error", err)
-			pctx.Errors = append(pctx.Errors, fmt.Sprintf("Rollback [%s]: %v", stage.Name(), err))
+			pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("Rollback [%s]: %v", stage.Name(), err))
 		}
 	}
 }

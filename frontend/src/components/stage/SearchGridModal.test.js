@@ -43,6 +43,6 @@ describe('SearchGridModal Component', () => {
 
     let current = null;
     selectedGame.subscribe(v => current = v)();
-    expect(current?.Name).toBe('Balatro');
+    expect(current?.name).toBe('Balatro');
   });
 });

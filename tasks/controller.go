@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+
+	"github.com/staernid/gamux/domain"
 )
 
 // Controller coordinates execution lifecycle, telemetry reporting, pause synchronization, and rate limiting.
@@ -15,6 +17,7 @@ type Controller struct {
 	isPaused     atomic.Bool
 	pauseCond    *sync.Cond
 	mu           sync.Mutex
+	resultGame   *domain.Game
 	onProgress   func(currBytes, totalBytes int64, currItems, totalItems int, speed float64, eta int, pct float64)
 	onStage      func(stage, details string)
 	onStep       func(step, total int, stage, details string)
@@ -51,6 +54,20 @@ func (c *Controller) Context() context.Context {
 // TaskID returns the ID of the running task.
 func (c *Controller) TaskID() string {
 	return c.taskID
+}
+
+// SetResultGame assigns the mutated Game entity upon successful operation completion.
+func (c *Controller) SetResultGame(g *domain.Game) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.resultGame = g
+}
+
+// ResultGame retrieves the mutated Game entity if set.
+func (c *Controller) ResultGame() *domain.Game {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.resultGame
 }
 
 // IsPaused returns true if the controller is in a paused state.

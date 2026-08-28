@@ -13,13 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/util/testutil"
 )
 
 func TestMain(m *testing.M) {
 	restore := testutil.SilenceLogging()
+	cache.DisableCache = true
 	code := m.Run()
+	cache.DisableCache = false
 	restore()
 	os.Exit(code)
 }

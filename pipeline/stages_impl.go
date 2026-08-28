@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/detector"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/runner"
@@ -26,10 +27,13 @@ func (s *ScanStage) Name() string {
 func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 	targetPath := pctx.Game.GameDir
 	if targetPath == "" {
+		targetPath = pctx.Options.Path
+	}
+	if targetPath == "" {
 		targetPath = "."
 	}
 
-	if !pctx.DryRun {
+	if !pctx.Options.DryRun {
 		if count, decErr := util.DecompressVSZaInDir(targetPath); decErr == nil && count > 0 {
 			slog.Info("Decompressed raw VSZa Steam depot files", "target", targetPath, "count", count)
 		}
@@ -42,15 +46,15 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 
 	*pctx.Game = *info
 
-	if pctx.ExePath != "" {
-		if filepath.IsAbs(pctx.ExePath) {
-			pctx.Game.ExePath = pctx.ExePath
+	if pctx.Options.ExePath != "" {
+		if filepath.IsAbs(pctx.Options.ExePath) {
+			pctx.Game.ExePath = pctx.Options.ExePath
 		} else {
-			pctx.Game.ExePath = filepath.Join(pctx.Game.GameDir, pctx.ExePath)
+			pctx.Game.ExePath = filepath.Join(pctx.Game.GameDir, pctx.Options.ExePath)
 		}
 	}
-	if pctx.ExeArgs != "" {
-		pctx.Game.ExeArgs = pctx.ExeArgs
+	if pctx.Options.ExeArgs != "" {
+		pctx.Game.ExeArgs = pctx.Options.ExeArgs
 	}
 
 	return nil
@@ -136,7 +140,7 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 		if entries, readErr := os.ReadDir(manifestsDir); readErr != nil || len(entries) == 0 {
 			slog.Info("No local [Manifests] found, resolving keys and manifests", "appID", pctx.Game.AppID)
 			parsedLua, keyErr := manifest.ResolveKeys(ctx, pctx.Game.NumericAppID, "", "")
-			if keyErr == nil && len(parsedLua.ManifestFiles) > 0 && !pctx.DryRun {
+			if keyErr == nil && len(parsedLua.ManifestFiles) > 0 && !pctx.Options.DryRun {
 				_ = os.MkdirAll(manifestsDir, 0755)
 				for fname, fcontent := range parsedLua.ManifestFiles {
 					outPath := filepath.Join(manifestsDir, fname)
@@ -182,7 +186,7 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 			}
 
 			content := detector.GenerateACFContent(acfData)
-			if pctx.DryRun {
+			if pctx.Options.DryRun {
 				slog.Info("[DRY RUN] Would synthesize 1:1 ACF manifest", "path", targetACF, "appID", pctx.Game.AppID)
 			} else {
 				if err := os.WriteFile(targetACF, []byte(content), 0644); err != nil {
@@ -191,7 +195,7 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 				s.synthesizedACF = targetACF
 				slog.Info("Synthesized 1:1 ACF manifest", "path", targetACF, "appID", pctx.Game.AppID)
 			}
-			pctx.ACFSynthesized = true
+			pctx.Results.ACFSynthesized = true
 		}
 	}
 
@@ -202,7 +206,7 @@ func (s *ManifestStage) Rollback(ctx context.Context, pctx *Context) error {
 	if s.synthesizedACF != "" && util.FileExists(s.synthesizedACF) {
 		slog.Info("Removing synthesized ACF manifest during rollback", "path", s.synthesizedACF)
 		_ = os.Remove(s.synthesizedACF)
-		pctx.ACFSynthesized = false
+		pctx.Results.ACFSynthesized = false
 	}
 	return nil
 }
@@ -218,7 +222,12 @@ func (s *NormalizeStage) Name() string {
 }
 
 func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
-	if !pctx.NormalizeDir {
+	if !pctx.Options.NormalizeDir {
+		return nil
+	}
+
+	// Non-Steam games (GOG, Standalone, Epic, etc.) must not have their directories renamed
+	if pctx.Game.Store != domain.StoreSteam && pctx.Game.Source != domain.SourceSteam {
 		return nil
 	}
 
@@ -238,9 +247,9 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 		return nil
 	}
 
-	if pctx.DryRun {
+	if pctx.Options.DryRun {
 		slog.Info("[DRY RUN] Would normalize game directory", "from", currentDir, "to", targetDir)
-		pctx.DirectoryNormalized = true
+		pctx.Results.DirectoryNormalized = true
 		return nil
 	}
 
@@ -252,7 +261,7 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 	s.renamedDir = targetDir
 
 	slog.Info("Successfully normalized game directory name", "from", currentDir, "to", targetDir)
-	pctx.DirectoryNormalized = true
+	pctx.Results.DirectoryNormalized = true
 	pctx.Game.GameDir = targetDir
 	if pctx.Game.ExePath != "" {
 		relExe, err := filepath.Rel(currentDir, pctx.Game.ExePath)
@@ -302,7 +311,7 @@ func (s *NormalizeStage) Rollback(ctx context.Context, pctx *Context) error {
 		}
 		_ = runner.SaveProfile(prof)
 	}
-	pctx.DirectoryNormalized = false
+	pctx.Results.DirectoryNormalized = false
 	return nil
 }
 
@@ -314,7 +323,7 @@ func (s *SteamlessStage) Name() string {
 }
 
 func (s *SteamlessStage) Execute(ctx context.Context, pctx *Context) error {
-	if pctx.NoSteamless || pctx.Game.Platform != "windows" {
+	if pctx.Options.NoSteamless || pctx.Game.Platform != "windows" {
 		return nil
 	}
 
@@ -323,12 +332,12 @@ func (s *SteamlessStage) Execute(ctx context.Context, pctx *Context) error {
 		return nil
 	}
 
-	unpacked, err := steamless.UnpackExecutable(ctx, pctx.Config, pctx.Game.GameDir, pctx.DryRun)
+	unpacked, err := steamless.UnpackExecutable(ctx, pctx.Config, pctx.Game.GameDir, pctx.Options.DryRun)
 	if err != nil {
 		slog.Warn("Steamless unpacking warning", "error", err)
-		pctx.Errors = append(pctx.Errors, fmt.Sprintf("steamless: %v", err))
+		pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("steamless: %v", err))
 	}
-	pctx.SteamlessUnpacked = unpacked
+	pctx.Results.SteamlessUnpacked = unpacked
 	return nil
 }
 
@@ -340,45 +349,61 @@ func (s *GBEStage) Name() string {
 }
 
 func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
-	if !pctx.ApplyGBE {
+	opMode := pctx.Options.EffectiveOperatingMode()
+	if opMode == "" {
+		opMode = pctx.Game.EffectiveOperatingMode()
+	}
+	if opMode == "" {
+		if pctx.Config != nil && pctx.Config.OperatingMode != "" {
+			opMode = pctx.Config.OperatingMode
+		} else {
+			opMode = domain.ModeLoader
+		}
+	}
+
+	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
+	if !pctx.Game.RequiresSteamEmulator() || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
+		if pctx.Game.HasBackups() || pctx.Game.SettingsDirExists {
+			_, _ = runner.RevertCompatibility(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
+		}
 		return nil
 	}
 
-	// Skip GBE if game does not require Steamworks emulation
-	if !pctx.Game.RequiresSteamEmulator() {
-		return nil
-	}
-
-	gbeCfg := pctx.Config
-	if pctx.Language != "" {
-		cloned := *pctx.Config
-		cloned.Language = pctx.Language
-		gbeCfg = &cloned
-	}
-
-	err := gbe.Apply(ctx, gbe.Options{
-		Config:     gbeCfg,
-		TargetDir:  pctx.Game.GameDir,
-		Platform:   pctx.Game.Platform,
-		AppID:      pctx.Game.AppID,
-		DryRun:     pctx.DryRun,
-		Portable:   pctx.Portable,
-		WinePrefix: pctx.WinePrefix,
-		ExePath:    pctx.Game.ExePath,
-	})
-	if err != nil {
-		slog.Warn("GBE application warning/error", "error", err)
-		pctx.Errors = append(pctx.Errors, fmt.Sprintf("gbe patch: %v", err))
+	profile := pctx.Game.LaunchProfile
+	if profile == nil {
+		profile = &domain.LaunchProfile{
+			GameDir:       pctx.Game.GameDir,
+			AppID:         pctx.Game.AppID,
+			Platform:      pctx.Game.Platform,
+			OperatingMode: opMode,
+			ExePath:       pctx.Game.EffectiveExePath(),
+			WinePrefix:    pctx.Options.WinePrefix,
+			Language:      pctx.Options.Language,
+		}
 	} else {
-		pctx.Patched = true
+		profile.OperatingMode = opMode
+		if pctx.Options.WinePrefix != "" {
+			profile.WinePrefix = pctx.Options.WinePrefix
+		}
+		if pctx.Options.Language != "" {
+			profile.Language = pctx.Options.Language
+		}
 	}
 
-	if pctx.FetchAchievements && pctx.Game.NumericAppID > 0 {
+	err := runner.ApplyCompatibility(ctx, pctx.Config, pctx.Game, profile, pctx.Options.DryRun)
+	if err != nil {
+		slog.Warn("Compatibility & DRM application warning/error", "error", err)
+		pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("gbe patch: %v", err))
+	} else {
+		pctx.Results.Patched = true
+	}
+
+	if pctx.Options.FetchAchievements && pctx.Game.NumericAppID > 0 {
 		apiKey := ""
 		if pctx.Config != nil {
 			apiKey = pctx.Config.SteamWebAPIKey
 		}
-		if achErr := gbe.GenerateAchievementsJSON(ctx, pctx.Game.NumericAppID, apiKey, pctx.Game.GameDir, pctx.DryRun); achErr != nil {
+		if achErr := gbe.GenerateAchievementsJSON(ctx, pctx.Game.NumericAppID, apiKey, pctx.Game.GameDir, pctx.Options.DryRun); achErr != nil {
 			slog.Warn("Achievement schema generation warning", "error", achErr)
 		}
 	}
@@ -387,7 +412,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 }
 
 func (s *GBEStage) Rollback(ctx context.Context, pctx *Context) error {
-	_, err := gbe.Revert(pctx.Game.GameDir, pctx.DryRun)
+	_, err := runner.RevertCompatibility(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
 	return err
 }
 

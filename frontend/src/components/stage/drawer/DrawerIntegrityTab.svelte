@@ -63,24 +63,44 @@
         <strong class="text-white">{total} files</strong>
       </div>
       <div class="flex items-center justify-between text-emerald-400">
-        <span>✓ Intact & Valid:</span>
+        <span class="flex items-center space-x-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Intact & Valid:</span>
+        </span>
         <span>{valid} files</span>
       </div>
       {#if modified.length > 0}
         <div class="flex items-center justify-between text-rose-400">
-          <span>✗ Modified / Corrupted:</span>
+          <span class="flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>Modified / Corrupted:</span>
+          </span>
           <span>{modified.length} files</span>
         </div>
       {/if}
       {#if missing.length > 0}
         <div class="flex items-center justify-between text-amber-400">
-          <span>⚠ Missing Files:</span>
+          <span class="flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Missing Files:</span>
+          </span>
           <span>{missing.length} files</span>
         </div>
       {/if}
       {#if untracked.length > 0}
         <div class="flex items-center justify-between text-slate-400">
-          <span>+ Extra / Untracked Mods:</span>
+          <span class="flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Extra / Untracked Mods:</span>
+          </span>
           <span>{untracked.length} files</span>
         </div>
       {/if}

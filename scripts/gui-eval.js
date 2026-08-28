@@ -56,20 +56,24 @@ async function ensureViteServer() {
     return { process: null, pid: null };
   }
 
-  const serverProc = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'], {
+  const viteBin = path.join(FRONTEND_DIR, 'node_modules', '.bin', 'vite');
+  const serverProc = spawn(viteBin, ['--host', '127.0.0.1', '--port', String(PORT), '--strictPort'], {
     cwd: FRONTEND_DIR,
     stdio: 'ignore'
   });
 
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 100; i++) {
     await new Promise(r => setTimeout(r, 100));
     if (await checkServerReady()) {
       return { process: serverProc, pid: serverProc.pid };
     }
   }
 
-  throw new Error(`Failed to start Vite preview server on ${BASE_URL} after 5s`);
+  try { serverProc.kill('SIGKILL'); } catch {}
+  throw new Error(`Failed to start Vite dev server on ${BASE_URL} after 10s`);
 }
+
+
 
 async function executeViaCDP(chromeBin, targetUrl, jsExpression) {
   const cdpPort = 9222 + Math.floor(Math.random() * 500);
@@ -156,6 +160,10 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.method === 'Runtime.exceptionThrown') {
+          const exc = msg.params?.exceptionDetails;
+          console.error('[Browser Exception]', exc?.text, exc?.exception?.description);
+        }
         if (msg.id && pendingRequests.has(msg.id)) {
           const { resolve, reject } = pendingRequests.get(msg.id);
           pendingRequests.delete(msg.id);
@@ -171,6 +179,7 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
       }
     };
 
+
     ws.onopen = async () => {
       try {
         await request('Page.enable');
@@ -179,7 +188,7 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
 
         // Poll for window.__GAMUX_DEV__ readiness via Node-side intervals
         let ready = false;
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 100; i++) {
           await new Promise(r => setTimeout(r, 100));
           try {
             const isReady = await request('Runtime.evaluate', {
@@ -196,6 +205,7 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
         if (!ready) {
           throw new Error('GAMUX_DEV bridge not ready after waiting');
         }
+
 
         const evalResult = await request('Runtime.evaluate', {
           expression: `(async () => { return await (${expr}); })()`,
@@ -316,9 +326,13 @@ async function handleSnapshots(chromeBin) {
   const views = [
     { name: '01_library_hero.png', path: '?view=library' },
     { name: '02_game_hub.png', path: '?view=game-hub' },
+    { name: '02_game_hub_achievements.png', path: '?view=game-hub&tab=achievements' },
     { name: '03_game_properties.png', path: '?view=game-hub&drawer=1' },
-    { name: '04_downloads_view.png', path: '?view=downloads' },
+    { name: '03_game_properties_drm.png', path: '?view=game-hub&drawer=1&tab=emu' },
+    { name: '04_downloads_view.png', path: '?view=tasks' },
     { name: '05_settings_view.png', path: '?view=settings' },
+    { name: '05_settings_drm.png', path: '?view=settings&tab=emu' },
+    { name: '05_settings_tools.png', path: '?view=settings&tab=tools' },
     { name: '05_settings_logs.png', path: '?view=settings&tab=logs' },
     { name: '06_search_grid.png', path: '?view=library&search=1' },
   ];

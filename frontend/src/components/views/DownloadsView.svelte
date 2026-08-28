@@ -118,11 +118,17 @@
     selectedStore = candidate.store || 'steam';
     searchQuery = selectedName;
     searchResults = [];
-    if ($libraryPath) {
-      const safeName = selectedName.replace(/[^\w\s-]/g, '').trim();
+    const safeName = selectedName.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || selectedName;
+    const isMusic = candidate.type === 'music' || candidate.type === 'soundtrack';
+    if (isMusic) {
+      targetDir = `~/Music/${safeName}`;
+    } else if ($libraryPath) {
       targetDir = `${$libraryPath}/${safeName}`;
+    } else {
+      targetDir = `./${safeName}`;
     }
   }
+
 
   function clearSelection() {
     selectedID = '';
@@ -591,7 +597,12 @@
                         </span>
                       {/if}
                     </span>
-                    <span class="text-[10px] text-slate-500">{expandedDepots[tr.id] ? '▲ Hide' : '▼ Details'}</span>
+                    <span class="text-[10px] text-slate-500 font-bold flex items-center space-x-1">
+                      <span>{expandedDepots[tr.id] ? 'Hide' : 'Details'}</span>
+                      <svg class="w-3 h-3 transform transition-transform {expandedDepots[tr.id] ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </span>
                   </button>
 
                   {#if expandedDepots[tr.id]}

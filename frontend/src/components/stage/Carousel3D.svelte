@@ -2,13 +2,23 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import PosterArt from '../common/PosterArt.svelte';
   import ArchScrollbar from './ArchScrollbar.svelte';
-  import { filteredGames, selectedGame } from '../../stores/library.js';
-  import { getPlatformColors, isSamePath, extractCoverColorPalette, getCachedCoverPalette, parseColorToRgba } from '../../utils/game.js';
+  import { filteredGames, selectedGame, runningGames } from '../../stores/library.js';
+  import { getPlatformColors, isSamePath, extractCoverColorPalette, getCachedCoverPalette, formatPlaytime } from '../../utils/game.js';
+  import { playTick, playSelect } from '../../utils/audio.js';
 
   const dispatch = createEventDispatcher();
 
   let containerEl;
   let animFrameId = null;
+  let isLoopRunning = false;
+
+  function wakeLoop() {
+    if (!isLoopRunning && typeof window !== 'undefined') {
+      isLoopRunning = true;
+      lastPhysicsTime = performance.now();
+      animFrameId = requestAnimationFrame(physicsLoop);
+    }
+  }
 
   // High-speed smooth target-following physics
   let currentPos = 0;
@@ -27,6 +37,7 @@
   // Store synchronization guard to prevent circular reactive feedback
   let lastEmittedDir = null;
   let lastSyncIndex = -1;
+  let lastSoundIndex = -1;
   let lastList = null;
 
   $: list = $filteredGames || [];
@@ -46,6 +57,7 @@
         if (diff > count / 2) diff -= count;
         if (diff < -count / 2) diff += count;
         targetPos = Math.round(currentPos) + diff;
+        wakeLoop();
       }
     }
   }
@@ -191,14 +203,15 @@
     return { r: 26, g: 159, b: 255 };
   }
 
-  // Continuous Fluid Ambient Color State
-  let colorPhase = 0;
-  let currentR = 26;
-  let currentG = 159;
-  let currentB = 255;
-  let glowCenter = 'rgba(26, 159, 255, 0.48)';
-  let glowMid = 'rgba(26, 159, 255, 0.18)';
-  let glowOuter = 'rgba(26, 159, 255, 0.03)';
+  // Reactive Ambient Glow derived directly from active game palette
+  $: glowRgb = (() => {
+    const pal = activePalette.length > 0 ? activePalette : (activeColors?.border ? [activeColors.border] : []);
+    if (pal.length > 0) {
+      const c = parseRgb(pal[0]);
+      return `${c.r}, ${c.g}, ${c.b}`;
+    }
+    return '26, 159, 255';
+  })();
 
   let stickStopTimeout = null;
 
@@ -206,15 +219,26 @@
   export function step(delta) {
     if (count <= 1) return;
     targetPos = Math.round(targetPos) + delta;
+    playTick();
+    wakeLoop();
   }
 
   // Rotary joystick scrubbing (iPod click wheel on Right Stick)
+  let rotaryAcc = 0;
   export function addRotaryDelta(delta) {
     if (count <= 1) return;
     targetPos += delta;
+    rotaryAcc += Math.abs(delta);
+    if (rotaryAcc >= 0.75) {
+      playTick();
+      rotaryAcc = 0;
+    }
+    wakeLoop();
     if (stickStopTimeout) clearTimeout(stickStopTimeout);
     stickStopTimeout = setTimeout(() => {
       targetPos = Math.round(targetPos);
+      rotaryAcc = 0;
+      wakeLoop();
     }, 100);
   }
 
@@ -235,15 +259,20 @@
     if (diff > count / 2) diff -= count;
     if (diff < -count / 2) diff += count;
     targetPos = Math.round(currentPos) + diff;
+    playTick();
+    wakeLoop();
   }
 
   function handleCardClick(diff, game) {
     if (!game) return;
     if (Math.abs(diff) < 0.25) {
+      playSelect();
       dispatch('launch', game);
     } else {
       const stepDelta = Math.round(diff);
       targetPos = Math.round(currentPos) + stepDelta;
+      playTick();
+      wakeLoop();
     }
   }
 
@@ -268,6 +297,8 @@
       }
       targetPos = Math.round(targetPos) + (stepDir * speedBoost);
       lastWheelTime = now;
+      playTick();
+      wakeLoop();
     } else {
       // Continuous touchpad / precision trackpad sweep
       wheelAccumulator += rawDelta;
@@ -278,6 +309,8 @@
         targetPos = Math.round(targetPos) + stepDir;
         wheelAccumulator -= stepDir * threshold;
         lastWheelTime = now;
+        playTick();
+        wakeLoop();
       }
     }
 
@@ -285,6 +318,7 @@
     wheelResetTimeout = setTimeout(() => {
       wheelAccumulator = 0;
       targetPos = Math.round(targetPos);
+      wakeLoop();
     }, 100);
   }
 
@@ -296,6 +330,7 @@
     dragStartPos = currentPos;
     lastDragTime = performance.now();
     dragVelocity = 0;
+    wakeLoop();
   }
 
   function handlePointerMove(e) {
@@ -309,6 +344,7 @@
     currentPos = newPos;
     targetPos = newPos;
     lastDragTime = now;
+    wakeLoop();
   }
 
   function handlePointerUp() {
@@ -316,6 +352,7 @@
     isDragging = false;
     const projected = currentPos + dragVelocity * 80;
     targetPos = Math.round(projected);
+    wakeLoop();
   }
 
   function handleContainerPointerMove(e) {
@@ -329,6 +366,7 @@
       pointerNormX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
       pointerNormY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
       isHovering = true;
+      wakeLoop();
     }
   }
 
@@ -336,6 +374,7 @@
     isHovering = false;
     pointerNormX = 0;
     pointerNormY = 0;
+    wakeLoop();
   }
 
   let lastPhysicsTime = 0;
@@ -349,6 +388,7 @@
       const dt = Math.min(64, Math.max(1, now - lastPhysicsTime)) / 1000;
       lastPhysicsTime = now;
 
+      let positionSettled = false;
       if (!isDragging) {
         const diff = targetPos - currentPos;
         if (Math.abs(diff) > 0.0001 || Math.abs(springVelocity) > 0.0001) {
@@ -361,6 +401,7 @@
         } else {
           currentPos = targetPos;
           springVelocity = 0;
+          positionSettled = true;
         }
       } else {
         springVelocity = 0;
@@ -370,53 +411,32 @@
       const targetTiltX = isHovering && !isDragging ? pointerNormX * 7.5 : 0;
       const targetTiltY = isHovering && !isDragging ? -pointerNormY * 6.0 : 0;
       const tiltFactor = 1 - Math.exp(-18 * dt);
-      currentTiltX += (targetTiltX - currentTiltX) * tiltFactor;
-      currentTiltY += (targetTiltY - currentTiltY) * tiltFactor;
+      const diffTiltX = targetTiltX - currentTiltX;
+      const diffTiltY = targetTiltY - currentTiltY;
 
-      // Continuous Smooth Ambient Color Morphing across palette
-      let targetR = 26;
-      let targetG = 159;
-      let targetB = 255;
-
-      const pal = activePalette.length > 0 ? activePalette : (activeColors?.border ? [activeColors.border] : []);
-      if (pal.length === 1) {
-        const c = parseRgb(pal[0]);
-        targetR = c.r;
-        targetG = c.g;
-        targetB = c.b;
-      } else if (pal.length > 1) {
-        // Continuous sinusoidal time progression (5.5s cycle)
-        colorPhase += dt / 5.5;
-        const t = colorPhase % pal.length;
-        const i1 = Math.floor(t);
-        const i2 = (i1 + 1) % pal.length;
-        const frac = t - i1;
-        const s = 0.5 - 0.5 * Math.cos(frac * Math.PI);
-        const c1 = parseRgb(pal[i1]);
-        const c2 = parseRgb(pal[i2]);
-        targetR = c1.r + (c2.r - c1.r) * s;
-        targetG = c1.g + (c2.g - c1.g) * s;
-        targetB = c1.b + (c2.b - c1.b) * s;
+      let tiltSettled = false;
+      if (Math.abs(diffTiltX) > 0.005 || Math.abs(diffTiltY) > 0.005) {
+        currentTiltX += diffTiltX * tiltFactor;
+        currentTiltY += diffTiltY * tiltFactor;
+      } else {
+        currentTiltX = targetTiltX;
+        currentTiltY = targetTiltY;
+        tiltSettled = true;
       }
 
-      // Smoothly interpolate current RGB towards target RGB
-      const colorBlendFactor = 1 - Math.exp(-6 * dt);
-      currentR += (targetR - currentR) * colorBlendFactor;
-      currentG += (targetG - currentG) * colorBlendFactor;
-      currentB += (targetB - currentB) * colorBlendFactor;
-
-      const ir = Math.round(currentR);
-      const ig = Math.round(currentG);
-      const ib = Math.round(currentB);
-      glowCenter = `rgba(${ir}, ${ig}, ${ib}, 0.48)`;
-      glowMid = `rgba(${ir}, ${ig}, ${ib}, 0.18)`;
-      glowOuter = `rgba(${ir}, ${ig}, ${ib}, 0.03)`;
+      // Central mechanical tick on crossing card index boundaries
+      const currentCenterIdx = wrapIndex(Math.round(currentPos));
+      if (lastSoundIndex !== -1 && currentCenterIdx !== lastSoundIndex) {
+        lastSoundIndex = currentCenterIdx;
+        playTick();
+      } else if (lastSoundIndex === -1 && count > 0) {
+        lastSoundIndex = currentCenterIdx;
+      }
 
       // Only notify heavy global store subscribers when settling close to destination,
       // preventing cascading DOM re-renders in drawers and HUD on every transit frame.
       const isSettling = Math.abs(targetPos - currentPos) < 0.15;
       if (isSettling) {
-        const currentCenterIdx = wrapIndex(Math.round(currentPos));
         if (currentCenterIdx !== lastSyncIndex && list[currentCenterIdx]) {
           lastSyncIndex = currentCenterIdx;
           const targetGame = list[currentCenterIdx];
@@ -424,8 +444,19 @@
           selectedGame.set(targetGame);
         }
       }
+
+      // Sleep loop if motion and tilt are completely settled and not dragging
+      if (positionSettled && tiltSettled && !isDragging) {
+        isLoopRunning = false;
+        animFrameId = null;
+        lastPhysicsTime = 0;
+        return;
+      }
     } else {
-      lastPhysicsTime = timestamp || performance.now();
+      isLoopRunning = false;
+      animFrameId = null;
+      lastPhysicsTime = 0;
+      return;
     }
 
     animFrameId = requestAnimationFrame(physicsLoop);
@@ -439,12 +470,14 @@
         currentPos = idx;
         targetPos = idx;
         lastSyncIndex = idx;
+        lastSoundIndex = idx;
         lastEmittedDir = dir;
       } else {
         const mid = Math.floor(count / 2);
         currentPos = mid;
         targetPos = mid;
         lastSyncIndex = mid;
+        lastSoundIndex = mid;
         if (list[mid]) {
           lastEmittedDir = list[mid].gameDir;
           selectedGame.set(list[mid]);
@@ -455,12 +488,13 @@
       currentPos = mid;
       targetPos = mid;
       lastSyncIndex = mid;
+      lastSoundIndex = mid;
       if (list[mid]) {
         lastEmittedDir = list[mid].gameDir;
         selectedGame.set(list[mid]);
       }
     }
-    animFrameId = requestAnimationFrame(physicsLoop);
+    wakeLoop();
   });
 
   onDestroy(() => {
@@ -494,10 +528,10 @@
   {:else}
     <!-- 3D Curved Arc Carousel Stage -->
     <div class="relative w-full h-[400px] sm:h-[450px] md:h-[490px] flex items-center justify-center">
-      <!-- Ambient Dynamic Cover Radial Glow (100% Fluid Continuous GPU Composited) -->
+      <!-- Ambient Dynamic Cover Radial Glow (GPU Composited with smooth CSS transition) -->
       <div
-        class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] sm:w-[950px] md:w-[1150px] lg:w-[1300px] h-[480px] sm:h-[600px] md:h-[680px] rounded-full pointer-events-none z-0"
-        style="background: radial-gradient(ellipse at center, {glowCenter} 0%, {glowMid} 36%, {glowOuter} 62%, transparent 75%);"
+        class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] sm:w-[950px] md:w-[1150px] lg:w-[1300px] h-[480px] sm:h-[600px] md:h-[680px] rounded-full pointer-events-none z-0 transition-all duration-700 ease-out will-change-transform"
+        style="background: radial-gradient(ellipse at center, rgba({glowRgb}, 0.48) 0%, rgba({glowRgb}, 0.18) 36%, rgba({glowRgb}, 0.03) 62%, transparent 75%);"
       ></div>
 
       <!-- Physical Stage Floor Contact Shadow (Grounding the 3D cards) -->
@@ -524,7 +558,10 @@
             <!-- Card Container (100% GPU-composited transform and opacity, strict 2:3 poster aspect ratio) -->
             <div
               class="relative h-[340px] sm:h-[395px] md:h-[450px] aspect-[2/3] rounded-[32px] overflow-hidden shadow-xl bg-[#161622] border border-white/10"
-              style="opacity: {style.opacity};"
+              style="
+                opacity: {style.opacity};
+                -webkit-box-reflect: below 8px linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, transparent 40%);
+              "
             >
               <!-- Poster Artwork (Stable per game, never unmounts while in view) -->
               <PosterArt
@@ -543,48 +580,6 @@
                 class="absolute inset-0 bg-black pointer-events-none"
                 style="opacity: {style.dimOpacity};"
               ></div>
-
-              <!-- Platform Pill -->
-              {#if card.platformColors}
-                <div
-                  class="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wider text-slate-200 shadow-md pointer-events-none z-10 bg-[#12131c]/90 border border-white/10"
-                  style="opacity: {style.centerProximity};"
-                >
-                  <span>{card.platformColors.label}</span>
-                </div>
-              {/if}
-
-              <!-- Status Badges -->
-              {#if card.game.isRunning}
-                <div
-                  class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950 text-[9px] font-mono font-bold uppercase tracking-wider shadow-md flex items-center space-x-1 pointer-events-none z-10"
-                  style="opacity: {style.centerProximity};"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-slate-950"></span>
-                  <span>Running</span>
-                </div>
-              {:else if card.game.hasUpdate}
-                <div
-                  class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-cyan-500 text-slate-950 text-[9px] font-mono font-bold uppercase tracking-wider shadow-md pointer-events-none z-10"
-                  style="opacity: {style.centerProximity};"
-                >
-                  <span>Update</span>
-                </div>
-              {:else if card.game.isPatched}
-                <div
-                  class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-[#062419]/90 text-emerald-300 border border-emerald-500/40 text-[9px] font-mono font-bold uppercase tracking-wider shadow-md pointer-events-none z-10"
-                  style="opacity: {style.centerProximity};"
-                >
-                  <span>Ready</span>
-                </div>
-              {:else}
-                <div
-                  class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-[#291406]/90 text-amber-300 border border-amber-500/40 text-[9px] font-mono font-bold uppercase tracking-wider shadow-md pointer-events-none z-10"
-                  style="opacity: {style.centerProximity};"
-                >
-                  <span>Unconfigured</span>
-                </div>
-              {/if}
             </div>
           </div>
         {/if}
@@ -594,8 +589,14 @@
     <!-- Active Game Floating Title Badge Below Card -->
     {#if activeGame}
       <div class="mt-2 sm:mt-4 flex items-center justify-center z-40 transition-all duration-200 ease-out">
-        <div class="px-6 py-1.5 rounded-full bg-slate-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
+        <div class="px-5 py-1.5 rounded-full bg-slate-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center gap-2 max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
+          {#if $runningGames.has(activeGame.gameDir)}
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+          {/if}
           <span class="truncate">{activeGame.name}</span>
+          {#if activeGame.playtimeSeconds > 0}
+            <span class="text-[11px] font-mono text-slate-400 font-normal flex-shrink-0">· {formatPlaytime(activeGame.playtimeSeconds)}</span>
+          {/if}
         </div>
       </div>
     {/if}

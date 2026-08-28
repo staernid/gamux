@@ -1,54 +1,106 @@
 package engine
 
 import (
+	"context"
+	"net/http"
+	"path/filepath"
+	"time"
+
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/events"
+	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/saves"
+	"github.com/staernid/gamux/store"
+	"github.com/staernid/gamux/tasks"
+	"github.com/staernid/gamux/tools"
 )
 
-// Engine provides backward-compatible access to all domain services via embedding.
-// Callers can use eng.InspectStatus(), eng.ProcessGame(), eng.SubmitApply() etc.
-// directly — methods are promoted from the embedded services.
-//
-// For new code, prefer injecting individual services (LibraryService, GameService,
-// TaskService) directly rather than using Engine as a facade.
+// Engine is the deep orchestration module for all game management, library scanning,
+// task supervision, DRM setup, execution, savegame backup, and telemetry operations.
 type Engine struct {
-	*ServiceContext
-	*LibraryService
-	*GameService
-	*TaskService
-	*SaveService
+	Config         *config.Config
+	HTTPClient     *http.Client
+	EventBus       *events.Bus
+	Tasks          *tasks.Manager
+	RunnerMgr      *runner.Manager
+	StoreRegistry  *store.Registry
+	ArtworkService *store.ArtworkService
+	Notifier       func(ctx context.Context, title, message string) error
+	StepReporter   func(ctx context.Context, prog StepProgress)
+	toolManager    *tools.Manager
+	savesManifest  *saves.ManifestManager
+	savesResolver  *saves.Resolver
+	savesBackup    *saves.BackupManager
 }
 
-// New creates a new Engine with all domain services initialised and wired together.
+// New creates a new Engine with all domain and infrastructure services initialized.
 func New(cfg *config.Config) *Engine {
-	sc, lib, game, task := NewServices(cfg)
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	bus := events.NewBus()
+	tasksFile := filepath.Join(filepath.Dir(config.GetConfigPath("")), "tasks.json")
+	storeAdapter := tasks.NewFileStore(tasksFile)
+	eventSink := tasks.NewBusEventSink(bus)
+	limiter := tasks.NewTokenBucketLimiter(cfg.TransferSpeedLimit)
+
+	reg := store.NewRegistry()
+	reg.Register(store.NewSteamProvider())
+	reg.Register(store.NewGOGProvider())
+	reg.Register(store.NewRAWGProvider(cfg.RAWGAPIKey))
+	reg.Register(store.NewSGDBProvider(cfg.SteamGridDBAPIKey))
+
+	artSvc := store.NewArtworkService(cfg.ArtworkDir, reg)
+
+	taskMgr := tasks.NewManager(tasks.Options{
+		MaxConcurrentDownloads:  2,
+		MaxConcurrentOperations: 4,
+		Store:                   storeAdapter,
+		EventSink:               eventSink,
+		Limiter:                 limiter,
+	})
+
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	customSaveURL := cfg.SaveManifestURL
+	backupDir := cfg.BackupDir
+	retention := 5
+	if cfg.BackupRetentionCount > 0 {
+		retention = cfg.BackupRetentionCount
+	}
+
+	manifestMgr := saves.NewManifestManager("", customSaveURL, httpClient)
+	resolver := saves.NewResolver(manifestMgr)
+	backupMgr := saves.NewBackupManager(backupDir, retention, resolver)
 
 	eng := &Engine{
-		ServiceContext: sc,
-		LibraryService: lib,
-		GameService:    game,
-		TaskService:    task,
-		SaveService:    sc.Saves,
+		Config:         cfg,
+		HTTPClient:     httpClient,
+		EventBus:       bus,
+		Tasks:          taskMgr,
+		RunnerMgr:      runner.NewManager(bus),
+		StoreRegistry:  reg,
+		ArtworkService: artSvc,
+		toolManager:    tools.NewManager(cfg),
+		savesManifest:  manifestMgr,
+		savesResolver:  resolver,
+		savesBackup:    backupMgr,
 	}
+
+	// Auto-backup on game process termination if configured
+	bus.SubscribeFunc(func(ev events.Event) {
+		if ev.Type == events.EventGameExited && eng.Config != nil && eng.Config.AutoBackupSaves && ev.GameDir != "" {
+			go func(gDir, gName, aID string) {
+				_, _ = eng.CreateSaveBackup(context.Background(), gDir, "Automatic post-game snapshot", "auto_exit")
+			}(ev.GameDir, ev.GameName, ev.AppID)
+		}
+	})
+
+	// Non-blocking background save manifest load on startup
+	go func() {
+		_ = manifestMgr.LoadOrFetch(context.Background(), false)
+	}()
 
 	eng.registerDefaultTaskRunners()
 	return eng
-}
-
-// Services groups the three domain services for convenient construction.
-type Services struct {
-	SC      *ServiceContext
-	Library *LibraryService
-	Game    *GameService
-	Tasks   *TaskService
-}
-
-// NewServices creates all domain services wired together and returns them individually.
-// Prefer this over New() for callers that want explicit service references.
-func NewServices(cfg *config.Config) (*ServiceContext, *LibraryService, *GameService, *TaskService) {
-	sc := NewServiceContext(cfg)
-	lib := NewLibraryService(sc)
-	game := NewGameService(sc, lib)
-	task := NewTaskService(sc, lib, game)
-	task.registerDefaultTaskRunners()
-	return sc, lib, game, task
 }

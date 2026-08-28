@@ -50,8 +50,20 @@ export function GetGSEUserConfig() {
   return window['go']['gui']['App']['GetGSEUserConfig']();
 }
 
+export function GetGameAchievements(arg1) {
+  return window['go']['gui']['App']['GetGameAchievements'](arg1);
+}
+
 export function GetGameBackups(arg1) {
   return window['go']['gui']['App']['GetGameBackups'](arg1);
+}
+
+export function GetGameDepots(arg1) {
+  return window['go']['gui']['App']['GetGameDepots'](arg1);
+}
+
+export function GetGameDetails(arg1) {
+  return window['go']['gui']['App']['GetGameDetails'](arg1);
 }
 
 export function GetGameLog(arg1) {
@@ -102,12 +114,20 @@ export function LinkGameMetadata(arg1, arg2, arg3) {
   return window['go']['gui']['App']['LinkGameMetadata'](arg1, arg2, arg3);
 }
 
+export function ListMetadataProviders() {
+  return window['go']['gui']['App']['ListMetadataProviders']();
+}
+
 export function ListTasks() {
   return window['go']['gui']['App']['ListTasks']();
 }
 
 export function OpenDirectory(arg1) {
   return window['go']['gui']['App']['OpenDirectory'](arg1);
+}
+
+export function OpenURL(arg1) {
+  return window['go']['gui']['App']['OpenURL'](arg1);
 }
 
 export function PauseTask(arg1) {
@@ -190,6 +210,22 @@ export function SubmitApply(arg1) {
   return window['go']['gui']['App']['SubmitApply'](arg1);
 }
 
+export function SubmitBatchAchievements() {
+  return window['go']['gui']['App']['SubmitBatchAchievements']();
+}
+
+export function SubmitBatchArtwork() {
+  return window['go']['gui']['App']['SubmitBatchArtwork']();
+}
+
+export function SubmitBatchNormalize() {
+  return window['go']['gui']['App']['SubmitBatchNormalize']();
+}
+
+export function SubmitBatchVerify() {
+  return window['go']['gui']['App']['SubmitBatchVerify']();
+}
+
 export function SubmitNormalize(arg1) {
   return window['go']['gui']['App']['SubmitNormalize'](arg1);
 }
@@ -204,6 +240,18 @@ export function SubmitUpdate(arg1) {
 
 export function SubmitVerify(arg1) {
   return window['go']['gui']['App']['SubmitVerify'](arg1);
+}
+
+export function SwitchGamePlatform(arg1, arg2) {
+  return window['go']['gui']['App']['SwitchGamePlatform'](arg1, arg2);
+}
+
+export function UninstallDepot(arg1, arg2) {
+  return window['go']['gui']['App']['UninstallDepot'](arg1, arg2);
+}
+
+export function UnlinkGameMetadata(arg1) {
+  return window['go']['gui']['App']['UnlinkGameMetadata'](arg1);
 }
 
 export function UpdateSaveManifest() {

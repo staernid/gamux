@@ -17,8 +17,10 @@ import (
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/util"
 	"golang.org/x/sync/errgroup"
 )
+
 
 // Default Steam API endpoints
 const (
@@ -78,19 +80,29 @@ func (r *ReleaseDate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// AppGenre holds Steam store genre tags.
+type AppGenre struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+}
+
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
-	Name               string         `json:"name"`
-	Type               string         `json:"type"`
-	IsFree             bool           `json:"is_free"`
-	HeaderImage        string         `json:"header_image"`
-	RequiredAge        int            `json:"required_age"`
-	About              string         `json:"about_the_game"`
-	ShortDesc          string         `json:"short_description"`
-	SupportedLanguages string         `json:"supported_languages"`
-	ReleaseDate        ReleaseDate    `json:"release_date"`
-	Platforms          AppPlatforms   `json:"platforms"`
-	PriceOverview      *PriceOverview `json:"price_overview,omitempty"`
+	Name                string         `json:"name"`
+	Type                string         `json:"type"`
+	IsFree              bool           `json:"is_free"`
+	HeaderImage         string         `json:"header_image"`
+	RequiredAge         int            `json:"required_age"`
+	About               string         `json:"about_the_game"`
+	ShortDesc           string         `json:"short_description"`
+	DetailedDesc        string         `json:"detailed_description"`
+	Developers          []string       `json:"developers"`
+	Publishers          []string       `json:"publishers"`
+	Genres              []AppGenre     `json:"genres"`
+	SupportedLanguages  string         `json:"supported_languages"`
+	ReleaseDate         ReleaseDate    `json:"release_date"`
+	Platforms           AppPlatforms   `json:"platforms"`
+	PriceOverview       *PriceOverview `json:"price_overview,omitempty"`
 }
 
 // AppPlatforms holds platform availability flags.
@@ -179,10 +191,22 @@ func (a *AppDetails) GetSupportedLanguageCodes() []string {
 	return result
 }
 
-// FetchAppDetails fetches full app details for a given AppID using a tiered fallback strategy.
+// FetchAppDetails fetches full app details for a given AppID using a tiered fallback strategy with deep caching.
 // Tier 1: Query with explicit US region, English language, and mature content cookies (bypasses age-gate & NSFW blocks).
 // Tier 2: Fallback query without region/language parameters for geo-IP / region-exclusive store listings.
 func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
+	if appID == "" || appID == "0" {
+		return nil, fmt.Errorf("invalid AppID %q", appID)
+	}
+
+	// 0. Check local disk & memory cache first
+	if cachedData, ok := cache.GetAppDetails(appID); ok && len(cachedData) > 0 {
+		var details AppDetails
+		if err := json.Unmarshal(cachedData, &details); err == nil && details.Name != "" {
+			return &details, nil
+		}
+	}
+
 	doQuery := func(apiURL string) (*AppDetails, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 		if err != nil {
@@ -225,6 +249,10 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	primaryURL := fmt.Sprintf("%s/appdetails?appids=%s&cc=US&l=english", DefaultSteamStoreAPI, appID)
 	details, err := doQuery(primaryURL)
 	if err == nil && details != nil && details.Name != "" {
+		if raw, mErr := json.Marshal(details); mErr == nil {
+			_ = cache.SaveAppDetails(appID, raw)
+		}
+		cache.SaveAppName(appID, details.Name)
 		return details, nil
 	}
 	if err != nil {
@@ -235,6 +263,10 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 	fallbackURL := fmt.Sprintf("%s/appdetails?appids=%s", DefaultSteamStoreAPI, appID)
 	details, err = doQuery(fallbackURL)
 	if err == nil && details != nil && details.Name != "" {
+		if raw, mErr := json.Marshal(details); mErr == nil {
+			_ = cache.SaveAppDetails(appID, raw)
+		}
+		cache.SaveAppName(appID, details.Name)
 		return details, nil
 	}
 	if err != nil {
@@ -259,9 +291,6 @@ func FetchAppName(ctx context.Context, appID string) (string, error) {
 		}
 		return "", err
 	}
-	if details.Name != "" {
-		cache.SaveAppName(appID, details.Name)
-	}
 	return details.Name, nil
 }
 
@@ -276,6 +305,30 @@ func FetchSupportedLanguages(ctx context.Context, appID string) ([]string, error
 	}
 	return details.GetSupportedLanguageCodes(), nil
 }
+
+// IsSoundtrack returns true if the Steam app type represents music or a soundtrack.
+func IsSoundtrack(appType string) bool {
+	t := strings.ToLower(strings.TrimSpace(appType))
+	return t == "music" || t == "soundtrack"
+}
+
+// FetchAppInfo gets the canonical app title, store type (game, music, dlc, etc.), and sanitized installdir.
+func FetchAppInfo(ctx context.Context, appID string) (name, appType, installDir string, err error) {
+	details, err := FetchAppDetails(ctx, appID)
+	if err != nil {
+		if cachedName, ok := cache.GetAppName(appID); ok && cachedName != "" {
+			return cachedName, "game", util.SanitizeInstallDir(cachedName), nil
+		}
+		return "", "", "", err
+	}
+	t := details.Type
+	if t == "" {
+		t = "game"
+	}
+	cleanInstall := util.SanitizeInstallDir(details.Name)
+	return details.Name, t, cleanInstall, nil
+}
+
 
 
 // SearchResultItem represents an item in storesearch results.

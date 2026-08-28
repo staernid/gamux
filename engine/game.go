@@ -2,61 +2,57 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
-type GameService struct {
-	sc      *ServiceContext
-	library *LibraryService
-}
-
-func NewGameService(sc *ServiceContext, library *LibraryService) *GameService {
-	return &GameService{sc: sc, library: library}
-}
-
 // ProcessGame processes a game directory according to the supplied options.
-func (gs *GameService) ProcessGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
-	ctx = gs.sc.WrapContext(ctx)
+func (eng *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
+	ctx = eng.WrapContext(ctx)
 	targetPath := opts.Path
 	if targetPath == "" {
 		targetPath = "."
 	}
+	targetPath = util.CanonicalPath(targetPath)
 
 	game := domain.NewGame("", targetPath, "", "")
 	pctx := &pipeline.Context{
 		Options:  opts,
 		Game:     game,
-		Config:   gs.sc.Config,
-		EventBus: gs.sc.EventBus,
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
 		Reporter: opts.Reporter,
 	}
 
-	pipe := pipeline.ForGame(game)
+	pipe := pipeline.NewDefault()
 	pipeErr := pipe.Execute(ctx, pctx)
 
 	pctx.Game.RecomputeState()
 
 	res := &ProcessResult{
 		Info:                pctx.Game,
-		Patched:             pctx.Patched,
-		SteamlessUnpacked:   pctx.SteamlessUnpacked,
+		Patched:             pctx.Results.Patched,
+		SteamlessUnpacked:   pctx.Results.SteamlessUnpacked,
 		ManifestsMoved:      true,
-		DirectoryNormalized: pctx.DirectoryNormalized,
-		ACFSynthesized:      pctx.ACFSynthesized,
-		Errors:              pctx.Errors,
+		DirectoryNormalized: pctx.Results.DirectoryNormalized,
+		ACFSynthesized:      pctx.Results.ACFSynthesized,
+		Errors:              pctx.Results.Errors,
 	}
 
 	if pipeErr != nil {
@@ -67,7 +63,7 @@ func (gs *GameService) ProcessGame(ctx context.Context, opts ProcessOptions) (*P
 }
 
 // BatchProcess scans a parent directory containing multiple game folders and processes each discovered game.
-func (gs *GameService) BatchProcess(ctx context.Context, parentDir string, opts ProcessOptions) ([]*ProcessResult, error) {
+func (eng *Engine) BatchProcess(ctx context.Context, parentDir string, opts ProcessOptions) ([]*ProcessResult, error) {
 	absParent, err := filepath.Abs(parentDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve batch directory: %w", err)
@@ -94,7 +90,7 @@ func (gs *GameService) BatchProcess(ctx context.Context, parentDir string, opts 
 		subOpts := opts
 		subOpts.Path = gamePath
 
-		res, err := gs.ProcessGame(ctx, subOpts)
+		res, err := eng.ProcessGame(ctx, subOpts)
 		if err != nil {
 			slog.Warn("Failed to batch process game directory", "path", gamePath, "error", err)
 			continue
@@ -106,8 +102,8 @@ func (gs *GameService) BatchProcess(ctx context.Context, parentDir string, opts 
 }
 
 // ApplyGame performs the end-to-end One-Shot lifecycle: Inspect -> ACF -> GBE Setup.
-func (gs *GameService) ApplyGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
-	status, err := gs.library.InspectStatus(ctx, opts.Path)
+func (eng *Engine) ApplyGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
+	status, err := eng.InspectStatus(ctx, opts.Path)
 	if err != nil {
 		slog.Warn("Apply inspection warning", "error", err)
 	}
@@ -116,11 +112,11 @@ func (gs *GameService) ApplyGame(ctx context.Context, opts ProcessOptions) (*Pro
 		slog.Info("Apply detected available Steam depot update", "title", status.Name, "localManifest", status.ManifestID)
 	}
 
-	return gs.ProcessGame(ctx, opts)
+	return eng.ProcessGame(ctx, opts)
 }
 
 // Rollback restores original backup files and cleans up generated configuration files in a game directory.
-func (gs *GameService) Rollback(ctx context.Context, targetPath string, dryRun bool) error {
+func (eng *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) error {
 	info, err := detector.Detect(ctx, targetPath)
 	if err != nil {
 		return fmt.Errorf("detect game for rollback: %w", err)
@@ -136,27 +132,27 @@ func (gs *GameService) Rollback(ctx context.Context, targetPath string, dryRun b
 	return nil
 }
 
-func (gs *GameService) runnerManager() *runner.Manager {
-	if gs.sc.RunnerMgr != nil {
-		return gs.sc.RunnerMgr
+func (eng *Engine) runnerManager() *runner.Manager {
+	if eng.RunnerMgr != nil {
+		return eng.RunnerMgr
 	}
 	return runner.DefaultManager()
 }
 
 // LaunchGame starts the game process asynchronously using the configured operating mode and runner.
 // Profile loading, executable resolution fallback, and environment synthesis are encapsulated in the runner.
-func (gs *GameService) LaunchGame(ctx context.Context, opts runner.LaunchOptions) (*exec.Cmd, error) {
+func (eng *Engine) LaunchGame(ctx context.Context, opts runner.LaunchOptions) (*exec.Cmd, error) {
 	if opts.GameDir == "" && opts.ExePath == "" {
 		return nil, fmt.Errorf("game directory or executable path cannot be empty")
 	}
-	return gs.runnerManager().Start(ctx, gs.sc.Config, opts)
+	return eng.runnerManager().Start(ctx, eng.Config, opts)
 }
 
 // EnsureAndLaunchGame performs one-click Quick Play: if the game is unpatched/unconfigured,
 // it auto-applies setup first, then starts the game asynchronously.
-func (gs *GameService) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOptions) (*exec.Cmd, error) {
+func (eng *Engine) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOptions) (*exec.Cmd, error) {
 	if opts.GameDir != "" {
-		status, err := gs.library.InspectStatus(ctx, opts.GameDir)
+		status, err := eng.InspectStatus(ctx, opts.GameDir)
 		if err == nil && status != nil && (status.IsClean() || !status.IsReady) {
 			slog.Info("EnsureAndLaunchGame auto-applying setup before launch", "dir", opts.GameDir, "game", status.Name)
 			applyOpts := ProcessOptions{
@@ -167,39 +163,127 @@ func (gs *GameService) EnsureAndLaunchGame(ctx context.Context, opts runner.Laun
 				ExePath:    opts.ExePath,
 				ExeArgs:    opts.ExeArgs,
 			}
-			if _, applyErr := gs.ApplyGame(ctx, applyOpts); applyErr != nil {
-				return nil, fmt.Errorf("auto-apply before launch failed: %w", applyErr)
+			applyOp := &ApplyOperation{
+				Engine:   eng,
+				Options:  applyOpts,
+				GameName: status.Name,
+			}
+			if eng.Tasks != nil {
+				if err := eng.Tasks.RunSyncOp(ctx, applyOp); err != nil {
+					return nil, fmt.Errorf("auto-apply before launch failed: %w", err)
+				}
+			} else {
+				if _, applyErr := eng.ApplyGame(ctx, applyOpts); applyErr != nil {
+					return nil, fmt.Errorf("auto-apply before launch failed: %w", applyErr)
+				}
 			}
 		}
 	}
 
-	return gs.LaunchGame(ctx, opts)
+	return eng.LaunchGame(ctx, opts)
 }
 
 // RunGame executes the game process synchronously, streaming output to stdout/stderr.
-func (gs *GameService) RunGame(ctx context.Context, opts runner.LaunchOptions) error {
-	return runner.Run(ctx, gs.sc.Config, opts)
+func (eng *Engine) RunGame(ctx context.Context, opts runner.LaunchOptions) error {
+	return runner.Run(ctx, eng.Config, opts)
 }
 
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.
-func (gs *GameService) GetLaunchProfile(ctx context.Context, gameDir string) (*runner.LaunchOptions, error) {
+func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*runner.LaunchOptions, error) {
 	return runner.LoadLaunchProfile(gameDir)
 }
 
 // SaveLaunchProfile persists custom launch configuration and synchronizes on-disk integrations.
-func (gs *GameService) SaveLaunchProfile(ctx context.Context, gameDir string, opts runner.LaunchOptions) error {
+func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts runner.LaunchOptions) error {
 	opts.GameDir = gameDir
-	return runner.SyncLaunchProfile(ctx, &opts, gs.sc.Config)
+	game, _ := eng.InspectLocal(ctx, gameDir)
+	return runner.ApplyCompatibility(ctx, eng.Config, game, &opts, false)
 }
 
-// ResetLaunchProfile removes custom launch configuration from <gameDir>/steam_settings/launch_profile.json.
-func (gs *GameService) ResetLaunchProfile(ctx context.Context, gameDir string) error {
-	return runner.ResetLaunchProfile(gameDir)
+// GetGameDepots retrieves the structured inventory of all content depots for a game directory.
+func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.DepotSummary, error) {
+	ctx = eng.WrapContext(ctx)
+	status, err := eng.InspectLocal(ctx, gameDir)
+	if err != nil {
+		return nil, err
+	}
+	numAppID, _ := util.ParseAppID(status.AppID)
+	return manifest.InspectGameDepots(status.GameDir, numAppID)
+}
+
+// UninstallDepot removes on-disk files belonging to a specific depot ID while preserving shared assets and manifests.
+func (eng *Engine) UninstallDepot(ctx context.Context, gameDir string, depotID uint32) error {
+	ctx = eng.WrapContext(ctx)
+	status, err := eng.InspectLocal(ctx, gameDir)
+	if err != nil {
+		return err
+	}
+	numAppID, _ := util.ParseAppID(status.AppID)
+	deleted, freed, err := manifest.UninstallDepot(status.GameDir, numAppID, depotID)
+	if err != nil {
+		return fmt.Errorf("uninstall depot %d: %w", depotID, err)
+	}
+	slog.Info("Uninstalled depot", "gameDir", gameDir, "depotID", depotID, "deletedFiles", deleted, "freedBytes", freed)
+	return nil
+}
+
+// SwitchGamePlatform configures the game launch profile for a new target platform (e.g. "linux", "win64", "macos")
+// and automatically switches the runner and primary executable.
+func (eng *Engine) SwitchGamePlatform(ctx context.Context, gameDir string, targetPlatform string) error {
+	ctx = eng.WrapContext(ctx)
+	profile, err := runner.LoadLaunchProfile(gameDir)
+	if err != nil || profile == nil {
+		profile = &runner.LaunchOptions{GameDir: gameDir}
+	}
+
+	game, err := eng.InspectLocal(ctx, gameDir)
+	if err != nil {
+		return fmt.Errorf("inspect game: %w", err)
+	}
+
+	numAppID, _ := util.ParseAppID(game.AppID)
+	targetPlatClean := strings.ToLower(strings.TrimSpace(targetPlatform))
+	if targetPlatClean == "windows" {
+		targetPlatClean = "win64"
+	}
+
+	profile.Platform = targetPlatClean
+	if targetPlatClean == "linux" {
+		profile.Runner = runner.RunnerLinux
+	} else if targetPlatClean == "win64" || targetPlatClean == "win32" {
+		if profile.Runner == runner.RunnerLinux || profile.Runner == "" {
+			profile.Runner = runner.RunnerUMU
+		}
+	}
+
+	// Discover matching executable for target platform
+	if numAppID > 0 {
+		candidates := manifest.DiscoverManifestExecutables(gameDir, numAppID, targetPlatClean)
+		if len(candidates) > 0 {
+			profile.ExePath = candidates[0].Executable
+		}
+	}
+
+	if err := eng.SaveLaunchProfile(ctx, gameDir, *profile); err != nil {
+		return fmt.Errorf("save launch profile for platform switch: %w", err)
+	}
+
+	slog.Info("Successfully switched game platform", "gameDir", gameDir, "platform", targetPlatClean, "runner", profile.Runner, "exe", profile.ExePath)
+	return nil
+}
+
+// ResetLaunchProfile removes custom launch configuration from <gameDir>/steam_settings/launch_profile.json and synchronizes default DRM state.
+func (eng *Engine) ResetLaunchProfile(ctx context.Context, gameDir string) error {
+	if err := runner.ResetLaunchProfile(gameDir); err != nil {
+		return err
+	}
+	game, _ := eng.InspectLocal(ctx, gameDir)
+	return runner.ApplyCompatibility(ctx, eng.Config, game, nil, false)
 }
 
 // NotifyLaunch inspects a game directory for updates or configuration issues, and triggers a console/desktop notification if found.
-func (gs *GameService) NotifyLaunch(ctx context.Context, gameDir string) error {
-	status, err := gs.library.InspectStatus(ctx, gameDir)
+func (eng *Engine) NotifyLaunch(ctx context.Context, gameDir string) error {
+	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
 		slog.Warn("NotifyLaunch status inspection failed", "dir", gameDir, "error", err)
 		return nil // Don't block launch if inspection fails
@@ -227,18 +311,18 @@ func (gs *GameService) NotifyLaunch(ctx context.Context, gameDir string) error {
 	msg += fmt.Sprintf("\nSuggested Action: Run 'gamux apply %q' to resolve.", status.GameDir)
 
 	slog.Info("Pre-launch notification sent", "title", status.Name, "issuesCount", len(issues))
-	return gs.sc.Notify(ctx, status.Name, msg)
+	return eng.Notify(ctx, status.Name, msg)
 }
 
 // GetGameLog reads the persisted output log for the last/current run of a game.
-func (gs *GameService) GetGameLog(ctx context.Context, gameDir string) (string, error) {
+func (eng *Engine) GetGameLog(ctx context.Context, gameDir string) (string, error) {
 	if gameDir == "" {
 		return "", fmt.Errorf("game directory cannot be empty")
 	}
 
 	gameName := ""
 	appID := ""
-	if status, err := gs.library.InspectStatus(ctx, gameDir); err == nil && status != nil {
+	if status, err := eng.InspectStatus(ctx, gameDir); err == nil && status != nil {
 		gameName = status.Name
 		appID = status.AppID
 	}
@@ -246,19 +330,232 @@ func (gs *GameService) GetGameLog(ctx context.Context, gameDir string) (string, 
 	return runner.GetLog(gameDir, gameName, appID)
 }
 
+// GetGameAchievements reads the achievement schema and unlocked status for a game.
+func (eng *Engine) GetGameAchievements(ctx context.Context, gameDir string) ([]domain.AchievementItem, error) {
+	if gameDir == "" {
+		return nil, fmt.Errorf("game directory cannot be empty")
+	}
+
+	gameDir = util.CanonicalPath(gameDir)
+	status, _ := eng.InspectStatus(ctx, gameDir)
+
+	var appID uint32
+	if status != nil && status.AppID != "" {
+		appID, _ = util.ParseAppID(status.AppID)
+	}
+
+	// Fallback to steam_appid.txt if appID wasn't parsed from ACF/status
+	if appID == 0 {
+		for _, p := range []string{
+			filepath.Join(gameDir, "steam_appid.txt"),
+			filepath.Join(gameDir, "steam_settings", "steam_appid.txt"),
+		} {
+			if data, err := os.ReadFile(p); err == nil {
+				txt := strings.TrimSpace(string(data))
+				if parsed, ok := util.ParseAppID(txt); ok && parsed > 0 {
+					appID = parsed
+					break
+				}
+			}
+		}
+	}
+
+	// Fallback to launch_profile.json
+	if appID == 0 {
+		if prof, err := runner.LoadLaunchProfile(gameDir); err == nil && prof != nil && prof.AppID != "" {
+			if parsed, ok := util.ParseAppID(prof.AppID); ok && parsed > 0 {
+				appID = parsed
+			}
+		}
+	}
+
+	achievementsFile := filepath.Join(gameDir, "steam_settings", "achievements.json")
+	var schemas []steam.AchievementSchema
+
+	if util.FileExists(achievementsFile) {
+		if data, err := os.ReadFile(achievementsFile); err == nil {
+			if err := json.Unmarshal(data, &schemas); err != nil {
+				// Try map format {"ACH_NAME": {displayName: "...", ...}}
+				var schemaMap map[string]steam.AchievementSchema
+				if err2 := json.Unmarshal(data, &schemaMap); err2 == nil {
+					for k, v := range schemaMap {
+						if v.Name == "" {
+							v.Name = k
+						}
+						schemas = append(schemas, v)
+					}
+				}
+			}
+		}
+	}
+
+	if len(schemas) == 0 && appID > 0 {
+		apiKey := ""
+		if eng.Config != nil {
+			apiKey = eng.Config.SteamWebAPIKey
+		}
+		if fetched, err := steam.FetchAchievementSchema(ctx, appID, apiKey, "english"); err == nil && len(fetched) > 0 {
+			schemas = fetched
+		}
+	}
+
+	if len(schemas) == 0 {
+		return []domain.AchievementItem{}, nil
+	}
+
+	// Discover unlocked achievements from standard GSE emulator save paths
+	unlockedMap := make(map[string]int64)
+
+	home, _ := os.UserHomeDir()
+	candidatePaths := []string{
+		filepath.Join(gameDir, "steam_settings", "achievements_unlocked.json"),
+	}
+
+	if appID > 0 && home != "" {
+		appIDStr := fmt.Sprintf("%d", appID)
+		candidatePaths = append(candidatePaths,
+			filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "achievements.json"),
+			filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "remote", "achievements.json"),
+			filepath.Join(home, ".local", "share", "GSE Saves", "settings", "achievements.json"),
+			filepath.Join(home, "Games", "umu", "umu-default", "drive_c", "users", "steamuser", "AppData", "Roaming", "GSE Saves", appIDStr, "achievements.json"),
+		)
+
+		// Expand nested remote folder patterns (e.g. GSE Saves/<appID>/remote/*/achievements.json)
+		if matches, err := filepath.Glob(filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "remote", "*", "achievements.json")); err == nil {
+			candidatePaths = append(candidatePaths, matches...)
+		}
+	}
+
+	for _, p := range candidatePaths {
+		if !util.FileExists(p) {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+
+		var simpleMap map[string]any
+		if err := json.Unmarshal(data, &simpleMap); err == nil {
+			for k, v := range simpleMap {
+				switch val := v.(type) {
+				case float64:
+					if val > 0 {
+						unlockedMap[strings.ToUpper(k)] = int64(val)
+					}
+				case bool:
+					if val {
+						unlockedMap[strings.ToUpper(k)] = 1
+					}
+				case map[string]any:
+					earned := false
+					if e, ok := val["earned"].(bool); ok && e {
+						earned = true
+					} else if u, ok := val["unlocked"].(bool); ok && u {
+						earned = true
+					}
+
+					if earned {
+						var t int64 = 1
+						if et, ok := val["earned_time"].(float64); ok && et > 0 {
+							t = int64(et)
+						} else if ut, ok := val["unlock_time"].(float64); ok && ut > 0 {
+							t = int64(ut)
+						}
+						unlockedMap[strings.ToUpper(k)] = t
+					}
+				default:
+					unlockedMap[strings.ToUpper(k)] = 1
+				}
+			}
+		} else {
+			var arr []string
+			if err := json.Unmarshal(data, &arr); err == nil {
+				for _, k := range arr {
+					unlockedMap[strings.ToUpper(k)] = 1
+				}
+			}
+		}
+	}
+
+	items := make([]domain.AchievementItem, 0, len(schemas))
+	for _, s := range schemas {
+		unlockedTime, isUnlocked := unlockedMap[strings.ToUpper(s.Name)]
+
+		iconURL := s.Icon
+		iconGrayURL := s.IconGray
+
+		cleanIcon := strings.TrimPrefix(s.Icon, "img/")
+		cleanGray := strings.TrimPrefix(s.IconGray, "img/")
+
+		// Check if local image files exist
+		localImgPath := filepath.Join(gameDir, "steam_settings", "img", cleanIcon)
+		if !util.FileExists(localImgPath) {
+			localImgPath = filepath.Join(gameDir, "steam_settings", s.Icon)
+		}
+		if util.FileExists(localImgPath) {
+			iconURL = "/local-img" + localImgPath
+		} else if appID > 0 && !strings.HasPrefix(iconURL, "http") {
+			iconURL = fmt.Sprintf("https://shared.fastly.steamstatic.com/community_assets/images/apps/%d/%s", appID, cleanIcon)
+		}
+
+		localGrayPath := filepath.Join(gameDir, "steam_settings", "img", cleanGray)
+		if !util.FileExists(localGrayPath) {
+			localGrayPath = filepath.Join(gameDir, "steam_settings", s.IconGray)
+		}
+		if util.FileExists(localGrayPath) {
+			iconGrayURL = "/local-img" + localGrayPath
+		} else if appID > 0 && !strings.HasPrefix(iconGrayURL, "http") {
+			iconGrayURL = fmt.Sprintf("https://shared.fastly.steamstatic.com/community_assets/images/apps/%d/%s", appID, cleanGray)
+		}
+
+		items = append(items, domain.AchievementItem{
+			ID:          s.Name,
+			Name:        s.DisplayName,
+			Description: s.Description,
+			IconURL:     iconURL,
+			IconGrayURL: iconGrayURL,
+			Hidden:      s.Hidden == 1,
+			Unlocked:    isUnlocked,
+			UnlockTime:  unlockedTime,
+		})
+	}
+
+	// Sort achievements: completed/unlocked first (sorted by most recent unlock time desc), then locked
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Unlocked != items[j].Unlocked {
+			return items[i].Unlocked // true comes before false
+		}
+		if items[i].Unlocked {
+			return items[i].UnlockTime > items[j].UnlockTime // most recently unlocked first
+		}
+		return false // preserve schema order for locked items
+	})
+
+	return items, nil
+}
+
 // DownloadGame orchestrates key resolution, manifest persistence, depot chunk downloading, and optional post-download setup.
-func (gs *GameService) DownloadGame(ctx context.Context, opts DownloadGameOptions) (*downloader.Result, error) {
-	ctx = gs.sc.WrapContext(ctx)
+func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (*downloader.Result, error) {
+	ctx = eng.WrapContext(ctx)
 	if opts.AppID == 0 {
 		return nil, fmt.Errorf("invalid Steam AppID")
 	}
-	if opts.TargetDir == "" {
-		opts.TargetDir = "."
+	if opts.TargetDir == "" || opts.TargetDir == "." {
+		if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", opts.AppID)); err == nil && installDir != "" {
+			if steam.IsSoundtrack(appType) {
+				opts.TargetDir = filepath.Join(util.GetMusicDir(), installDir)
+			} else {
+				opts.TargetDir = installDir
+			}
+		} else if opts.TargetDir == "" {
+			opts.TargetDir = "."
+		}
 	}
 
 	hubcapKey := ""
-	if gs.sc.Config != nil {
-		hubcapKey = gs.sc.Config.HubcapAPIKey
+	if eng.Config != nil {
+		hubcapKey = eng.Config.HubcapAPIKey
 	}
 
 	req := downloader.DownloadRequest{
@@ -269,11 +566,11 @@ func (gs *GameService) DownloadGame(ctx context.Context, opts DownloadGameOption
 		HubcapAPIKey: hubcapKey,
 		WorkerLimit:  opts.WorkerLimit,
 		DryRun:       opts.DryRun,
-		HTTPClient:   gs.sc.HTTPClient,
+		HTTPClient:   eng.HTTPClient,
 		CheckCancel:  opts.CheckCancel,
 		Throttle:     opts.Throttle,
 		OnStage: func(stage, details string) {
-			gs.sc.reportStep(ctx, 1, 3, stage, details)
+			eng.reportStep(ctx, 1, 3, stage, details)
 		},
 		OnProgress: func(p downloader.ProgressUpdate) {
 			if opts.OnProgress != nil {
@@ -294,7 +591,7 @@ func (gs *GameService) DownloadGame(ctx context.Context, opts DownloadGameOption
 	}
 
 	if opts.AutoApply {
-		gs.sc.reportStep(ctx, 3, 3, "Running Post-Download Setup", fmt.Sprintf("Target: %s", opts.TargetDir))
+		eng.reportStep(ctx, 3, 3, "Running Post-Download Setup", fmt.Sprintf("Target: %s", opts.TargetDir))
 		applyOpts := ProcessOptions{
 			Path:              opts.TargetDir,
 			ApplyGBE:          true,
@@ -307,7 +604,7 @@ func (gs *GameService) DownloadGame(ctx context.Context, opts DownloadGameOption
 			applyOpts = *opts.ApplyOptions
 			applyOpts.Path = opts.TargetDir
 		}
-		if _, err := gs.ProcessGame(ctx, applyOpts); err != nil {
+		if _, err := eng.ProcessGame(ctx, applyOpts); err != nil {
 			slog.Warn("Auto-apply setup failed following download", "targetDir", opts.TargetDir, "error", err)
 		}
 	}
@@ -316,8 +613,8 @@ func (gs *GameService) DownloadGame(ctx context.Context, opts DownloadGameOption
 }
 
 // UpdateGame checks for available Steam depot updates for an existing game directory, downloads changed files, and re-applies setup.
-func (gs *GameService) UpdateGame(ctx context.Context, gamePath string) (*GameStatus, error) {
-	ctx = gs.sc.WrapContext(ctx)
+func (eng *Engine) UpdateGame(ctx context.Context, gamePath string) (*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
 	targetPath := gamePath
 	if targetPath == "" {
 		targetPath = "."
@@ -342,9 +639,9 @@ func (gs *GameService) UpdateGame(ctx context.Context, gamePath string) (*GameSt
 		AutoApply: true,
 	}
 
-	if _, dlErr := gs.DownloadGame(ctx, dlOpts); dlErr != nil {
+	if _, dlErr := eng.DownloadGame(ctx, dlOpts); dlErr != nil {
 		return nil, fmt.Errorf("update download failed: %w", dlErr)
 	}
 
-	return gs.library.InspectStatus(ctx, info.GameDir)
+	return eng.InspectStatus(ctx, info.GameDir)
 }

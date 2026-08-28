@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/util"
 
@@ -71,6 +72,43 @@ type ToolInfo struct {
 	HasUpdate     bool   `json:"has_update"`
 }
 
+func fetchGithubReleaseWithCache(ctx context.Context, key, apiURL string) (*Release, error) {
+	if cachedData, ok := cache.GetGitHubRelease(key); ok && len(cachedData) > 0 {
+		var release Release
+		if err := json.Unmarshal(cachedData, &release); err == nil && release.TagName != "" {
+			slog.Debug("Using cached GitHub release metadata", "key", key, "tag", release.TagName)
+			return &release, nil
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Game Manager)")
+
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s release: %w", key, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s release HTTP %s", key, resp.Status)
+	}
+
+	var release Release
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("decode %s release JSON: %w", key, err)
+	}
+
+	if raw, err := json.Marshal(release); err == nil {
+		_ = cache.SaveGitHubRelease(key, raw)
+	}
+
+	return &release, nil
+}
+
 // FetchGBERelease fetches the latest release metadata and release notes for GBE fork.
 func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error) {
 	if cfg == nil {
@@ -79,23 +117,9 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 	gbeHome := util.ExpandPath(cfg.GbeDir)
 	timestampFile := filepath.Join(gbeHome, ".gbe_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultGithubAPIURL, nil)
+	release, err := fetchGithubReleaseWithCache(ctx, "gbe", DefaultGithubAPIURL)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch GBE release: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GBE release HTTP %s", resp.Status)
-	}
-
-	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("decode GBE release JSON: %w", err)
+		return nil, err
 	}
 
 	installedTag := "(not installed)"
@@ -148,23 +172,9 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 	steamlessHome := util.ExpandPath(cfg.SteamlessDir)
 	timestampFile := filepath.Join(steamlessHome, ".steamless_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultSteamlessGithubAPI, nil)
+	release, err := fetchGithubReleaseWithCache(ctx, "steamless", DefaultSteamlessGithubAPI)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch steamless release: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("steamless release HTTP %s", resp.Status)
-	}
-
-	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("decode steamless release JSON: %w", err)
+		return nil, err
 	}
 
 	installedTag := "(not installed)"
@@ -213,23 +223,9 @@ func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 	umuHome := filepath.Join(home, ".local", "share", "umu")
 	timestampFile := filepath.Join(umuHome, ".umu_timestamp")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultUMUGithubAPI, nil)
+	release, err := fetchGithubReleaseWithCache(ctx, "umu", DefaultUMUGithubAPI)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch umu release: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("umu release HTTP %s", resp.Status)
-	}
-
-	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("decode umu release JSON: %w", err)
+		return nil, err
 	}
 
 	installedTag := "(not installed)"

@@ -30,17 +30,8 @@
   >
     <svg
       viewBox="0 0 290 64"
-      class="w-64 sm:w-72 md:w-80 h-12 overflow-visible"
+      class="w-64 sm:w-72 md:w-80 h-12 overflow-visible drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]"
     >
-      <defs>
-        <!-- Soft physical drop shadow for tactile depth -->
-        <filter id="pillShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8" />
-        </filter>
-      </defs>
-
-      <!-- Invisible Arch Track (No background stroke rendered) -->
-
       <!-- Thick, Extremely Rounded Solid White Curved Pill -->
       <path
         d={pathD}
@@ -51,7 +42,6 @@
         pathLength="100"
         stroke-dasharray="{thumbLength} 100"
         stroke-dashoffset={dashOffset}
-        filter="url(#pillShadow)"
       />
 
       <!-- Crisp Specular Highlight Core -->

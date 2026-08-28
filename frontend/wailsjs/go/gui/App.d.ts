@@ -6,6 +6,7 @@ import {saves} from '../models';
 import {config} from '../models';
 import {util} from '../models';
 import {gbe} from '../models';
+import {gui} from '../models';
 import {tasks} from '../models';
 import {tools} from '../models';
 import {store} from '../models';
@@ -38,7 +39,13 @@ export function GetDiskSpace(arg1:string):Promise<util.DiskSpaceInfo>;
 
 export function GetGSEUserConfig():Promise<gbe.GSEUserConfig>;
 
+export function GetGameAchievements(arg1:string):Promise<Array<domain.AchievementItem>>;
+
 export function GetGameBackups(arg1:string):Promise<Array<saves.BackupInfo>>;
+
+export function GetGameDepots(arg1:string):Promise<Array<domain.DepotSummary>>;
+
+export function GetGameDetails(arg1:string):Promise<gui.GameMetadataDetails>;
 
 export function GetGameLog(arg1:string):Promise<string>;
 
@@ -64,9 +71,13 @@ export function LaunchGame(arg1:domain.LaunchProfile):Promise<void>;
 
 export function LinkGameMetadata(arg1:string,arg2:string,arg3:string):Promise<domain.Game>;
 
+export function ListMetadataProviders():Promise<Array<store.ProviderDescriptor>>;
+
 export function ListTasks():Promise<Array<tasks.Task>>;
 
 export function OpenDirectory(arg1:string):Promise<void>;
+
+export function OpenURL(arg1:string):Promise<void>;
 
 export function PauseTask(arg1:string):Promise<void>;
 
@@ -108,6 +119,14 @@ export function StopGame(arg1:string):Promise<void>;
 
 export function SubmitApply(arg1:pipeline.Options):Promise<string>;
 
+export function SubmitBatchAchievements():Promise<string>;
+
+export function SubmitBatchArtwork():Promise<string>;
+
+export function SubmitBatchNormalize():Promise<string>;
+
+export function SubmitBatchVerify():Promise<string>;
+
 export function SubmitNormalize(arg1:string):Promise<string>;
 
 export function SubmitRollback(arg1:string,arg2:boolean):Promise<string>;
@@ -115,6 +134,12 @@ export function SubmitRollback(arg1:string,arg2:boolean):Promise<string>;
 export function SubmitUpdate(arg1:string):Promise<string>;
 
 export function SubmitVerify(arg1:string):Promise<string>;
+
+export function SwitchGamePlatform(arg1:string,arg2:string):Promise<domain.Game>;
+
+export function UninstallDepot(arg1:string,arg2:number):Promise<domain.Game>;
+
+export function UnlinkGameMetadata(arg1:string):Promise<domain.Game>;
 
 export function UpdateSaveManifest():Promise<void>;
 

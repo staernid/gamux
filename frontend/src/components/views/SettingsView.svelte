@@ -4,13 +4,19 @@
   import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { AppAPI } from '../../api/app.js';
+  import { isSfxEnabled, setSfxEnabled } from '../../utils/audio.js';
 
   let localCfg = {};
   let currentScale = 18;
+  let sfxOn = isSfxEnabled();
   let activeTab = 'system'; // 'system' | 'emu' | 'paths' | 'integrations' | 'tools' | 'logs'
 
   let logFilter = 'all'; // 'all' | 'error' | 'warning' | 'info' | 'success'
   const notifItems = notificationStore.items;
+
+  $: {
+    setSfxEnabled(sfxOn);
+  }
 
   $: filteredLogs = ($notifItems || []).filter(item => {
     if (logFilter === 'all') return true;
@@ -115,6 +121,92 @@
     }
   }
 
+  let isSubmittingBatch = false;
+
+  async function handleBatchAchievements() {
+    isSubmittingBatch = true;
+    try {
+      await AppAPI.submitBatchAchievements();
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Batch Achievements Task Queued',
+        message: 'Downloading missing achievements and icons in background. Track progress in Tasks.'
+      });
+      activeView.set('tasks');
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Failed to Queue Task',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isSubmittingBatch = false;
+    }
+  }
+
+  async function handleBatchArtwork() {
+    isSubmittingBatch = true;
+    try {
+      await AppAPI.submitBatchArtwork();
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Batch Artwork Task Queued',
+        message: 'Resolving and caching missing posters, heroes, and banners in background.'
+      });
+      activeView.set('tasks');
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Failed to Queue Task',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isSubmittingBatch = false;
+    }
+  }
+
+  async function handleBatchNormalize() {
+    isSubmittingBatch = true;
+    try {
+      await AppAPI.submitBatchNormalize();
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Batch Directory Normalization Queued',
+        message: 'Standardizing directory names across all library games.'
+      });
+      activeView.set('tasks');
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Failed to Queue Task',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isSubmittingBatch = false;
+    }
+  }
+
+  async function handleBatchVerify() {
+    isSubmittingBatch = true;
+    try {
+      await AppAPI.submitBatchVerify();
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Batch Integrity Verification Queued',
+        message: 'Verifying depot file integrity for all manifest-backed games.'
+      });
+      activeView.set('tasks');
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Failed to Queue Task',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isSubmittingBatch = false;
+    }
+  }
+
   async function handleAddLibrary() {
     const selected = await AppAPI.selectDirectory('Select Steam Games Library Folder');
     if (selected) {
@@ -167,9 +259,8 @@
         gbe_dir: '~/.local/share/gbe_fork',
         steamless_dir: '~/.local/share/steamless',
         steam_userdata: '~/.local/share/Steam/userdata',
-        operating_mode: 'standalone',
+        operating_mode: 'loader',
         default_runner: 'umu',
-        gbe_mode: 'loader',
         steamless: true,
         achievements: true,
         normalize: true,
@@ -177,6 +268,9 @@
         wine_fullscreen_fsr: false,
         proton_nvapi: false,
         enable_launch_notify: true,
+        steam_web_api_key: '',
+        steamgriddb_api_key: '',
+        hubcap_api_key: '',
       };
       gseUserCfg = {
         account_name: 'GamuxPlayer',
@@ -222,7 +316,7 @@
         <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
-        <span>Emu</span>
+        <span>DRM</span>
       </button>
       <button
         type="button"
@@ -273,7 +367,7 @@
       {#if activeTab === 'system'}
         <!-- SYSTEM TAB -->
         <div class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
               <label for="setUiScale" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
                 Display Scale
@@ -284,6 +378,15 @@
                 <option value={20}>Large (20px)</option>
                 <option value={22}>Handheld / Steam Deck (22px)</option>
                 <option value={24}>Extra Large / 4K TV (24px)</option>
+              </select>
+            </div>
+            <div>
+              <label for="setSfx" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
+                Tactile Audio SFX
+              </label>
+              <select id="setSfx" bind:value={sfxOn} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
+                <option value={true}>Enabled (Synthesized)</option>
+                <option value={false}>Disabled (Muted)</option>
               </select>
             </div>
             <div>
@@ -386,7 +489,9 @@
                       Up to date
                     </span>
                   {/if}
-                  <span class="text-slate-500 text-xs">{isGbeExpanded ? '▲' : '▼'}</span>
+                  <svg class="w-3.5 h-3.5 text-slate-500 transform transition-transform {isGbeExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
                 <p class="text-slate-400 font-mono text-[11px]">
                   Installed: <span class="text-slate-200">{gbeStatus?.installed_tag || 'N/A'}</span>
@@ -445,12 +550,14 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label for="setGbeMode" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
-                Emulation Mode
+              <label for="setOperatingMode" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider mb-1">
+                Default Operating Mode
               </label>
-              <select id="setGbeMode" bind:value={localCfg.gbe_mode} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
-                <option value="loader">Loader Mode (ColdClientLoader)</option>
-                <option value="portable">Portable Mode (Direct DLL)</option>
+              <select id="setOperatingMode" bind:value={localCfg.operating_mode} class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none">
+                <option value="loader">Loader (Non-destructive, Recommended)</option>
+                <option value="portable">Portable (Direct DLL/SO Replacement)</option>
+                <option value="standalone">Standalone (Direct Play)</option>
+                <option value="none">None (Disabled / DRM-free)</option>
               </select>
             </div>
 
@@ -482,7 +589,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <span class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
-                  Global Goldberg Persona
+                  Global Steam Persona
                 </span>
                 <span class="text-[10px] text-slate-500 font-mono">
                   ~/.local/share/GSE Saves/settings/configs.user.ini
@@ -705,13 +812,44 @@
             </div>
           </div>
 
-          <!-- Cover Art & Metadata Providers -->
+          <!-- API Keys & Online Services -->
           <div class="pt-3 border-t border-[#20202c]">
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-2">
-              🎨 Cover Art & Metadata Services
+            <span class="flex items-center space-x-1.5 text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-2">
+              <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              <span>API Keys & External Services</span>
             </span>
-            <div class="bg-[#09090d] p-3.5 rounded-xl border border-[#202030] space-y-2">
+            <div class="bg-[#09090d] p-3.5 rounded-xl border border-[#202030] space-y-4">
+              <!-- Steam Web API Key -->
               <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="setSteamWebKey" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
+                    Steam Web API Key
+                  </label>
+                  <a
+                    href="https://steamcommunity.com/dev/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="text-[10px] text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Get free API key ↗
+                  </a>
+                </div>
+                <input
+                  id="setSteamWebKey"
+                  type="password"
+                  bind:value={localCfg.steam_web_api_key}
+                  placeholder="Enter 32-character Steam Web API key"
+                  class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs"
+                />
+                <p class="text-[10px] text-slate-400 mt-1">
+                  Used for fetching detailed Steam store metadata, official achievement schemas, and game changelogs.
+                </p>
+              </div>
+
+              <!-- SteamGridDB API Key -->
+              <div class="pt-3 border-t border-[#181824]">
                 <div class="flex items-center justify-between mb-1">
                   <label for="setSGDBKey" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
                     SteamGridDB API Key
@@ -736,6 +874,25 @@
                   Provides high-res vertical posters, hero banners, and transparent logos for Steam, GOG, Epic, and Standalone games. Free keyless fallbacks (Steam CDN, GOG) will be used automatically when this is blank.
                 </p>
               </div>
+
+              <!-- Hubcap Depot API Key -->
+              <div class="pt-3 border-t border-[#181824]">
+                <div class="flex items-center justify-between mb-1">
+                  <label for="setHubcapKey" class="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
+                    Hubcap Depot API Key
+                  </label>
+                </div>
+                <input
+                  id="setHubcapKey"
+                  type="password"
+                  bind:value={localCfg.hubcap_api_key}
+                  placeholder="Enter Hubcap API key (optional)"
+                  class="w-full bg-[#0c0c10] border border-[#262636] rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs"
+                />
+                <p class="text-[10px] text-slate-400 mt-1">
+                  Used for unlocking and fetching community depot manifests, depot keys, and decryption metadata.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -747,7 +904,13 @@
           <div class="bg-[#0b0b10] border border-[#242436] rounded-xl p-4 space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <strong class="text-white font-bold block text-sm">🛠️ Helper Tools & Toolchain</strong>
+                <strong class="text-white font-bold text-sm flex items-center space-x-2">
+                  <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Helper Tools & Toolchain</span>
+                </strong>
                 <p class="text-[11px] text-slate-400">
                   External tools for Steam emulation, DRM removal, and Proton execution.
                 </p>
@@ -806,28 +969,149 @@
             </div>
           </div>
 
-          <!-- Batch Apply Clean Titles -->
-          <div class="bg-[#0b0b10] border border-[#242436] rounded-xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <div>
-                <strong class="text-white font-bold block text-sm">📦 Batch DRM & Emulator Setup</strong>
-                <p class="text-[11px] text-slate-400">
-                  Run Goldberg Emulator setup and SteamStub DRM unpacking on all unpatched library games.
-                </p>
-              </div>
-              <span class="text-[10px] font-mono bg-[#161622] text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md">
-                {$games.filter(g => !g.isPatched).length} unpatched
-              </span>
+          <!-- Batch Library Maintenance Operations -->
+          <div class="bg-[#0b0b10] border border-[#242436] rounded-xl p-4 space-y-4">
+            <div>
+              <strong class="text-white font-bold text-sm flex items-center space-x-2">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Batch Maintenance Operations</span>
+              </strong>
+              <p class="text-[11px] text-slate-400">
+                Automated multi-game library operations executed in the background.
+              </p>
             </div>
 
-            <button
-              type="button"
-              on:click={batchApplyCleanGames}
-              disabled={$games.filter(g => !g.isPatched).length === 0}
-              class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-slate-200 hover:text-white font-bold text-xs py-2.5 px-3 rounded-xl border border-[#2c2c40] transition-colors flex items-center justify-center space-x-1.5"
-            >
-              <span>Apply Setup to All Unpatched Games ({$games.filter(g => !g.isPatched).length})</span>
-            </button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <!-- 1. Batch Achievements -->
+              <div class="bg-[#08080c] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3.5 rounded-xl flex flex-col justify-between space-y-3 transition-colors">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-slate-100 text-xs flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                      <span>Missing Achievements</span>
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Download official Steam achievement schemas and icon artwork to steam_settings for all library titles.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  on:click={handleBatchAchievements}
+                  disabled={isSubmittingBatch || $games.length === 0}
+                  class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-sky-300 hover:text-white font-bold text-xs py-2 px-3 rounded-lg border border-sky-900/40 hover:border-sky-700/60 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <span>Download Achievements</span>
+                </button>
+              </div>
+
+              <!-- 2. Batch Artwork -->
+              <div class="bg-[#08080c] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3.5 rounded-xl flex flex-col justify-between space-y-3 transition-colors">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-slate-100 text-xs flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>Refresh Artwork</span>
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Query SteamGridDB and Steam CDN to resolve and cache vertical posters, hero banners, and logos.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  on:click={handleBatchArtwork}
+                  disabled={isSubmittingBatch || $games.length === 0}
+                  class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-purple-300 hover:text-white font-bold text-xs py-2 px-3 rounded-lg border border-purple-900/40 hover:border-purple-700/60 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <span>Refresh All Artwork</span>
+                </button>
+              </div>
+
+              <!-- 3. Batch Apply GBE & Steamless -->
+              <div class="bg-[#08080c] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3.5 rounded-xl flex flex-col justify-between space-y-3 transition-colors">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-slate-100 text-xs flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                      <span>Apply DRM & Emulator</span>
+                    </span>
+                    <span class="text-[10px] font-mono bg-[#161622] text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                      {$games.filter(g => !g.isPatched).length} unpatched
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Unpack SteamStub DRM and generate Goldberg emulator configuration on unpatched games.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  on:click={batchApplyCleanGames}
+                  disabled={$games.filter(g => !g.isPatched).length === 0}
+                  class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-amber-300 hover:text-white font-bold text-xs py-2 px-3 rounded-lg border border-amber-900/40 hover:border-amber-700/60 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <span>Apply Setup ({$games.filter(g => !g.isPatched).length})</span>
+                </button>
+              </div>
+
+              <!-- 4. Batch Normalize Directories -->
+              <div class="bg-[#08080c] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3.5 rounded-xl flex flex-col justify-between space-y-3 transition-colors">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-slate-100 text-xs flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      <span>Normalize Directory Names</span>
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Standardize scene release and archive directory names (e.g. Game.Name.v1.0-P2P &rarr; Game Name).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  on:click={handleBatchNormalize}
+                  disabled={isSubmittingBatch || $games.length === 0}
+                  class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-emerald-300 hover:text-white font-bold text-xs py-2 px-3 rounded-lg border border-emerald-900/40 hover:border-emerald-700/60 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <span>Normalize Directories</span>
+                </button>
+              </div>
+
+              <!-- 5. Batch Verify Integrity -->
+              <div class="bg-[#08080c] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3.5 rounded-xl flex flex-col justify-between space-y-3 transition-colors md:col-span-2">
+                <div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-slate-100 text-xs flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      <span>Verify All Depot Manifests</span>
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Verify SHA-1 file integrity against official Steam depot manifests for all games that include manifest data.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  on:click={handleBatchVerify}
+                  disabled={isSubmittingBatch || $games.length === 0}
+                  class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-cyan-300 hover:text-white font-bold text-xs py-2 px-3 rounded-lg border border-cyan-900/40 hover:border-cyan-700/60 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <span>Verify All Game Manifests</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       {:else if activeTab === 'logs'}
@@ -859,10 +1143,13 @@
                 <button
                   type="button"
                   on:click={copyLogsToClipboard}
-                  class="text-[11px] font-bold bg-[#181824] hover:bg-[#222232] text-slate-300 px-2.5 py-1 rounded-xl border border-[#2c2c3e] transition-colors flex items-center space-x-1"
+                  class="text-[11px] font-bold bg-[#181824] hover:bg-[#222232] text-slate-300 px-2.5 py-1 rounded-xl border border-[#2c2c3e] transition-colors flex items-center space-x-1.5 cursor-pointer"
                   title="Copy log to clipboard"
                 >
-                  <span>📋 Copy</span>
+                  <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Copy</span>
                 </button>
                 <button
                   type="button"

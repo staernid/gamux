@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/ui"
@@ -72,10 +73,15 @@ func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, stri
 	}
 
 	if appID > 0 && (arg == "" || arg == strconv.FormatUint(uint64(appID), 10)) {
-		title, err := steam.FetchAppName(ctx, fmt.Sprintf("%d", appID))
-		if err == nil && title != "" {
-			cleanTitle := util.SanitizeInstallDir(title)
-			return appID, filepath.Join(".", cleanTitle)
+		name, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", appID))
+		if err == nil && installDir != "" {
+			if steam.IsSoundtrack(appType) {
+				return appID, filepath.Join(util.GetMusicDir(), installDir)
+			}
+			return appID, filepath.Join(".", installDir)
+		}
+		if name != "" {
+			return appID, filepath.Join(".", util.SanitizeInstallDir(name))
 		}
 		return appID, fmt.Sprintf("./%d", appID)
 	}
@@ -86,6 +92,7 @@ func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, stri
 
 	return appID, "."
 }
+
 
 func isAutoYes(c *cli.Context) bool {
 	if c.Bool("yes") || c.IsSet("yes") || c.IsSet("y") {
@@ -106,40 +113,37 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 
 	autoYes := isAutoYes(c)
 
-	// 1. GBE & Portable/Loader Mode Resolution
-	applyGBE := true
-	portable := false
-	gbeMode := cfg.GbeMode
-
-	if c.IsSet("portable") {
-		gbeMode = "portable"
-	} else if c.IsSet("loader") {
-		gbeMode = "loader"
-	} else if c.IsSet("no-gbe") {
-		gbeMode = "disabled"
+	// 1. Operating Mode Resolution
+	opMode := cfg.OperatingMode
+	if opMode == "" {
+		opMode = domain.ModeLoader
 	}
 
-	if strings.EqualFold(gbeMode, "portable") {
-		applyGBE = true
-		portable = true
-	} else if strings.EqualFold(gbeMode, "loader") {
-		applyGBE = true
-		portable = false
-	} else if strings.EqualFold(gbeMode, "disabled") || strings.EqualFold(gbeMode, "none") || strings.EqualFold(gbeMode, "off") {
-		applyGBE = false
-		portable = false
+	if c.IsSet("portable") {
+		opMode = domain.ModePortable
+	} else if c.IsSet("loader") {
+		opMode = domain.ModeLoader
+	} else if c.IsSet("no-gbe") {
+		opMode = domain.ModeNone
 	} else if promptIfUnset && !autoYes {
-		applyGBE = ui.PromptYesNoWithExplanation(
+		applyGBE := ui.PromptYesNoWithExplanation(
 			"Apply Goldberg Emulator & Steamless DRM removal?",
 			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
 			true,
 		)
 		if applyGBE {
-			portable = ui.PromptYesNoWithExplanation(
+			portable := ui.PromptYesNoWithExplanation(
 				"Use Portable Mode (Direct DLL/SO replacement)?",
 				"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
 				false,
 			)
+			if portable {
+				opMode = domain.ModePortable
+			} else {
+				opMode = domain.ModeLoader
+			}
+		} else {
+			opMode = domain.ModeNone
 		}
 	}
 
@@ -177,9 +181,10 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 
 	return engine.ProcessOptions{
 		Path:              path,
-		ApplyGBE:          applyGBE,
+		OperatingMode:     opMode,
+		ApplyGBE:          opMode != domain.ModeNone && opMode != domain.ModeStandalone,
+		Portable:          opMode == domain.ModePortable,
 		WinePrefix:        winePrefix,
-		Portable:          portable,
 		NormalizeDir:      normalize,
 		DryRun:            c.Bool("dry-run"),
 		AutoYes:           autoYes,

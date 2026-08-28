@@ -779,6 +779,28 @@ func GetDiskSpace(path string) (*DiskSpaceInfo, error) {
 	}, nil
 }
 
-
-
-
+// GetMusicDir returns the standard system-wide music directory (XDG_MUSIC_DIR or ~/Music).
+func GetMusicDir() string {
+	if xdgMusic := os.Getenv("XDG_MUSIC_DIR"); xdgMusic != "" {
+		return ExpandPath(xdgMusic)
+	}
+	// Try reading ~/.config/user-dirs.dirs
+	if home, err := os.UserHomeDir(); err == nil {
+		userDirsPath := filepath.Join(home, ".config", "user-dirs.dirs")
+		if data, err := os.ReadFile(userDirsPath); err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "XDG_MUSIC_DIR=") {
+					val := strings.TrimPrefix(line, "XDG_MUSIC_DIR=")
+					val = strings.Trim(val, "\"")
+					val = strings.ReplaceAll(val, "$HOME", home)
+					if val != "" {
+						return ExpandPath(val)
+					}
+				}
+			}
+		}
+		return filepath.Join(home, "Music")
+	}
+	return "~/Music"
+}

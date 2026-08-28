@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
-	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -25,45 +24,15 @@ var applyCommand = &cli.Command{
 			return nil
 		}
 		path := extractPath(c)
-		sc, lib, game, _ := engine.NewServices(activeConfig)
+		eng := engine.New(activeConfig)
 
-		var status *engine.GameStatus
-		if st, err := lib.InspectStatus(c.Context, path); err == nil {
+		var status *domain.Game
+		if st, err := eng.InspectStatus(c.Context, path); err == nil {
 			status = st
 		}
 
 		if !isAutoYes(c) && status != nil {
-			var uiCands []ui.LaunchCandidateSummary
-			for _, lc := range status.LaunchCandidates {
-				uiCands = append(uiCands, ui.LaunchCandidateSummary{
-					Name:        lc.Name,
-					Executable:  lc.Executable,
-					Arguments:   lc.Arguments,
-					Description: lc.Description,
-				})
-			}
-
-			ui.RenderDetectionSummary(ui.DetectionInfoSummary{
-				Name:              status.Name,
-				AppID:             status.AppID,
-				Platform:          status.Platform,
-				GameDir:           status.GameDir,
-				ExePath:           status.ExePath,
-				LaunchCandidates:  uiCands,
-				State:             status.State,
-				OriginalBackups:   len(status.OriginalBackups),
-				ManifestID:        status.ManifestID,
-				BuildID:           status.BuildID,
-				DiskSizeBytes:     status.DiskSizeBytes,
-				FileCount:         status.FileCount,
-				OfficialFileCount: status.OfficialFileCount,
-				UntrackedFiles:    status.UntrackedFiles,
-				HasUpdate:         status.HasUpdate,
-				RemoteManifestID:  status.RemoteManifestID,
-				DLCCount:          status.DLCCount,
-				AchievementCount:  status.AchievementCount,
-				RecentPatchNote:   status.RecentPatchNote,
-			})
+			ui.RenderDetectionSummary(status)
 		}
 
 		opts := extractProcessOptions(c, true, activeConfig)
@@ -84,34 +53,23 @@ var applyCommand = &cli.Command{
 				}
 			}
 		} else if !isAutoYes(c) && !c.IsSet("exe") && status != nil && len(status.LaunchCandidates) > 1 {
-			var uiCands []ui.LaunchCandidateSummary
-			for _, lc := range status.LaunchCandidates {
-				uiCands = append(uiCands, ui.LaunchCandidateSummary{
-					Name:        lc.Name,
-					Executable:  lc.Executable,
-					Arguments:   lc.Arguments,
-					Description: lc.Description,
-				})
-			}
-			if selected, pErr := ui.PromptSelectLaunchOption(status.Name, uiCands); pErr == nil {
+			if selected, pErr := ui.PromptSelectLaunchOption(status.Name, status.LaunchCandidates); pErr == nil {
 				opts.ExePath = selected.Executable
 				opts.ExeArgs = selected.Arguments
 			}
 		}
 
 		ui.RenderStep(1, 1, "Applying configuration for "+opts.Path)
-		var res *engine.ProcessResult
-		err := sc.Tasks.RunSync(c.Context, tasks.TaskSpec{
-			Type:         tasks.TypeApply,
-			Title:        fmt.Sprintf("Apply %s", opts.Path),
-			GameDir:      opts.Path,
-			Capabilities: tasks.CapCancellable,
-			Run: func(ctx context.Context, ctrl *tasks.Controller) error {
-				var applyErr error
-				res, applyErr = game.ApplyGame(ctx, opts)
-				return applyErr
-			},
-		})
+		gameName := ""
+		if status != nil {
+			gameName = status.Name
+		}
+		applyOp := &engine.ApplyOperation{
+			Engine:   eng,
+			Options:  opts,
+			GameName: gameName,
+		}
+		err := eng.Tasks.RunSyncOp(c.Context, applyOp)
 		if err != nil {
 			renderCLIError(err, "Check directory path", "Verify file permissions")
 			return err
@@ -122,7 +80,11 @@ var applyCommand = &cli.Command{
 			fmt.Sprintf("Run 'gamux status %s' to view mod files & update status", opts.Path),
 		}
 
-		ui.RenderSuccess("Setup applied successfully for "+res.Info.Name, "", nextSteps)
+		successName := opts.Path
+		if applyOp.Result != nil && applyOp.Result.Info != nil && applyOp.Result.Info.Name != "" {
+			successName = applyOp.Result.Info.Name
+		}
+		ui.RenderSuccess("Setup applied successfully for "+successName, "", nextSteps)
 		return nil
 	},
 }

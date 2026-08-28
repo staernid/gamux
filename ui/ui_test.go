@@ -4,21 +4,20 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/staernid/gamux/domain"
 	"github.com/urfave/cli/v2"
 )
 
 func TestDetectionSummary(t *testing.T) {
-	info := DetectionInfoSummary{
-		Name:     "Test Game",
-		AppID:    "123456",
-		Platform: "Windows PE (64-bit)",
-		GameDir:  "/tmp/testgame",
-		ExePath:  "/tmp/testgame/game.exe",
-		State:    "Original",
-	}
+	game := domain.NewGame("Test Game", "/tmp/testgame", "123456", "Windows PE (64-bit)")
+	game.ExePath = "/tmp/testgame/game.exe"
+	game.State = "Original"
 
-	// Verify RenderDetectionSummary does not panic
-	RenderDetectionSummary(info)
+	// Verify RenderDetectionSummary & RenderTerseStatus do not panic
+	RenderDetectionSummary(game)
+	RenderTerseStatus(game)
+	RenderDetectionSummary(nil)
+	RenderTerseStatus(nil)
 }
 
 func TestRenderStepsAndSuccess(t *testing.T) {

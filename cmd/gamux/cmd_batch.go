@@ -32,10 +32,10 @@ var batchCommand = &cli.Command{
 			parentDir = c.Args().Get(1)
 		}
 
-		_, lib, game, _ := engine.NewServices(activeConfig)
+		eng := engine.New(activeConfig)
 
 		if verb == "status" {
-			statuses, err := lib.BatchInspect(c.Context, parentDir)
+			statuses, err := eng.BatchInspect(c.Context, parentDir)
 			if err != nil {
 				renderCLIError(err, "Verify directory exists")
 				return err
@@ -59,20 +59,7 @@ var batchCommand = &cli.Command{
 					updatesAvail++
 				}
 
-				ui.RenderTerseStatus(ui.DetectionInfoSummary{
-					Name:             s.Name,
-					AppID:            s.AppID,
-					Store:            s.Store,
-					Platform:         s.Platform,
-					GameDir:          s.GameDir,
-					State:            s.State,
-					ManifestID:       s.ManifestID,
-					ModifiedFiles:    s.ModifiedFiles,
-					MissingFiles:     s.MissingFiles,
-					UntrackedFiles:   s.UntrackedFiles,
-					HasUpdate:        s.HasUpdate,
-					RemoteManifestID: s.RemoteManifestID,
-				})
+				ui.RenderTerseStatus(s)
 			}
 			ui.RenderTerseSummary(len(statuses), loaderCount, cleanCount, updatesAvail)
 			return nil
@@ -82,7 +69,7 @@ var batchCommand = &cli.Command{
 		if !c.Bool("json") {
 			ui.RenderStep(1, 1, "Scanning parent directory: "+parentDir)
 		}
-		results, err := game.BatchProcess(c.Context, parentDir, opts)
+		results, err := eng.BatchProcess(c.Context, parentDir, opts)
 		if err != nil {
 			renderCLIError(err, "Verify directory exists")
 			return err

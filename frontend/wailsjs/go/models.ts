@@ -8,12 +8,12 @@ export namespace config {
 	    steam_web_api_key?: string;
 	    hubcap_api_key?: string;
 	    steamgriddb_api_key?: string;
+	    rawg_api_key?: string;
 	    artwork_dir?: string;
 	    enable_launch_notify: boolean;
 	    operating_mode?: string;
 	    default_runner?: string;
 	    proton_path?: string;
-	    gbe_mode?: string;
 	    steamless: boolean;
 	    achievements: boolean;
 	    normalize: boolean;
@@ -45,12 +45,12 @@ export namespace config {
 	        this.steam_web_api_key = source["steam_web_api_key"];
 	        this.hubcap_api_key = source["hubcap_api_key"];
 	        this.steamgriddb_api_key = source["steamgriddb_api_key"];
+	        this.rawg_api_key = source["rawg_api_key"];
 	        this.artwork_dir = source["artwork_dir"];
 	        this.enable_launch_notify = source["enable_launch_notify"];
 	        this.operating_mode = source["operating_mode"];
 	        this.default_runner = source["default_runner"];
 	        this.proton_path = source["proton_path"];
-	        this.gbe_mode = source["gbe_mode"];
 	        this.steamless = source["steamless"];
 	        this.achievements = source["achievements"];
 	        this.normalize = source["normalize"];
@@ -75,6 +75,32 @@ export namespace config {
 
 export namespace domain {
 	
+	export class AchievementItem {
+	    id: string;
+	    name: string;
+	    description: string;
+	    icon_url: string;
+	    icon_gray_url: string;
+	    hidden: boolean;
+	    unlocked: boolean;
+	    unlock_time?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AchievementItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.icon_url = source["icon_url"];
+	        this.icon_gray_url = source["icon_gray_url"];
+	        this.hidden = source["hidden"];
+	        this.unlocked = source["unlocked"];
+	        this.unlock_time = source["unlock_time"];
+	    }
+	}
 	export class ArtworkOption {
 	    id: string;
 	    provider: string;
@@ -127,6 +153,30 @@ export namespace domain {
 	        this.asset_type = source["asset_type"];
 	    }
 	}
+	export class DepotSummary {
+	    depot_id: number;
+	    name: string;
+	    category: string;
+	    installed: boolean;
+	    size: number;
+	    file_count: number;
+	    manifest_id: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DepotSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.depot_id = source["depot_id"];
+	        this.name = source["name"];
+	        this.category = source["category"];
+	        this.installed = source["installed"];
+	        this.size = source["size"];
+	        this.file_count = source["file_count"];
+	        this.manifest_id = source["manifest_id"];
+	    }
+	}
 	export class NewsItem {
 	    id: string;
 	    title: string;
@@ -176,6 +226,9 @@ export namespace domain {
 	    working_dir?: string;
 	    store?: string;
 	    store_app_id?: string;
+	    source_override?: string;
+	    metadata_provider?: string;
+	    metadata_id?: string;
 	    gog_id?: string;
 	    sgdb_id?: string;
 	    custom_cover_url?: string;
@@ -184,6 +237,8 @@ export namespace domain {
 	    custom_logo_url?: string;
 	    custom_icon_url?: string;
 	    locked_artwork?: boolean;
+	    playtime_seconds?: number;
+	    last_played?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new LaunchProfile(source);
@@ -211,6 +266,9 @@ export namespace domain {
 	        this.working_dir = source["working_dir"];
 	        this.store = source["store"];
 	        this.store_app_id = source["store_app_id"];
+	        this.source_override = source["source_override"];
+	        this.metadata_provider = source["metadata_provider"];
+	        this.metadata_id = source["metadata_id"];
 	        this.gog_id = source["gog_id"];
 	        this.sgdb_id = source["sgdb_id"];
 	        this.custom_cover_url = source["custom_cover_url"];
@@ -219,6 +277,8 @@ export namespace domain {
 	        this.custom_logo_url = source["custom_logo_url"];
 	        this.custom_icon_url = source["custom_icon_url"];
 	        this.locked_artwork = source["locked_artwork"];
+	        this.playtime_seconds = source["playtime_seconds"];
+	        this.last_played = source["last_played"];
 	    }
 	}
 	export class LaunchCandidate {
@@ -240,30 +300,43 @@ export namespace domain {
 	    }
 	}
 	export class Game {
+	    game_dir: string;
 	    app_id: string;
 	    numeric_app_id: number;
 	    name: string;
 	    install_dir?: string;
 	    store: string;
 	    source: string;
-	    game_dir: string;
 	    platform: string;
-	    exe_path: string;
-	    exe_args?: string;
-	    launch_candidates?: LaunchCandidate[];
-	    launch_profile?: LaunchProfile;
-	    operating_mode?: string;
-	    runner?: string;
-	    wine_prefix?: string;
-	    dll_overrides?: string;
-	    target_lib_path?: string;
-	    manifest_path?: string;
-	    raw_depot_layout?: boolean;
 	    steam_appid?: number;
 	    gog_id?: string;
 	    epic_app?: string;
 	    sgdb_id?: string;
+	    rawg_id?: string;
 	    igdb_id?: string;
+	    disk_size_bytes: number;
+	    file_count: number;
+	    dlc_count?: number;
+	    achievement_count?: number;
+	    launch_candidates?: LaunchCandidate[];
+	    depots?: DepotSummary[];
+	    available_platforms?: string[];
+	    supported_languages?: string[];
+	    target_lib_path?: string;
+	    manifest_path?: string;
+	    raw_depot_layout?: boolean;
+	    exe_path?: string;
+	    exe_args?: string;
+	    launch_profile?: LaunchProfile;
+	    state: string;
+	    is_patched: boolean;
+	    is_portable: boolean;
+	    has_updates_or_issues: boolean;
+	    is_ready: boolean;
+	    original_backups?: string[];
+	    settings_dir_exists: boolean;
+	    steam_appid_txt_found: boolean;
+	    current_language?: string;
 	    cover_url?: string;
 	    banner_url?: string;
 	    hero_url?: string;
@@ -284,15 +357,6 @@ export namespace domain {
 	    custom_logo_url?: string;
 	    custom_icon_url?: string;
 	    locked_artwork?: boolean;
-	    original_backups?: string[];
-	    settings_dir_exists: boolean;
-	    steam_appid_txt_found: boolean;
-	    current_language?: string;
-	    supported_languages?: string[];
-	    disk_size_bytes: number;
-	    file_count: number;
-	    dlc_count: number;
-	    achievement_count: number;
 	    manifest_id?: string;
 	    build_id?: string;
 	    remote_manifest_id?: string;
@@ -305,11 +369,6 @@ export namespace domain {
 	    has_update: boolean;
 	    recent_patch_note?: string;
 	    news_items?: NewsItem[];
-	    state: string;
-	    is_patched: boolean;
-	    is_portable: boolean;
-	    has_updates_or_issues: boolean;
-	    is_ready: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Game(source);
@@ -317,30 +376,43 @@ export namespace domain {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.game_dir = source["game_dir"];
 	        this.app_id = source["app_id"];
 	        this.numeric_app_id = source["numeric_app_id"];
 	        this.name = source["name"];
 	        this.install_dir = source["install_dir"];
 	        this.store = source["store"];
 	        this.source = source["source"];
-	        this.game_dir = source["game_dir"];
 	        this.platform = source["platform"];
-	        this.exe_path = source["exe_path"];
-	        this.exe_args = source["exe_args"];
-	        this.launch_candidates = this.convertValues(source["launch_candidates"], LaunchCandidate);
-	        this.launch_profile = this.convertValues(source["launch_profile"], LaunchProfile);
-	        this.operating_mode = source["operating_mode"];
-	        this.runner = source["runner"];
-	        this.wine_prefix = source["wine_prefix"];
-	        this.dll_overrides = source["dll_overrides"];
-	        this.target_lib_path = source["target_lib_path"];
-	        this.manifest_path = source["manifest_path"];
-	        this.raw_depot_layout = source["raw_depot_layout"];
 	        this.steam_appid = source["steam_appid"];
 	        this.gog_id = source["gog_id"];
 	        this.epic_app = source["epic_app"];
 	        this.sgdb_id = source["sgdb_id"];
+	        this.rawg_id = source["rawg_id"];
 	        this.igdb_id = source["igdb_id"];
+	        this.disk_size_bytes = source["disk_size_bytes"];
+	        this.file_count = source["file_count"];
+	        this.dlc_count = source["dlc_count"];
+	        this.achievement_count = source["achievement_count"];
+	        this.launch_candidates = this.convertValues(source["launch_candidates"], LaunchCandidate);
+	        this.depots = this.convertValues(source["depots"], DepotSummary);
+	        this.available_platforms = source["available_platforms"];
+	        this.supported_languages = source["supported_languages"];
+	        this.target_lib_path = source["target_lib_path"];
+	        this.manifest_path = source["manifest_path"];
+	        this.raw_depot_layout = source["raw_depot_layout"];
+	        this.exe_path = source["exe_path"];
+	        this.exe_args = source["exe_args"];
+	        this.launch_profile = this.convertValues(source["launch_profile"], LaunchProfile);
+	        this.state = source["state"];
+	        this.is_patched = source["is_patched"];
+	        this.is_portable = source["is_portable"];
+	        this.has_updates_or_issues = source["has_updates_or_issues"];
+	        this.is_ready = source["is_ready"];
+	        this.original_backups = source["original_backups"];
+	        this.settings_dir_exists = source["settings_dir_exists"];
+	        this.steam_appid_txt_found = source["steam_appid_txt_found"];
+	        this.current_language = source["current_language"];
 	        this.cover_url = source["cover_url"];
 	        this.banner_url = source["banner_url"];
 	        this.hero_url = source["hero_url"];
@@ -361,15 +433,6 @@ export namespace domain {
 	        this.custom_logo_url = source["custom_logo_url"];
 	        this.custom_icon_url = source["custom_icon_url"];
 	        this.locked_artwork = source["locked_artwork"];
-	        this.original_backups = source["original_backups"];
-	        this.settings_dir_exists = source["settings_dir_exists"];
-	        this.steam_appid_txt_found = source["steam_appid_txt_found"];
-	        this.current_language = source["current_language"];
-	        this.supported_languages = source["supported_languages"];
-	        this.disk_size_bytes = source["disk_size_bytes"];
-	        this.file_count = source["file_count"];
-	        this.dlc_count = source["dlc_count"];
-	        this.achievement_count = source["achievement_count"];
 	        this.manifest_id = source["manifest_id"];
 	        this.build_id = source["build_id"];
 	        this.remote_manifest_id = source["remote_manifest_id"];
@@ -382,11 +445,6 @@ export namespace domain {
 	        this.has_update = source["has_update"];
 	        this.recent_patch_note = source["recent_patch_note"];
 	        this.news_items = this.convertValues(source["news_items"], NewsItem);
-	        this.state = source["state"];
-	        this.is_patched = source["is_patched"];
-	        this.is_portable = source["is_portable"];
-	        this.has_updates_or_issues = source["has_updates_or_issues"];
-	        this.is_ready = source["is_ready"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -457,7 +515,6 @@ export namespace domain {
 	        this.locked_artwork = source["locked_artwork"];
 	    }
 	}
-	
 	
 
 }
@@ -534,6 +591,39 @@ export namespace gbe {
 
 }
 
+export namespace gui {
+	
+	export class GameMetadataDetails {
+	    name: string;
+	    short_description: string;
+	    detailed_description: string;
+	    about_the_game: string;
+	    header_image: string;
+	    developers: string[];
+	    publishers: string[];
+	    genres: string[];
+	    release_date: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameMetadataDetails(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.short_description = source["short_description"];
+	        this.detailed_description = source["detailed_description"];
+	        this.about_the_game = source["about_the_game"];
+	        this.header_image = source["header_image"];
+	        this.developers = source["developers"];
+	        this.publishers = source["publishers"];
+	        this.genres = source["genres"];
+	        this.release_date = source["release_date"];
+	    }
+	}
+
+}
+
 export namespace manifest {
 	
 	export class IntegrityReport {
@@ -567,8 +657,9 @@ export namespace pipeline {
 	
 	export class Options {
 	    path: string;
-	    apply_gbe: boolean;
-	    portable: boolean;
+	    operating_mode?: string;
+	    apply_gbe?: boolean;
+	    portable?: boolean;
 	    normalize_dir: boolean;
 	    dry_run: boolean;
 	    auto_yes: boolean;
@@ -586,6 +677,7 @@ export namespace pipeline {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
+	        this.operating_mode = source["operating_mode"];
 	        this.apply_gbe = source["apply_gbe"];
 	        this.portable = source["portable"];
 	        this.normalize_dir = source["normalize_dir"];
@@ -715,6 +807,60 @@ export namespace saves {
 
 export namespace store {
 	
+	export class ProviderCapabilities {
+	    can_search: boolean;
+	    can_fetch_metadata: boolean;
+	    can_provide_artwork: boolean;
+	    is_game_store: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderCapabilities(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.can_search = source["can_search"];
+	        this.can_fetch_metadata = source["can_fetch_metadata"];
+	        this.can_provide_artwork = source["can_provide_artwork"];
+	        this.is_game_store = source["is_game_store"];
+	    }
+	}
+	export class ProviderDescriptor {
+	    id: string;
+	    display_name: string;
+	    description?: string;
+	    capabilities: ProviderCapabilities;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderDescriptor(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.display_name = source["display_name"];
+	        this.description = source["description"];
+	        this.capabilities = this.convertValues(source["capabilities"], ProviderCapabilities);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SearchResult {
 	    id: string;
 	    store: string;
@@ -781,6 +927,7 @@ export namespace tasks {
 	    started_at?: number;
 	    finished_at?: number;
 	    metadata?: Record<string, string>;
+	    game?: domain.Game;
 	
 	    static createFrom(source: any = {}) {
 	        return new Task(source);
@@ -804,6 +951,7 @@ export namespace tasks {
 	        this.started_at = source["started_at"];
 	        this.finished_at = source["finished_at"];
 	        this.metadata = source["metadata"];
+	        this.game = this.convertValues(source["game"], domain.Game);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -345,3 +345,76 @@ func TestTasksManager_ReorderAndClear(t *testing.T) {
 		t.Fatalf("expected 2 queued tasks after removal, got %d", len(remaining))
 	}
 }
+
+type testSampleOp struct {
+	name     string
+	executed atomic.Bool
+	stage    string
+}
+
+func (op *testSampleOp) TaskSpec() tasks.TaskSpec {
+	return tasks.TaskSpec{
+		Type:         tasks.TypeApply,
+		Title:        "Sample Op " + op.name,
+		GameName:     op.name,
+		Capabilities: tasks.CapCancellable,
+	}
+}
+
+func (op *testSampleOp) Execute(ctx context.Context, ctrl *tasks.Controller) error {
+	ctrl.ReportStage("Executing", "Running sample operation "+op.name)
+	ctrl.ReportProgress(100, 100, 1, 1, 0, 0, 100)
+	op.executed.Store(true)
+	op.stage = "Done"
+	return nil
+}
+
+func TestTasksManager_OperationLifecycle(t *testing.T) {
+	mgr := tasks.NewManager(tasks.Options{})
+	defer func() { _ = mgr.Shutdown(context.Background()) }()
+
+	op := &testSampleOp{name: "TestGame"}
+	id, err := mgr.SubmitOp(op)
+	if err != nil {
+		t.Fatalf("SubmitOp failed: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if op.executed.Load() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !op.executed.Load() {
+		t.Fatal("expected operation to execute")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	task, ok := mgr.Get(id)
+	if !ok || task.Status != tasks.StatusCompleted {
+		t.Fatalf("expected completed task status, got %+v", task)
+	}
+	if task.Title != "Sample Op TestGame" {
+		t.Errorf("expected title 'Sample Op TestGame', got %q", task.Title)
+	}
+}
+
+func TestTasksManager_RunSyncOp(t *testing.T) {
+	mgr := tasks.NewManager(tasks.Options{})
+	defer func() { _ = mgr.Shutdown(context.Background()) }()
+
+	op := &testSampleOp{name: "SyncGame"}
+	err := mgr.RunSyncOp(context.Background(), op)
+	if err != nil {
+		t.Fatalf("RunSyncOp failed: %v", err)
+	}
+
+	if !op.executed.Load() {
+		t.Fatal("expected sync operation to execute")
+	}
+	if op.stage != "Done" {
+		t.Errorf("expected stage Done, got %s", op.stage)
+	}
+}

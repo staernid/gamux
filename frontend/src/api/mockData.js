@@ -8,7 +8,7 @@ export const MOCK_CONFIG = {
   steam_web_api: 'https://api.steampowered.com',
   github_api_url: 'https://api.github.com/repos/Detanup01/gbe_fork/releases/latest',
   steamless_github_api: 'https://api.github.com/repos/staernid/steamless-rs/releases/latest',
-  gbe_mode: 'loader',
+  operating_mode: 'loader',
   platform: 'win64',
   runner: 'wine',
   steamless: true,

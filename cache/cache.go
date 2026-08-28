@@ -11,11 +11,30 @@ import (
 )
 
 var (
+	// DisableCache globally disables disk and memory caching (useful for testing or forced refresh).
 	DisableCache bool
 	baseCacheDir string
 	dirMutex     sync.RWMutex
-	nameMutex    sync.Mutex
+
+	// In-memory thread-safe cache for Steam app names
+	nameMu          sync.RWMutex
+	nameMemoryCache map[string]string
+	namesLoaded     bool
+
+	// In-memory thread-safe cache for Steam store AppDetails
+	detailsMu          sync.RWMutex
+	detailsMemoryCache = make(map[string][]byte)
 )
+
+var cacheSubdirs = []string{
+	"hubcap",
+	"news",
+	"appdetails",
+	"github",
+	"revobd",
+	"steamdepotdb",
+	"sgdb",
+}
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
 func SetCacheDir(dir string) {
@@ -23,9 +42,19 @@ func SetCacheDir(dir string) {
 	defer dirMutex.Unlock()
 	baseCacheDir = dir
 	if dir != "" {
-		_ = os.MkdirAll(filepath.Join(baseCacheDir, "hubcap"), 0755)
-		_ = os.MkdirAll(filepath.Join(baseCacheDir, "news"), 0755)
+		for _, sub := range cacheSubdirs {
+			_ = os.MkdirAll(filepath.Join(baseCacheDir, sub), 0755)
+		}
 	}
+
+	nameMu.Lock()
+	nameMemoryCache = nil
+	namesLoaded = false
+	nameMu.Unlock()
+
+	detailsMu.Lock()
+	detailsMemoryCache = make(map[string][]byte)
+	detailsMu.Unlock()
 }
 
 func getCacheDir() string {
@@ -51,90 +80,184 @@ func getCacheDir() string {
 		userCache = filepath.Join(home, ".cache")
 	}
 	baseCacheDir = filepath.Join(userCache, "gamux")
-	_ = os.MkdirAll(filepath.Join(baseCacheDir, "hubcap"), 0755)
-	_ = os.MkdirAll(filepath.Join(baseCacheDir, "news"), 0755)
+	for _, sub := range cacheSubdirs {
+		_ = os.MkdirAll(filepath.Join(baseCacheDir, sub), 0755)
+	}
 	return baseCacheDir
 }
 
-// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available on disk.
-func GetHubcapZIP(appID uint32) ([]byte, bool) {
+// TTLWrapper wraps cached byte payloads with an explicit expiration timestamp.
+type TTLWrapper struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Payload   json.RawMessage `json:"payload"`
+}
+
+func readTTLFile(path string, ttl time.Duration) ([]byte, bool) {
 	if DisableCache {
 		return nil, false
 	}
-	dir := getCacheDir()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var wrapper TTLWrapper
+	if err := json.Unmarshal(data, &wrapper); err == nil && len(wrapper.Payload) > 0 {
+		if time.Since(wrapper.Timestamp) < ttl {
+			return wrapper.Payload, true
+		}
+	}
+	return nil, false
+}
 
-	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
-	data, err := os.ReadFile(zipPath)
-	if err == nil && len(data) > 0 {
-		slog.Info("Using cached Hubcap ZIP archive from disk (0 API requests consumed)", "appID", appID)
+func writeTTLFile(path string, payload []byte) error {
+	if DisableCache || len(payload) == 0 {
+		return nil
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+	wrapper := TTLWrapper{
+		Timestamp: time.Now(),
+		Payload:   payload,
+	}
+	data, err := json.Marshal(wrapper)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// ==========================================
+// 1. Steam App Names Cache (In-Memory + Disk)
+// ==========================================
+
+type appNameDiskCache struct {
+	Names map[string]string `json:"names"`
+}
+
+func loadAppNamesLocked() {
+	if namesLoaded {
+		return
+	}
+	nameMemoryCache = make(map[string]string)
+	namesLoaded = true
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "app_names.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var disk appNameDiskCache
+	if err := json.Unmarshal(data, &disk); err == nil && disk.Names != nil {
+		for k, v := range disk.Names {
+			nameMemoryCache[k] = v
+		}
+	}
+}
+
+// GetAppName looks up a cached Steam AppID title (in-memory fast lookup with disk fallback).
+func GetAppName(appID string) (string, bool) {
+	if DisableCache || appID == "" {
+		return "", false
+	}
+	nameMu.RLock()
+	if namesLoaded {
+		if name, ok := nameMemoryCache[appID]; ok && name != "" {
+			nameMu.RUnlock()
+			return name, true
+		}
+	}
+	nameMu.RUnlock()
+
+	nameMu.Lock()
+	defer nameMu.Unlock()
+	loadAppNamesLocked()
+	if name, ok := nameMemoryCache[appID]; ok && name != "" {
+		return name, true
+	}
+	return "", false
+}
+
+// SaveAppName saves a Steam AppID title to in-memory and local disk cache.
+func SaveAppName(appID, name string) {
+	if DisableCache || appID == "" || name == "" {
+		return
+	}
+	nameMu.Lock()
+	defer nameMu.Unlock()
+
+	loadAppNamesLocked()
+	if nameMemoryCache[appID] == name {
+		return
+	}
+	nameMemoryCache[appID] = name
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "app_names.json")
+	disk := appNameDiskCache{Names: nameMemoryCache}
+	if bytes, err := json.MarshalIndent(disk, "", "  "); err == nil {
+		_ = os.WriteFile(path, bytes, 0644)
+	}
+}
+
+// ==========================================
+// 2. Steam AppDetails Cache (7 Days TTL)
+// ==========================================
+
+// GetAppDetails retrieves cached Steam store AppDetails JSON if less than 7 days old.
+func GetAppDetails(appID string) ([]byte, bool) {
+	if DisableCache || appID == "" {
+		return nil, false
+	}
+
+	// 1. Fast in-memory cache check
+	detailsMu.RLock()
+	if cached, ok := detailsMemoryCache[appID]; ok && len(cached) > 0 {
+		detailsMu.RUnlock()
+		return cached, true
+	}
+	detailsMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "appdetails", fmt.Sprintf("%s.json", appID))
+	if data, ok := readTTLFile(path, 7*24*time.Hour); ok {
+		detailsMu.Lock()
+		detailsMemoryCache[appID] = data
+		detailsMu.Unlock()
 		return data, true
 	}
 	return nil, false
 }
 
-// SaveHubcapZIP writes Hubcap ZIP archive bytes to local disk cache.
-func SaveHubcapZIP(appID uint32, data []byte) error {
-	if len(data) == 0 {
+// SaveAppDetails writes Steam store AppDetails JSON to in-memory and disk cache for 7 days.
+func SaveAppDetails(appID string, data []byte) error {
+	if DisableCache || appID == "" || len(data) == 0 {
 		return nil
 	}
-	dir := getCacheDir()
-	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
-	slog.Debug("Caching Hubcap ZIP archive to disk", "appID", appID, "path", zipPath)
-	return os.WriteFile(zipPath, data, 0644)
-}
-
-type AppNameCache struct {
-	Names map[string]string `json:"names"`
-}
-
-// GetAppName looks up a cached Steam AppID title.
-func GetAppName(appID string) (string, bool) {
-	if DisableCache {
-		return "", false
-	}
-	nameMutex.Lock()
-	defer nameMutex.Unlock()
-
+	detailsMu.Lock()
+	detailsMemoryCache[appID] = data
+	detailsMu.Unlock()
 
 	dir := getCacheDir()
-	path := filepath.Join(dir, "app_names.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
+	if dir == "" {
+		return nil
 	}
-	var cache AppNameCache
-	if err := json.Unmarshal(data, &cache); err == nil && cache.Names != nil {
-		if name, ok := cache.Names[appID]; ok && name != "" {
-			return name, true
-		}
-	}
-	return "", false
+	path := filepath.Join(dir, "appdetails", fmt.Sprintf("%s.json", appID))
+	return writeTTLFile(path, data)
 }
 
-// SaveAppName saves a Steam AppID title to local disk cache.
-func SaveAppName(appID, name string) {
-	if appID == "" || name == "" {
-		return
-	}
-	nameMutex.Lock()
-	defer nameMutex.Unlock()
-
-	dir := getCacheDir()
-	path := filepath.Join(dir, "app_names.json")
-
-	var cache AppNameCache
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &cache)
-	}
-	if cache.Names == nil {
-		cache.Names = make(map[string]string)
-	}
-	cache.Names[appID] = name
-
-	if bytes, err := json.MarshalIndent(cache, "", "  "); err == nil {
-		_ = os.WriteFile(path, bytes, 0644)
-	}
-}
+// ==========================================
+// 3. Steam News / Patch Notes Cache (12h/24h)
+// ==========================================
 
 type CachedNews struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -143,7 +266,13 @@ type CachedNews struct {
 
 // GetNews retrieves cached Steam patch notes if less than 24 hours old.
 func GetNews(appID string) (string, bool) {
+	if DisableCache || appID == "" {
+		return "", false
+	}
 	dir := getCacheDir()
+	if dir == "" {
+		return "", false
+	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -160,10 +289,13 @@ func GetNews(appID string) (string, bool) {
 
 // SaveNews caches Steam patch notes to disk for 24 hours.
 func SaveNews(appID, news string) {
-	if appID == "" || news == "" {
+	if DisableCache || appID == "" || news == "" {
 		return
 	}
 	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
 	item := CachedNews{
 		Timestamp: time.Now(),
@@ -185,6 +317,9 @@ func GetNewsItems(appID string) ([]byte, bool) {
 		return nil, false
 	}
 	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -205,6 +340,9 @@ func SaveNewsItems(appID string, itemsJSON []byte) {
 		return
 	}
 	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
 	cached := CachedNewsItems{
 		Timestamp: time.Now(),
@@ -213,4 +351,162 @@ func SaveNewsItems(appID string, itemsJSON []byte) {
 	if data, err := json.MarshalIndent(cached, "", "  "); err == nil {
 		_ = os.WriteFile(path, data, 0644)
 	}
+}
+
+// ==========================================
+// 4. Hubcap & RevoBD Manifest ZIP Cache
+// ==========================================
+
+// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available on disk.
+func GetHubcapZIP(appID uint32) ([]byte, bool) {
+	if DisableCache {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
+	data, err := os.ReadFile(zipPath)
+	if err == nil && len(data) > 0 {
+		slog.Info("Using cached Hubcap ZIP archive from disk (0 API requests consumed)", "appID", appID)
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveHubcapZIP writes Hubcap ZIP archive bytes to local disk cache.
+func SaveHubcapZIP(appID uint32, data []byte) error {
+	if DisableCache || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
+	slog.Debug("Caching Hubcap ZIP archive to disk", "appID", appID, "path", zipPath)
+	return os.WriteFile(zipPath, data, 0644)
+}
+
+// GetRevoBDZIP retrieves cached RevoBD ZIP archive bytes if available on disk.
+func GetRevoBDZIP(appID uint32) ([]byte, bool) {
+	if DisableCache {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	zipPath := filepath.Join(dir, "revobd", fmt.Sprintf("%d.zip", appID))
+	data, err := os.ReadFile(zipPath)
+	if err == nil && len(data) > 0 {
+		slog.Info("Using cached RevoBD ZIP archive from disk (0 API requests consumed)", "appID", appID)
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveRevoBDZIP writes RevoBD ZIP archive bytes to local disk cache.
+func SaveRevoBDZIP(appID uint32, data []byte) error {
+	if DisableCache || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	zipPath := filepath.Join(dir, "revobd", fmt.Sprintf("%d.zip", appID))
+	slog.Debug("Caching RevoBD ZIP archive to disk", "appID", appID, "path", zipPath)
+	return os.WriteFile(zipPath, data, 0644)
+}
+
+// ==========================================
+// 5. SteamDepotDB Cache (24h TTL)
+// ==========================================
+
+// GetSteamDepotDB retrieves cached SteamDepotDB fallback keys if less than 24 hours old.
+func GetSteamDepotDB() ([]byte, bool) {
+	if DisableCache {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "steamdepotdb", "fallback_depotkeys.json")
+	return readTTLFile(path, 24*time.Hour)
+}
+
+// SaveSteamDepotDB saves SteamDepotDB fallback keys to disk for 24 hours.
+func SaveSteamDepotDB(data []byte) error {
+	if DisableCache || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	path := filepath.Join(dir, "steamdepotdb", "fallback_depotkeys.json")
+	return writeTTLFile(path, data)
+}
+
+// ==========================================
+// 6. GitHub Release Cache (1 Hour TTL)
+// ==========================================
+
+// GetGitHubRelease retrieves cached GitHub release metadata if less than 1 hour old.
+func GetGitHubRelease(key string) ([]byte, bool) {
+	if DisableCache || key == "" {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "github", fmt.Sprintf("%s.json", key))
+	return readTTLFile(path, 1*time.Hour)
+}
+
+// SaveGitHubRelease caches GitHub release metadata to disk for 1 hour.
+func SaveGitHubRelease(key string, data []byte) error {
+	if DisableCache || key == "" || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	path := filepath.Join(dir, "github", fmt.Sprintf("%s.json", key))
+	return writeTTLFile(path, data)
+}
+
+// ==========================================
+// 7. SteamGridDB Artwork Metadata Cache (7 Days TTL)
+// ==========================================
+
+// GetSGDBArtwork retrieves cached SteamGridDB artwork metadata if less than 7 days old.
+func GetSGDBArtwork(lookupKey string) ([]byte, bool) {
+	if DisableCache || lookupKey == "" {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "sgdb", fmt.Sprintf("%s.json", lookupKey))
+	return readTTLFile(path, 7*24*time.Hour)
+}
+
+// SaveSGDBArtwork caches SteamGridDB artwork metadata to disk for 7 days.
+func SaveSGDBArtwork(lookupKey string, data []byte) error {
+	if DisableCache || lookupKey == "" || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	path := filepath.Join(dir, "sgdb", fmt.Sprintf("%s.json", lookupKey))
+	return writeTTLFile(path, data)
 }

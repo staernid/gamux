@@ -30,13 +30,9 @@ import (
 
 // App is the Go backend adapter exposed to the Wails frontend.
 type App struct {
-	ctx     context.Context
-	Config  *config.Config
-	SC      *engine.ServiceContext
-	Library *engine.LibraryService
-	Game    *engine.GameService
-	Task    *engine.TaskService
-	Saves   *engine.SaveService
+	ctx    context.Context
+	Config *config.Config
+	Engine *engine.Engine
 }
 
 // NewApp creates a new App instance with configuration and services initialized.
@@ -49,14 +45,10 @@ func NewApp(cfg *config.Config) *App {
 			cfg = config.DefaultConfig()
 		}
 	}
-	sc, lib, game, task := engine.NewServices(cfg)
+	eng := engine.New(cfg)
 	return &App{
-		Config:  cfg,
-		SC:      sc,
-		Library: lib,
-		Game:    game,
-		Task:    task,
-		Saves:   sc.Saves,
+		Config: cfg,
+		Engine: eng,
 	}
 }
 
@@ -77,8 +69,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
 	// Bind central EventBus to Wails frontend event emitter
-	if a.SC != nil && a.SC.EventBus != nil {
-		a.SC.EventBus.SubscribeFunc(func(ev events.Event) {
+	if a.Engine != nil && a.Engine.EventBus != nil {
+		a.Engine.EventBus.SubscribeFunc(func(ev events.Event) {
 			if strings.HasPrefix(string(ev.Type), "transfer:") {
 				safeEmit(a.ctx, "gamux:transfer-event", ev)
 			} else {
@@ -110,10 +102,23 @@ func (a *App) Startup(ctx context.Context) {
 				})
 			}
 			if ev.Type == events.EventGameExited {
+				var sessionSec, playtimeSec, lastPlayed int64
+				if sStr, ok := ev.Metadata["session_seconds"]; ok {
+					sessionSec, _ = strconv.ParseInt(sStr, 10, 64)
+				}
+				if pStr, ok := ev.Metadata["playtime_seconds"]; ok {
+					playtimeSec, _ = strconv.ParseInt(pStr, 10, 64)
+				}
+				if lStr, ok := ev.Metadata["last_played"]; ok {
+					lastPlayed, _ = strconv.ParseInt(lStr, 10, 64)
+				}
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
-					"gameDir":   ev.GameDir,
-					"isRunning": false,
-					"pid":       0,
+					"gameDir":         ev.GameDir,
+					"isRunning":       false,
+					"pid":             0,
+					"sessionSeconds":  sessionSec,
+					"playtimeSeconds": playtimeSec,
+					"lastPlayed":      lastPlayed,
 				})
 			}
 			if ev.Type == events.EventTaskProgress && ev.Metadata != nil && ev.Metadata["step"] != "" {
@@ -130,24 +135,25 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Bind desktop/toast notifications to EventBus
-	a.SC.Notifier = func(nCtx context.Context, title, message string) error {
-		if a.SC != nil && a.SC.EventBus != nil {
-			a.SC.EventBus.Publish(events.NewNotification(title, message))
+	if a.Engine != nil {
+		// Bind desktop/toast notifications to EventBus
+		a.Engine.Notifier = func(nCtx context.Context, title, message string) error {
+			if a.Engine != nil && a.Engine.EventBus != nil {
+				a.Engine.EventBus.Publish(events.NewNotification(title, message))
+			}
+			return nil
 		}
-		return nil
-	}
 
-	// Bind step progress updates to EventBus
-	a.SC.StepReporter = func(sCtx context.Context, prog engine.StepProgress) {
-		if a.SC != nil && a.SC.EventBus != nil {
-			a.SC.EventBus.Publish(events.NewStepProgress(prog.Step, prog.Total, prog.Title, prog.Details))
+		// Bind step progress updates to EventBus
+		a.Engine.StepReporter = func(sCtx context.Context, prog engine.StepProgress) {
+			if a.Engine != nil && a.Engine.EventBus != nil {
+				a.Engine.EventBus.Publish(events.NewStepProgress(prog.Step, prog.Total, prog.Title, prog.Details))
+			}
 		}
 	}
 
 	slog.Info("Gamux GUI backend initialized")
 }
-
 
 // getContext returns the current context (useful for fallback and testing).
 func (a *App) getContext() context.Context {
@@ -174,7 +180,7 @@ func (a *App) SaveConfig(newCfg *config.Config) error {
 		return fmt.Errorf("save config: %w", err)
 	}
 	a.Config = newCfg
-	a.SC, a.Library, a.Game, a.Task = engine.NewServices(newCfg)
+	a.Engine = engine.New(newCfg)
 	slog.Info("Configuration updated and saved via GUI")
 	return nil
 }
@@ -210,7 +216,7 @@ func (a *App) InspectLibraries(dirs []string) ([]*engine.GameStatus, error) {
 	if len(cleanDirs) == 0 {
 		return nil, fmt.Errorf("library directories cannot be empty")
 	}
-	return a.Library.BatchInspectLibraries(a.getContext(), cleanDirs)
+	return a.Engine.BatchInspectLibraries(a.getContext(), cleanDirs)
 }
 
 // InspectGame inspects a game directory and returns its full GameStatus, optionally fetching news/patch notes.
@@ -220,9 +226,9 @@ func (a *App) InspectGame(gamePath string, newsCount int) (*engine.GameStatus, e
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
 	if newsCount > 0 {
-		return a.Library.InspectStatusEx(a.getContext(), gamePath, newsCount)
+		return a.Engine.InspectStatusEx(a.getContext(), gamePath, newsCount)
 	}
-	return a.Library.InspectStatus(a.getContext(), gamePath)
+	return a.Engine.InspectStatus(a.getContext(), gamePath)
 }
 
 // DetectGame inspects a given game directory and returns detected game metadata.
@@ -240,7 +246,7 @@ func (a *App) VerifyIntegrity(gamePath string) (*manifest.IntegrityReport, error
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	return a.Library.VerifyIntegrity(a.getContext(), gamePath)
+	return a.Engine.VerifyIntegrity(a.getContext(), gamePath)
 }
 
 // -----------------------------------------------------------------------------
@@ -253,7 +259,7 @@ func (a *App) SubmitApply(opts engine.ProcessOptions) (string, error) {
 	if opts.Path == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Task.SubmitApply(opts)
+	return a.Engine.SubmitApply(opts)
 }
 
 // SubmitNormalize enqueues an asynchronous directory normalization task.
@@ -262,7 +268,7 @@ func (a *App) SubmitNormalize(gamePath string) (string, error) {
 	if gamePath == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Task.SubmitNormalize(gamePath)
+	return a.Engine.SubmitNormalize(gamePath)
 }
 
 // SubmitRollback enqueues an asynchronous game rollback task.
@@ -271,7 +277,7 @@ func (a *App) SubmitRollback(gamePath string, dryRun bool) (string, error) {
 	if gamePath == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Task.SubmitRollback(gamePath, dryRun)
+	return a.Engine.SubmitRollback(gamePath, dryRun)
 }
 
 // SubmitVerify enqueues an asynchronous depot integrity verification task.
@@ -280,7 +286,7 @@ func (a *App) SubmitVerify(gamePath string) (string, error) {
 	if gamePath == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Task.SubmitVerify(gamePath)
+	return a.Engine.SubmitVerify(gamePath)
 }
 
 // SubmitUpdate enqueues an asynchronous game update task.
@@ -289,17 +295,37 @@ func (a *App) SubmitUpdate(gamePath string) (string, error) {
 	if gamePath == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Task.SubmitUpdate(gamePath)
+	return a.Engine.SubmitUpdate(gamePath)
 }
 
 // StartDownloadTransfer enqueues a new resumable file/depot download in the unified tasks engine.
 func (a *App) StartDownloadTransfer(opts engine.DownloadGameOptions) (string, error) {
-	return a.Task.SubmitDownload(opts)
+	return a.Engine.SubmitDownload(opts)
 }
 
 // UpdateTool enqueues an asynchronous tool update download in the unified Tasks engine.
 func (a *App) UpdateTool(toolKey string) (string, error) {
-	return a.Task.SubmitToolUpdate(toolKey)
+	return a.Engine.SubmitToolUpdate(toolKey)
+}
+
+// SubmitBatchAchievements enqueues a batch task to download missing achievement schemas and artwork for all library games.
+func (a *App) SubmitBatchAchievements() (string, error) {
+	return a.Engine.SubmitBatchAchievements()
+}
+
+// SubmitBatchArtwork enqueues a batch task to refresh and cache missing artwork for all library games.
+func (a *App) SubmitBatchArtwork() (string, error) {
+	return a.Engine.SubmitBatchArtwork()
+}
+
+// SubmitBatchNormalize enqueues a batch task to standardize directory naming for all library games.
+func (a *App) SubmitBatchNormalize() (string, error) {
+	return a.Engine.SubmitBatchNormalize()
+}
+
+// SubmitBatchVerify enqueues a batch task to verify depot integrity across all manifest-backed games.
+func (a *App) SubmitBatchVerify() (string, error) {
+	return a.Engine.SubmitBatchVerify()
 }
 
 // -----------------------------------------------------------------------------
@@ -308,72 +334,72 @@ func (a *App) UpdateTool(toolKey string) (string, error) {
 
 // ListTasks returns all background tasks tracked by the unified tasks manager.
 func (a *App) ListTasks() []*tasks.Task {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return []*tasks.Task{}
 	}
-	return a.SC.Tasks.List()
+	return a.Engine.Tasks.List()
 }
 
 // GetTask retrieves details for a single task.
 func (a *App) GetTask(id string) (*tasks.Task, bool) {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return nil, false
 	}
-	return a.SC.Tasks.Get(id)
+	return a.Engine.Tasks.Get(id)
 }
 
 // PauseTask suspends an active or queued task.
 func (a *App) PauseTask(id string) error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return fmt.Errorf("task manager not initialized")
 	}
-	return a.SC.Tasks.Pause(id)
+	return a.Engine.Tasks.Pause(id)
 }
 
 // ResumeTask continues a paused task.
 func (a *App) ResumeTask(id string) error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return fmt.Errorf("task manager not initialized")
 	}
-	return a.SC.Tasks.Resume(id)
+	return a.Engine.Tasks.Resume(id)
 }
 
 // CancelTask terminates a running, queued, or paused task.
 func (a *App) CancelTask(id string) error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return fmt.Errorf("task manager not initialized")
 	}
-	return a.SC.Tasks.Cancel(id)
+	return a.Engine.Tasks.Cancel(id)
 }
 
 // RemoveTask removes a finished task from the history list.
 func (a *App) RemoveTask(id string) error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return fmt.Errorf("task manager not initialized")
 	}
-	return a.SC.Tasks.Remove(id)
+	return a.Engine.Tasks.Remove(id)
 }
 
 // ReorderTasks rearranges queued tasks by ID priority.
 func (a *App) ReorderTasks(ids []string) error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return fmt.Errorf("task manager not initialized")
 	}
-	return a.SC.Tasks.Reorder(ids)
+	return a.Engine.Tasks.Reorder(ids)
 }
 
 // ClearFinishedTasks purges finished tasks from manager memory.
 func (a *App) ClearFinishedTasks() error {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return nil
 	}
-	return a.SC.Tasks.ClearFinished()
+	return a.Engine.Tasks.ClearFinished()
 }
 
 // SetTransferSpeedLimit configures the download bandwidth limiter (bytes/sec, 0 for unlimited) and persists it.
 func (a *App) SetTransferSpeedLimit(bps int64) {
-	if a.SC != nil && a.SC.Tasks != nil {
-		a.SC.Tasks.SetSpeedLimit(bps)
+	if a.Engine != nil && a.Engine.Tasks != nil {
+		a.Engine.Tasks.SetSpeedLimit(bps)
 	}
 	if a.Config != nil {
 		a.Config.TransferSpeedLimit = bps
@@ -383,10 +409,10 @@ func (a *App) SetTransferSpeedLimit(bps int64) {
 
 // GetTransferSpeedLimit returns the active download bandwidth limit.
 func (a *App) GetTransferSpeedLimit() int64 {
-	if a.SC == nil || a.SC.Tasks == nil {
+	if a.Engine == nil || a.Engine.Tasks == nil {
 		return 0
 	}
-	return a.SC.Tasks.SpeedLimit()
+	return a.Engine.Tasks.SpeedLimit()
 }
 
 // -----------------------------------------------------------------------------
@@ -398,28 +424,28 @@ type LaunchOptions = runner.LaunchOptions
 
 // LaunchGame starts the game process asynchronously according to the supplied launch options or detected game profile.
 func (a *App) LaunchGame(opts LaunchOptions) error {
-	_, err := a.Game.LaunchGame(a.getContext(), opts)
+	_, err := a.Engine.LaunchGame(a.getContext(), opts)
 	return err
 }
 
 // QuickPlay executes one-click setup and launch for a game.
 func (a *App) QuickPlay(opts LaunchOptions) error {
-	_, err := a.Game.EnsureAndLaunchGame(a.getContext(), opts)
+	_, err := a.Engine.EnsureAndLaunchGame(a.getContext(), opts)
 	return err
 }
 
 // IsGameRunning checks if a game process in the given game directory is currently active.
 func (a *App) IsGameRunning(gamePath string) bool {
-	if a.SC != nil && a.SC.RunnerMgr != nil {
-		return a.SC.RunnerMgr.IsRunning(gamePath)
+	if a.Engine != nil && a.Engine.RunnerMgr != nil {
+		return a.Engine.RunnerMgr.IsRunning(gamePath)
 	}
 	return runner.DefaultManager().IsRunning(gamePath)
 }
 
 // StopGame terminates an active game process and its process tree.
 func (a *App) StopGame(gamePath string) error {
-	if a.SC != nil && a.SC.RunnerMgr != nil {
-		return a.SC.RunnerMgr.Stop(gamePath)
+	if a.Engine != nil && a.Engine.RunnerMgr != nil {
+		return a.Engine.RunnerMgr.Stop(gamePath)
 	}
 	return runner.DefaultManager().Stop(gamePath)
 }
@@ -435,10 +461,17 @@ func (a *App) GetGameLog(gamePath string) (string, error) {
 	if gamePath == "" {
 		return "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Game.GetGameLog(a.getContext(), gamePath)
+	return a.Engine.GetGameLog(a.getContext(), gamePath)
 }
 
-
+// GetGameAchievements returns list of achievements and unlocked status for a game.
+func (a *App) GetGameAchievements(gamePath string) ([]domain.AchievementItem, error) {
+	gamePath = util.CanonicalPath(gamePath)
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	return a.Engine.GetGameAchievements(a.getContext(), gamePath)
+}
 
 // -----------------------------------------------------------------------------
 // Configuration & Launch Profiles
@@ -450,7 +483,7 @@ func (a *App) GetLaunchProfile(gamePath string) (*runner.LaunchOptions, error) {
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	return a.Game.GetLaunchProfile(a.getContext(), gamePath)
+	return a.Engine.GetLaunchProfile(a.getContext(), gamePath)
 }
 
 // SaveLaunchProfile persists custom launch configuration for a game directory and returns updated GameStatus.
@@ -459,10 +492,10 @@ func (a *App) SaveLaunchProfile(gamePath string, opts runner.LaunchOptions) (*en
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	if err := a.Game.SaveLaunchProfile(a.getContext(), gamePath, opts); err != nil {
+	if err := a.Engine.SaveLaunchProfile(a.getContext(), gamePath, opts); err != nil {
 		return nil, err
 	}
-	return a.Library.InspectStatus(a.getContext(), gamePath)
+	return a.Engine.InspectStatus(a.getContext(), gamePath)
 }
 
 // ResetLaunchProfile removes custom launch configuration and returns updated GameStatus.
@@ -471,15 +504,48 @@ func (a *App) ResetLaunchProfile(gamePath string) (*engine.GameStatus, error) {
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	if err := a.Game.ResetLaunchProfile(a.getContext(), gamePath); err != nil {
+	if err := a.Engine.ResetLaunchProfile(a.getContext(), gamePath); err != nil {
 		return nil, err
 	}
-	return a.Library.InspectStatus(a.getContext(), gamePath)
+	return a.Engine.InspectStatus(a.getContext(), gamePath)
+}
+
+// GetGameDepots retrieves structured metadata and installation state for all depots of a game.
+func (a *App) GetGameDepots(gamePath string) ([]domain.DepotSummary, error) {
+	gamePath = util.CanonicalPath(gamePath)
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	return a.Engine.GetGameDepots(a.getContext(), gamePath)
+}
+
+// SwitchGamePlatform switches the active execution platform and runner for a game directory.
+func (a *App) SwitchGamePlatform(gamePath, targetPlatform string) (*engine.GameStatus, error) {
+	gamePath = util.CanonicalPath(gamePath)
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	if err := a.Engine.SwitchGamePlatform(a.getContext(), gamePath, targetPlatform); err != nil {
+		return nil, err
+	}
+	return a.Engine.InspectStatus(a.getContext(), gamePath)
+}
+
+// UninstallDepot removes on-disk files belonging to a specific depot ID while preserving shared assets and manifests.
+func (a *App) UninstallDepot(gamePath string, depotID uint32) (*engine.GameStatus, error) {
+	gamePath = util.CanonicalPath(gamePath)
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	if err := a.Engine.UninstallDepot(a.getContext(), gamePath, depotID); err != nil {
+		return nil, err
+	}
+	return a.Engine.InspectStatus(a.getContext(), gamePath)
 }
 
 // GetToolsStatus returns version, release notes, and update status for GBE fork and steamless-rs.
 func (a *App) GetToolsStatus() ([]tools.ToolStatus, error) {
-	return a.SC.GetToolsStatus(a.getContext())
+	return a.Engine.GetToolsStatus(a.getContext())
 }
 
 // -----------------------------------------------------------------------------
@@ -488,7 +554,7 @@ func (a *App) GetToolsStatus() ([]tools.ToolStatus, error) {
 
 // SearchStoreGames queries all configured store providers (Steam, GOG, SteamGridDB) for game titles.
 func (a *App) SearchStoreGames(query string) ([]store.SearchResult, error) {
-	return a.Library.SearchStoreGames(a.getContext(), query)
+	return a.Engine.SearchStoreGames(a.getContext(), query)
 }
 
 // ResolveArtwork resolves covers, heroes, and banners for a game directory.
@@ -498,25 +564,101 @@ func (a *App) ResolveArtwork(gameDir string) (*domain.GameArtwork, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.Library.ResolveArtwork(a.getContext(), info)
+	return a.Engine.ResolveArtwork(a.getContext(), info)
 }
 
 // QueryArtworkOptions queries candidate providers for specific asset options (covers, heroes, banners, logos).
 func (a *App) QueryArtworkOptions(query domain.ArtworkQuery) ([]domain.ArtworkOption, error) {
 	query.GameDir = util.CanonicalPath(query.GameDir)
-	return a.Library.QueryArtworkOptions(a.getContext(), query)
+	return a.Engine.QueryArtworkOptions(a.getContext(), query)
 }
 
 // ApplyCustomArtwork sets custom artwork on a game directory and updates metadata.
 func (a *App) ApplyCustomArtwork(gameDir string, assetType string, imageSource string) (*domain.GameArtwork, error) {
 	gameDir = util.CanonicalPath(gameDir)
-	return a.Library.ApplyCustomArtwork(a.getContext(), gameDir, assetType, imageSource)
+	return a.Engine.ApplyCustomArtwork(a.getContext(), gameDir, assetType, imageSource)
 }
 
 // LinkGameMetadata links a game directory to a specific store provider and ID.
 func (a *App) LinkGameMetadata(gameDir string, storeName string, storeID string) (*domain.Game, error) {
 	gameDir = util.CanonicalPath(gameDir)
-	return a.Library.LinkGameMetadata(a.getContext(), gameDir, storeName, storeID)
+	return a.Engine.LinkGameMetadata(a.getContext(), gameDir, storeName, storeID)
+}
+
+// UnlinkGameMetadata removes custom metadata overrides and restores auto-detected identity.
+func (a *App) UnlinkGameMetadata(gameDir string) (*domain.Game, error) {
+	gameDir = util.CanonicalPath(gameDir)
+	return a.Engine.UnlinkGameMetadata(a.getContext(), gameDir)
+}
+
+// ListMetadataProviders returns registered metadata and artwork providers with their capabilities.
+func (a *App) ListMetadataProviders() ([]store.ProviderDescriptor, error) {
+	return a.Engine.ListMetadataProviders(a.getContext()), nil
+}
+
+// GameMetadataDetails holds rich game synopsis and metadata for the About view.
+type GameMetadataDetails struct {
+	Name                string   `json:"name"`
+	ShortDescription    string   `json:"short_description"`
+	DetailedDescription string   `json:"detailed_description"`
+	AboutTheGame        string   `json:"about_the_game"`
+	HeaderImage         string   `json:"header_image"`
+	Developers          []string `json:"developers"`
+	Publishers          []string `json:"publishers"`
+	Genres              []string `json:"genres"`
+	ReleaseDate         string   `json:"release_date"`
+}
+
+// GetGameDetails fetches store metadata and game description for a given AppID or store.
+func (a *App) GetGameDetails(appID string) (*GameMetadataDetails, error) {
+	if appID == "" || appID == "0" {
+		return nil, fmt.Errorf("invalid app id")
+	}
+
+	// 1. Try Steam details
+	if details, err := steam.FetchAppDetails(a.getContext(), appID); err == nil && details != nil && details.Name != "" {
+		var genres []string
+		for _, g := range details.Genres {
+			if g.Description != "" {
+				genres = append(genres, g.Description)
+			}
+		}
+		return &GameMetadataDetails{
+			Name:                details.Name,
+			ShortDescription:    details.ShortDesc,
+			DetailedDescription: details.DetailedDesc,
+			AboutTheGame:        details.About,
+			HeaderImage:         details.HeaderImage,
+			Developers:          details.Developers,
+			Publishers:          details.Publishers,
+			Genres:              genres,
+			ReleaseDate:         details.ReleaseDate.Date,
+		}, nil
+	}
+
+	// 2. Try GOG / RAWG / Registered providers if available
+	if a.Engine != nil && a.Engine.StoreRegistry != nil {
+		for _, p := range a.Engine.StoreRegistry.List() {
+			if p.ID() == "steamgriddb" {
+				continue
+			}
+			if meta, err := p.GetMetadata(a.getContext(), appID); err == nil && meta != nil && meta.Name != "" {
+				return &GameMetadataDetails{
+					Name:                meta.Name,
+					ShortDescription:    meta.Summary,
+					DetailedDescription: meta.Summary,
+					AboutTheGame:        meta.Summary,
+					HeaderImage:         meta.HeaderImage,
+					Developers:          meta.Developers,
+					Publishers:          meta.Publishers,
+					Genres:              meta.Genres,
+					ReleaseDate:         meta.ReleaseDate,
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("metadata not found for id %s", appID)
 }
 
 // FetchNews retrieves news and patch note items for a Steam AppID.
@@ -536,7 +678,7 @@ func (a *App) GetPatchNote(gamePath string, itemIndex int) (*steam.NewsItem, str
 	if gamePath == "" {
 		return nil, "", fmt.Errorf("game path cannot be empty")
 	}
-	return a.Library.GetPatchNote(a.getContext(), gamePath, itemIndex)
+	return a.Engine.GetPatchNote(a.getContext(), gamePath, itemIndex)
 }
 
 // -----------------------------------------------------------------------------
@@ -599,6 +741,23 @@ func (a *App) OpenDirectory(dirPath string) error {
 	return nil
 }
 
+// OpenURL opens the specified URL in the user's default web browser.
+func (a *App) OpenURL(rawURL string) error {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return fmt.Errorf("URL cannot be empty")
+	}
+	if a.ctx != nil {
+		wailsRuntime.BrowserOpenURL(a.ctx, rawURL)
+		return nil
+	}
+	cmd := exec.Command("xdg-open", rawURL)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("open URL: %w", err)
+	}
+	return nil
+}
+
 // -----------------------------------------------------------------------------
 // Save Game & Configuration Data
 // -----------------------------------------------------------------------------
@@ -609,10 +768,10 @@ func (a *App) GetGameSaveLocations(gamePath string) (*saves.SaveLocationsResult,
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return nil, fmt.Errorf("save service not initialized")
 	}
-	return a.SC.Saves.InspectSaveLocations(a.getContext(), gamePath)
+	return a.Engine.InspectSaveLocations(a.getContext(), gamePath)
 }
 
 // GetGameBackups lists available backup snapshots for a game.
@@ -621,10 +780,10 @@ func (a *App) GetGameBackups(gamePath string) ([]saves.BackupInfo, error) {
 	if gamePath == "" {
 		return []saves.BackupInfo{}, nil
 	}
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return []saves.BackupInfo{}, nil
 	}
-	return a.SC.Saves.ListSaveBackups(a.getContext(), gamePath)
+	return a.Engine.ListSaveBackups(a.getContext(), gamePath)
 }
 
 // CreateSaveBackup creates a new timestamped snapshot archive for a game.
@@ -633,10 +792,10 @@ func (a *App) CreateSaveBackup(gamePath, note string) (*saves.BackupInfo, error)
 	if gamePath == "" {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return nil, fmt.Errorf("save service not initialized")
 	}
-	return a.SC.Saves.CreateSaveBackup(a.getContext(), gamePath, note, "manual")
+	return a.Engine.CreateSaveBackup(a.getContext(), gamePath, note, "manual")
 }
 
 // RestoreSaveBackup restores a snapshot archive to the game's active save locations.
@@ -645,10 +804,10 @@ func (a *App) RestoreSaveBackup(gamePath, backupID string) error {
 	if gamePath == "" {
 		return fmt.Errorf("game path cannot be empty")
 	}
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return fmt.Errorf("save service not initialized")
 	}
-	return a.SC.Saves.RestoreSaveBackup(a.getContext(), gamePath, backupID)
+	return a.Engine.RestoreSaveBackup(a.getContext(), gamePath, backupID)
 }
 
 // DeleteSaveBackup removes a snapshot archive from disk.
@@ -657,21 +816,21 @@ func (a *App) DeleteSaveBackup(gamePath, backupID string) error {
 	if gamePath == "" {
 		return fmt.Errorf("game path cannot be empty")
 	}
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return fmt.Errorf("save service not initialized")
 	}
-	return a.SC.Saves.DeleteSaveBackup(a.getContext(), gamePath, backupID)
+	return a.Engine.DeleteSaveBackup(a.getContext(), gamePath, backupID)
 }
 
 // UpdateSaveManifest forces a re-download and re-indexing of the Ludusavi save database.
 func (a *App) UpdateSaveManifest() error {
-	if a.SC == nil || a.SC.Saves == nil {
+	if a.Engine == nil {
 		return fmt.Errorf("save service not initialized")
 	}
-	return a.SC.Saves.UpdateSaveManifest(a.getContext())
+	return a.Engine.UpdateSaveManifest(a.getContext())
 }
 
-// AssetHandler returns an http.Handler that serves cached artwork from disk under /art/.
+// AssetHandler returns an http.Handler that serves cached artwork and local game images from disk.
 func (a *App) AssetHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/art/") {
@@ -689,6 +848,15 @@ func (a *App) AssetHandler() http.Handler {
 				artDir = filepath.Join(home, ".local", "share", "gamux", "art")
 			}
 			filePath := filepath.Join(artDir, rel)
+			if util.FileExists(filePath) {
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				http.ServeFile(w, r, filePath)
+				return
+			}
+		} else if strings.HasPrefix(r.URL.Path, "/local-img/") {
+			rel := strings.TrimPrefix(r.URL.Path, "/local-img/")
+			filePath := "/" + rel
+			filePath = filepath.Clean(filePath)
 			if util.FileExists(filePath) {
 				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 				http.ServeFile(w, r, filePath)

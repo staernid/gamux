@@ -1,16 +1,19 @@
 <script>
-  import { activeView, selectedGame } from '../../stores/library.js';
+  import { activeView, selectedGame, games, runningGames, setGameRunning } from '../../stores/library.js';
   import { tasksStore } from '../../stores/tasks.js';
+  import { AppAPI } from '../../api/app.js';
+  import { isSamePath } from '../../utils/game.js';
 
   const totalTasks = tasksStore.activeCount;
   const activeTransfersCount = tasksStore.activeTransfersCount;
 
   $: activeOpsCount = $activeTransfersCount > 0 ? $activeTransfersCount : $totalTasks;
+  $: runningGameList = Array.from($runningGames || []).map(dir => $games.find(g => isSamePath(g.gameDir, dir))).filter(Boolean);
 
   const views = ['library', 'tasks', 'settings'];
 
   function cycleView(dir) {
-    const currentBase = $activeView === 'game-hub' ? 'library' : ($activeView === 'downloads' || $activeView === 'transfers' ? 'tasks' : $activeView);
+    const currentBase = $activeView === 'game-hub' ? 'library' : $activeView;
     const idx = views.indexOf(currentBase);
     let next = idx + dir;
     if (next < 0) next = views.length - 1;
@@ -77,7 +80,7 @@
       <button
         type="button"
         on:click={() => { $activeView = 'tasks'; }}
-        class="relative p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center {$activeView === 'tasks' || $activeView === 'downloads' || $activeView === 'transfers' || $activeView === 'downloader' ? 'bg-[#252538] text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+        class="relative p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center {$activeView === 'tasks' ? 'bg-[#252538] text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
         title="Tasks (2)"
       >
         <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,3 +122,36 @@
     </button>
   </div>
 </header>
+
+<!-- Active Running Games Stack (Anchored to top-right, vertically stacked) -->
+{#if runningGameList.length > 0}
+  <aside class="absolute top-4 right-6 z-40 select-none pointer-events-none flex flex-col items-end space-y-2">
+    {#each runningGameList as rGame (rGame.gameDir)}
+      <div class="pointer-events-auto flex items-center space-x-2.5 bg-[#12121a]/90 backdrop-blur-xl border border-emerald-500/40 hover:border-emerald-400/70 px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-all">
+        <button
+          type="button"
+          on:click={() => { $selectedGame = rGame; $activeView = 'game-hub'; }}
+          class="flex items-center space-x-2 text-xs text-emerald-300 hover:text-white font-bold transition-colors truncate max-w-[180px] sm:max-w-[240px]"
+          title="Jump to Game Hub ({rGame.name})"
+        >
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+          <span class="truncate">{rGame.name}</span>
+        </button>
+        <button
+          type="button"
+          on:click|stopPropagation={() => {
+            AppAPI.stopGame(rGame.gameDir);
+            setGameRunning(rGame.gameDir, false);
+          }}
+          class="px-2 py-0.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 hover:text-white text-[11px] font-mono font-bold border border-rose-700/50 hover:border-rose-500 transition-all flex items-center space-x-1 flex-shrink-0 active:scale-95 cursor-pointer shadow-sm"
+          title="Stop Process (Terminate {rGame.name})"
+        >
+          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+          </svg>
+          <span>Stop</span>
+        </button>
+      </div>
+    {/each}
+  </aside>
+{/if}

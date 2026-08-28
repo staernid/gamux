@@ -15,10 +15,11 @@ type Config struct {
 	SteamUserdata string   `json:"steam_userdata,omitempty"`
 
 	// API Keys
-	SteamWebAPIKey   string `json:"steam_web_api_key,omitempty"`
-	HubcapAPIKey     string `json:"hubcap_api_key,omitempty"`
+	SteamWebAPIKey    string `json:"steam_web_api_key,omitempty"`
+	HubcapAPIKey      string `json:"hubcap_api_key,omitempty"`
 	SteamGridDBAPIKey string `json:"steamgriddb_api_key,omitempty"`
-	ArtworkDir       string `json:"artwork_dir,omitempty"`
+	RAWGAPIKey        string `json:"rawg_api_key,omitempty"`
+	ArtworkDir        string `json:"artwork_dir,omitempty"`
 
 	// Notifications
 	EnableLaunchNotify bool `json:"enable_launch_notify"`
@@ -27,7 +28,6 @@ type Config struct {
 	OperatingMode      string            `json:"operating_mode,omitempty"`
 	DefaultRunner      string            `json:"default_runner,omitempty"`
 	ProtonPath         string            `json:"proton_path,omitempty"`
-	GbeMode            string            `json:"gbe_mode,omitempty"`
 	Steamless          bool              `json:"steamless"`
 	Achievements       bool              `json:"achievements"`
 	Normalize          bool              `json:"normalize"`
@@ -103,9 +103,8 @@ func DefaultConfig() *Config {
 		HubcapAPIKey:         "",
 		SteamGridDBAPIKey:    "",
 		EnableLaunchNotify:   true,
-		OperatingMode:        "standalone",
+		OperatingMode:        "loader",
 		DefaultRunner:        "umu",
-		GbeMode:              "loader",
 		Steamless:            true,
 		Achievements:         true,
 		Normalize:            true,

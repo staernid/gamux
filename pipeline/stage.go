@@ -12,14 +12,15 @@ import (
 // Options holds user-facing execution flags for pipeline stages.
 // This is the single source of truth — CLI, GUI, and engine all construct this directly.
 type Options struct {
-	Path              string `json:"path"`
-	ApplyGBE          bool   `json:"apply_gbe"`
-	Portable          bool   `json:"portable"`
-	NormalizeDir      bool   `json:"normalize_dir"`
-	DryRun            bool   `json:"dry_run"`
-	AutoYes           bool   `json:"auto_yes"`
-	NoSteamless       bool   `json:"no_steamless"`
-	FetchAchievements bool   `json:"fetch_achievements"`
+	Path              string                 `json:"path"`
+	OperatingMode     string                 `json:"operating_mode,omitempty"` // "loader", "portable", "standalone", "native", "none"
+	ApplyGBE          bool                   `json:"apply_gbe,omitempty"`      // Convenience flag for backward compatibility
+	Portable          bool                   `json:"portable,omitempty"`       // Convenience flag for backward compatibility
+	NormalizeDir      bool                   `json:"normalize_dir"`
+	DryRun            bool                   `json:"dry_run"`
+	AutoYes           bool                   `json:"auto_yes"`
+	NoSteamless       bool                   `json:"no_steamless"`
+	FetchAchievements bool                   `json:"fetch_achievements"`
 	Language          string                 `json:"language,omitempty"`
 	WinePrefix        string                 `json:"wine_prefix,omitempty"`
 	ExePath           string                 `json:"exe_path,omitempty"`
@@ -27,20 +28,37 @@ type Options struct {
 	Reporter          tasks.ProgressReporter `json:"-"`
 }
 
+// EffectiveOperatingMode resolves the operating mode requested by options,
+// taking into account legacy flags (Portable, ApplyGBE) if OperatingMode is empty.
+func (o *Options) EffectiveOperatingMode() string {
+	if o.OperatingMode != "" {
+		return o.OperatingMode
+	}
+	if o.Portable {
+		return domain.ModePortable
+	}
+	if o.ApplyGBE {
+		return domain.ModeLoader
+	}
+	return ""
+}
+
+// Results tracks mutations, syntheses, unpacks, and errors across executed stages.
+type Results struct {
+	DirectoryNormalized bool     `json:"directory_normalized"`
+	ACFSynthesized      bool     `json:"acf_synthesized"`
+	SteamlessUnpacked   bool     `json:"steamless_unpacked"`
+	Patched             bool     `json:"patched"`
+	Errors              []string `json:"errors,omitempty"`
+	Mutations           []string `json:"mutations,omitempty"`
+}
+
 // Context encapsulates execution state, options, and results passed across pipeline stages.
 type Context struct {
-	Options // Embedded — all user-facing execution flags
-
-	Game   *domain.Game
-	Config *config.Config
-
-	// Results tracking
-	DirectoryNormalized bool
-	ACFSynthesized      bool
-	SteamlessUnpacked   bool
-	Patched             bool
-	Errors              []string
-	Mutations           []string
+	Options Options
+	Game    *domain.Game
+	Config  *config.Config
+	Results Results
 
 	// Telemetry reporting
 	Reporter tasks.ProgressReporter

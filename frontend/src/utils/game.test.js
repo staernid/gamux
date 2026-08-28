@@ -7,6 +7,10 @@ import {
   isSteamApp,
   getPlatformType,
   getPlatformColors,
+  formatPlaytime,
+  formatLastPlayed,
+  hasMetadataMatch,
+  getMetadataInfo,
 } from './game.js';
 
 describe('Game Data Model & Normalization Helpers', () => {
@@ -76,13 +80,13 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.launchCandidates.length).toBe(1);
     expect(normalized.launchCandidates[0].name).toBe('Main Game');
 
-    // Seamless backwards-compatibility aliases
-    expect(normalized.GameDir).toBe('/home/user/Games/Cyberpunk 2077');
-    expect(normalized.game_dir).toBe('/home/user/Games/Cyberpunk 2077');
-    expect(normalized.AppID).toBe('1091500');
-    expect(normalized.app_id).toBe('1091500');
-    expect(normalized.DiskSizeBytes).toBe(73014444032);
-    expect(normalized.disk_size_bytes).toBe(73014444032);
+    // Verify no legacy alias pollution
+    expect(normalized.GameDir).toBeUndefined();
+    expect(normalized.game_dir).toBeUndefined();
+    expect(normalized.AppID).toBeUndefined();
+    expect(normalized.app_id).toBeUndefined();
+    expect(normalized.DiskSizeBytes).toBeUndefined();
+    expect(normalized.disk_size_bytes).toBeUndefined();
   });
 
   it('calculates game title initials', () => {
@@ -109,5 +113,49 @@ describe('Game Data Model & Normalization Helpers', () => {
     const steamColors = getPlatformColors({ store: 'Steam' });
     expect(steamColors.label).toBe('Steam');
     expect(steamColors.border).toBe('#1a9fff');
+  });
+
+  it('formats playtime and last played timestamps cleanly', () => {
+    expect(formatPlaytime(0)).toBe('Never played');
+    expect(formatPlaytime(45)).toBe('0 mins');
+    expect(formatPlaytime(120)).toBe('2 mins');
+    expect(formatPlaytime(3600)).toBe('1 hr');
+    expect(formatPlaytime(9000)).toBe('2.5 hrs');
+
+    expect(formatLastPlayed(0)).toBe('');
+    expect(formatLastPlayed(Math.floor(Date.now() / 1000) - 10)).toBe('Just now');
+  });
+
+  it('correctly resolves metadata info and matches for Steam, GOG, and RAWG', () => {
+    const rawgGame = {
+      store: 'Standalone',
+      source: 'Standalone',
+      metadata_provider: 'rawg',
+      metadata_id: '34744',
+      app_id: '0'
+    };
+
+    expect(getMetadataInfo(rawgGame)).toEqual({ provider: 'RAWG', id: '34744' });
+    expect(hasMetadataMatch(rawgGame)).toBe(true);
+
+    const gogGame = {
+      store: 'Standalone',
+      source: 'Standalone',
+      metadata_provider: 'gog',
+      metadata_id: '12345',
+      app_id: '0'
+    };
+    expect(getMetadataInfo(gogGame)).toEqual({ provider: 'GOG', id: '12345' });
+    expect(hasMetadataMatch(gogGame)).toBe(true);
+
+    const standaloneGame = {
+      store: 'Standalone',
+      source: 'Standalone',
+      metadata_provider: 'standalone',
+      metadata_id: '0',
+      app_id: '0'
+    };
+    expect(getMetadataInfo(standaloneGame)).toEqual({ provider: 'Standalone', id: '' });
+    expect(hasMetadataMatch(standaloneGame)).toBe(false);
   });
 });

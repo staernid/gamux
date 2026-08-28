@@ -338,6 +338,158 @@ func TestRegistry_SearchStores(t *testing.T) {
 	}
 }
 
+func TestSGDBProvider_AssetTypeEndpoints(t *testing.T) {
+	p := NewSGDBProvider("mock-key")
+	if p.APIKey() != "mock-key" {
+		t.Fatalf("expected api key")
+	}
+
+	// Verify that querying without api key returns an error
+	noKeyProv := NewSGDBProvider("")
+	if _, err := noKeyProv.QueryArtworkCandidates(context.Background(), ArtworkQuery{AssetType: "banner"}); err == nil {
+		t.Errorf("expected error when API key is missing")
+	}
+}
+
+func TestGOGProvider_Endpoints(t *testing.T) {
+	p := NewGOGProvider()
+	if p.ID() != "gog" || p.DisplayName() != "GOG.com" || !p.IsGameStore() {
+		t.Fatalf("unexpected GOG provider properties")
+	}
+
+	results, err := p.Search(context.Background(), "Witcher")
+	if err != nil {
+		t.Fatalf("GOG search failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected at least one search result for 'Witcher'")
+	}
+	if results[0].Store != "gog" || results[0].Name == "" || results[0].ID == "" {
+		t.Errorf("invalid GOG search result: %+v", results[0])
+	}
+
+	meta, err := p.GetMetadata(context.Background(), results[0].ID)
+	if err != nil {
+		t.Fatalf("GOG GetMetadata failed: %v", err)
+	}
+	if meta.Name == "" || meta.Store != "gog" {
+		t.Errorf("invalid GOG metadata: %+v", meta)
+	}
+
+	art, err := p.GetArtwork(context.Background(), results[0].ID)
+	if err != nil {
+		t.Fatalf("GOG GetArtwork failed: %v", err)
+	}
+	if art.CoverURL == "" && art.BannerURL == "" {
+		t.Errorf("expected GOG artwork to have cover or banner URL, got %+v", art)
+	}
+
+	candidates, err := p.QueryArtworkCandidates(context.Background(), ArtworkQuery{
+		GOGID:     results[0].ID,
+		AssetType: "cover",
+	})
+	if err != nil {
+		t.Fatalf("GOG QueryArtworkCandidates failed: %v", err)
+	}
+	if len(candidates) == 0 {
+		t.Errorf("expected at least one cover candidate from GOG")
+	}
+}
+
+func TestGOGProvider_NoFalsePositives(t *testing.T) {
+	p := NewGOGProvider()
+
+	// 1. Non-existent search query must return 0 results, not Witcher 3 recommendations
+	results, err := p.Search(context.Background(), "NonExistentGameXYZ12345")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-existent game, got %d (first: %s)", len(results), results[0].Name)
+	}
+
+	// 2. Non-existent game ID must return an error, not Witcher 3
+	_, err = p.GetMetadata(context.Background(), "999999999")
+	if err == nil {
+		t.Errorf("expected error for non-existent GOG ID, got nil")
+	}
+
+	// 3. Candidate query for unmatched title must return 0 candidates
+	candidates, err := p.QueryArtworkCandidates(context.Background(), ArtworkQuery{
+		Title:     "NonExistentGameXYZ12345",
+		AssetType: "cover",
+	})
+	if err != nil {
+		t.Fatalf("QueryArtworkCandidates error: %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates for non-existent game, got %d", len(candidates))
+	}
+}
+
+func TestArtworkService_NoGOGDefaultFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	reg := NewRegistry()
+	reg.Register(NewGOGProvider())
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameDir := t.TempDir()
+	// Game without GOG ID and without matching title
+	g := domain.NewGame("Unmatched Standalone Game", gameDir, "", "linux")
+	art, err := svc.Resolve(context.Background(), g)
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	// Must NOT have populated Witcher 3 artwork!
+	if art.CoverURL != "" || art.BannerURL != "" || art.HeroURL != "" {
+		t.Errorf("expected empty artwork for unmatched game, got %+v", art)
+	}
+}
+
+func TestRAWGProvider_Basics(t *testing.T) {
+	p := NewRAWGProvider("")
+	if p.ID() != "rawg" {
+		t.Errorf("expected ID 'rawg', got %s", p.ID())
+	}
+	if p.DisplayName() != "RAWG Video Games Database" {
+		t.Errorf("expected DisplayName 'RAWG Video Games Database', got %s", p.DisplayName())
+	}
+	caps := p.Capabilities()
+	if !caps.CanSearch || !caps.CanFetchMetadata || !caps.CanProvideArtwork || caps.IsGameStore {
+		t.Errorf("unexpected capabilities: %+v", caps)
+	}
+}
+
+func TestRegistry_ListDescriptors(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(NewSteamProvider())
+	reg.Register(NewGOGProvider())
+	reg.Register(NewRAWGProvider(""))
+	reg.Register(NewSGDBProvider(""))
+
+	descriptors := reg.ListDescriptors()
+	if len(descriptors) != 4 {
+		t.Fatalf("expected 4 descriptors, got %d", len(descriptors))
+	}
+
+	foundRAWG := false
+	for _, d := range descriptors {
+		if d.ID == "rawg" {
+			foundRAWG = true
+			if d.Capabilities.IsGameStore {
+				t.Errorf("expected rawg IsGameStore to be false")
+			}
+		}
+	}
+	if !foundRAWG {
+		t.Errorf("rawg descriptor not found in list")
+	}
+}
+
+
+
+
 
 
 

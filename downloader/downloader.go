@@ -151,10 +151,10 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		depotKeys[d.DepotID] = d.DecryptionKey
 	}
 
-	// 4. Load binary manifest(s) from disk or memory
+	// 4. Load binary manifest(s) from disk or memory filtered by target platform
 	var loadedManifest *manifest.Manifest
 	if entries, readErr := os.ReadDir(manifestsDir); readErr == nil && len(entries) > 0 {
-		loadedManifest, _ = manifest.LoadManifestFromDirWithKeys(absTargetDir, req.AppID, depotKeys)
+		loadedManifest, _ = manifest.LoadManifestFromDirWithPlatform(absTargetDir, req.AppID, depotKeys, req.Platform)
 	}
 
 	// Fallback to in-memory parsed manifests if disk manifests are absent (e.g. during DryRun)
@@ -169,12 +169,19 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 					fileDepotID = uint32(did)
 				}
 			}
-			if firstDepotID == 0 {
-				firstDepotID = fileDepotID
-			}
 			hexKey := depotKeys[fileDepotID]
 			files, err := manifest.ParseBinaryManifestWithKey(data, hexKey)
 			if err == nil && len(files) > 0 {
+				if req.Platform != "" && req.Platform != "all" {
+					cat := manifest.ClassifyDepot(files)
+					if !manifest.MatchesPlatform(cat, req.Platform) {
+						slog.Debug("Skipping remote depot manifest not matching platform", "depotID", fileDepotID, "category", cat, "targetPlatform", req.Platform)
+						continue
+					}
+				}
+				if firstDepotID == 0 {
+					firstDepotID = fileDepotID
+				}
 				for idx := range files {
 					files[idx].DepotID = fileDepotID
 				}
@@ -190,6 +197,7 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 			}
 		}
 	}
+
 
 	if loadedManifest == nil || len(loadedManifest.Files) == 0 {
 		trace := parsedLua.AuditTrace
@@ -269,7 +277,11 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		return nil, fmt.Errorf("manifest cannot be nil")
 	}
 
+	manifestCopy := *m
+	m = &manifestCopy
+
 	targetDir := opts.TargetDir
+
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -280,7 +292,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	}
 
 	if len(m.Files) == 0 {
-		loadedManifest, err := manifest.LoadManifestFromDirWithKeys(absTargetDir, opts.AppID, m.DepotKeys)
+		loadedManifest, err := manifest.LoadManifestFromDirWithPlatform(absTargetDir, opts.AppID, m.DepotKeys, opts.Platform)
 		if err == nil && loadedManifest != nil && len(loadedManifest.Files) > 0 {
 			m.Files = loadedManifest.Files
 			if m.DepotID == 0 {
@@ -289,9 +301,25 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			if len(m.DepotKeys) == 0 && len(loadedManifest.DepotKeys) > 0 {
 				m.DepotKeys = loadedManifest.DepotKeys
 			}
-			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID)
+			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID, "platform", opts.Platform)
+		}
+	} else if opts.Platform != "" && opts.Platform != "all" {
+		depotFiles := make(map[uint32][]manifest.ManifestFileEntry)
+		for _, f := range m.Files {
+			depotFiles[f.DepotID] = append(depotFiles[f.DepotID], f)
+		}
+		var filtered []manifest.ManifestFileEntry
+		for _, files := range depotFiles {
+			cat := manifest.ClassifyDepot(files)
+			if manifest.MatchesPlatform(cat, opts.Platform) {
+				filtered = append(filtered, files...)
+			}
+		}
+		if len(filtered) > 0 {
+			m.Files = filtered
 		}
 	}
+
 
 	if len(m.Files) == 0 {
 		trace := opts.AuditTrace
@@ -355,41 +383,6 @@ func isDirectoryEntry(entry manifest.ManifestFileEntry) bool {
 	return (entry.Flags&0x40) != 0 || strings.HasSuffix(entry.Path, "/") || strings.HasSuffix(entry.Path, "\\")
 }
 
-func detectSingleRootPrefix(files []manifest.ManifestFileEntry, targetDirName string) string {
-	if len(files) == 0 {
-		return ""
-	}
-	var firstRoot string
-	for _, f := range files {
-		clean := manifest.NormalizePath(f.Path)
-		if clean == "" || clean == "." {
-			continue
-		}
-		parts := strings.Split(clean, "/")
-		if len(parts) <= 1 {
-			if !isDirectoryEntry(f) {
-				return ""
-			}
-			continue
-		}
-		root := parts[0]
-		if firstRoot == "" {
-			firstRoot = root
-		} else if firstRoot != root {
-			return ""
-		}
-	}
-
-	if firstRoot != "" && targetDirName != "" {
-		sanitizedRoot := util.SanitizeInstallDir(firstRoot)
-		sanitizedTarget := util.SanitizeInstallDir(targetDirName)
-		if strings.EqualFold(sanitizedRoot, sanitizedTarget) || strings.EqualFold(firstRoot, targetDirName) {
-			return firstRoot
-		}
-	}
-	return ""
-}
-
 func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir string, req DownloadRequest, httpClient *http.Client, rankedHosts []string) (*Result, error) {
 	workerLimit := req.WorkerLimit
 	if workerLimit <= 0 {
@@ -413,23 +406,6 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	checkpointFile := filepath.Join(manifestsDir, ".gamux-checkpoint.json")
 	cp := loadCheckpoint(checkpointFile)
 
-	targetBase := filepath.Base(absTargetDir)
-	singleRoot := detectSingleRootPrefix(m.Files, targetBase)
-	if singleRoot != "" {
-		slog.Info("Detected common root wrapper in manifest; normalizing paths", "rootPrefix", singleRoot)
-	}
-
-	normalizeEntryPath := func(p string) string {
-		norm := manifest.NormalizePath(p)
-		if singleRoot != "" {
-			if norm == singleRoot {
-				return ""
-			}
-			norm = strings.TrimPrefix(norm, singleRoot+"/")
-		}
-		return norm
-	}
-
 	if !req.DryRun {
 		if err := os.MkdirAll(absTargetDir, 0755); err != nil {
 			return nil, fmt.Errorf("create target directory %s: %w", absTargetDir, err)
@@ -438,7 +414,7 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 
 		// Pre-create all directories sequentially on main thread
 		for _, entry := range m.Files {
-			relPath := normalizeEntryPath(entry.Path)
+			relPath := manifest.NormalizePath(entry.Path)
 			if relPath == "" {
 				continue
 			}
@@ -513,7 +489,7 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 
 	for _, fileEntry := range m.Files {
 		entry := fileEntry
-		relPath := normalizeEntryPath(entry.Path)
+		relPath := manifest.NormalizePath(entry.Path)
 		if relPath == "" && isDirectoryEntry(entry) {
 			continue
 		}
@@ -532,26 +508,6 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 			// Skip directory entries in download loop
 			if isDirectoryEntry(entry) {
 				return nil
-			}
-
-			// Filter out mismatched platform files if specific platform selected
-			normPath := strings.ToLower(entry.Path)
-			plat := strings.ToLower(req.Platform)
-			if plat == "linux" {
-				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".dylib") || strings.HasSuffix(normPath, ".app") {
-					slog.Debug("Filtering out non-Linux file for Linux target", "path", entry.Path)
-					return nil
-				}
-			} else if plat == "win64" || plat == "win32" {
-				if strings.HasSuffix(normPath, ".so") || strings.HasSuffix(normPath, ".dylib") {
-					slog.Debug("Filtering out non-Windows library for Windows PE target", "path", entry.Path)
-					return nil
-				}
-			} else if plat == "osx" || plat == "macos" {
-				if strings.HasSuffix(normPath, ".exe") || strings.HasSuffix(normPath, ".dll") || strings.HasSuffix(normPath, ".so") {
-					slog.Debug("Filtering out non-macOS file for macOS target", "path", entry.Path)
-					return nil
-				}
 			}
 
 			needsDownload := false

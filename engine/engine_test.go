@@ -7,13 +7,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
@@ -473,8 +476,8 @@ func TestEngine_LaunchProfileAndOperatingMode(t *testing.T) {
 		t.Fatalf("InspectStatus failed: %v", err)
 	}
 
-	if status.OperatingMode != "standalone" {
-		t.Errorf("expected OperatingMode standalone, got %s", status.OperatingMode)
+	if status.EffectiveOperatingMode() != "standalone" {
+		t.Errorf("expected OperatingMode standalone, got %s", status.EffectiveOperatingMode())
 	}
 	if !status.IsReady {
 		t.Errorf("expected game with executable to be ready in standalone mode")
@@ -499,9 +502,340 @@ func TestEngine_LaunchProfileAndOperatingMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InspectStatus after profile save failed: %v", err)
 	}
-	if filepath.Base(statusAfter.ExePath) != "game.x86_64" {
-		t.Errorf("expected status ExePath game.x86_64, got %s", statusAfter.ExePath)
+	if filepath.Base(statusAfter.EffectiveExePath()) != "game.x86_64" {
+		t.Errorf("expected status ExePath game.x86_64, got %s", statusAfter.EffectiveExePath())
 	}
 }
+
+func TestEngine_SaveLaunchProfile_SyncsDRMFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	x64Release := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(x64Release, 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steam_api64.dll"), []byte("emulated_gbe_dll"), 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steamclient64.dll"), []byte("emulated_steamclient_dll"), 0755)
+
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("loader_steamclient64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient.dll"), []byte("loader_steamclient32"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer64.dll"), []byte("loader_overlay64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer.dll"), []byte("loader_overlay32"), 0755)
+
+	cfg := config.DefaultConfig()
+	cfg.GbeDir = gbeDir
+	cfg.OperatingMode = domain.ModeLoader
+	eng := New(cfg)
+
+	gameExe := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(gameExe, []byte("MZ"), 0755)
+	libPath := filepath.Join(tmpDir, "steam_api64.dll")
+	_ = os.WriteFile(libPath, []byte("pristine_steam_lib"), 0755)
+
+	// 1. Save profile with Portable mode -> should backup and replace steam_api64.dll
+	err := eng.SaveLaunchProfile(context.Background(), tmpDir, runner.LaunchOptions{
+		GameDir:       tmpDir,
+		AppID:         "200710",
+		Platform:      "win64",
+		OperatingMode: domain.ModePortable,
+		ExePath:       "game.exe",
+	})
+	if err != nil {
+		t.Fatalf("SaveLaunchProfile(portable) failed: %v", err)
+	}
+
+	data, _ := os.ReadFile(libPath)
+	if string(data) != "emulated_gbe_dll" {
+		t.Fatalf("expected emulated lib in portable mode, got: %s", string(data))
+	}
+	entries, _ := os.ReadDir(tmpDir)
+	var foundBackup bool
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".ORIGINAL") {
+			foundBackup = true
+			break
+		}
+	}
+	if !foundBackup {
+		t.Fatalf("expected .ORIGINAL backup file after saving portable profile")
+	}
+
+	// 2. Save profile with Loader mode -> should restore .ORIGINAL and create loader symlinks
+	err = eng.SaveLaunchProfile(context.Background(), tmpDir, runner.LaunchOptions{
+		GameDir:       tmpDir,
+		AppID:         "200710",
+		Platform:      "win64",
+		OperatingMode: domain.ModeLoader,
+		ExePath:       "game.exe",
+	})
+	if err != nil {
+		t.Fatalf("SaveLaunchProfile(loader) failed: %v", err)
+	}
+
+	restoredData, _ := os.ReadFile(libPath)
+	if string(restoredData) != "pristine_steam_lib" {
+		t.Fatalf("expected pristine lib restored after saving loader profile, got: %s", string(restoredData))
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "steamclient64.dll")); err != nil {
+		t.Fatalf("expected steamclient64.dll symlink to exist in loader mode")
+	}
+
+	// 3. Save profile with None mode -> should remove loader symlinks
+	err = eng.SaveLaunchProfile(context.Background(), tmpDir, runner.LaunchOptions{
+		GameDir:       tmpDir,
+		AppID:         "200710",
+		Platform:      "win64",
+		OperatingMode: domain.ModeNone,
+		ExePath:       "game.exe",
+	})
+	if err != nil {
+		t.Fatalf("SaveLaunchProfile(none) failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "steamclient64.dll")); err == nil {
+		t.Fatalf("expected steamclient64.dll to be removed in None mode")
+	}
+}
+
+
+func TestEngine_GetGameAchievements_GSE(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	// Create steam_settings/achievements.json
+	settingsDir := filepath.Join(tmpDir, "steam_settings")
+	_ = os.MkdirAll(settingsDir, 0755)
+
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("846770\n"), 0644)
+
+	schemaJSON := `[
+		{
+			"name": "GATEKEEPER",
+			"displayName": "Gatekeeper",
+			"description": "Beat the Gatekeeper.",
+			"hidden": 0,
+			"icon": "img/gatekeeper.jpg",
+			"icongray": "img/gatekeeper_gray.jpg"
+		},
+		{
+			"name": "BOSS_LAW",
+			"displayName": "Law",
+			"description": "Defeat Law",
+			"hidden": 1,
+			"icon": "img/boss_law.jpg",
+			"icongray": "img/boss_law_gray.jpg"
+		}
+	]`
+	_ = os.WriteFile(filepath.Join(settingsDir, "achievements.json"), []byte(schemaJSON), 0644)
+
+	// Create unlocked JSON in steam_settings/achievements_unlocked.json
+	unlockedJSON := `{
+		"GATEKEEPER": {
+			"earned": true,
+			"earned_time": 1787349287
+		},
+		"BOSS_LAW": {
+			"earned": false,
+			"earned_time": 0
+		}
+	}`
+	_ = os.WriteFile(filepath.Join(settingsDir, "achievements_unlocked.json"), []byte(unlockedJSON), 0644)
+
+	achievements, err := eng.GetGameAchievements(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("GetGameAchievements failed: %v", err)
+	}
+
+	if len(achievements) != 2 {
+		t.Fatalf("expected 2 achievements, got %d", len(achievements))
+	}
+
+	var gatekeeper, bossLaw *domain.AchievementItem
+	for i := range achievements {
+		if achievements[i].ID == "GATEKEEPER" {
+			gatekeeper = &achievements[i]
+		} else if achievements[i].ID == "BOSS_LAW" {
+			bossLaw = &achievements[i]
+		}
+	}
+
+	if gatekeeper == nil || !gatekeeper.Unlocked || gatekeeper.UnlockTime != 1787349287 {
+		t.Errorf("expected GATEKEEPER to be unlocked with timestamp 1787349287, got %+v", gatekeeper)
+	}
+
+	if bossLaw == nil || bossLaw.Unlocked || bossLaw.UnlockTime != 0 {
+		t.Errorf("expected BOSS_LAW to be locked, got %+v", bossLaw)
+	}
+}
+
+func TestEngine_GetGameAchievements_RealDysmantle(t *testing.T) {
+	dysmantleDir := "/home/staernid/Games/DYSMANTLE"
+	if !util.FileExists(dysmantleDir) {
+		t.Skip("Dysmantle directory not present on host")
+	}
+
+	eng := New(nil)
+	achievements, err := eng.GetGameAchievements(context.Background(), dysmantleDir)
+	if err != nil {
+		t.Fatalf("GetGameAchievements on Dysmantle failed: %v", err)
+	}
+
+	if len(achievements) == 0 {
+		t.Fatalf("expected Dysmantle to have achievements, got 0")
+	}
+
+	unlockedCount := 0
+	for _, ach := range achievements {
+		if ach.Unlocked {
+			unlockedCount++
+		}
+	}
+
+	if unlockedCount == 0 {
+		t.Errorf("expected Dysmantle to have unlocked achievements, got 0 out of %d", len(achievements))
+	}
+
+	t.Logf("Dysmantle: found %d total achievements, %d unlocked!", len(achievements), unlockedCount)
+}
+
+func TestEngine_GetGameDepots(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	depots, err := eng.GetGameDepots(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("GetGameDepots failed: %v", err)
+	}
+	if len(depots) != 0 {
+		t.Errorf("expected 0 depots for empty dir, got %d", len(depots))
+	}
+}
+
+func TestEngine_SwitchGamePlatform(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	// Create dummy game files
+	_ = os.WriteFile(filepath.Join(tmpDir, "game.exe"), []byte("MZ"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "game.bin.x86_64"), []byte("ELF"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("41500"), 0644)
+
+	// 1. Switch to linux
+	err := eng.SwitchGamePlatform(context.Background(), tmpDir, "linux")
+	if err != nil {
+		t.Fatalf("SwitchGamePlatform(linux) failed: %v", err)
+	}
+
+	profile, err := eng.GetLaunchProfile(context.Background(), tmpDir)
+	if err != nil || profile == nil {
+		t.Fatalf("GetLaunchProfile failed: %v", err)
+	}
+	if profile.Platform != "linux" {
+		t.Errorf("expected platform linux, got %s", profile.Platform)
+	}
+	if profile.Runner != runner.RunnerLinux {
+		t.Errorf("expected runner linux, got %s", profile.Runner)
+	}
+
+	// 2. Switch to win64
+	err = eng.SwitchGamePlatform(context.Background(), tmpDir, "win64")
+	if err != nil {
+		t.Fatalf("SwitchGamePlatform(win64) failed: %v", err)
+	}
+
+	profile, err = eng.GetLaunchProfile(context.Background(), tmpDir)
+	if err != nil || profile == nil {
+		t.Fatalf("GetLaunchProfile failed: %v", err)
+	}
+	if profile.Platform != "win64" {
+		t.Errorf("expected platform win64, got %s", profile.Platform)
+	}
+	if profile.Runner != runner.RunnerUMU {
+		t.Errorf("expected runner umu, got %s", profile.Runner)
+	}
+}
+
+func TestEngine_UninstallDepot_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	err := eng.UninstallDepot(context.Background(), tmpDir, 41502)
+	if err == nil {
+		t.Errorf("expected error when uninstalling missing depot")
+	}
+}
+
+func TestEngine_TaskOperations(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	// Create a dummy game structure
+	gameDir := filepath.Join(tmpDir, "OpTestGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("MZdummy"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_appid.txt"), []byte("480"), 0644)
+
+	// 1. Test ApplyOperation via Engine
+	taskID, err := eng.SubmitApply(ProcessOptions{
+		Path:     gameDir,
+		DryRun:   true,
+		AutoYes:  true,
+		ApplyGBE: false,
+	})
+	if err != nil {
+		t.Fatalf("SubmitApply failed: %v", err)
+	}
+	if taskID == "" {
+		t.Fatal("expected non-empty task ID")
+	}
+
+	// 2. Test NormalizeOperation via Engine
+	normID, err := eng.SubmitNormalize(gameDir)
+	if err != nil {
+		t.Fatalf("SubmitNormalize failed: %v", err)
+	}
+	if normID == "" {
+		t.Fatal("expected non-empty normalize task ID")
+	}
+
+	// 3. Test VerifyOperation via Engine
+	verifyID, err := eng.SubmitVerify(gameDir)
+	if err != nil {
+		t.Fatalf("SubmitVerify failed: %v", err)
+	}
+	if verifyID == "" {
+		t.Fatal("expected non-empty verify task ID")
+	}
+
+	// 4. Test RollbackOperation via Engine
+	rollbackID, err := eng.SubmitRollback(gameDir, true)
+	if err != nil {
+		t.Fatalf("SubmitRollback failed: %v", err)
+	}
+	if rollbackID == "" {
+		t.Fatal("expected non-empty rollback task ID")
+	}
+
+	// Wait for operations to process
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if eng.Tasks.ActiveCount() == 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Verify task records
+	t1, ok1 := eng.Tasks.Get(taskID)
+	if !ok1 || t1.Status != tasks.StatusCompleted {
+		t.Errorf("expected completed apply task, got %+v", t1)
+	}
+
+	t2, ok2 := eng.Tasks.Get(normID)
+	if !ok2 || t2.Status != tasks.StatusCompleted {
+		t.Errorf("expected completed normalize task, got %+v", t2)
+	}
+}
+
+
 
 

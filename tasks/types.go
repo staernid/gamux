@@ -3,6 +3,8 @@ package tasks
 import (
 	"context"
 	"errors"
+
+	"github.com/staernid/gamux/domain"
 )
 
 // Standard typed error modes across the seam.
@@ -86,6 +88,7 @@ type Task struct {
 	StartedAt    int64             `json:"started_at,omitempty"`
 	FinishedAt   int64             `json:"finished_at,omitempty"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
+	Game         *domain.Game      `json:"game,omitempty"`
 
 	// Run is the internal execution closure (not exported to JSON).
 	Run TaskFunc `json:"-"`
@@ -93,6 +96,15 @@ type Task struct {
 
 // TaskFunc is the execution closure executed by the worker pool.
 type TaskFunc func(ctx context.Context, ctrl *Controller) error
+
+// Operation represents a self-contained, typed executable task with its own metadata, capabilities, and execution lifecycle.
+type Operation interface {
+	// TaskSpec returns the specification describing this operation.
+	TaskSpec() TaskSpec
+
+	// Execute runs the operation within the task supervisor's controller context.
+	Execute(ctx context.Context, ctrl *Controller) error
+}
 
 // TaskSpec configures an arbitrary task submission blueprint.
 type TaskSpec struct {
@@ -105,6 +117,7 @@ type TaskSpec struct {
 	Capabilities Capability
 	Priority     int
 	Metadata     map[string]string
+	Op           Operation
 	Run          TaskFunc
 }
 

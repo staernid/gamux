@@ -242,7 +242,12 @@
                   title="Copy directory path to clipboard"
                 >
                   {#if copiedPath === loc.path}
-                    <span class="text-emerald-400 font-bold">✓ Copied</span>
+                    <span class="text-emerald-400 font-bold flex items-center space-x-1">
+                      <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Copied</span>
+                    </span>
                   {:else}
                     <span>Copy</span>
                   {/if}

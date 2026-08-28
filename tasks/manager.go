@@ -232,6 +232,9 @@ func (m *Manager) runWorker(ctx context.Context, t *Task, slot chan struct{}) {
 		if t.Stage == "" || t.Stage == "Running" {
 			t.Stage = "Completed"
 		}
+		if resGame := ctrl.ResultGame(); resGame != nil {
+			t.Game = resGame
+		}
 		taskCopy := *t
 		m.emitEvent(events.EventTaskCompleted, &taskCopy)
 	}
@@ -340,16 +343,47 @@ func (m *Manager) emitEvent(typ events.EventType, t *Task) {
 			Percent:      t.Progress.Percent,
 		},
 		Metadata:  t.Metadata,
+		Game:      t.Game,
 		Timestamp: time.Now().UnixMilli(),
 	}
 
 	m.eventSink.Emit(ev)
 }
 
+// SubmitOp enqueues a self-contained Operation into the supervisor.
+func (m *Manager) SubmitOp(op Operation) (string, error) {
+	if op == nil {
+		return "", fmt.Errorf("tasks: cannot submit nil operation")
+	}
+	spec := op.TaskSpec()
+	spec.Op = op
+	if spec.Run == nil {
+		spec.Run = op.Execute
+	}
+	return m.Submit(spec)
+}
+
+// RunSyncOp executes a self-contained Operation synchronously within the caller context.
+func (m *Manager) RunSyncOp(ctx context.Context, op Operation) error {
+	if op == nil {
+		return fmt.Errorf("tasks: cannot run nil operation")
+	}
+	spec := op.TaskSpec()
+	spec.Op = op
+	if spec.Run == nil {
+		spec.Run = op.Execute
+	}
+	return m.RunSync(ctx, spec)
+}
+
 // Submit enqueues a new task blueprint.
 func (m *Manager) Submit(spec TaskSpec) (string, error) {
 	if m.closed.Load() {
 		return "", ErrManagerClosed
+	}
+
+	if spec.Run == nil && spec.Op != nil {
+		spec.Run = spec.Op.Execute
 	}
 
 	id := spec.ID
@@ -409,6 +443,10 @@ func (m *Manager) Submit(spec TaskSpec) (string, error) {
 // RunSync executes a task blueprint synchronously within the caller context,
 // driving progress through a Controller and emitting standard progress telemetry.
 func (m *Manager) RunSync(ctx context.Context, spec TaskSpec) error {
+	if spec.Run == nil && spec.Op != nil {
+		spec.Run = spec.Op.Execute
+	}
+
 	id := spec.ID
 	if id == "" {
 		prefix := string(spec.Type)

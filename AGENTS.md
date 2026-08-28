@@ -4,32 +4,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ## Project Overview & Architecture
 
-`gamux` is a post-download Steam game manager for Linux (DRM removal via Goldberg Emulator, direct host runners via UMU/Wine/Proton, and artwork management).
-
-### Package Layout
-- [`cache`](file:///home/staernid/projects/gamux/cache): Fast disk and in-memory TTL caching for Steam game metadata, AppIDs, and patch note changelogs.
-- [`cmd/gamux`](file:///home/staernid/projects/gamux/cmd/gamux): CLI entry point (`bin/gamux`), flag definitions, and interactive terminal subcommands.
-- [`cmd/gamux-gui`](file:///home/staernid/projects/gamux/cmd/gamux-gui): Wails desktop application entry point (`bin/gamux-gui`).
-- [`config`](file:///home/staernid/projects/gamux/config): Global shared configuration loading (`config.json`), default paths, and data models.
-- [`detector`](file:///home/staernid/projects/gamux/detector): Game directory scanner, AppID detection (via ACF manifests / `steam_appid.txt`), platform inspection (Linux native vs. Windows PE via Wine/Proton).
-- [`domain`](file:///home/staernid/projects/gamux/domain): Canonical entity models (`domain.Game`) and domain state helpers (`IsClean`, `HasBackups`, `IsLoaderConfigured`).
-- [`downloader`](file:///home/staernid/projects/gamux/downloader): High-level multi-depot downloader orchestrating key retrieval, manifest decryption, and chunk downloads.
-- [`engine`](file:///home/staernid/projects/gamux/engine): High-level orchestrator coordinating game scanning, pipeline stage dispatching, and library queries.
-- [`events`](file:///home/staernid/projects/gamux/events): Thread-safe pub/sub broker (`events.Bus`) distributing typed lifecycle events (`task:started`, `task:progress`, `task:stage_change`, `task:completed`, `task:failed`, `task:cancelled`).
-- [`frontend`](file:///home/staernid/projects/gamux/frontend): Svelte 5 / Vite desktop UI with reactive task queues, Steam Deck-optimized navigation, and Vitest test suite.
-- [`gbe`](file:///home/staernid/projects/gamux/gbe): Goldberg Steam Emulator setup (DLL/SO patching, loader env vars, DLC configuration, steam_settings generation).
-- [`github`](file:///home/staernid/projects/gamux/github): GitHub API client for fetching and updating GBE fork release assets.
-- [`gui`](file:///home/staernid/projects/gamux/gui): Wails desktop bridge adapter communicating between Go engine/events/tasks and the WebKit frontend.
-- [`tasks`](file:///home/staernid/projects/gamux/tasks): Unified background task supervisor (`tasks.Manager`) managing concurrency limits, task lifecycles, and cooperative context cancellation.
-- [`manifest`](file:///home/staernid/projects/gamux/manifest): Depot manifest parsing, Lua/RevoBD/SteamDepotDB key resolution, file checksum verification, and integrity reporting.
-- [`pipeline`](file:///home/staernid/projects/gamux/pipeline): Composable game setup pipeline and stages (`pipeline.Stage`, `pipeline.Pipeline`, `pipeline.Context`).
-- [`runner`](file:///home/staernid/projects/gamux/runner): Subprocess management, launch profile persistence (`steam_settings/launch_profile.json`), runner construction (Wine, Proton, UMU, Linux native), and process supervision.
-- [`steam`](file:///home/staernid/projects/gamux/steam): Steam Web & Store API client for AppID searching, DLC metadata fetching, changelogs, and grid artwork downloads.
-- [`steamless`](file:///home/staernid/projects/gamux/steamless): Steamless-rs automated extraction and SteamStub DRM executable unpacking.
-- [`store`](file:///home/staernid/projects/gamux/store): Store catalog registry, multi-tier artwork waterfall, and provider adapters.
-- [`tools`](file:///home/staernid/projects/gamux/tools): Modular post-processing tool manager and update inspector.
-- [`ui`](file:///home/staernid/projects/gamux/ui): CLI dashboards, guided wizards, help formatters, and terminal progress indicators.
-- [`util`](file:///home/staernid/projects/gamux/util): File utilities (backup & atomic replacement, archive extraction, hash calculation, process execution).
+`gamux` is a game manager for Linux (DRM removal, direct host runners via UMU/Wine/Proton, artwork management, savegame management).
 
 ---
 
@@ -68,71 +43,6 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ---
 
-## Architectural Patterns & Concrete Recipes
-
-### Recipe 1: Adding a New Game Operation Step
-Implement a `pipeline.Stage` (and optionally `pipeline.RollbackableStage`) in [`pipeline/stages_impl.go`](file:///home/staernid/projects/gamux/pipeline/stages_impl.go):
-
-```go
-type MyCustomStage struct{}
-
-func (s *MyCustomStage) Name() string {
-    return "My Custom Setup Step"
-}
-
-func (s *MyCustomStage) Execute(ctx context.Context, pctx *Context) error {
-    if pctx.DryRun {
-        slog.Info("[DRY RUN] Would execute custom step", "game", pctx.Game.Name)
-        return nil
-    }
-    // Perform mutations or checks against pctx.Game
-    return nil
-}
-
-// Optional rollback on downstream stage failure:
-func (s *MyCustomStage) Rollback(ctx context.Context, pctx *Context) error {
-    slog.Info("Reverting custom setup step", "game", pctx.Game.Name)
-    return nil
-}
-```
-
-### Recipe 2: Submitting a Background Asynchronous Task
-Submit a `tasks.TaskSpec` to the supervisor via `e.Tasks`:
-
-```go
-taskID, err := e.Tasks.Submit(tasks.TaskSpec{
-    Type:         tasks.TypeDownload,
-    Title:        "Download Cyberpunk 2077",
-    GameName:     "Cyberpunk 2077",
-    GameDir:      targetDir,
-    AppID:        "1091500",
-    Capabilities: tasks.CapCancellable | tasks.CapPausable | tasks.CapBandwidthLimit,
-    Run: func(ctx context.Context, ctrl *tasks.Controller) error {
-        ctrl.ReportStage("Downloading Chunks", "Connecting to Steam CDN...")
-        ctrl.ReportProgress(10485760, 209715200, 5, 100, 5000000, 40, 5.0)
-        return nil
-    },
-})
-```
-
-### Recipe 3: Testing Network Clients Safely
-Inject scoped mock HTTP clients through `context.Context` without modifying global state:
-
-```go
-mockClient := testutil.NewMockHTTPClient(func(req *http.Request) (*http.Response, error) {
-    return &http.Response{
-        StatusCode: http.StatusOK,
-        Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
-        Header:     make(http.Header),
-    }, nil
-})
-
-ctx := steam.WithHTTPClient(context.Background(), mockClient)
-// All downstream Steam API calls using ctx will now use mockClient safely in parallel
-```
-
----
-
 ## Core Conventions
 
 1. **Logging Strategy**:
@@ -166,10 +76,10 @@ ctx := steam.WithHTTPClient(context.Background(), mockClient)
 When touching anything under `frontend/` or the Wails bridge in `gui/`:
 
 ### The Mandatory 4-Stage GUI Diagnostic Gate
-Before making code edits on any GUI bug or async lifecycle issue:
+Before making code edits on GUI bugs or async lifecycle issues:
 
 1. **Phase 1: Trace Before Touch**:
-   - Do NOT guess or blindly edit code.
+   - Try not to guess or blindly edit code.
    - Run `npm run gui:dump` (or `make gui-dump`) to inspect current store snapshots and event timelines.
    - Run `npm run gui:trace -- <scenario>` (or `make gui-trace`) to simulate the failing lifecycle and view the step-by-step event reduction table.
    - Evaluate expressions interactively via `npm run gui:eval -- "window.__GAMUX_DEV__.<expr>"`.
@@ -187,11 +97,10 @@ Before making code edits on any GUI bug or async lifecycle issue:
    - Add or update scenario/store tests in `frontend/src/debug/debug.test.js` or `frontend/src/**/*.test.js`.
 
 4. **Phase 4: Visual & Invariant Verification Gate**:
-   - Every GUI change MUST pass:
-     - **Step 1 (Check)**: `cd frontend && npm run check` (Svelte type & syntax validation).
-     - **Step 2 (Audit & Test)**: `make test-frontend` (Vitest test suite + automated invariant audit).
-     - **Step 3 (Visual Snapshot)**: `make gui-snap` $\rightarrow$ inspect generated `.gui-snapshots/*.png` with `view_file` to visually verify UI alignment and states.
-     - **Step 4 (Build)**: `make build-gui` (Full asset bundling and Go WebKit binary compilation).
+     - **Check**: `cd frontend && npm run check` (Svelte type & syntax validation).
+     - **Audit & Test**: `make test-frontend` (Vitest test suite + automated invariant audit).
+     - **Visual Snapshot**: `make gui-snap` $\rightarrow$ inspect generated `.gui-snapshots/*.png` with `view_file` to visually verify UI alignment and states.
+     - **Build**: `make build-gui` (Full asset bundling and Go WebKit binary compilation).
 
 ---
 
@@ -218,4 +127,3 @@ make test-frontend     # Run frontend Vitest suite and GUI invariant audit
 make lint              # Run go vet and svelte-check
 make build             # Compile bin/gamux and bin/gamux-gui
 ```
-

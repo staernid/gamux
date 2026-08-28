@@ -20,6 +20,7 @@ const (
 const (
 	ModePortable   = "portable"
 	ModeLoader     = "loader"
+	ModeNone       = "none"
 	ModeNative     = "native"
 	ModeStandalone = "standalone"
 )
@@ -31,6 +32,27 @@ const (
 	RunnerWine   = "wine"
 	RunnerProton = "proton"
 	RunnerLinux  = "linux"
+)
+
+// GameSource represents how and where the game is installed and run.
+type GameSource = string
+
+const (
+	SourceSteam      GameSource = StoreSteam
+	SourceGOG        GameSource = StoreGOG
+	SourceEpic       GameSource = StoreEpic
+	SourceItch       GameSource = StoreItch
+	SourceStandalone GameSource = StoreStandalone
+	SourceCustom     GameSource = StoreCustom
+)
+
+// Canonical asset types
+const (
+	AssetCover  = "cover"
+	AssetBanner = "banner"
+	AssetHero   = "hero"
+	AssetLogo   = "logo"
+	AssetIcon   = "icon"
 )
 
 // LaunchCandidate represents an executable or configured launch target in a game directory.
@@ -52,6 +74,18 @@ type NewsItem struct {
 	Date      int64  `json:"date"`
 	FeedName  string `json:"feedname,omitempty"`
 	AppID     uint32 `json:"appid,omitempty"`
+}
+
+// AchievementItem represents a game achievement with metadata and unlock status.
+type AchievementItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IconURL     string `json:"icon_url"`
+	IconGrayURL string `json:"icon_gray_url"`
+	Hidden      bool   `json:"hidden"`
+	Unlocked    bool   `json:"unlocked"`
+	UnlockTime  int64  `json:"unlock_time,omitempty"`
 }
 
 // ArtworkOption represents a selectable artwork asset candidate discovered from a metadata provider.
@@ -78,62 +112,28 @@ type ArtworkQuery struct {
 	AssetType  string `json:"asset_type"` // "cover", "banner", "hero", "logo", "icon"
 }
 
-// LaunchProfile defines execution overrides and runtime environment settings for a game.
-type LaunchProfile struct {
-	GameDir           string            `json:"game_dir"`
-	AppID             string            `json:"app_id,omitempty"`
-	Name              string            `json:"name,omitempty"`
-	Platform          string            `json:"platform,omitempty"`       // "linux", "win64", "win32"
-	ExePath           string            `json:"exe_path"`
-	ExeArgs           string            `json:"exe_args,omitempty"`
-	OperatingMode     string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native"
-	Runner            string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
-	WinePrefix        string            `json:"wine_prefix,omitempty"`
-	ProtonPath        string            `json:"proton_path,omitempty"`
-	Language          string            `json:"language,omitempty"`
-	MangoHud          *bool             `json:"mangohud,omitempty"`
-	DXVKHud           string            `json:"dxvk_hud,omitempty"`
-	WineFullscreenFSR *bool             `json:"wine_fullscreen_fsr,omitempty"`
-	ProtonNVAPI       *bool             `json:"proton_nvapi,omitempty"`
-	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
-	CustomEnv         map[string]string `json:"custom_env,omitempty"`
-	WorkingDir        string            `json:"working_dir,omitempty"`
-
-	// Store & Metadata bindings
-	Store           string `json:"store,omitempty"`
-	StoreAppID      string `json:"store_app_id,omitempty"`
-	GOGID           string `json:"gog_id,omitempty"`
-	SGDBID          string `json:"sgdb_id,omitempty"`
-	CustomCoverURL  string `json:"custom_cover_url,omitempty"`
-	CustomBannerURL string `json:"custom_banner_url,omitempty"`
-	CustomHeroURL   string `json:"custom_hero_url,omitempty"`
-	CustomLogoURL   string `json:"custom_logo_url,omitempty"`
-	CustomIconURL   string `json:"custom_icon_url,omitempty"`
-	LockedArtwork   bool   `json:"locked_artwork,omitempty"`
+// ExternalIDs tracks cross-platform and database identifiers for a game.
+type ExternalIDs struct {
+	SteamAppID uint32 `json:"steam_appid,omitempty"`
+	GOGID      string `json:"gog_id,omitempty"`
+	EpicApp    string `json:"epic_app,omitempty"`
+	SGDBID     string `json:"sgdb_id,omitempty"`
+	RAWGID     string `json:"rawg_id,omitempty"`
+	IGDBID     string `json:"igdb_id,omitempty"`
 }
 
-// ---------------------------------------------------------------------------
-// Focused sub-structs — each cluster of fields has exactly one producer and
-// one consumer. Embedded in Game for backward-compatible flat field access
-// and JSON serialization.
-// ---------------------------------------------------------------------------
-
-// InspectionResult holds filesystem scan and integration status for a game directory.
-// Produced by engine.InspectLocal; consumed by CLI/GUI status displays.
-type InspectionResult struct {
-	OriginalBackups    []string `json:"original_backups,omitempty"`
-	SettingsDirExists  bool     `json:"settings_dir_exists"`
-	SteamAppIDTxtFound bool     `json:"steam_appid_txt_found"`
-	CurrentLanguage    string   `json:"current_language,omitempty"`
-	SupportedLanguages []string `json:"supported_languages,omitempty"`
-	DiskSizeBytes      int64    `json:"disk_size_bytes"`
-	FileCount          int      `json:"file_count"`
-	DLCCount           int      `json:"dlc_count"`
-	AchievementCount   int      `json:"achievement_count"`
+// DepotSummary encapsulates metadata and disk installation state for a single Steam content depot.
+type DepotSummary struct {
+	DepotID    uint32 `json:"depot_id"`
+	Name       string `json:"name"`
+	Category   string `json:"category"` // "common", "windows", "linux", "macos", "soundtrack"
+	Installed  bool   `json:"installed"`
+	Size       uint64 `json:"size"`
+	FileCount  int    `json:"file_count"`
+	ManifestID uint64 `json:"manifest_id"`
 }
 
 // ManifestStatus holds depot manifest and file integrity state.
-// Produced by manifest verification; consumed by update checks and integrity UI.
 type ManifestStatus struct {
 	ManifestID        string   `json:"manifest_id,omitempty"`
 	BuildID           string   `json:"build_id,omitempty"`
@@ -148,51 +148,10 @@ type ManifestStatus struct {
 }
 
 // StoreMetadata holds store-sourced remote metadata (news, patch notes).
-// Produced by Steam API fetches; consumed by news/changelog UI.
 type StoreMetadata struct {
 	RecentPatchNote string     `json:"recent_patch_note,omitempty"`
 	NewsItems       []NewsItem `json:"news_items,omitempty"`
 }
-
-// ReadinessStatus holds computed lifecycle flags derived from inspection data.
-// Produced by RecomputeState; consumed by ready-state badges in CLI/GUI.
-type ReadinessStatus struct {
-	State              string `json:"state"` // "Original", "Loader-Configured", "Portable-Patched"
-	IsPatched          bool   `json:"is_patched"`
-	IsPortable         bool   `json:"is_portable"`
-	HasUpdatesOrIssues bool   `json:"has_updates_or_issues"`
-	IsReady            bool   `json:"is_ready"`
-}
-
-// GameSource represents how and where the game is installed and run.
-type GameSource = string
-
-const (
-	SourceSteam      GameSource = StoreSteam
-	SourceGOG        GameSource = StoreGOG
-	SourceEpic       GameSource = StoreEpic
-	SourceItch       GameSource = StoreItch
-	SourceStandalone GameSource = StoreStandalone
-	SourceCustom     GameSource = StoreCustom
-)
-
-// ExternalIDs tracks cross-platform and database identifiers for a game.
-type ExternalIDs struct {
-	SteamAppID uint32 `json:"steam_appid,omitempty"`
-	GOGID      string `json:"gog_id,omitempty"`
-	EpicApp    string `json:"epic_app,omitempty"`
-	SGDBID     string `json:"sgdb_id,omitempty"`
-	IGDBID     string `json:"igdb_id,omitempty"`
-}
-
-// Canonical asset types
-const (
-	AssetCover  = "cover"
-	AssetBanner = "banner"
-	AssetHero   = "hero"
-	AssetLogo   = "logo"
-	AssetIcon   = "icon"
-)
 
 // AssetLocation encapsulates paths and URLs for a specific graphical asset.
 type AssetLocation struct {
@@ -226,41 +185,111 @@ type GameArtwork struct {
 	LockedArtwork   bool   `json:"locked_artwork,omitempty"`
 }
 
+// ---------------------------------------------------------------------------
+// 1. Dedicated Model: GameRecord (Static Identity & On-Disk Inventory)
+// ---------------------------------------------------------------------------
+
+// GameRecord captures the immutable on-disk identity, directory layout, and inventory metrics of an installed game.
+type GameRecord struct {
+	GameDir            string            `json:"game_dir"`
+	AppID              string            `json:"app_id"`
+	NumericAppID       uint32            `json:"numeric_app_id"`
+	Name               string            `json:"name"`
+	InstallDir         string            `json:"install_dir,omitempty"`
+	Store              string            `json:"store"`  // "Steam", "GOG", "Epic", "Itch", "Standalone", "Custom"
+	Source             GameSource        `json:"source"` // Canonical distribution source
+	Platform           string            `json:"platform"` // "linux", "win64", "win32"
+	ExternalIDs        `json:",inline"`
+	DiskSizeBytes      int64             `json:"disk_size_bytes"`
+	FileCount          int               `json:"file_count"`
+	DLCCount           int               `json:"dlc_count,omitempty"`
+	AchievementCount   int               `json:"achievement_count,omitempty"`
+	LaunchCandidates   []LaunchCandidate `json:"launch_candidates,omitempty"`
+	Depots             []DepotSummary    `json:"depots,omitempty"`
+	AvailablePlatforms []string          `json:"available_platforms,omitempty"`
+	SupportedLanguages []string          `json:"supported_languages,omitempty"`
+	TargetLibPath      string            `json:"target_lib_path,omitempty"`
+	ManifestPath       string            `json:"manifest_path,omitempty"`
+	RawDepotLayout     bool              `json:"raw_depot_layout,omitempty"`
+	ExePath            string            `json:"exe_path,omitempty"` // Detected default primary executable
+	ExeArgs            string            `json:"exe_args,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// 2. Dedicated Model: LaunchProfile (Persistent User Configuration)
+// ---------------------------------------------------------------------------
+
+// LaunchProfile defines execution overrides and runtime environment settings for a game,
+// persisted atomically to <gameDir>/steam_settings/launch_profile.json.
+type LaunchProfile struct {
+	GameDir           string            `json:"game_dir"`
+	AppID             string            `json:"app_id,omitempty"`
+	Name              string            `json:"name,omitempty"`
+	Platform          string            `json:"platform,omitempty"`       // "linux", "win64", "win32"
+	ExePath           string            `json:"exe_path"`
+	ExeArgs           string            `json:"exe_args,omitempty"`
+	OperatingMode     string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native" | "none"
+	Runner            string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
+	WinePrefix        string            `json:"wine_prefix,omitempty"`
+	ProtonPath        string            `json:"proton_path,omitempty"`
+	Language          string            `json:"language,omitempty"`
+	MangoHud          *bool             `json:"mangohud,omitempty"`
+	DXVKHud           string            `json:"dxvk_hud,omitempty"`
+	WineFullscreenFSR *bool             `json:"wine_fullscreen_fsr,omitempty"`
+	ProtonNVAPI       *bool             `json:"proton_nvapi,omitempty"`
+	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
+	CustomEnv         map[string]string `json:"custom_env,omitempty"`
+	WorkingDir        string            `json:"working_dir,omitempty"`
+
+	// Store & Metadata bindings
+	Store            string `json:"store,omitempty"`
+	StoreAppID       string `json:"store_app_id,omitempty"`
+	SourceOverride   string `json:"source_override,omitempty"`
+	MetadataProvider string `json:"metadata_provider,omitempty"`
+	MetadataID       string `json:"metadata_id,omitempty"`
+	GOGID            string `json:"gog_id,omitempty"`
+	SGDBID           string `json:"sgdb_id,omitempty"`
+	CustomCoverURL   string `json:"custom_cover_url,omitempty"`
+	CustomBannerURL  string `json:"custom_banner_url,omitempty"`
+	CustomHeroURL    string `json:"custom_hero_url,omitempty"`
+	CustomLogoURL    string `json:"custom_logo_url,omitempty"`
+	CustomIconURL    string `json:"custom_icon_url,omitempty"`
+	LockedArtwork    bool   `json:"locked_artwork,omitempty"`
+	PlaytimeSeconds  int64  `json:"playtime_seconds,omitempty"`
+	LastPlayed       int64  `json:"last_played,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// 3. Dedicated Model: ReadinessStatus (Computed Health & Integration State)
+// ---------------------------------------------------------------------------
+
+// ReadinessStatus holds computed operational flags derived from inspection data and configurations.
+type ReadinessStatus struct {
+	State              string   `json:"state"` // "Original", "Loader-Configured", "Portable-Patched"
+	IsPatched          bool     `json:"is_patched"`
+	IsPortable         bool     `json:"is_portable"`
+	HasUpdatesOrIssues bool     `json:"has_updates_or_issues"`
+	IsReady            bool     `json:"is_ready"`
+	OriginalBackups    []string `json:"original_backups,omitempty"`
+	SettingsDirExists  bool     `json:"settings_dir_exists"`
+	SteamAppIDTxtFound bool     `json:"steam_appid_txt_found"`
+	CurrentLanguage    string   `json:"current_language,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// Unified Domain Aggregate: Game
+// ---------------------------------------------------------------------------
+
 // Game is the canonical entity representing a managed game installation.
-// Sub-structs are embedded for flat field access and backward-compatible JSON.
+// It composes the static on-disk record, user launch configuration, computed readiness,
+// manifest integrity status, store metadata, and graphical assets.
 type Game struct {
-	// Core identity
-	AppID            string            `json:"app_id"`
-	NumericAppID     uint32            `json:"numeric_app_id"`
-	Name             string            `json:"name"`
-	InstallDir       string            `json:"install_dir,omitempty"`
-	Store            string            `json:"store"`  // "Steam", "GOG", "Epic", "Itch", "Standalone", "Custom"
-	Source           GameSource        `json:"source"` // Canonical distribution source
-	GameDir          string            `json:"game_dir"`
-	Platform         string            `json:"platform"` // "linux", "win64", "win32"
-
-	// Executable & launch configuration
-	ExePath          string            `json:"exe_path"`
-	ExeArgs          string            `json:"exe_args,omitempty"`
-	LaunchCandidates []LaunchCandidate `json:"launch_candidates,omitempty"`
-	LaunchProfile    *LaunchProfile    `json:"launch_profile,omitempty"`
-	OperatingMode    string            `json:"operating_mode,omitempty"`
-	Runner           string            `json:"runner,omitempty"`
-	WinePrefix       string            `json:"wine_prefix,omitempty"`
-	DllOverrides     string            `json:"dll_overrides,omitempty"`
-
-	// Detection & patching
-	TargetLibPath  string `json:"target_lib_path,omitempty"`
-	ManifestPath   string `json:"manifest_path,omitempty"`
-	RawDepotLayout bool   `json:"raw_depot_layout,omitempty"`
-
-	// Focused sub-structs (embedded for flat access)
-	ExternalIDs      `json:",inline"`
-	GameArtwork      `json:",inline"`
-	InspectionResult `json:",inline"`
-	ManifestStatus   `json:",inline"`
-	StoreMetadata    `json:",inline"`
-	ReadinessStatus  `json:",inline"`
+	GameRecord                 `json:",inline"`
+	LaunchProfile *LaunchProfile `json:"launch_profile,omitempty"`
+	ReadinessStatus            `json:",inline"`
+	GameArtwork                `json:",inline"`
+	ManifestStatus             `json:",inline"`
+	StoreMetadata              `json:",inline"`
 }
 
 // NewGame initializes a Game entity with parsed numeric AppID and standard defaults.
@@ -271,25 +300,24 @@ func NewGame(name, gameDir, appID, platform string) *Game {
 		store = StoreStandalone
 	}
 	return &Game{
-		Name:         name,
-		GameDir:      gameDir,
-		AppID:        appID,
-		NumericAppID: numAppID,
-		Platform:     platform,
-		Store:        store,
-		Source:       store,
-		ExternalIDs: ExternalIDs{
-			SteamAppID: numAppID,
+		GameRecord: GameRecord{
+			Name:         name,
+			GameDir:      gameDir,
+			AppID:        appID,
+			NumericAppID: numAppID,
+			Platform:     platform,
+			Store:        store,
+			Source:       store,
+			ExternalIDs: ExternalIDs{
+				SteamAppID: numAppID,
+			},
+			SupportedLanguages: []string{"english"},
+			LaunchCandidates:   make([]LaunchCandidate, 0),
 		},
 		ReadinessStatus: ReadinessStatus{
-			State: "Original",
+			State:           "Original",
+			OriginalBackups: make([]string, 0),
 		},
-		OperatingMode: string(ModeStandalone),
-		InspectionResult: InspectionResult{
-			SupportedLanguages: []string{"english"},
-			OriginalBackups:    make([]string, 0),
-		},
-		LaunchCandidates: make([]LaunchCandidate, 0),
 		ManifestStatus: ManifestStatus{
 			ModifiedFiles:  make([]string, 0),
 			MissingFiles:   make([]string, 0),
@@ -303,6 +331,66 @@ func NewGame(name, gameDir, appID, platform string) *Game {
 	}
 }
 
+// EffectiveExePath returns the resolved executable path (profile override taking priority over detected binary).
+func (g *Game) EffectiveExePath() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.ExePath != "" {
+		return g.LaunchProfile.ExePath
+	}
+	if g.GameRecord.ExePath != "" {
+		return g.GameRecord.ExePath
+	}
+	if len(g.LaunchCandidates) > 0 {
+		return g.LaunchCandidates[0].Executable
+	}
+	return ""
+}
+
+// EffectiveExeArgs returns the launch arguments (profile override taking priority).
+func (g *Game) EffectiveExeArgs() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.ExeArgs != "" {
+		return g.LaunchProfile.ExeArgs
+	}
+	if g.GameRecord.ExeArgs != "" {
+		return g.GameRecord.ExeArgs
+	}
+	if len(g.LaunchCandidates) > 0 {
+		return g.LaunchCandidates[0].Arguments
+	}
+	return ""
+}
+
+// EffectiveOperatingMode returns the active operating mode from the profile or defaults to ModeStandalone.
+func (g *Game) EffectiveOperatingMode() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.OperatingMode != "" {
+		return g.LaunchProfile.OperatingMode
+	}
+	return ModeStandalone
+}
+
+// EffectiveRunner returns the active runner from the profile or defaults to RunnerAuto.
+func (g *Game) EffectiveRunner() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.Runner != "" {
+		return g.LaunchProfile.Runner
+	}
+	return RunnerAuto
+}
+
+// EffectiveWinePrefix returns the active Wine prefix configured in the launch profile.
+func (g *Game) EffectiveWinePrefix() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.WinePrefix != "" {
+		return g.LaunchProfile.WinePrefix
+	}
+	return ""
+}
+
+// EffectivePlaytime returns the total playtime in seconds and last played timestamp.
+func (g *Game) EffectivePlaytime() (int64, int64) {
+	if g.LaunchProfile != nil {
+		return g.LaunchProfile.PlaytimeSeconds, g.LaunchProfile.LastPlayed
+	}
+	return 0, 0
+}
+
 // SteamAppID returns the numeric AppID if present.
 func (g *Game) SteamAppID() (uint32, bool) {
 	if g.ExternalIDs.SteamAppID > 0 {
@@ -310,6 +398,11 @@ func (g *Game) SteamAppID() (uint32, bool) {
 	}
 	if g.NumericAppID > 0 {
 		return g.NumericAppID, true
+	}
+	if g.LaunchProfile != nil && g.LaunchProfile.AppID != "" {
+		if parsed, ok := util.ParseAppID(g.LaunchProfile.AppID); ok && parsed > 0 {
+			return parsed, true
+		}
 	}
 	if g.AppID != "" {
 		return util.ParseAppID(g.AppID)
@@ -319,7 +412,9 @@ func (g *Game) SteamAppID() (uint32, bool) {
 
 // IsSteam returns true if game originated from or integrates with Steam.
 func (g *Game) IsSteam() bool {
-	return strings.EqualFold(g.Store, StoreSteam) || g.NumericAppID > 0
+	return strings.EqualFold(g.Store, StoreSteam) ||
+		g.NumericAppID > 0 ||
+		g.ExternalIDs.SteamAppID > 0
 }
 
 // HasBackups returns true if any .ORIGINAL backup libraries are found.
@@ -334,9 +429,10 @@ func (g *Game) IsClean() bool {
 
 // IsLoaderConfigured returns true if Goldberg loader configuration files or binaries are active.
 func (g *Game) IsLoaderConfigured() bool {
-	return g.OperatingMode == string(ModeLoader) ||
+	mode := g.EffectiveOperatingMode()
+	return mode == string(ModeLoader) ||
 		g.State == "Loader-Configured" ||
-		strings.Contains(strings.ToLower(g.ExePath), "steamclient_loader")
+		strings.Contains(strings.ToLower(g.EffectiveExePath()), "steamclient_loader")
 }
 
 // IsPortablePatched returns true if Goldberg emulator libraries are directly injected into the game tree.
@@ -346,6 +442,10 @@ func (g *Game) IsPortablePatched() bool {
 
 // RequiresSteamEmulator returns true if the game requires Steamworks mocking.
 func (g *Game) RequiresSteamEmulator() bool {
+	mode := g.EffectiveOperatingMode()
+	if mode == string(ModeNone) {
+		return false
+	}
 	if !g.IsSteam() && g.AppID == "" {
 		return false
 	}
@@ -354,18 +454,21 @@ func (g *Game) RequiresSteamEmulator() bool {
 
 // RecomputeState recalculates computed flags (IsPatched, IsPortable, IsReady, HasUpdatesOrIssues).
 func (g *Game) RecomputeState() {
+	mode := g.EffectiveOperatingMode()
 	if len(g.OriginalBackups) > 0 {
 		g.State = "Portable-Patched"
-	} else if g.SettingsDirExists || g.SteamAppIDTxtFound || g.OperatingMode == string(ModeLoader) {
+	} else if mode == string(ModeNone) {
+		g.State = "Original"
+	} else if g.SettingsDirExists || g.SteamAppIDTxtFound {
 		g.State = "Loader-Configured"
 	} else if g.State == "" {
 		g.State = "Original"
 	}
 
 	g.IsPortable = g.State == "Portable-Patched"
-	g.IsPatched = g.IsPortable || g.State == "Loader-Configured" || g.SettingsDirExists
+	g.IsPatched = g.IsPortable || (g.State == "Loader-Configured" && mode != string(ModeNone))
 	g.HasUpdatesOrIssues = g.IsSteam() && (g.HasUpdate || len(g.ModifiedFiles) > 0 || len(g.MissingFiles) > 0)
-	g.IsReady = g.IsPatched || g.ExePath != ""
+	g.IsReady = g.IsPatched || g.EffectiveExePath() != ""
 }
 
 // GetAsset returns the location information for a specific asset type.
@@ -477,4 +580,47 @@ func (g *Game) SetAsset(assetType string, loc AssetLocation) {
 		}
 	}
 }
+
+// EffectiveMetadataProvider returns the active metadata provider in lowercase (e.g. "steam", "gog", "custom", "standalone").
+func (g *Game) EffectiveMetadataProvider() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.MetadataProvider != "" {
+		return strings.ToLower(g.LaunchProfile.MetadataProvider)
+	}
+	if g.Store != "" && !strings.EqualFold(g.Store, StoreStandalone) && !strings.EqualFold(g.Store, StoreCustom) {
+		return strings.ToLower(g.Store)
+	}
+	if g.NumericAppID > 0 || g.ExternalIDs.SteamAppID > 0 {
+		return "steam"
+	}
+	if g.GOGID != "" {
+		return "gog"
+	}
+	return "standalone"
+}
+
+// EffectiveMetadataID returns the identifier associated with the active metadata provider.
+func (g *Game) EffectiveMetadataID() string {
+	if g.LaunchProfile != nil && g.LaunchProfile.MetadataID != "" {
+		return g.LaunchProfile.MetadataID
+	}
+	if g.AppID != "" && g.AppID != "0" {
+		return g.AppID
+	}
+	if g.GOGID != "" {
+		return g.GOGID
+	}
+	if g.RAWGID != "" {
+		return g.RAWGID
+	}
+	return ""
+}
+
+// HasCustomMetadata returns true if the game has a custom metadata provider override configured.
+func (g *Game) HasCustomMetadata() bool {
+	if g.LaunchProfile != nil {
+		return g.LaunchProfile.MetadataProvider != "" || g.LaunchProfile.MetadataID != ""
+	}
+	return false
+}
+
 

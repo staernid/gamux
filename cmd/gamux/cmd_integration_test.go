@@ -91,8 +91,8 @@ func TestCLI_ConfigShow(t *testing.T) {
 	if !strings.Contains(out, "gamux Configuration Dashboard") {
 		t.Errorf("expected configuration dashboard header, got:\n%s", out)
 	}
-	if !strings.Contains(out, "gbe_mode") {
-		t.Errorf("expected gbe_mode in dashboard, got:\n%s", out)
+	if !strings.Contains(out, "operating_mode") {
+		t.Errorf("expected operating_mode in dashboard, got:\n%s", out)
 	}
 	if strings.Contains(out, "promote") {
 		t.Errorf("expected promote to NOT be in dashboard, got:\n%s", out)

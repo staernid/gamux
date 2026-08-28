@@ -190,13 +190,13 @@ func TestApp_StartupAndNotifier(t *testing.T) {
 	// Verify Startup doesn't panic
 	app.Startup(context.Background())
 
-	if app.SC.Notifier == nil {
-		t.Fatal("SC.Notifier not configured after Startup")
+	if app.Engine.Notifier == nil {
+		t.Fatal("Engine.Notifier not configured after Startup")
 	}
 
 	// Calling notifier with dummy ctx should not fail
-	if err := app.SC.Notifier(context.Background(), "Test Alert", "Sample Message"); err != nil {
-		t.Errorf("app.SC.Notifier returned error: %v", err)
+	if err := app.Engine.Notifier(context.Background(), "Test Alert", "Sample Message"); err != nil {
+		t.Errorf("app.Engine.Notifier returned error: %v", err)
 	}
 }
 

@@ -7,7 +7,13 @@
 
   const dispatch = createEventDispatcher();
 
-  let targetStore = 'Steam'; // 'Steam' | 'GOG' | 'Standalone'
+  let targetStore = 'steam'; // 'steam' | 'gog' | 'rawg' | 'standalone'
+  let providers = [
+    { id: 'steam', display_name: 'Steam', badge: 'AppID' },
+    { id: 'gog', display_name: 'GOG.com', badge: 'GOG ID' },
+    { id: 'rawg', display_name: 'RAWG Video Games Database', badge: 'Open DB' },
+    { id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' }
+  ];
   let query = '';
   let customId = '';
   let candidates = [];
@@ -19,18 +25,33 @@
   $: gameDir = game?.gameDir || '';
 
   onMount(() => {
-    const currStore = game?.store || 'Steam';
-    if (currStore === 'GOG') targetStore = 'GOG';
-    else if (currStore === 'Standalone' || currStore === 'Custom') targetStore = 'Standalone';
-    else targetStore = 'Steam';
+    const providerKey = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
+    if (providerKey === 'gog') targetStore = 'gog';
+    else if (providerKey === 'rawg') targetStore = 'rawg';
+    else if (providerKey === 'standalone' || providerKey === 'custom') targetStore = 'standalone';
+    else targetStore = 'steam';
 
     query = gameName || '';
-    customId = String(game?.appId || '');
+    customId = String(game?.metadataId || game?.metadata_id || game?.appId || '');
     if (customId === '0') customId = '';
 
-    if (targetStore !== 'Standalone' && query.trim()) {
+    if (targetStore !== 'standalone' && query.trim()) {
       handleSearch();
     }
+
+    AppAPI.listMetadataProviders().then(fetched => {
+      if (Array.isArray(fetched) && fetched.length > 0) {
+        const list = fetched
+          .filter(p => p.id !== 'steamgriddb')
+          .map(p => ({
+            id: p.id,
+            display_name: p.display_name,
+            badge: p.id === 'steam' ? 'AppID' : (p.id === 'gog' ? 'GOG ID' : (p.id === 'rawg' ? 'Open DB' : 'Direct'))
+          }));
+        list.push({ id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' });
+        providers = list;
+      }
+    }).catch(() => {});
   });
 
   async function handleSearch() {
@@ -40,9 +61,8 @@
     try {
       const results = await AppAPI.searchStoreGames(query.trim());
       candidates = (results || []).filter(c => {
-        if (targetStore === 'Steam') return c.store === 'steam';
-        if (targetStore === 'GOG') return c.store === 'gog';
-        return true;
+        const storeLower = (c.store || '').toLowerCase();
+        return storeLower === targetStore.toLowerCase();
       });
     } catch (err) {
       console.warn('Failed to search store games:', err);
@@ -61,12 +81,12 @@
     if (!gameDir) return;
     isLinking = true;
     try {
-      const idToLink = targetStore === 'Standalone' ? '0' : customId.trim();
+      const idToLink = targetStore === 'standalone' ? '0' : customId.trim();
       const updated = await AppAPI.linkGameMetadata(gameDir, targetStore, idToLink);
       notificationStore.items.add({
         type: 'success',
         title: 'Metadata Linked',
-        message: `Linked ${gameName} to ${targetStore} ${idToLink ? `(#${idToLink})` : ''}`
+        message: `Linked ${gameName} to ${targetStore.toUpperCase()} ${idToLink ? `(#${idToLink})` : ''}`
       });
       dispatch('updated', updated);
       dispatch('close');
@@ -74,6 +94,29 @@
       notificationStore.items.add({
         type: 'error',
         title: 'Linking Failed',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isLinking = false;
+    }
+  }
+
+  async function handleUnlink() {
+    if (!gameDir) return;
+    isLinking = true;
+    try {
+      const updated = await AppAPI.unlinkGameMetadata(gameDir);
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Metadata Unlinked',
+        message: `Reset metadata overrides for ${gameName} to auto-detected origin.`
+      });
+      dispatch('updated', updated);
+      dispatch('close');
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Unlink Failed',
         message: err?.message || String(err)
       });
     } finally {
@@ -103,11 +146,20 @@
         <span>Change Metadata Provider:</span>
         <span class="text-sky-400 truncate max-w-md">{gameName}</span>
       </h2>
-      <p class="text-xs text-slate-400 mt-0.5">Switch store origin, re-link Steam AppID / GOG metadata, or configure as a Standalone game.</p>
+      <p class="text-xs text-slate-400 mt-0.5">Link Steam, GOG, or RAWG metadata for artwork and synopsis without changing the game's physical installation source.</p>
     </div>
 
-    <!-- Close Hint -->
+    <!-- Close Hint & Unlink Action -->
     <div class="flex items-center space-x-3">
+      <button
+        type="button"
+        on:click={handleUnlink}
+        disabled={isLinking}
+        class="px-3 py-1.5 rounded-xl bg-[#201518] hover:bg-[#301c22] border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-mono transition-colors flex items-center space-x-1.5"
+        title="Unset all metadata overrides and restore auto-detected identity"
+      >
+        <span>Reset to Auto</span>
+      </button>
       <button
         type="button"
         on:click={() => dispatch('close')}
@@ -120,36 +172,23 @@
   </div>
 
   <!-- Store Provider Tabs -->
-  <div class="max-w-4xl w-full mx-auto mb-6 flex items-center justify-start gap-2 flex-shrink-0">
-    <button
-      type="button"
-      on:click={() => { targetStore = 'Steam'; if (query.trim()) handleSearch(); }}
-      class="px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center space-x-2 {targetStore === 'Steam' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 border border-blue-400/40' : 'bg-[#14141e] border border-[#262638] text-slate-400 hover:text-white'}"
-    >
-      <span>Steam</span>
-      <span class="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-mono">AppID</span>
-    </button>
-    <button
-      type="button"
-      on:click={() => { targetStore = 'GOG'; if (query.trim()) handleSearch(); }}
-      class="px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center space-x-2 {targetStore === 'GOG' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 border border-purple-400/40' : 'bg-[#14141e] border border-[#262638] text-slate-400 hover:text-white'}"
-    >
-      <span>GOG.com</span>
-      <span class="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-mono">GOG ID</span>
-    </button>
-    <button
-      type="button"
-      on:click={() => { targetStore = 'Standalone'; }}
-      class="px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center space-x-2 {targetStore === 'Standalone' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 border border-emerald-400/40' : 'bg-[#14141e] border border-[#262638] text-slate-400 hover:text-white'}"
-    >
-      <span>Standalone / DRM-Free</span>
-      <span class="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-mono">Direct</span>
-    </button>
+  <div class="max-w-4xl w-full mx-auto mb-6 flex items-center justify-start gap-2 flex-shrink-0 overflow-x-auto custom-scrollbar">
+    {#each providers as prov}
+      {@const isActive = targetStore === prov.id}
+      <button
+        type="button"
+        on:click={() => { targetStore = prov.id; if (targetStore !== 'standalone' && query.trim()) handleSearch(); }}
+        class="px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center space-x-2 flex-shrink-0 {isActive ? (prov.id === 'steam' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 border border-blue-400/40' : (prov.id === 'gog' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 border border-purple-400/40' : (prov.id === 'rawg' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-400/40' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 border border-emerald-400/40'))) : 'bg-[#14141e] border border-[#262638] text-slate-400 hover:text-white'}"
+      >
+        <span>{prov.display_name}</span>
+        <span class="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-mono">{prov.badge}</span>
+      </button>
+    {/each}
   </div>
 
   <!-- Main Modal Content Area -->
   <div class="flex-1 max-w-4xl w-full mx-auto overflow-y-auto pr-2 custom-scrollbar space-y-4">
-    {#if targetStore === 'Standalone'}
+    {#if targetStore === 'standalone'}
       <!-- Standalone Explanation Card -->
       <div class="bg-[#12121c] border border-[#262638] p-6 rounded-2xl space-y-4">
         <div class="flex items-start space-x-3.5">
@@ -186,7 +225,7 @@
               type="text"
               bind:value={query}
               on:keydown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-              placeholder={`Search ${targetStore} title...`}
+              placeholder={`Search ${targetStore.toUpperCase()} title...`}
               class="w-full bg-[#0a0a0f] border border-[#1f1f2e] focus:border-sky-500 rounded-xl px-4 py-2 text-xs text-white outline-none font-mono placeholder:text-slate-500"
             />
           </div>
@@ -203,12 +242,12 @@
         <!-- Manual ID Input & Apply Button -->
         <div class="flex items-center gap-3 pt-2 border-t border-[#1e1e2c]">
           <span class="text-[11px] font-bold text-slate-400 flex-shrink-0">
-            {targetStore === 'Steam' ? 'Steam AppID:' : 'GOG ID / Slug:'}
+            {targetStore === 'steam' ? 'Steam AppID:' : (targetStore === 'gog' ? 'GOG ID / Slug:' : 'RAWG Game ID / Slug:')}
           </span>
           <input
             type="text"
             bind:value={customId}
-            placeholder={targetStore === 'Steam' ? 'e.g. 1091500' : 'e.g. the_witcher_3_wild_hunt'}
+            placeholder={targetStore === 'steam' ? 'e.g. 1091500' : (targetStore === 'gog' ? 'e.g. the_witcher_3_wild_hunt' : 'e.g. portal-2 or 4200')}
             class="flex-1 bg-[#0a0a0f] border border-[#1f1f2e] focus:border-sky-500 rounded-lg px-3 py-1 text-xs text-white outline-none font-mono placeholder:text-slate-600"
           />
           <button

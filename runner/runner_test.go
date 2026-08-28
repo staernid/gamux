@@ -499,12 +499,6 @@ func TestLaunchProfile_Sync(t *testing.T) {
 		t.Errorf("expected force_language.txt spanish, got %s (err: %v)", string(langData), err)
 	}
 
-	// Verify ColdClientLoader.ini Exe replaced
-	iniData, err := os.ReadFile(filepath.Join(tmpDir, "ColdClientLoader.ini"))
-	if err != nil || !strings.Contains(string(iniData), "ActionGame.exe") {
-		t.Errorf("expected ColdClientLoader.ini to contain ActionGame.exe, got: %s", string(iniData))
-	}
-
 	// Now set Language to "" and re-sync: force_language.txt should be removed
 	p.Language = ""
 	if err := SyncLaunchProfile(context.Background(), p, cfg); err != nil {
@@ -747,12 +741,9 @@ func TestManager_LaunchGameDomain(t *testing.T) {
 	mgr := NewManager()
 	cfg := config.DefaultConfig()
 
-	game := &domain.Game{
-		Name:          "Domain Game",
-		AppID:         "11111",
-		GameDir:       tmpDir,
-		ExePath:       scriptPath,
-		Platform:      "linux",
+	game := domain.NewGame("Domain Game", tmpDir, "11111", "linux")
+	game.GameRecord.ExePath = scriptPath
+	game.LaunchProfile = &domain.LaunchProfile{
 		OperatingMode: ModeStandalone,
 		Runner:        RunnerLinux,
 	}
@@ -823,6 +814,209 @@ func TestBuildCommand_DllOverrides(t *testing.T) {
 	}
 	if !strings.Contains(foundOverride, "steamclient,steamclient64=n,b") {
 		t.Errorf("expected loader redirection steamclient,steamclient64=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
+	}
+}
+
+func TestBuildCommand_ModeNone_WineNoLoaderOverride(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.exe",
+		Platform:      "win64",
+		Runner:        RunnerWine,
+		OperatingMode: ModeNone,
+	}
+
+	cmd, err := BuildCommand(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	for _, env := range cmd.Env {
+		if strings.HasPrefix(env, "WINEDLLOVERRIDES=") {
+			if strings.Contains(env, "steamclient") {
+				t.Errorf("expected ModeNone to NOT contain steamclient override in WINEDLLOVERRIDES, got: %s", env)
+			}
+		}
+	}
+}
+
+func TestBuildCommand_Linux_LoaderPreload(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	linuxGbe := filepath.Join(gbeDir, "linux_release", "experimental", "x64")
+	_ = os.MkdirAll(linuxGbe, 0755)
+	soPath := filepath.Join(linuxGbe, "steamclient.so")
+	_ = os.WriteFile(soPath, []byte("so_mock"), 0755)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	binPath := filepath.Join(tmpDir, "game.x86_64")
+	_ = os.WriteFile(binPath, []byte("\x7fELF..."), 0755)
+
+	// ModeLoader -> should have LD_PRELOAD
+	optsLoader := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.x86_64",
+		Platform:      "linux",
+		Runner:        RunnerLinux,
+		OperatingMode: ModeLoader,
+	}
+
+	cmdLoader, err := BuildCommand(context.Background(), cfg, optsLoader)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	var foundPreload string
+	for _, env := range cmdLoader.Env {
+		if strings.HasPrefix(env, "LD_PRELOAD=") {
+			foundPreload = strings.TrimPrefix(env, "LD_PRELOAD=")
+		}
+	}
+	if !strings.Contains(foundPreload, "steamclient.so") {
+		t.Errorf("expected steamclient.so in LD_PRELOAD for linux loader mode, got: %s", foundPreload)
+	}
+
+	// ModeNone -> should NOT have LD_PRELOAD
+	optsNone := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.x86_64",
+		Platform:      "linux",
+		Runner:        RunnerLinux,
+		OperatingMode: ModeNone,
+	}
+
+	cmdNone, err := BuildCommand(context.Background(), cfg, optsNone)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	for _, env := range cmdNone.Env {
+		if strings.HasPrefix(env, "LD_PRELOAD=") {
+			if strings.Contains(env, "steamclient.so") {
+				t.Errorf("expected ModeNone to NOT have steamclient.so in LD_PRELOAD, got: %s", env)
+			}
+		}
+	}
+}
+
+func TestApplyCompatibility_Modes(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	x64Release := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(x64Release, 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steam_api64.dll"), []byte("emulated_gbe_dll"), 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steamclient64.dll"), []byte("emulated_steamclient_dll"), 0755)
+
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("loader_steamclient64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient.dll"), []byte("loader_steamclient32"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer64.dll"), []byte("loader_overlay64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer.dll"), []byte("loader_overlay32"), 0755)
+
+	cfg := config.DefaultConfig()
+	cfg.GbeDir = gbeDir
+
+	gameDir := filepath.Join(tmpDir, "GameFolder")
+	_ = os.MkdirAll(gameDir, 0755)
+	gameExe := filepath.Join(gameDir, "game.exe")
+	_ = os.WriteFile(gameExe, []byte("MZ"), 0755)
+	libPath := filepath.Join(gameDir, "steam_api64.dll")
+	_ = os.WriteFile(libPath, []byte("pristine_steam_lib"), 0755)
+
+	game := domain.NewGame("Test Game", gameDir, "12345", "win64")
+	game.GameRecord.ExePath = "game.exe"
+
+	// 1. Apply Portable Mode
+	profilePortable := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "12345",
+		Platform:      "win64",
+		OperatingMode: domain.ModePortable,
+		ExePath:       "game.exe",
+		Language:      "english",
+	}
+
+	err := ApplyCompatibility(context.Background(), cfg, game, profilePortable, false)
+	if err != nil {
+		t.Fatalf("ApplyCompatibility(portable) failed: %v", err)
+	}
+
+	data, _ := os.ReadFile(libPath)
+	if string(data) != "emulated_gbe_dll" {
+		t.Fatalf("expected emulated lib in portable mode, got: %s", string(data))
+	}
+
+	langData, _ := os.ReadFile(filepath.Join(gameDir, "steam_settings", "force_language.txt"))
+	if strings.TrimSpace(string(langData)) != "english" {
+		t.Errorf("expected force_language.txt english, got: %s", string(langData))
+	}
+
+	// 2. Apply Loader Mode -> should restore original library and create loader symlinks
+	profileLoader := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "12345",
+		Platform:      "win64",
+		OperatingMode: domain.ModeLoader,
+		ExePath:       "game.exe",
+	}
+
+	err = ApplyCompatibility(context.Background(), cfg, game, profileLoader, false)
+	if err != nil {
+		t.Fatalf("ApplyCompatibility(loader) failed: %v", err)
+	}
+
+	restoredData, _ := os.ReadFile(libPath)
+	if string(restoredData) != "pristine_steam_lib" {
+		t.Fatalf("expected pristine lib restored in loader mode, got: %s", string(restoredData))
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); err != nil {
+		t.Fatalf("expected steamclient64.dll symlink to exist in loader mode")
+	}
+
+	// 3. Apply None Mode -> should clean up loader symlinks
+	profileNone := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "12345",
+		Platform:      "win64",
+		OperatingMode: domain.ModeNone,
+		ExePath:       "game.exe",
+	}
+
+	err = ApplyCompatibility(context.Background(), cfg, game, profileNone, false)
+	if err != nil {
+		t.Fatalf("ApplyCompatibility(none) failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); err == nil {
+		t.Fatalf("expected steamclient64.dll to be removed in None mode")
+	}
+}
+
+func TestRevertCompatibility(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_api64.dll"), []byte("emulated"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_api64.dll.ORIGINAL"), []byte("pristine"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "steamclient64.dll"), []byte("loader_link"), 0755)
+
+	restored, err := RevertCompatibility(context.Background(), tmpDir, false)
+	if err != nil {
+		t.Fatalf("RevertCompatibility failed: %v", err)
+	}
+	if restored == 0 {
+		t.Errorf("expected at least 1 restored backup, got 0")
+	}
+
+	data, _ := os.ReadFile(filepath.Join(tmpDir, "steam_api64.dll"))
+	if string(data) != "pristine" {
+		t.Errorf("expected pristine library restored, got %s", string(data))
+	}
+	if util.FileExists(filepath.Join(tmpDir, "steamclient64.dll")) {
+		t.Errorf("expected loader artifact to be removed")
 	}
 }
 

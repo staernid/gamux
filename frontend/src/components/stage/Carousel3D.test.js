@@ -18,12 +18,11 @@ describe('Carousel3D Component', () => {
     selectedGame.set(mockGames[0]);
   });
 
-  it('renders active game with title badge and platform pill', () => {
+  it('renders active game with floating title badge', () => {
     render(Carousel3D);
 
     const titleBadge = screen.getByText('Astroneer');
     expect(titleBadge).toBeInTheDocument();
-    expect(screen.getAllByText('Steam').length).toBeGreaterThan(0);
   });
 
   it('rotates to adjacent game on card click', async () => {
@@ -53,11 +52,12 @@ describe('Carousel3D Component', () => {
     expect(screen.getByText('Astroneer')).toBeInTheDocument();
   });
 
-  it('renders status badges for patched and clean titles', () => {
+  it('renders clean poster cards without overlay badge clutter', () => {
     render(Carousel3D);
 
-    // Initial mock has clean/patched games
-    expect(screen.getAllByText(/Ready|Unconfigured|Running/i).length).toBeGreaterThan(0);
+    // Posters rendered cleanly without card badges
+    expect(screen.getByAltText('Astroneer')).toBeInTheDocument();
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument();
   });
 
   it('allows stepping left and right smoothly without getting locked', () => {
@@ -71,6 +71,15 @@ describe('Carousel3D Component', () => {
 
     component.addRotaryDelta(1.5);
     expect(component.getCurrentPos()).toBeDefined();
+
+    component.seek(2);
+    expect(component.getCurrentPos()).toBeDefined();
+  });
+
+  it('renders ambient glow container without error', () => {
+    const { container } = render(Carousel3D);
+    const glow = container.querySelector('.rounded-full.pointer-events-none');
+    expect(glow).toBeInTheDocument();
   });
 });
 

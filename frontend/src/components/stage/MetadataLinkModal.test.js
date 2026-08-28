@@ -17,6 +17,7 @@ describe('MetadataLinkModal Component', () => {
     expect(screen.getAllByText(/Change Metadata Provider/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Steam')).toBeInTheDocument();
     expect(screen.getByText('GOG.com')).toBeInTheDocument();
+    expect(screen.getByText('RAWG Video Games Database')).toBeInTheDocument();
     expect(screen.getByText('Standalone / DRM-Free')).toBeInTheDocument();
   });
 
@@ -28,5 +29,12 @@ describe('MetadataLinkModal Component', () => {
 
     expect(screen.getByText(/Standalone \/ Custom Non-Store Configuration/i)).toBeInTheDocument();
     expect(screen.getByText(/Set as Standalone Game/i)).toBeInTheDocument();
+  });
+
+  it('renders Reset to Auto button to unset metadata overrides', () => {
+    render(MetadataLinkModal, { props: { game: mockGame } });
+
+    const resetButton = screen.getByText('Reset to Auto');
+    expect(resetButton).toBeInTheDocument();
   });
 });

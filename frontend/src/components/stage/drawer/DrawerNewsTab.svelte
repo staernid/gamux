@@ -59,18 +59,23 @@
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="p-1 text-slate-400 hover:text-cyan-400 text-xs font-mono"
+                class="p-1 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center"
                 title="Open on Steam Web"
               >
-                ↗
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
               </a>
             {/if}
             <button
               type="button"
-              class="text-slate-400 font-mono text-xs p-1"
+              class="text-slate-400 hover:text-white p-1 transition-colors flex items-center justify-center"
               on:click={() => onToggleExpand(idx)}
+              aria-label={isExpanded ? 'Collapse article' : 'Expand article'}
             >
-              <span class="inline-block transform transition-transform {isExpanded ? 'rotate-180' : ''}">▼</span>
+              <svg class="w-3.5 h-3.5 transform transition-transform {isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
           </div>
         </div>

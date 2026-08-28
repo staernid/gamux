@@ -52,5 +52,23 @@ describe('TopBar Component', () => {
     activeView.subscribe(v => currentView = v)();
     expect(currentView).toBe('library');
   });
+
+  it('renders vertically stacked running games on the right when games are active', async () => {
+    const { games, runningGames } = await import('../../stores/library.js');
+    games.set([
+      { gameDir: '/games/game1', name: 'Game One' },
+      { gameDir: '/games/game2', name: 'Game Two' }
+    ]);
+    runningGames.set(new Set(['/games/game1', '/games/game2']));
+
+    render(TopBar);
+
+    expect(screen.getByText('Game One')).toBeInTheDocument();
+    expect(screen.getByText('Game Two')).toBeInTheDocument();
+    const stopButtons = screen.getAllByRole('button', { name: /Stop/i });
+    expect(stopButtons.length).toBe(2);
+
+    runningGames.set(new Set());
+  });
 });
 

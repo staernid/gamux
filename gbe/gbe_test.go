@@ -285,7 +285,7 @@ func TestRevert_LoaderMode(t *testing.T) {
 	_ = os.MkdirAll(loaderDir, 0755)
 	_ = os.MkdirAll(winGbe, 0755)
 
-	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient_loader_x64.exe"), []byte("loader_binary"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("steamclient64_binary"), 0755)
 	_ = os.WriteFile(filepath.Join(winGbe, "steam_api64.dll"), []byte("emulated_dll"), 0644)
 
 	gameDir := filepath.Join(tmpDir, "LoaderGame")
@@ -321,11 +321,8 @@ func TestRevert_LoaderMode(t *testing.T) {
 	}
 
 	// Verify loader artifacts created
-	if _, err := os.Stat(filepath.Join(gameDir, "ColdClientLoader.ini")); err != nil {
-		t.Fatalf("expected ColdClientLoader.ini")
-	}
-	if _, err := os.Stat(filepath.Join(gameDir, "steamclient_loader_x64.exe")); err != nil {
-		t.Fatalf("expected steamclient_loader_x64.exe")
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); err != nil {
+		t.Fatalf("expected steamclient64.dll")
 	}
 
 	// Revert
@@ -335,17 +332,156 @@ func TestRevert_LoaderMode(t *testing.T) {
 	}
 
 	// Verify loader artifacts removed
-	if _, err := os.Stat(filepath.Join(gameDir, "ColdClientLoader.ini")); !os.IsNotExist(err) {
-		t.Errorf("expected ColdClientLoader.ini to be removed")
-	}
-	if _, err := os.Stat(filepath.Join(gameDir, "steamclient_loader_x64.exe")); !os.IsNotExist(err) {
-		t.Errorf("expected steamclient_loader_x64.exe to be removed")
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); !os.IsNotExist(err) {
+		t.Errorf("expected steamclient64.dll to be removed")
 	}
 
 	// Original files remain intact
 	data, _ := os.ReadFile(filepath.Join(gameDir, "Game.exe"))
 	if string(data) != "original_exe" {
 		t.Errorf("Game.exe corrupted")
+	}
+}
+
+func TestSetupLoaderMode_SubdirectoryExe(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	winGbe := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.MkdirAll(winGbe, 0755)
+
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("steamclient64_binary"), 0755)
+	_ = os.WriteFile(filepath.Join(winGbe, "steam_api64.dll"), []byte("emulated_dll"), 0644)
+
+	gameDir := filepath.Join(tmpDir, "DeepGame")
+	binDir := filepath.Join(gameDir, "bin", "x64")
+	pluginDir := filepath.Join(gameDir, "Plugins")
+	_ = os.MkdirAll(binDir, 0755)
+	_ = os.MkdirAll(pluginDir, 0755)
+
+	exePath := filepath.Join(binDir, "DeepGame.exe")
+	libPath := filepath.Join(pluginDir, "steam_api64.dll")
+	_ = os.WriteFile(exePath, []byte("exe_binary"), 0755)
+	_ = os.WriteFile(libPath, []byte("original_steam_lib"), 0644)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
+	// Apply loader mode with exe in subdirectory
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "win64",
+		AppID:     "33333",
+		Portable:  false,
+		ExePath:   exePath,
+	})
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Verify steamclient64.dll is symlinked in root, bin/x64, and Plugins
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); err != nil {
+		t.Errorf("missing steamclient64.dll in root dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(binDir, "steamclient64.dll")); err != nil {
+		t.Errorf("missing steamclient64.dll in exe dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "steamclient64.dll")); err != nil {
+		t.Errorf("missing steamclient64.dll in lib dir: %v", err)
+	}
+
+	// Verify original lib remains unmodified
+	data, err := os.ReadFile(libPath)
+	if err != nil || string(data) != "original_steam_lib" {
+		t.Errorf("original lib was modified: %s", string(data))
+	}
+}
+
+func TestTransition_PortableToLoader_RestoresOriginal(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	winGbe := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.MkdirAll(winGbe, 0755)
+
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("steamclient64_binary"), 0755)
+	_ = os.WriteFile(filepath.Join(winGbe, "steam_api64.dll"), []byte("emulated_gbe_dll"), 0644)
+
+	gameDir := filepath.Join(tmpDir, "TransitionGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	libPath := filepath.Join(gameDir, "steam_api64.dll")
+	_ = os.WriteFile(libPath, []byte("pristine_steam_lib"), 0644)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
+	// 1. First apply Portable mode (replaces steam_api64.dll and creates .ORIGINAL)
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "win64",
+		AppID:     "44444",
+		Portable:  true,
+	})
+	if err != nil {
+		t.Fatalf("Portable Apply failed: %v", err)
+	}
+
+	data, _ := os.ReadFile(libPath)
+	if string(data) != "emulated_gbe_dll" {
+		t.Fatalf("expected emulated lib in portable mode, got: %s", string(data))
+	}
+	entries, _ := os.ReadDir(gameDir)
+	var foundBackup bool
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".ORIGINAL") {
+			foundBackup = true
+			break
+		}
+	}
+	if !foundBackup {
+		t.Fatalf("expected .ORIGINAL backup to exist in %s", gameDir)
+	}
+
+	// 2. Now transition to Loader mode (should restore .ORIGINAL and install loader symlinks)
+	err = Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "win64",
+		AppID:     "44444",
+		Portable:  false,
+	})
+	if err != nil {
+		t.Fatalf("Loader Apply failed: %v", err)
+	}
+
+	restoredData, _ := os.ReadFile(libPath)
+	if string(restoredData) != "pristine_steam_lib" {
+		t.Errorf("expected pristine lib restored in loader mode, got: %s", string(restoredData))
+	}
+	if _, err := os.Stat(filepath.Join(gameDir, "steamclient64.dll")); err != nil {
+		t.Errorf("expected steamclient64.dll loader symlink to exist")
 	}
 }
 

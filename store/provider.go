@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/staernid/gamux/domain"
 )
@@ -48,6 +49,22 @@ type ArtworkOption = domain.ArtworkOption
 // ArtworkQuery aliases the canonical domain model.
 type ArtworkQuery = domain.ArtworkQuery
 
+// ProviderCapabilities defines the functional features supported by a metadata/asset provider.
+type ProviderCapabilities struct {
+	CanSearch        bool `json:"can_search"`
+	CanFetchMetadata bool `json:"can_fetch_metadata"`
+	CanProvideArtwork bool `json:"can_provide_artwork"`
+	IsGameStore      bool `json:"is_game_store"`
+}
+
+// ProviderDescriptor provides human-friendly and programmatic metadata about a registered provider.
+type ProviderDescriptor struct {
+	ID           string               `json:"id"`
+	DisplayName  string               `json:"display_name"`
+	Description  string               `json:"description,omitempty"`
+	Capabilities ProviderCapabilities `json:"capabilities"`
+}
+
 // ArtworkCandidateProvider is an optional capability interface implemented by providers
 // that can return collections of artwork candidates for user selection (e.g. covers, banners, heroes, logos).
 type ArtworkCandidateProvider interface {
@@ -62,9 +79,9 @@ type StoreProvider interface {
 
 // Provider represents a store backend seam providing game discovery, metadata, and asset queries.
 type Provider interface {
-	// ID returns the canonical identifier for the store (e.g. "steam", "gog").
+	// ID returns the canonical identifier for the store (e.g. "steam", "gog", "rawg").
 	ID() string
-	// DisplayName returns a human-friendly name (e.g. "Steam", "GOG.com").
+	// DisplayName returns a human-friendly name (e.g. "Steam", "GOG.com", "RAWG Video Games Database").
 	DisplayName() string
 	// Search queries the store catalogue for game candidates matching a query string.
 	Search(ctx context.Context, query string) ([]SearchResult, error)
@@ -109,6 +126,41 @@ func (r *Registry) List() []Provider {
 	list := make([]Provider, 0, len(r.providers))
 	for _, p := range r.providers {
 		list = append(list, p)
+	}
+	return list
+}
+
+// ListDescriptors returns structured descriptor information for all registered providers.
+func (r *Registry) ListDescriptors() []ProviderDescriptor {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	list := make([]ProviderDescriptor, 0, len(r.providers))
+	for _, p := range r.providers {
+		caps := ProviderCapabilities{
+			CanSearch:        true,
+			CanFetchMetadata: true,
+			CanProvideArtwork: true,
+		}
+		if cp, ok := p.(interface{ Capabilities() ProviderCapabilities }); ok {
+			caps = cp.Capabilities()
+		} else {
+			if sp, ok := p.(StoreProvider); ok {
+				caps.IsGameStore = sp.IsGameStore()
+			}
+			if _, ok := p.(ArtworkCandidateProvider); ok {
+				caps.CanProvideArtwork = true
+			}
+		}
+		desc := ""
+		if dp, ok := p.(interface{ Description() string }); ok {
+			desc = dp.Description()
+		}
+		list = append(list, ProviderDescriptor{
+			ID:           p.ID(),
+			DisplayName:  p.DisplayName(),
+			Description:  desc,
+			Capabilities: caps,
+		})
 	}
 	return list
 }
@@ -192,6 +244,9 @@ func (r *Registry) QueryArtworkOptions(ctx context.Context, query ArtworkQuery) 
 		query.AssetType = "cover"
 	}
 
+	queryCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+
 	r.mu.RLock()
 	providers := make([]Provider, 0, len(r.providers))
 	for _, p := range r.providers {
@@ -210,7 +265,7 @@ func (r *Registry) QueryArtworkOptions(ctx context.Context, query ArtworkQuery) 
 			defer wg.Done()
 
 			if cp, ok := prov.(ArtworkCandidateProvider); ok {
-				opts, err := cp.QueryArtworkCandidates(ctx, query)
+				opts, err := cp.QueryArtworkCandidates(queryCtx, query)
 				if err == nil && len(opts) > 0 {
 					mu.Lock()
 					allOptions = append(allOptions, opts...)

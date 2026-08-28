@@ -180,26 +180,42 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 		s.resolveLocalAsset(ctx, game, spec, gameArtDir)
 	}
 
-	// Step 2: Steam CDN direct resolution for Steam titles
+	// Step 2: Resolve according to metadata provider
+	provider := game.EffectiveMetadataProvider()
+	rawgID := ""
+	if provider == "rawg" {
+		rawgID = game.EffectiveMetadataID()
+	}
+	gogID := game.GOGID
+	if gogID == "" && provider == "gog" {
+		gogID = game.EffectiveMetadataID()
+	}
 	steamID, hasSteamID := game.SteamAppID()
 	if !hasSteamID && game.AppID != "" && game.AppID != "0" {
 		steamID, hasSteamID = util.ParseAppID(game.AppID)
 	}
 
-	if hasSteamID && steamID > 0 && !game.LockedArtwork {
+	if provider == "rawg" && rawgID != "" && !game.LockedArtwork && s.registry != nil {
+		s.resolveFromRAWG(ctx, game, rawgID, gameArtDir)
+	} else if provider == "gog" && gogID != "" && !game.LockedArtwork && s.registry != nil {
+		s.resolveFromGOG(ctx, game, gogID, gameArtDir)
+	} else if hasSteamID && steamID > 0 && !game.LockedArtwork {
 		idStr := fmt.Sprintf("%d", steamID)
 		for _, spec := range canonicalAssetSpecs {
 			s.resolveSteamCDN(ctx, game, spec, idStr, gameArtDir)
 		}
 	}
 
-	// Step 3: Lazy Provider queries (SteamGridDB & GOG) for remaining missing assets
+	// Step 3: Lazy Provider queries (SteamGridDB, GOG, RAWG) for remaining missing assets
 	if s.registry != nil && !game.LockedArtwork {
 		if s.hasMissingAssets(game) {
 			s.resolveFromSGDB(ctx, game, steamID, hasSteamID, gameArtDir)
 		}
-		if s.hasMissingAssets(game) && game.GOGID != "" {
-			s.resolveFromGOG(ctx, game, gameArtDir)
+		if s.hasMissingAssets(game) && gogID != "" {
+			s.resolveFromGOG(ctx, game, gogID, gameArtDir)
+		}
+		if s.hasMissingAssets(game) && rawgID != "" {
+			s.resolveFromRAWG(ctx, game, rawgID, gameArtDir)
 		}
 	}
 
@@ -334,13 +350,35 @@ func (s *ArtworkService) resolveFromSGDB(ctx context.Context, game *domain.Game,
 	s.applyProviderArtwork(ctx, game, art, gameArtDir)
 }
 
-func (s *ArtworkService) resolveFromGOG(ctx context.Context, game *domain.Game, gameArtDir string) {
+func (s *ArtworkService) resolveFromGOG(ctx context.Context, game *domain.Game, gogID string, gameArtDir string) {
+	if gogID == "" {
+		return
+	}
+
 	p, ok := s.registry.Get("gog")
 	if !ok {
 		return
 	}
 
-	art, err := p.GetArtwork(ctx, game.GOGID)
+	art, err := p.GetArtwork(ctx, gogID)
+	if err != nil || art == nil {
+		return
+	}
+
+	s.applyProviderArtwork(ctx, game, art, gameArtDir)
+}
+
+func (s *ArtworkService) resolveFromRAWG(ctx context.Context, game *domain.Game, rawgID string, gameArtDir string) {
+	if rawgID == "" {
+		return
+	}
+
+	p, ok := s.registry.Get("rawg")
+	if !ok {
+		return
+	}
+
+	art, err := p.GetArtwork(ctx, rawgID)
 	if err != nil || art == nil {
 		return
 	}

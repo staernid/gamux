@@ -18,57 +18,89 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type LibraryService struct {
-	sc *ServiceContext
-}
-
-func NewLibraryService(sc *ServiceContext) *LibraryService {
-	return &LibraryService{sc: sc}
-}
-
 // InspectLocal performs fast static local inspection (executables, manifests, backups, configuration profile).
-func (ls *LibraryService) InspectLocal(ctx context.Context, targetPath string) (*GameStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) InspectLocal(ctx context.Context, targetPath string) (*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
 	status, err := detector.Inspect(ctx, targetPath)
 	if err != nil {
 		return nil, err
 	}
 
-	if status.CurrentLanguage == "" && ls.sc.Config != nil && ls.sc.Config.Language != "" {
-		status.CurrentLanguage = ls.sc.Config.Language
+	if status.CurrentLanguage == "" && eng.Config != nil && eng.Config.Language != "" {
+		status.CurrentLanguage = eng.Config.Language
 	}
 
-	if status.OperatingMode == "" {
-		if ls.sc.Config != nil && ls.sc.Config.OperatingMode != "" {
-			status.OperatingMode = ls.sc.Config.OperatingMode
-		} else {
-			status.OperatingMode = runner.ModeStandalone
+	if status.LaunchProfile == nil {
+		status.LaunchProfile = &domain.LaunchProfile{
+			GameDir:       status.GameDir,
+			OperatingMode: runner.ModeStandalone,
 		}
-	}
-	if status.Runner == "" {
-		if ls.sc.Config != nil && ls.sc.Config.DefaultRunner != "" {
-			status.Runner = ls.sc.Config.DefaultRunner
+		if eng.Config != nil {
+			if eng.Config.OperatingMode != "" {
+				status.LaunchProfile.OperatingMode = eng.Config.OperatingMode
+			}
+			if eng.Config.DefaultRunner != "" {
+				status.LaunchProfile.Runner = eng.Config.DefaultRunner
+			}
+			if eng.Config.WinePrefix != "" {
+				status.LaunchProfile.WinePrefix = eng.Config.WinePrefix
+			}
 		}
-	}
-	if status.WinePrefix == "" {
-		if ls.sc.Config != nil {
-			status.WinePrefix = ls.sc.Config.WinePrefix
+	} else {
+		if status.LaunchProfile.OperatingMode == "" && eng.Config != nil && eng.Config.OperatingMode != "" {
+			status.LaunchProfile.OperatingMode = eng.Config.OperatingMode
+		}
+		if status.LaunchProfile.Runner == "" && eng.Config != nil && eng.Config.DefaultRunner != "" {
+			status.LaunchProfile.Runner = eng.Config.DefaultRunner
+		}
+		if status.LaunchProfile.WinePrefix == "" && eng.Config != nil && eng.Config.WinePrefix != "" {
+			status.LaunchProfile.WinePrefix = eng.Config.WinePrefix
 		}
 	}
 
 	status.RecomputeState()
 
-	if ls.sc.ArtworkService != nil {
-		_, _ = ls.sc.ArtworkService.Resolve(ctx, status)
+	numAppID, _ := util.ParseAppID(status.AppID)
+	if numAppID > 0 {
+		if depots, err := manifest.InspectGameDepots(status.GameDir, numAppID); err == nil && len(depots) > 0 {
+			status.Depots = depots
+			var platforms []string
+			platSeen := make(map[string]bool)
+			for _, d := range depots {
+				var p string
+				switch d.Category {
+				case "windows":
+					p = "Windows"
+				case "linux":
+					p = "Linux Native"
+				case "macos":
+					p = "macOS"
+				}
+				if p != "" && !platSeen[p] {
+					platSeen[p] = true
+					platforms = append(platforms, p)
+				}
+			}
+			status.AvailablePlatforms = platforms
+		}
+
+		if manifestCandidates := manifest.DiscoverManifestExecutables(status.GameDir, numAppID, status.Platform); len(manifestCandidates) > 0 {
+			status.LaunchCandidates = manifestCandidates
+		}
+	}
+
+	if eng.ArtworkService != nil {
+		_, _ = eng.ArtworkService.Resolve(ctx, status)
 	}
 
 	return status, nil
 }
 
+
 // InspectStatus inspects a game directory to determine its patch and configuration state, enriched with remote metadata.
-func (ls *LibraryService) InspectStatus(ctx context.Context, targetPath string) (*GameStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
-	status, err := ls.InspectLocal(ctx, targetPath)
+func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
+	status, err := eng.InspectLocal(ctx, targetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +119,9 @@ func (ls *LibraryService) InspectStatus(ctx context.Context, targetPath string) 
 }
 
 // InspectStatusEx extends InspectStatus with customizable news history depth.
-func (ls *LibraryService) InspectStatusEx(ctx context.Context, targetPath string, newsCount int) (*GameStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
-	status, err := ls.InspectStatus(ctx, targetPath)
+func (eng *Engine) InspectStatusEx(ctx context.Context, targetPath string, newsCount int) (*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
+	status, err := eng.InspectStatus(ctx, targetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +134,8 @@ func (ls *LibraryService) InspectStatusEx(ctx context.Context, targetPath string
 }
 
 // BatchInspect scans all candidate game subdirectories in parentDir and returns their GameStatus.
-func (ls *LibraryService) BatchInspect(ctx context.Context, parentDir string) ([]*GameStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) BatchInspect(ctx context.Context, parentDir string) ([]*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
 	absParent, err := filepath.Abs(parentDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve parent directory path: %w", err)
@@ -119,7 +151,15 @@ func (ls *LibraryService) BatchInspect(ctx context.Context, parentDir string) ([
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		validPaths = append(validPaths, filepath.Join(absParent, entry.Name()))
+		dirLower := strings.ToLower(entry.Name())
+		if dirLower == "umu" || dirLower == "umu-default" || dirLower == "wine" || dirLower == "proton" || dirLower == "pfx" || dirLower == "prefix" || dirLower == "prefixes" || dirLower == "art" || dirLower == "backups" {
+			continue
+		}
+		fullPath := filepath.Join(absParent, entry.Name())
+		if util.FileExists(filepath.Join(fullPath, "drive_c")) && (util.FileExists(filepath.Join(fullPath, "system.reg")) || util.FileExists(filepath.Join(fullPath, "user.reg")) || util.FileExists(filepath.Join(fullPath, "dosdevices"))) {
+			continue
+		}
+		validPaths = append(validPaths, fullPath)
 	}
 
 	results := make([]*GameStatus, len(validPaths))
@@ -130,7 +170,7 @@ func (ls *LibraryService) BatchInspect(ctx context.Context, parentDir string) ([
 		idx := i
 		path := p
 		g.Go(func() error {
-			status, err := ls.InspectLocal(ctx, path)
+			status, err := eng.InspectLocal(ctx, path)
 			if err == nil && status != nil {
 				results[idx] = status
 			}
@@ -150,8 +190,8 @@ func (ls *LibraryService) BatchInspect(ctx context.Context, parentDir string) ([
 }
 
 // BatchInspectLibraries scans multiple library parent directories concurrently and consolidates results.
-func (ls *LibraryService) BatchInspectLibraries(ctx context.Context, libDirs []string) ([]*GameStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) BatchInspectLibraries(ctx context.Context, libDirs []string) ([]*GameStatus, error) {
+	ctx = eng.WrapContext(ctx)
 	seen := make(map[string]bool)
 	var consolidated []*GameStatus
 
@@ -164,7 +204,7 @@ func (ls *LibraryService) BatchInspectLibraries(ctx context.Context, libDirs []s
 		if !util.FileExists(expanded) {
 			continue
 		}
-		statuses, err := ls.BatchInspect(ctx, expanded)
+		statuses, err := eng.BatchInspect(ctx, expanded)
 		if err != nil {
 			slog.Warn("Failed to inspect library directory", "path", expanded, "error", err)
 			continue
@@ -181,8 +221,8 @@ func (ls *LibraryService) BatchInspectLibraries(ctx context.Context, libDirs []s
 }
 
 // VerifyIntegrity runs an on-demand full depot integrity comparison for a game directory.
-func (ls *LibraryService) VerifyIntegrity(ctx context.Context, targetPath string) (*manifest.IntegrityReport, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) VerifyIntegrity(ctx context.Context, targetPath string) (*manifest.IntegrityReport, error) {
+	ctx = eng.WrapContext(ctx)
 	info, err := detector.Detect(ctx, targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("detect game for integrity check: %w", err)
@@ -193,12 +233,12 @@ func (ls *LibraryService) VerifyIntegrity(ctx context.Context, targetPath string
 		return nil, fmt.Errorf("invalid AppID %q for integrity verification", info.AppID)
 	}
 
-	return manifest.ScanDepotIntegrity(info.GameDir, appIDVal)
+	return manifest.ScanDepotIntegrityWithPlatform(info.GameDir, appIDVal, info.Platform)
 }
 
 // CheckLibraryUpdates scans a directory containing game folders and checks for available Steam updates.
-func (ls *LibraryService) CheckLibraryUpdates(ctx context.Context, parentDir string) ([]LibraryUpdateStatus, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) CheckLibraryUpdates(ctx context.Context, parentDir string) ([]LibraryUpdateStatus, error) {
+	ctx = eng.WrapContext(ctx)
 	if parentDir == "" {
 		parentDir = "."
 	}
@@ -250,7 +290,7 @@ func (ls *LibraryService) CheckLibraryUpdates(ctx context.Context, parentDir str
 	return results, nil
 }
 
-func (ls *LibraryService) resolveGameName(ctx context.Context, path string) string {
+func (eng *Engine) resolveGameName(ctx context.Context, path string) string {
 	if info, err := detector.Detect(ctx, path); err == nil && info != nil && info.Name != "" {
 		return info.Name
 	}
@@ -258,50 +298,50 @@ func (ls *LibraryService) resolveGameName(ctx context.Context, path string) stri
 }
 
 // SearchStoreGames searches across registered game store providers (Steam, GOG).
-func (ls *LibraryService) SearchStoreGames(ctx context.Context, query string) ([]store.SearchResult, error) {
-	if ls.sc.StoreRegistry == nil {
+func (eng *Engine) SearchStoreGames(ctx context.Context, query string) ([]store.SearchResult, error) {
+	if eng.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
-	return ls.sc.StoreRegistry.SearchStores(ls.sc.WrapContext(ctx), query)
+	return eng.StoreRegistry.SearchStores(eng.WrapContext(ctx), query)
 }
 
 // ResolveArtwork resolves covers, banners, heroes, and logos for a game.
-func (ls *LibraryService) ResolveArtwork(ctx context.Context, game *domain.Game) (*domain.GameArtwork, error) {
-	if ls.sc.ArtworkService == nil {
+func (eng *Engine) ResolveArtwork(ctx context.Context, game *domain.Game) (*domain.GameArtwork, error) {
+	if eng.ArtworkService == nil {
 		return nil, fmt.Errorf("artwork service not initialized")
 	}
-	return ls.sc.ArtworkService.Resolve(ls.sc.WrapContext(ctx), game)
+	return eng.ArtworkService.Resolve(eng.WrapContext(ctx), game)
 }
 
 // SearchArtworkCandidates queries registered providers (SteamGridDB, Steam, GOG) for artwork matching a title.
-func (ls *LibraryService) SearchArtworkCandidates(ctx context.Context, query string) ([]store.SearchResult, error) {
-	if ls.sc.StoreRegistry == nil {
+func (eng *Engine) SearchArtworkCandidates(ctx context.Context, query string) ([]store.SearchResult, error) {
+	if eng.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
-	return ls.sc.StoreRegistry.SearchAll(ls.sc.WrapContext(ctx), query)
+	return eng.StoreRegistry.SearchAll(eng.WrapContext(ctx), query)
 }
 
 // QueryArtworkOptions queries candidate providers for specific asset options (covers, heroes, banners, logos).
-func (ls *LibraryService) QueryArtworkOptions(ctx context.Context, query domain.ArtworkQuery) ([]domain.ArtworkOption, error) {
-	if ls.sc.StoreRegistry == nil {
+func (eng *Engine) QueryArtworkOptions(ctx context.Context, query domain.ArtworkQuery) ([]domain.ArtworkOption, error) {
+	if eng.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
-	return ls.sc.StoreRegistry.QueryArtworkOptions(ls.sc.WrapContext(ctx), query)
+	return eng.StoreRegistry.QueryArtworkOptions(eng.WrapContext(ctx), query)
 }
 
 // ApplyCustomArtwork sets custom artwork on a game and persists the choice in the launch profile.
-func (ls *LibraryService) ApplyCustomArtwork(ctx context.Context, gameDir string, assetType string, imageSource string) (*domain.GameArtwork, error) {
-	ctx = ls.sc.WrapContext(ctx)
-	if ls.sc.ArtworkService == nil {
+func (eng *Engine) ApplyCustomArtwork(ctx context.Context, gameDir string, assetType string, imageSource string) (*domain.GameArtwork, error) {
+	ctx = eng.WrapContext(ctx)
+	if eng.ArtworkService == nil {
 		return nil, fmt.Errorf("artwork service not initialized")
 	}
 
-	status, err := ls.InspectStatus(ctx, gameDir)
+	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
 		return nil, fmt.Errorf("inspect game: %w", err)
 	}
 
-	art, err := ls.sc.ArtworkService.ApplyCustomArtwork(ctx, status, assetType, imageSource)
+	art, err := eng.ArtworkService.ApplyCustomArtwork(ctx, status, assetType, imageSource)
 	if err != nil {
 		return nil, err
 	}
@@ -330,8 +370,8 @@ func (ls *LibraryService) ApplyCustomArtwork(ctx context.Context, gameDir string
 }
 
 // LinkGameMetadata links a game installation to a specific metadata provider and ID.
-func (ls *LibraryService) LinkGameMetadata(ctx context.Context, gameDir, storeName, storeID string) (*domain.Game, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, storeID string) (*domain.Game, error) {
+	ctx = eng.WrapContext(ctx)
 	profile, err := runner.LoadLaunchProfile(gameDir)
 	if err != nil {
 		profile = &domain.LaunchProfile{
@@ -339,38 +379,81 @@ func (ls *LibraryService) LinkGameMetadata(ctx context.Context, gameDir, storeNa
 		}
 	}
 
+	storeNameLower := strings.ToLower(strings.TrimSpace(storeName))
+	profile.MetadataProvider = storeNameLower
+	profile.MetadataID = strings.TrimSpace(storeID)
 	profile.Store = storeName
-	storeNameLower := strings.ToLower(storeName)
+
 	switch storeNameLower {
+	case "standalone", "custom", "none", "":
+		profile.MetadataProvider = "standalone"
+		profile.MetadataID = ""
+		profile.AppID = "0"
+		profile.StoreAppID = ""
+		profile.GOGID = ""
+		profile.Store = domain.StoreStandalone
+		profile.Name = filepath.Base(gameDir)
 	case "steam":
-		profile.AppID = storeID
-		profile.StoreAppID = storeID
+		profile.AppID = profile.MetadataID
+		profile.StoreAppID = profile.MetadataID
+		profile.GOGID = ""
 		// Try fetching Steam game name if empty
-		if name, err := steam.FetchAppName(ctx, storeID); err == nil && name != "" {
+		if name, err := steam.FetchAppName(ctx, profile.MetadataID); err == nil && name != "" {
 			profile.Name = name
 		}
 	case "gog":
-		profile.GOGID = storeID
-		if ls.sc.StoreRegistry != nil {
-			if p, ok := ls.sc.StoreRegistry.Get("gog"); ok {
-				if meta, err := p.GetMetadata(ctx, storeID); err == nil && meta != nil && meta.Name != "" {
+		profile.GOGID = profile.MetadataID
+		profile.StoreAppID = ""
+		profile.AppID = "0"
+		if eng.StoreRegistry != nil {
+			if p, ok := eng.StoreRegistry.Get("gog"); ok {
+				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
 					profile.Name = meta.Name
 				}
 			}
 		}
-	case "standalone", "custom":
+	default:
+		// Generic metadata provider (e.g. RAWG, PCGW, etc.)
 		profile.AppID = "0"
 		profile.StoreAppID = ""
 		profile.GOGID = ""
-		profile.Name = filepath.Base(gameDir)
+		if eng.StoreRegistry != nil {
+			if p, ok := eng.StoreRegistry.Get(storeNameLower); ok {
+				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
+					profile.Name = meta.Name
+				}
+			}
+		}
 	}
 
 	if err := runner.SaveProfile(profile); err != nil {
 		return nil, fmt.Errorf("save launch profile: %w", err)
 	}
-	_ = runner.SyncLaunchProfile(ctx, profile, ls.sc.Config)
+	_ = runner.SyncLaunchProfile(ctx, profile, eng.Config)
 
-	status, err := ls.InspectStatus(ctx, gameDir)
+	status, err := eng.InspectStatus(ctx, gameDir)
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
+}
+
+// ListMetadataProviders returns descriptors for all registered metadata and artwork providers.
+func (eng *Engine) ListMetadataProviders(ctx context.Context) []store.ProviderDescriptor {
+	if eng.StoreRegistry == nil {
+		return []store.ProviderDescriptor{}
+	}
+	return eng.StoreRegistry.ListDescriptors()
+}
+
+// UnlinkGameMetadata removes custom metadata bindings and restores auto-detected game identity.
+func (eng *Engine) UnlinkGameMetadata(ctx context.Context, gameDir string) (*domain.Game, error) {
+	ctx = eng.WrapContext(ctx)
+	if err := runner.UnlinkMetadata(gameDir); err != nil {
+		return nil, fmt.Errorf("unlink metadata: %w", err)
+	}
+
+	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
 		return nil, err
 	}
@@ -378,8 +461,8 @@ func (ls *LibraryService) LinkGameMetadata(ctx context.Context, gameDir, storeNa
 }
 
 // GetPatchNote fetches and retrieves a single patch note at itemIndex (1-indexed) for a game path or AppID.
-func (ls *LibraryService) GetPatchNote(ctx context.Context, targetPath string, itemIndex int) (*steam.NewsItem, string, error) {
-	ctx = ls.sc.WrapContext(ctx)
+func (eng *Engine) GetPatchNote(ctx context.Context, targetPath string, itemIndex int) (*steam.NewsItem, string, error) {
+	ctx = eng.WrapContext(ctx)
 	appID := targetPath
 	gameName := targetPath
 

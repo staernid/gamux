@@ -302,7 +302,7 @@
     {#if isLoading}
       <div class="h-64 flex flex-col items-center justify-center text-slate-400 space-y-3 font-mono text-xs">
         <div class="w-7 h-7 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-        <p>Querying SteamGridDB and Steam providers...</p>
+        <p>Discovering artwork options across providers...</p>
       </div>
     {:else if options.length === 0}
       <div class="h-64 flex flex-col items-center justify-center text-slate-500 text-xs font-mono space-y-2 text-center">
@@ -336,7 +336,10 @@
               <!-- Active Badge -->
               {#if isActive}
                 <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-600 shadow-md flex items-center space-x-1">
-                  <span>✓ Active</span>
+                  <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Active</span>
                 </div>
               {/if}
 

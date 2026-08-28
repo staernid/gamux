@@ -37,7 +37,15 @@ const DEFAULT_MOCKS = {
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
   isGameRunning: () => false,
+  submitBatchAchievements: () => Promise.resolve('task_batch_achievements_1'),
+  submitBatchArtwork: () => Promise.resolve('task_batch_artwork_1'),
+  submitBatchNormalize: () => Promise.resolve('task_batch_normalize_1'),
+  submitBatchVerify: () => Promise.resolve('task_batch_verify_1'),
   getGameLog: (path) => Promise.resolve(`=== Gamux Launch Log ===\nTime: Tue, 25 Aug 2026 20:30:00 CEST\nGame: Mock Game Title\nPlatform: win64\nMode: standalone\nRunner: umu\nExecutable: /mock/game.exe\nWorkingDir: /mock\nCommand: umu-run /mock/game.exe\n========================\n\n[umu-run] Initializing Proton prefix...\n[Proton] Game process started successfully (PID: 12345)\n[DXVK] Found Vulkan 1.3 driver\n[Audio] PulseAudio sink connected\n`),
+  getGameAchievements: (path) => Promise.resolve([
+    { id: 'ACH_1', name: 'First Steps', description: 'Complete the tutorial', icon_url: '', icon_gray_url: '', hidden: false, unlocked: true, unlock_time: 1690000000 },
+    { id: 'ACH_2', name: 'Master Collector', description: 'Collect all hidden items', icon_url: '', icon_gray_url: '', hidden: false, unlocked: false, unlock_time: 0 }
+  ]),
   verifyIntegrity: () => ({
     official_count: 1420,
     intact_count: 1420,
@@ -47,8 +55,28 @@ const DEFAULT_MOCKS = {
   }),
   getLaunchProfile: (path) => null,
   saveLaunchProfile: (path, p) => ({ ...mockData.MOCK_GAMES[0], launch_profile: p }),
-  resetLaunchProfile: (path) => mockData.MOCK_GAMES[0],
+  getGameDepots: (path) => [
+    { depot_id: 41501, name: 'Base Content (41501)', category: 'common', installed: true, size: 500000000, file_count: 120, manifest_id: 1001 },
+    { depot_id: 41502, name: 'Windows Binaries (41502)', category: 'windows', installed: true, size: 25000000, file_count: 15, manifest_id: 1002 },
+    { depot_id: 41504, name: 'Linux Native Binaries (41504)', category: 'linux', installed: false, size: 28000000, file_count: 18, manifest_id: 1003 },
+    { depot_id: 41505, name: 'Official Soundtrack (41505)', category: 'soundtrack', installed: false, size: 150000000, file_count: 24, manifest_id: 1004 },
+  ],
+  switchGamePlatform: (path, plat) => Promise.resolve({ ...mockData.MOCK_GAMES[0], platform: plat }),
+  uninstallDepot: (path, depotId) => Promise.resolve({ ...mockData.MOCK_GAMES[0] }),
   openDirectory: () => Promise.resolve(),
+
+
+  openURL: () => Promise.resolve(),
+  getGameDetails: (appId) => Promise.resolve({
+    name: 'Cyberpunk 2077',
+    short_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
+    detailed_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
+    about_the_game: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in the world of Night City.',
+    developers: ['CD PROJEKT RED'],
+    publishers: ['CD PROJEKT RED'],
+    genres: ['RPG', 'Action', 'Open World', 'Sci-Fi'],
+    release_date: 'Dec 10, 2020'
+  }),
   getDiskSpace: (path) => ({
     path: path || '/home/staernid/Games',
     total_bytes: 1099511627776, // 1 TiB
@@ -79,9 +107,21 @@ const DEFAULT_MOCKS = {
   linkGameMetadata: (path, store, id) => Promise.resolve({
     ...mockData.MOCK_GAMES[0],
     store,
+    metadata_provider: store,
+    metadata_id: id,
     app_id: id,
     AppID: id
   }),
+  unlinkGameMetadata: (path) => Promise.resolve({
+    ...mockData.MOCK_GAMES[0],
+    metadata_provider: '',
+    metadata_id: ''
+  }),
+  listMetadataProviders: () => Promise.resolve([
+    { id: 'steam', display_name: 'Steam', capabilities: { can_search: true, can_fetch_metadata: true, can_provide_artwork: true, is_game_store: true } },
+    { id: 'gog', display_name: 'GOG', capabilities: { can_search: true, can_fetch_metadata: true, can_provide_artwork: true, is_game_store: true } },
+    { id: 'rawg', display_name: 'RAWG Video Games Database', capabilities: { can_search: true, can_fetch_metadata: true, can_provide_artwork: true, is_game_store: false } }
+  ]),
   resolveArtwork: () => Promise.resolve({ cover_url: '', local_cover: '' }),
   fetchNews: (appId, count) => mockData.MOCK_GAMES[0].news_items || [],
   getPatchNote: () => Promise.resolve([null, '']),

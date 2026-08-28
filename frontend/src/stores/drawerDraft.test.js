@@ -115,4 +115,47 @@ describe('drawerDraft Store', () => {
     expect(AppAPI.saveLaunchProfile).toHaveBeenCalled();
     expect(get(showInspector)).toBe(false);
   });
+
+  it('correctly tracks and persists DRM operating mode (loader, portable, none, default)', async () => {
+    const saveSpy = vi.spyOn(AppAPI, 'saveLaunchProfile').mockResolvedValue({});
+    vi.spyOn(AppAPI, 'inspectGame').mockResolvedValue(mockGame);
+
+    drawerDraft.init(mockGame, mockGlobalConfig);
+
+    // Initial draft from mockGame with operating_mode 'standalone'
+    expect(get(drawerDraft).mode).toBe('standalone');
+
+    // Switch to 'loader'
+    drawerDraft.setField('mode', 'loader');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ operating_mode: 'loader' })
+    );
+
+    // Switch to 'portable'
+    drawerDraft.setField('mode', 'portable');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ operating_mode: 'portable' })
+    );
+
+    // Switch to 'none'
+    drawerDraft.setField('mode', 'none');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ operating_mode: 'none' })
+    );
+
+    // Switch to default/inherited ('')
+    drawerDraft.setField('mode', '');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ operating_mode: '' })
+    );
+  });
 });
+
