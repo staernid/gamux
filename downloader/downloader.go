@@ -2,6 +2,8 @@ package downloader
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -100,9 +102,9 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		targetDir = "."
 	}
 
-	absTargetDir, err := filepath.Abs(targetDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolve target directory: %w", err)
+	absTargetDir := util.CanonicalPath(targetDir)
+	if absTargetDir == "" {
+		return nil, fmt.Errorf("resolve target directory: empty path")
 	}
 
 	httpClient := req.HTTPClient
@@ -822,7 +824,17 @@ func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, 
 			continue
 		}
 
-		// 3. Write chunk payload at expected offset
+		// 3. Verify chunk integrity against chunk.ChunkID SHA-1 (when 40-hex SHA1 hash is provided)
+		if len(chunk.ChunkID) == 40 {
+			chunkSum := sha1.Sum(decompressed)
+			chunkHashHex := hex.EncodeToString(chunkSum[:])
+			if !strings.EqualFold(chunkHashHex, chunk.ChunkID) {
+				lastErr = fmt.Errorf("chunk %s checksum mismatch: got %s", chunk.ChunkID, chunkHashHex)
+				continue
+			}
+		}
+
+		// 4. Write chunk payload at expected offset
 		if _, err := dst.WriteAt(decompressed, int64(chunk.Offset)); err != nil {
 			return fmt.Errorf("write chunk %s at offset %d: %w", chunk.ChunkID, chunk.Offset, err)
 		}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/manifest"
@@ -163,9 +164,9 @@ func TestApp_GameOperations(t *testing.T) {
 
 	// 5. Submit Apply & Rollback Tasks
 	applyTaskID, err := app.SubmitApply(engine.ProcessOptions{
-		Path:     gameDir,
-		DryRun:   true,
-		ApplyGBE: true,
+		Path:          gameDir,
+		DryRun:        true,
+		OperatingMode: domain.ModeLoader,
 	})
 	if err != nil {
 		t.Fatalf("SubmitApply() dry run failed: %v", err)

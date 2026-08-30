@@ -6,7 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"syscall"
+	"time"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 )
@@ -62,7 +65,7 @@ func Launch(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.
 	return cmd, logFile, nil
 }
 
-// Run executes a game synchronously, waiting for it to complete.
+// Run executes a game synchronously, waiting for it to complete and tracking playtime.
 func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	resolved := ResolveEffectiveOptions(cfg, opts)
 	cmd, err := BuildCommand(ctx, cfg, resolved)
@@ -80,9 +83,74 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("game execution failed: %w", err)
 	}
 
-	return nil
+	started := time.Now()
+	pgid := 0
+	if cmd.Process != nil {
+		if p, err := syscall.Getpgid(cmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
+			pgid = p
+		}
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	lastFlushedTime := started
+	flushDelta := func() {
+		now := time.Now()
+		delta := int64(now.Sub(lastFlushedTime).Seconds())
+		if resolved.GameDir != "" {
+			if _, _, err := compat.IncrementPlaytime(resolved.GameDir, delta); err == nil {
+				if delta > 0 {
+					lastFlushedTime = now
+				}
+			}
+		}
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+
+	var waitErr error
+	waiting := true
+	for waiting {
+		select {
+		case <-ctx.Done():
+			if pgid > 1 {
+				_ = syscall.Kill(-pgid, syscall.SIGTERM)
+			} else if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			waitErr = ctx.Err()
+			waiting = false
+		case <-ticker.C:
+			flushDelta()
+		case waitErr = <-waitDone:
+			waiting = false
+		}
+	}
+
+	if pgid > 1 && ctx.Err() == nil {
+		for {
+			if err := syscall.Kill(-pgid, 0); err != nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				_ = syscall.Kill(-pgid, syscall.SIGTERM)
+				break
+			case <-ticker.C:
+				flushDelta()
+			case <-time.After(1 * time.Second):
+			}
+		}
+	}
+
+	flushDelta()
+	return waitErr
 }

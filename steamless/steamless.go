@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/util"
 )
 
@@ -52,7 +53,26 @@ func EnsureBinary(ctx context.Context, cfg *config.Config) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("embedded steamless binary unavailable for this architecture and 'steamless' not found in PATH")
+	// 3. Fallback to cached binary in cfg.SteamlessDir or auto-bootstrap from GitHub Releases
+	destDir := util.CanonicalPath(cfg.SteamlessDir)
+	for _, binName := range []string{"steamless-cli", "steamless"} {
+		p := filepath.Join(destDir, binName)
+		if util.FileExists(p) {
+			return p, nil
+		}
+	}
+
+	slog.Info("Steamless binary missing locally, bootstrapping from GitHub releases...", "dest", destDir)
+	if err := github.UpdateSteamlessAssets(ctx, cfg, destDir); err == nil {
+		for _, binName := range []string{"steamless-cli", "steamless"} {
+			p := filepath.Join(destDir, binName)
+			if util.FileExists(p) {
+				return p, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("steamless binary unavailable locally and could not be bootstrapped from GitHub")
 }
 
 // UnpackGameDirectory scans a game directory (or target executable) and attempts SteamStub DRM unpacking on all discovered executables.

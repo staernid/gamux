@@ -34,6 +34,7 @@ var cacheSubdirs = []string{
 	"revobd",
 	"steamdepotdb",
 	"sgdb",
+	"store_meta",
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -510,3 +511,36 @@ func SaveSGDBArtwork(lookupKey string, data []byte) error {
 	path := filepath.Join(dir, "sgdb", fmt.Sprintf("%s.json", lookupKey))
 	return writeTTLFile(path, data)
 }
+
+// ==========================================
+// 8. Multi-Store Metadata Cache (24 Hours TTL)
+// ==========================================
+
+// GetStoreMetadata retrieves cached catalog metadata (e.g. GOG, RAWG) if less than 24 hours old.
+func GetStoreMetadata(storeName, gameID string) ([]byte, bool) {
+	if DisableCache || storeName == "" || gameID == "" {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	safeID := filepath.Clean(gameID)
+	path := filepath.Join(dir, "store_meta", fmt.Sprintf("%s_%s.json", storeName, safeID))
+	return readTTLFile(path, 24*time.Hour)
+}
+
+// SaveStoreMetadata caches catalog metadata to disk for 24 hours.
+func SaveStoreMetadata(storeName, gameID string, data []byte) error {
+	if DisableCache || storeName == "" || gameID == "" || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	safeID := filepath.Clean(gameID)
+	path := filepath.Join(dir, "store_meta", fmt.Sprintf("%s_%s.json", storeName, safeID))
+	return writeTTLFile(path, data)
+}
+

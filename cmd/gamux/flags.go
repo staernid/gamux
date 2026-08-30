@@ -126,25 +126,7 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	} else if c.IsSet("no-gbe") {
 		opMode = domain.ModeNone
 	} else if promptIfUnset && !autoYes {
-		applyGBE := ui.PromptYesNoWithExplanation(
-			"Apply Goldberg Emulator & Steamless DRM removal?",
-			"Unpacks SteamStub DRM, configures DLCs, and sets up Steam API emulation.",
-			true,
-		)
-		if applyGBE {
-			portable := ui.PromptYesNoWithExplanation(
-				"Use Portable Mode (Direct DLL/SO replacement)?",
-				"Portable mode replaces steam_api.dll directly in the game folder (backed up to .ORIGINAL). Default Loader mode keeps original game files 100% untouched.",
-				false,
-			)
-			if portable {
-				opMode = domain.ModePortable
-			} else {
-				opMode = domain.ModeLoader
-			}
-		} else {
-			opMode = domain.ModeNone
-		}
+		opMode = ui.PromptSelectOperatingMode(opMode)
 	}
 
 	// 2. Operational Toggles
@@ -182,8 +164,6 @@ func extractProcessOptions(c *cli.Context, promptIfUnset bool, cfg *config.Confi
 	return engine.ProcessOptions{
 		Path:              path,
 		OperatingMode:     opMode,
-		ApplyGBE:          opMode != domain.ModeNone && opMode != domain.ModeStandalone,
-		Portable:          opMode == domain.ModePortable,
 		WinePrefix:        winePrefix,
 		NormalizeDir:      normalize,
 		DryRun:            c.Bool("dry-run"),

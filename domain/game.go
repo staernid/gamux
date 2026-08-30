@@ -190,6 +190,8 @@ type GameArtwork struct {
 // ---------------------------------------------------------------------------
 
 // GameRecord captures the immutable on-disk identity, directory layout, and inventory metrics of an installed game.
+// All fields reflect physical on-disk baseline data discovered via detector, ACF manifests, and depot scanners.
+// To override execution or environment behaviors, use LaunchProfile instead.
 type GameRecord struct {
 	GameDir            string            `json:"game_dir"`
 	AppID              string            `json:"app_id"`
@@ -221,6 +223,7 @@ type GameRecord struct {
 
 // LaunchProfile defines execution overrides and runtime environment settings for a game,
 // persisted atomically to <gameDir>/steam_settings/launch_profile.json.
+// Fields in LaunchProfile take precedence over detected defaults in GameRecord.
 type LaunchProfile struct {
 	GameDir           string            `json:"game_dir"`
 	AppID             string            `json:"app_id,omitempty"`
@@ -359,12 +362,12 @@ func (g *Game) EffectiveExeArgs() string {
 	return ""
 }
 
-// EffectiveOperatingMode returns the active operating mode from the profile or defaults to ModeStandalone.
+// EffectiveOperatingMode returns the active operating mode override from the profile or empty string if unset.
 func (g *Game) EffectiveOperatingMode() string {
 	if g.LaunchProfile != nil && g.LaunchProfile.OperatingMode != "" {
 		return g.LaunchProfile.OperatingMode
 	}
-	return ModeStandalone
+	return ""
 }
 
 // EffectiveRunner returns the active runner from the profile or defaults to RunnerAuto.
@@ -415,6 +418,18 @@ func (g *Game) IsSteam() bool {
 	return strings.EqualFold(g.Store, StoreSteam) ||
 		g.NumericAppID > 0 ||
 		g.ExternalIDs.SteamAppID > 0
+}
+
+// IsWindows returns true if the target executable platform is Windows (win64 or win32).
+func (g *Game) IsWindows() bool {
+	plat := strings.ToLower(strings.TrimSpace(g.Platform))
+	return plat == "win64" || plat == "win32" || plat == "windows"
+}
+
+// IsLinux returns true if the target executable platform is Linux native.
+func (g *Game) IsLinux() bool {
+	plat := strings.ToLower(strings.TrimSpace(g.Platform))
+	return plat == "linux" || plat == "linux32"
 }
 
 // HasBackups returns true if any .ORIGINAL backup libraries are found.

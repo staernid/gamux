@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/staernid/gamux/config"
-	"github.com/staernid/gamux/steam"
-	"github.com/staernid/gamux/util"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/github"
+	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util"
 )
 
 // PlatformConfig maps platform identifiers to their Goldberg Steam Emulator library targets.
@@ -24,6 +26,13 @@ var PlatformConfig = map[string]struct {
 		Additional: "steamclient.so",
 		Generator:  "generate_interfaces_x64",
 		Arch:       "64",
+	},
+	"linux32": {
+		Subdir:     "linux_release",
+		Target:     "libsteam_api.so",
+		Additional: "steamclient.so",
+		Generator:  "generate_interfaces_x32",
+		Arch:       "86",
 	},
 	"win64": {
 		Subdir:     "win_release",
@@ -52,6 +61,23 @@ type Options struct {
 	Portable   bool
 	WinePrefix string
 	ExePath    string
+}
+
+// EnsureAvailable ensures that Goldberg Emulator release assets are present locally, auto-downloading them if missing.
+func EnsureAvailable(ctx context.Context, cfg *config.Config) (string, error) {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	gbeDir := util.CanonicalPath(cfg.GbeDir)
+	if _, err := os.Stat(filepath.Join(gbeDir, "linux_release")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(gbeDir, "win_release")); os.IsNotExist(err) {
+			slog.Info("Goldberg Emulator assets not found locally, bootstrapping from GitHub releases...", "dest", gbeDir)
+			if err := github.UpdateGBE(ctx, cfg); err != nil {
+				return "", fmt.Errorf("auto-bootstrap Goldberg emulator: %w", err)
+			}
+		}
+	}
+	return gbeDir, nil
 }
 
 // ApplyGBE applies the Goldberg Steam Emulator to the target game directory (alias for Apply).
@@ -132,7 +158,42 @@ func Apply(ctx context.Context, opts Options) error {
 		slog.Warn("No target files found", "platform", platform, "dir", absTargetDir)
 	}
 
+	// For Linux, automatically detect if the target library is 32-bit ELF (ELFCLASS32: header[4] == 1)
+	if (platform == "linux" || platform == "linux32") && len(targetFiles) > 0 {
+		if f, err := os.Open(targetFiles[0]); err == nil {
+			header := make([]byte, 5)
+			if n, rErr := f.Read(header); rErr == nil && n >= 5 && string(header[:4]) == "\x7fELF" {
+				if header[4] == 1 {
+					slog.Info("Detected 32-bit (x86) Linux ELF library, selecting x86 Goldberg emulator", "file", targetFiles[0])
+					platformCfg = PlatformConfig["linux32"]
+				} else if header[4] == 2 {
+					platformCfg = PlatformConfig["linux"]
+				}
+				gbePath = filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x"+platformCfg.Arch)
+				if !util.FileExists(gbePath) && platformCfg.Arch == "86" {
+					if fallback := filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x32"); util.FileExists(fallback) {
+						gbePath = fallback
+					}
+				}
+			}
+			f.Close()
+		}
+	}
+
 	sourceFile := filepath.Join(gbePath, platformCfg.Target)
+	if !util.FileExists(sourceFile) {
+		if _, err := EnsureAvailable(ctx, cfg); err == nil {
+			gbeBase = util.CanonicalPath(cfg.GbeDir)
+			gbePath = filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x"+platformCfg.Arch)
+			if !util.FileExists(gbePath) && platformCfg.Arch == "86" {
+				if fallback := filepath.Join(gbeBase, platformCfg.Subdir, "experimental", "x32"); util.FileExists(fallback) {
+					gbePath = fallback
+				}
+			}
+			sourceFile = filepath.Join(gbePath, platformCfg.Target)
+		}
+	}
+
 	if _, err := os.Stat(sourceFile); os.IsNotExist(err) {
 		return fmt.Errorf("source file not found: '%s'", sourceFile)
 	}

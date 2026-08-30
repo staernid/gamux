@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/events"
@@ -83,20 +84,73 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 		}
 
 		go func(gDir string, pCmd *exec.Cmd, lFile *os.File, eb *events.Bus, name, appID string, started time.Time) {
-			waitErr := pCmd.Wait()
-			elapsed := time.Since(started)
-			sessionSec := int64(elapsed.Seconds())
+			pgid := 0
+			if pCmd != nil && pCmd.Process != nil {
+				if p, err := syscall.Getpgid(pCmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
+					pgid = p
+				}
+			}
+
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+
+			lastFlushedTime := started
 			var totalPlaytime int64
 			var lastPlayed int64
 
-			if gDir != "" && sessionSec > 0 {
-				if prof, err := LoadLaunchProfile(gDir); err == nil && prof != nil {
-					prof.PlaytimeSeconds += sessionSec
-					prof.LastPlayed = time.Now().Unix()
-					totalPlaytime = prof.PlaytimeSeconds
-					lastPlayed = prof.LastPlayed
-					_ = SaveLaunchProfile(gDir, *prof)
+			flushDelta := func() {
+				now := time.Now()
+				delta := int64(now.Sub(lastFlushedTime).Seconds())
+				if gDir != "" {
+					tot, lp, err := compat.IncrementPlaytime(gDir, delta)
+					if err == nil {
+						if delta > 0 {
+							lastFlushedTime = now
+						}
+						totalPlaytime = tot
+						lastPlayed = lp
+					}
 				}
+			}
+
+			waitDone := make(chan error, 1)
+			go func() {
+				waitDone <- pCmd.Wait()
+			}()
+
+			var waitErr error
+			waiting := true
+			for waiting {
+				select {
+				case <-ticker.C:
+					flushDelta()
+				case waitErr = <-waitDone:
+					waiting = false
+				}
+			}
+
+			// If the root process exited but child processes in the process group remain active,
+			// continue supervising the process group until all child processes exit.
+			if pgid > 1 {
+				for {
+					if err := syscall.Kill(-pgid, 0); err != nil {
+						break
+					}
+					select {
+					case <-ticker.C:
+						flushDelta()
+					case <-time.After(1 * time.Second):
+					}
+				}
+			}
+
+			flushDelta()
+			elapsed := time.Since(started)
+			sessionSec := int64(elapsed.Seconds())
+
+			if prof, err := compat.LoadProfile(gDir); err == nil && prof != nil {
+				totalPlaytime = prof.PlaytimeSeconds
+				lastPlayed = prof.LastPlayed
 			}
 
 			if lFile != nil {

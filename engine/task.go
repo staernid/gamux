@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/util"
 )
@@ -19,11 +22,13 @@ func (eng *Engine) SubmitApply(opts ProcessOptions) (string, error) {
 	}
 
 	gameName := eng.resolveGameName(context.Background(), opts.Path)
-	return eng.Tasks.SubmitOp(&ApplyOperation{
-		Engine:   eng,
+	pctx := &pipeline.Context{
 		Options:  opts,
-		GameName: gameName,
-	})
+		Game:     domain.NewGame(gameName, opts.Path, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	return eng.Tasks.SubmitOp(pipeline.NewSetupOperation(gameName, opts.Path, pctx))
 }
 
 // SubmitUpdate schedules an asynchronous game update task.
@@ -33,11 +38,17 @@ func (eng *Engine) SubmitUpdate(gamePath string) (string, error) {
 	}
 
 	gameName := eng.resolveGameName(context.Background(), gamePath)
-	return eng.Tasks.SubmitOp(&UpdateOperation{
-		Engine:   eng,
-		GamePath: gamePath,
-		GameName: gameName,
-	})
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:          gamePath,
+			OperatingMode: domain.ModePortable,
+			NormalizeDir:  true,
+		},
+		Game:     domain.NewGame(gameName, gamePath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	return eng.Tasks.SubmitOp(pipeline.NewUpdateOperation(gameName, gamePath, pctx))
 }
 
 // SubmitVerify schedules an asynchronous game depot integrity verification task.
@@ -47,11 +58,15 @@ func (eng *Engine) SubmitVerify(gamePath string) (string, error) {
 	}
 
 	gameName := eng.resolveGameName(context.Background(), gamePath)
-	return eng.Tasks.SubmitOp(&VerifyOperation{
-		Engine:   eng,
-		GamePath: gamePath,
-		GameName: gameName,
-	})
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path: gamePath,
+		},
+		Game:     domain.NewGame(gameName, gamePath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	return eng.Tasks.SubmitOp(pipeline.NewVerifyOperation(gameName, gamePath, pctx))
 }
 
 // SubmitNormalize schedules an asynchronous directory normalization task.
@@ -61,11 +76,17 @@ func (eng *Engine) SubmitNormalize(gamePath string) (string, error) {
 	}
 
 	gameName := eng.resolveGameName(context.Background(), gamePath)
-	return eng.Tasks.SubmitOp(&NormalizeOperation{
-		Engine:   eng,
-		GamePath: gamePath,
-		GameName: gameName,
-	})
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:         gamePath,
+			NormalizeDir: true,
+			AutoYes:      true,
+		},
+		Game:     domain.NewGame(gameName, gamePath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	return eng.Tasks.SubmitOp(pipeline.NewNormalizeOperation(gameName, gamePath, pctx))
 }
 
 // SubmitRollback schedules an asynchronous game rollback task.
@@ -75,12 +96,16 @@ func (eng *Engine) SubmitRollback(gamePath string, dryRun bool) (string, error) 
 	}
 
 	gameName := eng.resolveGameName(context.Background(), gamePath)
-	return eng.Tasks.SubmitOp(&RollbackOperation{
-		Engine:   eng,
-		GamePath: gamePath,
-		GameName: gameName,
-		DryRun:   dryRun,
-	})
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:   gamePath,
+			DryRun: dryRun,
+		},
+		Game:     domain.NewGame(gameName, gamePath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	return eng.Tasks.SubmitOp(pipeline.NewRollbackOperation(gameName, gamePath, pctx))
 }
 
 // SubmitDownload schedules an asynchronous depot download transfer with state persistence, speed telemetry, and pause/resume support.
@@ -191,52 +216,117 @@ func (eng *Engine) getLibraryDirs() []string {
 	return dirs
 }
 
-// SubmitBatchAchievements schedules an asynchronous batch task to fetch schemas and download achievement images for all library games.
-func (eng *Engine) SubmitBatchAchievements() (string, error) {
+// SubmitBatchLibraryOp schedules an asynchronous batch library operation.
+// Supported kinds: "achievements", "artwork", "normalize", "verify".
+func (eng *Engine) SubmitBatchLibraryOp(kind string) (string, error) {
 	if eng.Tasks == nil {
 		return "", fmt.Errorf("task manager not initialized")
 	}
 
-	return eng.Tasks.SubmitOp(&BatchAchievementsOperation{
-		Engine:      eng,
-		LibraryDirs: eng.getLibraryDirs(),
-	})
+	op, err := eng.newBatchLibraryOp(kind)
+	if err != nil {
+		return "", err
+	}
+
+	return eng.Tasks.SubmitOp(op)
 }
 
-// SubmitBatchArtwork schedules an asynchronous batch task to query and cache missing covers, heroes, and banners for all games.
-func (eng *Engine) SubmitBatchArtwork() (string, error) {
-	if eng.Tasks == nil {
-		return "", fmt.Errorf("task manager not initialized")
+// newBatchLibraryOp constructs a BatchLibraryOperation for the given kind.
+func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error) {
+	dirs := eng.getLibraryDirs()
+
+	switch strings.ToLower(kind) {
+	case "achievements":
+		apiKey := ""
+		if eng.Config != nil {
+			apiKey = eng.Config.SteamWebAPIKey
+		}
+		return &BatchLibraryOperation{
+			Engine:      eng,
+			LibraryDirs: dirs,
+			BatchTitle:  "Batch Download Missing Achievements",
+			TaskType:    tasks.TypeCustom,
+			ScanLabel:   "Scanning games for missing achievement data...",
+			DoneLabel:   "Processed %d games (downloaded data for %d)",
+			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
+				if game.AppID == "" || game.AppID == "0" || strings.EqualFold(game.AppID, "custom") {
+					return false, nil
+				}
+				appIDNum, ok := util.ParseAppID(game.AppID)
+				if !ok || appIDNum == 0 {
+					return false, nil
+				}
+				achFile := filepath.Join(game.GameDir, "steam_settings", "achievements.json")
+				imgDir := filepath.Join(game.GameDir, "steam_settings", "img")
+				if util.FileExists(achFile) && util.FileExists(imgDir) {
+					return false, nil
+				}
+				if err := gbe.GenerateAchievementsJSON(ctx, appIDNum, apiKey, game.GameDir, false); err != nil {
+					return false, err
+				}
+				return true, nil
+			},
+		}, nil
+
+	case "artwork":
+		return &BatchLibraryOperation{
+			Engine:      eng,
+			LibraryDirs: dirs,
+			BatchTitle:  "Batch Refresh Missing Artwork",
+			TaskType:    tasks.TypeCustom,
+			ScanLabel:   "Scanning games for missing poster, hero, and banner artwork...",
+			DoneLabel:   "Artwork refresh completed for %d games (%d updated)",
+			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
+				art, _ := eng.ResolveArtwork(ctx, game)
+				return art != nil, nil
+			},
+		}, nil
+
+	case "normalize":
+		return &BatchLibraryOperation{
+			Engine:      eng,
+			LibraryDirs: dirs,
+			BatchTitle:  "Batch Normalize Directory Names",
+			TaskType:    tasks.TypeNormalize,
+			ScanLabel:   "Scanning game directories for standard naming...",
+			DoneLabel:   "Normalization finished for %d games (%d directories renamed)",
+			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
+				opts := ProcessOptions{
+					Path:          game.GameDir,
+					OperatingMode: domain.ModeNone,
+					NormalizeDir:  true,
+					NoSteamless:   true,
+					AutoYes:       true,
+					Reporter:      ctrl,
+				}
+				res, err := eng.ProcessGame(ctx, opts)
+				if err != nil {
+					return false, err
+				}
+				return res != nil && res.Info != nil && res.Info.GameDir != game.GameDir, nil
+			},
+		}, nil
+
+	case "verify":
+		return &BatchLibraryOperation{
+			Engine:      eng,
+			LibraryDirs: dirs,
+			BatchTitle:  "Batch Verify Depot Integrity",
+			TaskType:    tasks.TypeVerify,
+			ScanLabel:   "Scanning games for depot manifests...",
+			DoneLabel:   "Integrity check finished for %d games (%d verified)",
+			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
+				rep, err := eng.VerifyIntegrity(ctx, game.GameDir)
+				if err != nil {
+					return false, err
+				}
+				return rep != nil && rep.OfficialCount > 0, nil
+			},
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown batch library operation kind: %q", kind)
 	}
-
-	return eng.Tasks.SubmitOp(&BatchArtworkOperation{
-		Engine:      eng,
-		LibraryDirs: eng.getLibraryDirs(),
-	})
-}
-
-// SubmitBatchNormalize schedules an asynchronous batch task to normalize directory names across all library games.
-func (eng *Engine) SubmitBatchNormalize() (string, error) {
-	if eng.Tasks == nil {
-		return "", fmt.Errorf("task manager not initialized")
-	}
-
-	return eng.Tasks.SubmitOp(&BatchNormalizeOperation{
-		Engine:      eng,
-		LibraryDirs: eng.getLibraryDirs(),
-	})
-}
-
-// SubmitBatchVerify schedules an asynchronous batch integrity verification task across all games with ACF manifests.
-func (eng *Engine) SubmitBatchVerify() (string, error) {
-	if eng.Tasks == nil {
-		return "", fmt.Errorf("task manager not initialized")
-	}
-
-	return eng.Tasks.SubmitOp(&BatchVerifyOperation{
-		Engine:      eng,
-		LibraryDirs: eng.getLibraryDirs(),
-	})
 }
 
 func (eng *Engine) registerDefaultTaskRunners() {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
 )
@@ -54,6 +55,10 @@ func (p *RAWGProvider) Description() string {
 	return "Open multi-platform video game database with rich metadata, descriptions, and artwork."
 }
 
+func (p *RAWGProvider) IsGameStore() bool {
+	return false
+}
+
 func (p *RAWGProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
@@ -64,8 +69,8 @@ func (p *RAWGProvider) Capabilities() ProviderCapabilities {
 }
 
 type rawgSearchResponse struct {
-	Count   int         `json:"count"`
-	Results []rawgGame  `json:"results"`
+	Count   int        `json:"count"`
+	Results []rawgGame `json:"results"`
 }
 
 type rawgGame struct {
@@ -82,7 +87,14 @@ type rawgGame struct {
 	Developers       []rawgNamedItem  `json:"developers"`
 	Publishers       []rawgNamedItem  `json:"publishers"`
 	Platforms        []rawgPlatform   `json:"platforms"`
+	Stores           []rawgStoreEntry `json:"stores"`
 	ShortScreenshots []rawgScreenshot `json:"short_screenshots"`
+}
+
+type rawgStoreEntry struct {
+	ID    int           `json:"id"`
+	URL   string        `json:"url"`
+	Store rawgNamedItem `json:"store"`
 }
 
 type rawgNamedItem struct {
@@ -123,7 +135,6 @@ func (p *RAWGProvider) Search(ctx context.Context, query string) ([]SearchResult
 	params := url.Values{}
 	params.Set("search", q)
 	params.Set("page_size", "20")
-	params.Set("search_precise", "true")
 
 	reqURL := p.buildURL("/games", params)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -151,7 +162,6 @@ func (p *RAWGProvider) Search(ctx context.Context, query string) ([]SearchResult
 		return nil, fmt.Errorf("unmarshal RAWG search response: %w", err)
 	}
 
-	qWords := strings.Fields(strings.ToLower(q))
 	var results []SearchResult
 
 	for _, g := range data.Results {
@@ -159,17 +169,20 @@ func (p *RAWGProvider) Search(ctx context.Context, query string) ([]SearchResult
 			continue
 		}
 
-		// Enforce keyword token validation to prevent unrelated catalog recommendations
-		nameLower := strings.ToLower(g.Name)
-		slugLower := strings.ToLower(g.Slug)
-		matchedTokens := 0
-		for _, w := range qWords {
-			if strings.Contains(nameLower, w) || strings.Contains(slugLower, w) {
-				matchedTokens++
+		if !util.IsTitleMatch(g.Name, q) && !util.IsTitleMatch(g.Slug, q) {
+			// Check if any significant query words match
+			qWords := strings.Fields(strings.ToLower(q))
+			nameLower := strings.ToLower(g.Name)
+			slugLower := strings.ToLower(g.Slug)
+			matchedTokens := 0
+			for _, w := range qWords {
+				if strings.Contains(nameLower, w) || strings.Contains(slugLower, w) {
+					matchedTokens++
+				}
 			}
-		}
-		if len(qWords) > 0 && matchedTokens == 0 {
-			continue
+			if len(qWords) > 0 && matchedTokens == 0 {
+				continue
+			}
 		}
 
 		results = append(results, SearchResult{
@@ -184,8 +197,38 @@ func (p *RAWGProvider) Search(ctx context.Context, query string) ([]SearchResult
 	return results, nil
 }
 
-// GetMetadata fetches full game details and descriptions for a RAWG ID or slug.
-func (p *RAWGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata, error) {
+// ExtractLinkedStoreIDs parses linked store links (Steam AppID, GOG slug) from a RAWG game.
+func ExtractLinkedStoreIDs(g *rawgGame) (steamAppID uint32, gogSlug string) {
+	if g == nil {
+		return 0, ""
+	}
+	for _, s := range g.Stores {
+		u := strings.ToLower(s.URL)
+		if strings.Contains(u, "store.steampowered.com/app/") {
+			parts := strings.Split(u, "store.steampowered.com/app/")
+			if len(parts) >= 2 {
+				sub := strings.Trim(parts[1], "/")
+				seg := strings.Split(sub, "/")[0]
+				if id, ok := util.ParseAppID(seg); ok && id > 0 {
+					steamAppID = id
+				}
+			}
+		} else if strings.Contains(u, "gog.com/game/") || strings.Contains(u, "gog.com/en/game/") {
+			parts := strings.Split(u, "game/")
+			if len(parts) >= 2 {
+				sub := strings.Trim(parts[1], "/")
+				seg := strings.Split(sub, "/")[0]
+				if seg != "" {
+					gogSlug = seg
+				}
+			}
+		}
+	}
+	return steamAppID, gogSlug
+}
+
+// FetchRawGame retrieves and unmarshals the raw game payload from RAWG.
+func (p *RAWGProvider) FetchRawGame(ctx context.Context, gameID string) (*rawgGame, error) {
 	id := strings.TrimSpace(gameID)
 	if id == "" {
 		return nil, fmt.Errorf("game ID cannot be empty")
@@ -215,6 +258,27 @@ func (p *RAWGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadat
 	var g rawgGame
 	if err := json.Unmarshal(body, &g); err != nil {
 		return nil, fmt.Errorf("unmarshal RAWG game JSON: %w", err)
+	}
+	return &g, nil
+}
+
+// GetMetadata fetches full game details and descriptions for a RAWG ID or slug.
+func (p *RAWGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata, error) {
+	id := strings.TrimSpace(gameID)
+	if id == "" {
+		return nil, fmt.Errorf("game ID cannot be empty")
+	}
+
+	if cachedData, ok := cache.GetStoreMetadata("rawg", id); ok && len(cachedData) > 0 {
+		var meta Metadata
+		if err := json.Unmarshal(cachedData, &meta); err == nil && meta.Name != "" {
+			return &meta, nil
+		}
+	}
+
+	g, err := p.FetchRawGame(ctx, id)
+	if err != nil {
+		return nil, err
 	}
 
 	summary := strings.TrimSpace(g.DescriptionRaw)
@@ -252,10 +316,14 @@ func (p *RAWGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadat
 		ReleaseDate: g.Released,
 	}
 
+	if encoded, err := json.Marshal(meta); err == nil {
+		_ = cache.SaveStoreMetadata("rawg", id, encoded)
+	}
+
 	return meta, nil
 }
 
-// GetArtwork resolves background and hero art for a RAWG ID.
+// GetArtwork resolves background, hero, and cover art for a RAWG ID.
 func (p *RAWGProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork, error) {
 	meta, err := p.GetMetadata(ctx, gameID)
 	if err != nil {
@@ -285,16 +353,19 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 
 	var targetID string
 	var targetName string
+	var targetPoster string
 	for _, r := range results {
 		if util.IsTitleMatch(r.Name, q) {
 			targetID = r.ID
 			targetName = r.Name
+			targetPoster = r.PosterURL
 			break
 		}
 	}
 	if targetID == "" && len(results) > 0 {
 		targetID = results[0].ID
 		targetName = results[0].Name
+		targetPoster = results[0].PosterURL
 	}
 
 	if targetID == "" {
@@ -303,7 +374,96 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 
 	var options []ArtworkOption
 
-	// 2. Fetch game details and screenshots
+	// Add primary artwork from main background image if present
+	if targetPoster != "" {
+		options = append(options, ArtworkOption{
+			ID:       fmt.Sprintf("rawg_%s_cover_main", targetID),
+			Provider: "rawg",
+			Type:     domain.AssetCover,
+			URL:      targetPoster,
+			ThumbURL: targetPoster,
+			Style:    "official",
+			Author:   targetName,
+			Score:    100,
+		})
+		options = append(options, ArtworkOption{
+			ID:       fmt.Sprintf("rawg_%s_hero_main", targetID),
+			Provider: "rawg",
+			Type:     domain.AssetHero,
+			URL:      targetPoster,
+			ThumbURL: targetPoster,
+			Width:    1920,
+			Height:   1080,
+			Style:    "official",
+			Author:   targetName,
+			Score:    100,
+		})
+		options = append(options, ArtworkOption{
+			ID:       fmt.Sprintf("rawg_%s_banner_main", targetID),
+			Provider: "rawg",
+			Type:     domain.AssetBanner,
+			URL:      targetPoster,
+			ThumbURL: targetPoster,
+			Width:    1920,
+			Height:   1080,
+			Style:    "official",
+			Author:   targetName,
+			Score:    100,
+		})
+	}
+
+	// 2. Fetch raw game to discover linked Steam and GOG options
+	if rg, err := p.FetchRawGame(ctx, targetID); err == nil && rg != nil {
+		steamID, _ := ExtractLinkedStoreIDs(rg)
+		if steamID > 0 {
+			options = append(options,
+				ArtworkOption{
+					ID:       fmt.Sprintf("steam_%d_cover", steamID),
+					Provider: "steam",
+					Type:     domain.AssetCover,
+					URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/library_600x900_2x.jpg", steamID),
+					ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/library_600x900.jpg", steamID),
+					Width:    600,
+					Height:   900,
+					Style:    "official",
+					Score:    100,
+				},
+				ArtworkOption{
+					ID:       fmt.Sprintf("steam_%d_hero", steamID),
+					Provider: "steam",
+					Type:     domain.AssetHero,
+					URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/library_hero.jpg", steamID),
+					ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/library_hero.jpg", steamID),
+					Width:    1920,
+					Height:   620,
+					Style:    "official",
+					Score:    100,
+				},
+				ArtworkOption{
+					ID:       fmt.Sprintf("steam_%d_banner", steamID),
+					Provider: "steam",
+					Type:     domain.AssetBanner,
+					URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/header.jpg", steamID),
+					ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/header.jpg", steamID),
+					Width:    460,
+					Height:   215,
+					Style:    "official",
+					Score:    100,
+				},
+				ArtworkOption{
+					ID:       fmt.Sprintf("steam_%d_logo", steamID),
+					Provider: "steam",
+					Type:     domain.AssetLogo,
+					URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/logo.png", steamID),
+					ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%d/logo.png", steamID),
+					Style:    "official",
+					Score:    100,
+				},
+			)
+		}
+	}
+
+	// 3. Fetch game screenshots
 	reqURL := p.buildURL("/games/"+url.PathEscape(targetID)+"/screenshots", nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err == nil {
@@ -318,16 +478,26 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 							continue
 						}
 						options = append(options, ArtworkOption{
-							ID:       fmt.Sprintf("rawg_%s_screen_%d", targetID, s.ID),
+							ID:       fmt.Sprintf("rawg_%s_cover_%d", targetID, s.ID),
+							Provider: "rawg",
+							Type:     domain.AssetCover,
+							URL:      s.Image,
+							ThumbURL: s.Image,
+							Style:    "screenshot",
+							Author:   targetName,
+							Score:    90 - idx,
+						})
+						options = append(options, ArtworkOption{
+							ID:       fmt.Sprintf("rawg_%s_hero_%d", targetID, s.ID),
 							Provider: "rawg",
 							Type:     domain.AssetHero,
 							URL:      s.Image,
 							ThumbURL: s.Image,
 							Width:    1920,
 							Height:   1080,
-							Style:    "official",
+							Style:    "screenshot",
 							Author:   targetName,
-							Score:    100 - idx,
+							Score:    90 - idx,
 						})
 						options = append(options, ArtworkOption{
 							ID:       fmt.Sprintf("rawg_%s_banner_%d", targetID, s.ID),
@@ -337,14 +507,26 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 							ThumbURL: s.Image,
 							Width:    1920,
 							Height:   1080,
-							Style:    "official",
+							Style:    "screenshot",
 							Author:   targetName,
-							Score:    100 - idx,
+							Score:    90 - idx,
 						})
 					}
 				}
 			}
 		}
+	}
+
+	// Filter options to match requested AssetType if specified
+	targetType := strings.ToLower(query.AssetType)
+	if targetType != "" {
+		var filtered []ArtworkOption
+		for _, opt := range options {
+			if strings.EqualFold(opt.Type, targetType) {
+				filtered = append(filtered, opt)
+			}
+		}
+		return filtered, nil
 	}
 
 	slog.Debug("Resolved RAWG artwork candidates", "title", q, "count", len(options))

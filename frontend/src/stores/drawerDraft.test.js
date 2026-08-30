@@ -157,5 +157,38 @@ describe('drawerDraft Store', () => {
       expect.objectContaining({ operating_mode: '' })
     );
   });
+
+  it('preserves playtime and metadata when saving launch profile', async () => {
+    const saveSpy = vi.spyOn(AppAPI, 'saveLaunchProfile').mockResolvedValue({});
+    vi.spyOn(AppAPI, 'inspectGame').mockResolvedValue(mockGame);
+
+    const gameWithStats = {
+      ...mockGame,
+      playtimeSeconds: 5400,
+      lastPlayed: 1720000000,
+      customCoverUrl: 'https://example.com/art.jpg',
+      lockedArtwork: true,
+      metadataProvider: 'steam',
+      metadataId: '1145360',
+    };
+
+    drawerDraft.init(gameWithStats, mockGlobalConfig);
+    drawerDraft.setField('runner', 'wine');
+
+    await drawerDraft.save(gameWithStats);
+
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      gameWithStats.gameDir,
+      expect.objectContaining({
+        runner: 'wine',
+        playtime_seconds: 5400,
+        last_played: 1720000000,
+        custom_cover_url: 'https://example.com/art.jpg',
+        locked_artwork: true,
+        metadata_provider: 'steam',
+        metadata_id: '1145360',
+      })
+    );
+  });
 });
 

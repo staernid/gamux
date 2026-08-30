@@ -77,12 +77,22 @@ type StoreProvider interface {
 	IsGameStore() bool
 }
 
+// NewsProvider is an optional capability interface implemented by providers
+// that can return store news, announcements, and patch notes.
+type NewsProvider interface {
+	GetNews(ctx context.Context, gameID string, count int) ([]domain.NewsItem, error)
+}
+
 // Provider represents a store backend seam providing game discovery, metadata, and asset queries.
 type Provider interface {
-	// ID returns the canonical identifier for the store (e.g. "steam", "gog", "rawg").
+	// ID returns the canonical identifier for the store (e.g. "steam", "gog", "rawg", "steamgriddb").
 	ID() string
 	// DisplayName returns a human-friendly name (e.g. "Steam", "GOG.com", "RAWG Video Games Database").
 	DisplayName() string
+	// Description returns a concise summary of the provider and its catalog.
+	Description() string
+	// Capabilities returns the feature flags supported by this provider.
+	Capabilities() ProviderCapabilities
 	// Search queries the store catalogue for game candidates matching a query string.
 	Search(ctx context.Context, query string) ([]SearchResult, error)
 	// GetMetadata retrieves full metadata for a specific store title by its ID.
@@ -136,45 +146,22 @@ func (r *Registry) ListDescriptors() []ProviderDescriptor {
 	defer r.mu.RUnlock()
 	list := make([]ProviderDescriptor, 0, len(r.providers))
 	for _, p := range r.providers {
-		caps := ProviderCapabilities{
-			CanSearch:        true,
-			CanFetchMetadata: true,
-			CanProvideArtwork: true,
-		}
-		if cp, ok := p.(interface{ Capabilities() ProviderCapabilities }); ok {
-			caps = cp.Capabilities()
-		} else {
-			if sp, ok := p.(StoreProvider); ok {
-				caps.IsGameStore = sp.IsGameStore()
-			}
-			if _, ok := p.(ArtworkCandidateProvider); ok {
-				caps.CanProvideArtwork = true
-			}
-		}
-		desc := ""
-		if dp, ok := p.(interface{ Description() string }); ok {
-			desc = dp.Description()
-		}
 		list = append(list, ProviderDescriptor{
 			ID:           p.ID(),
 			DisplayName:  p.DisplayName(),
-			Description:  desc,
-			Capabilities: caps,
+			Description:  p.Description(),
+			Capabilities: p.Capabilities(),
 		})
 	}
 	return list
 }
 
-// SearchStores queries only registered downloadable game catalog store providers (e.g. Steam, GOG), excluding artwork-only databases.
+// SearchStores queries only registered downloadable game catalog store providers (e.g. Steam, GOG), excluding metadata/artwork-only databases.
 func (r *Registry) SearchStores(ctx context.Context, query string) ([]SearchResult, error) {
 	r.mu.RLock()
 	providers := make([]Provider, 0, len(r.providers))
 	for _, p := range r.providers {
-		if sp, ok := p.(StoreProvider); ok {
-			if sp.IsGameStore() {
-				providers = append(providers, p)
-			}
-		} else if p.ID() != "steamgriddb" {
+		if p.Capabilities().IsGameStore {
 			providers = append(providers, p)
 		}
 	}

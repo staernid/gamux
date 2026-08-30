@@ -54,53 +54,99 @@ export function setSfxVolume(vol) {
 }
 
 /**
- * Punchy, crisp tactile mechanical click / card step tick
- * Combines an 880Hz->260Hz snap with a 150Hz->55Hz tactile body thump (38ms duration)
- * Clean, audible on all soundcards and speakers without distortion
+ * Tactile Mechanical Switch / Dial Ratchet Click
+ * Synthesizes a crisp, rich physical switch strike:
+ * 1. Mechanical switch friction / contact noise burst (12ms)
+ * 2. Crisp high-mid tactile snap (2200Hz -> 650Hz over 28ms)
+ * 3. Acoustic body resonant "tock" (950Hz -> 280Hz over 36ms)
+ * 4. Low-end tactile thump (220Hz -> 70Hz over 35ms)
  */
 export function playTick() {
   if (!sfxEnabled || sfxVolume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
 
   const now = ctx.currentTime;
-  if (now - lastTickTime < 0.035) return;
+  if (now - lastTickTime < 0.02) return;
   lastTickTime = now;
 
   try {
-    const duration = 0.038;
+    // Psychoacoustic loudness compensation for short impulse duration
+    const vol = Math.min(1.0, sfxVolume * 2.0);
 
-    // 1. High-mid tactile mechanical snap (880Hz -> 260Hz)
+    // 1. Mechanical switch friction / contact noise burst (12ms)
+    const sampleRate = ctx.sampleRate || 44100;
+    const noiseLen = Math.max(128, Math.floor(sampleRate * 0.014));
+    const noiseBuffer = ctx.createBuffer(1, noiseLen, sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (noiseLen * 0.28));
+    }
+
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = noiseBuffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(3600, now);
+    noiseFilter.Q.setValueAtTime(2.5, now);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(vol * 0.7, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+
+    noiseSrc.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseSrc.start(now);
+
+    // 2. Crisp high-mid tactile snap (2200Hz -> 650Hz over 28ms)
     const snapOsc = ctx.createOscillator();
     const snapGain = ctx.createGain();
     snapOsc.type = 'triangle';
-    snapOsc.frequency.setValueAtTime(880, now);
-    snapOsc.frequency.exponentialRampToValueAtTime(260, now + duration);
+    snapOsc.frequency.setValueAtTime(2200, now);
+    snapOsc.frequency.exponentialRampToValueAtTime(650, now + 0.028);
 
-    const snapVol = sfxVolume * 0.65;
-    snapGain.gain.setValueAtTime(snapVol, now);
-    snapGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    snapGain.gain.setValueAtTime(vol * 0.85, now);
+    snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028);
 
     snapOsc.connect(snapGain);
     snapGain.connect(ctx.destination);
     snapOsc.start(now);
-    snapOsc.stop(now + duration + 0.005);
+    snapOsc.stop(now + 0.03);
 
-    // 2. Low-frequency mechanical body thump (150Hz -> 55Hz)
+    // 3. Acoustic body resonant "tock" (950Hz -> 280Hz over 36ms)
     const bodyOsc = ctx.createOscillator();
     const bodyGain = ctx.createGain();
     bodyOsc.type = 'sine';
-    bodyOsc.frequency.setValueAtTime(150, now);
-    bodyOsc.frequency.exponentialRampToValueAtTime(55, now + duration + 0.01);
+    bodyOsc.frequency.setValueAtTime(950, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(280, now + 0.036);
 
-    const bodyVol = sfxVolume * 0.45;
-    bodyGain.gain.setValueAtTime(bodyVol, now);
-    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.01);
+    bodyGain.gain.setValueAtTime(vol * 0.65, now);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.036);
 
     bodyOsc.connect(bodyGain);
     bodyGain.connect(ctx.destination);
     bodyOsc.start(now);
-    bodyOsc.stop(now + duration + 0.015);
+    bodyOsc.stop(now + 0.038);
+
+    // 4. Low-end tactile thump (220Hz -> 70Hz over 35ms)
+    const thumpOsc = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thumpOsc.type = 'sine';
+    thumpOsc.frequency.setValueAtTime(220, now);
+    thumpOsc.frequency.exponentialRampToValueAtTime(70, now + 0.035);
+
+    thumpGain.gain.setValueAtTime(vol * 0.5, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thumpOsc.start(now);
+    thumpOsc.stop(now + 0.037);
   } catch {}
 }
 
@@ -111,6 +157,9 @@ export function playSelect() {
   if (!sfxEnabled || sfxVolume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
 
   try {
     const now = ctx.currentTime;
@@ -148,6 +197,9 @@ export function playBack() {
   if (!sfxEnabled || sfxVolume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
 
   try {
     const now = ctx.currentTime;
@@ -176,6 +228,9 @@ export function playNav() {
   if (!sfxEnabled || sfxVolume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
 
   try {
     const now = ctx.currentTime;

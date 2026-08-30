@@ -435,6 +435,53 @@ func PromptSelectPlatform(gameTitle string, availablePlatforms []string) (string
 	return availablePlatforms[0], nil
 }
 
+// PromptSelectOperatingMode presents an interactive choice for operating mode setup.
+func PromptSelectOperatingMode(defaultMode string) string {
+	modes := []struct {
+		Mode  string
+		Title string
+		Desc  string
+	}{
+		{domain.ModeLoader, "Loader Mode (Recommended)", "Zero file modification; symlinks Steam client DLLs / Wine registry overrides."},
+		{domain.ModePortable, "Portable Mode", "Directly replaces steam_api.dll in game folder with backups created as .ORIGINAL."},
+		{domain.ModeNone, "None (Clean / DRM-free)", "Skips Goldberg emulator integration entirely."},
+	}
+
+	fmt.Println()
+	fmt.Printf("%s\n", bold(cyan("⚙️  Select Operating Mode:")))
+	defaultIdx := 1
+	for i, m := range modes {
+		if strings.EqualFold(m.Mode, defaultMode) {
+			defaultIdx = i + 1
+		}
+		fmt.Printf("  [%d] %-28s %s\n", i+1, bold(m.Title), dim(m.Desc))
+	}
+	fmt.Println()
+	fmt.Printf("  %s %s", yellow("?"), bold(fmt.Sprintf("Select mode [%d]: ", defaultIdx)))
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return modes[defaultIdx-1].Mode
+	}
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return modes[defaultIdx-1].Mode
+	}
+
+	if idx, err := strconv.Atoi(input); err == nil && idx >= 1 && idx <= len(modes) {
+		return modes[idx-1].Mode
+	}
+
+	for _, m := range modes {
+		if strings.EqualFold(m.Mode, input) {
+			return m.Mode
+		}
+	}
+
+	return modes[defaultIdx-1].Mode
+}
+
 // CleanBBCode strips Steam community BBCode tags for clean terminal rendering.
 func CleanBBCode(input string) string {
 	s := input

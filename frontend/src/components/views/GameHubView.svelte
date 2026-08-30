@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import {
     selectedGame,
     activeView,
@@ -8,13 +8,13 @@
     runningGames,
     refreshGame
   } from '../../stores/library.js';
-  import { tasksStore } from '../../stores/tasks.js';
+  import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
   import { configStore } from '../../stores/config.js';
   import { AppAPI } from '../../api/app.js';
-  import { formatBytes } from '../../utils/format.js';
+  import { formatBytes, formatETA } from '../../utils/format.js';
   import {
     getPlatformColors,
     getPlatformType,
@@ -22,7 +22,8 @@
     isSteamApp,
     hasMetadataMatch,
     formatPlaytime,
-    formatLastPlayed
+    formatLastPlayed,
+    isSamePath
   } from '../../utils/game.js';
   import PosterArt from '../common/PosterArt.svelte';
   import DrawerAboutTab from '../stage/drawer/DrawerAboutTab.svelte';
@@ -52,6 +53,8 @@
   let heroFailed = false;
   let globalCfg = {};
   let isSaving = false;
+  let saveSuccess = false;
+  let saveSuccessTimer = null;
 
   // News State
   let newsItems = [];
@@ -66,6 +69,8 @@
   let isCheckingIntegrity = false;
   let isNormalizing = false;
 
+  const allTasks = tasksStore.items;
+
   $: game = $selectedGame;
   $: if (game) { logoFailed = false; heroFailed = false; }
   $: isGameRunning = Boolean(game?.gameDir && $runningGames.has(game.gameDir));
@@ -76,6 +81,27 @@
   $: isSteam = game ? isSteamApp(game.appId) : false;
   $: hasMeta = game ? hasMetadataMatch(game) : false;
   $: heroBackdropUrl = game ? (game.localHeroUrl || game.heroUrl || game.localBannerUrl || game.bannerUrl || (isSteam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/library_hero.jpg` : '') || game.localCoverUrl || game.coverUrl || '') : '';
+
+  $: activeGameTask = ($allTasks || []).find(t => {
+    if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending') return false;
+    if (game?.gameDir && isSamePath(t.game_dir || t.gameDir, game.gameDir)) return true;
+    if (game?.appId && game.appId !== '0' && (String(t.app_id || t.appID) === String(game.appId))) return true;
+    return false;
+  });
+  $: isTaskActive = Boolean(activeGameTask);
+
+  function getTaskBadgeLabel(task) {
+    if (!task) return 'TASK';
+    const op = (task.operation || task.type || '').toLowerCase();
+    if (isDownloadTask(task)) return 'DOWNLOADING';
+    if (op === 'apply') return 'APPLYING SETUP';
+    if (op === 'verify') return 'VERIFYING';
+    if (op === 'normalize') return 'NORMALIZING';
+    if (op === 'update') return 'UPDATING';
+    if (op === 'tool_update') return 'TOOL UPDATE';
+    if (op === 'rollback') return 'ROLLBACK';
+    return 'PROCESSING';
+  }
 
   $: candidates = (game?.launchCandidates || [])
     .filter(c => {
@@ -157,13 +183,25 @@
     }
   });
 
+  onDestroy(() => {
+    if (saveSuccessTimer) {
+      clearTimeout(saveSuccessTimer);
+    }
+  });
+
   async function handleSave() {
     if (!game || isSaving) return;
     isSaving = true;
+    saveSuccess = false;
+    if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
     try {
       const success = await drawerDraft.save(game);
       if (success) {
         await refreshGame(game.gameDir);
+        saveSuccess = true;
+        saveSuccessTimer = setTimeout(() => {
+          saveSuccess = false;
+        }, 2500);
       }
     } finally {
       isSaving = false;
@@ -371,6 +409,15 @@
     <div class="relative w-full h-96 sm:h-[420px] flex-shrink-0 overflow-hidden select-none">
       <!-- Background Image with dynamic blur -->
       <div class="absolute inset-0 bg-[#07070a]">
+        <!-- Seamless Cover Texture Anchor (Prevents layout/color pop during view enter) -->
+        {#if game.localCoverUrl || game.coverUrl}
+          <img
+            src={game.localCoverUrl || game.coverUrl}
+            alt=""
+            class="absolute inset-0 w-full h-full object-cover opacity-25 filter blur-xl scale-125 pointer-events-none"
+          />
+        {/if}
+
         {#if heroBackdropUrl && !heroFailed}
           <img
             src={heroBackdropUrl}
@@ -505,18 +552,25 @@
 
         <!-- Right: Primary CTA & Actions -->
         <div class="flex items-center space-x-3 flex-shrink-0">
-          <!-- Primary Action Button (Play / Stop / Setup) -->
+          <!-- Primary Action Button (Play / Stop / Setup / Task Running) -->
           <button
             bind:this={playButtonRef}
             type="button"
             on:click={handlePrimaryAction}
-            class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer {isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : isReady ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'}"
+            disabled={isTaskActive}
+            class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : isTaskActive ? 'bg-[#1e1e2c] border border-cyan-500/50 text-cyan-300 shadow-cyan-950/40' : isReady ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'}"
           >
             {#if isGameRunning}
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
               </svg>
               <span>Stop Game</span>
+            {:else if isTaskActive}
+              <svg class="animate-spin w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span>{activeGameTask.status === 'queued' ? 'Queued...' : 'Task in Progress...'}</span>
             {:else if isReady}
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
@@ -547,6 +601,81 @@
 
     <!-- Main Content & 5-Tab Section -->
     <div class="max-w-6xl w-full mx-auto px-6 py-4 flex-1 flex flex-col space-y-4">
+      <!-- Live Task Progress HUD (Displayed when an operation or download is active for this game) -->
+      {#if activeGameTask}
+        <div class="bg-gradient-to-r from-[#12121e] via-[#101018] to-[#12121e] border border-cyan-500/40 rounded-2xl p-4 shadow-xl space-y-2.5 animate-fade-in">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center space-x-2.5 min-w-0">
+              <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center space-x-1.5 flex-shrink-0">
+                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span>{getTaskBadgeLabel(activeGameTask)}</span>
+              </span>
+              <h4 class="font-bold text-white text-xs truncate">
+                {activeGameTask.stage || activeGameTask.title || 'Task executing'}
+              </h4>
+              {#if activeGameTask.details}
+                <span class="text-slate-500 text-xs hidden sm:inline">·</span>
+                <span class="text-slate-400 text-xs font-mono truncate hidden sm:inline max-w-sm">
+                  {activeGameTask.details}
+                </span>
+              {/if}
+            </div>
+
+            <!-- Task Controls -->
+            <div class="flex items-center space-x-2 flex-shrink-0">
+              <button
+                type="button"
+                on:click={() => { $activeView = 'tasks'; }}
+                class="px-2.5 py-1 rounded-xl bg-[#1c1c28] hover:bg-[#252538] text-slate-300 hover:text-white text-[11px] font-bold border border-[#2e2e42] transition flex items-center space-x-1 cursor-pointer"
+                title="Open full Tasks view (2)"
+              >
+                <span>View Tasks</span>
+                <span class="text-slate-500 font-mono text-[9px] px-1 py-0.2 rounded bg-black/40">2</span>
+              </button>
+              <button
+                type="button"
+                on:click={() => tasksStore.cancel(activeGameTask.id)}
+                class="px-2.5 py-1 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-[11px] font-bold border border-rose-900/40 hover:border-rose-700/60 transition flex items-center space-x-1 cursor-pointer active:scale-95"
+                title="Cancel active task"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="space-y-1">
+            <div class="w-full bg-[#0a0a0f] border border-[#1e1e2c] h-2 rounded-full overflow-hidden">
+              <div
+                class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all duration-300 relative"
+                style="width: {activeGameTask.percent || 0}%"
+              >
+                <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+              <span>
+                {#if activeGameTask.total_bytes && activeGameTask.total_bytes > 0}
+                  {formatBytes(activeGameTask.bytes_downloaded || activeGameTask.current_bytes || 0)} / {formatBytes(activeGameTask.total_bytes)} ({activeGameTask.percent?.toFixed(0) || 0}%)
+                {:else if activeGameTask.total_items && activeGameTask.total_items > 0}
+                  Step {activeGameTask.current_items || 0} of {activeGameTask.total_items} ({activeGameTask.percent?.toFixed(0) || 0}%)
+                {:else}
+                  {activeGameTask.percent?.toFixed(0) || 0}%
+                {/if}
+              </span>
+              <div class="flex items-center space-x-3">
+                {#if activeGameTask.speed_bps > 0}
+                  <span class="text-cyan-400 font-bold">{formatBytes(activeGameTask.speed_bps)}/s</span>
+                {/if}
+                {#if activeGameTask.eta_seconds > 0}
+                  <span>ETA: {formatETA(activeGameTask.eta_seconds)}</span>
+                {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <!-- 5 Primary Navigation Tabs -->
       <div class="flex items-center space-x-2 border-b border-[#20202c] pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->
@@ -774,7 +903,7 @@
                 type="button"
                 on:click={handleSave}
                 disabled={isSaving}
-                class="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-lg shadow-sky-950/40 transition-all flex items-center space-x-2 disabled:opacity-50 cursor-pointer"
+                class="px-6 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center space-x-2 disabled:opacity-50 cursor-pointer {saveSuccess ? 'bg-emerald-600 text-white shadow-emerald-950/40' : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-sky-950/40'}"
               >
                 {#if isSaving}
                   <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
@@ -782,6 +911,11 @@
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                   </svg>
                   <span>Saving...</span>
+                {:else if saveSuccess}
+                  <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Saved ✓</span>
                 {:else}
                   <span>Save Configuration</span>
                 {/if}
@@ -844,6 +978,7 @@
               <DrawerIntegrityTab
                 {isCheckingIntegrity}
                 {isNormalizing}
+                isUpdating={isTaskActive}
                 {integrityError}
                 {integrityReport}
                 onRunIntegrityCheck={runIntegrityCheck}

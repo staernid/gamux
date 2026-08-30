@@ -3,8 +3,7 @@
   import { selectedGame, refreshGame } from '../../stores/library.js';
 
   import SearchGridModal from '../stage/SearchGridModal.svelte';
-  import ArtworkPickerModal from '../stage/ArtworkPickerModal.svelte';
-  import MetadataLinkModal from '../stage/MetadataLinkModal.svelte';
+  import MetadataArtworkModal from '../stage/MetadataArtworkModal.svelte';
 
   async function handleUpdated(e) {
     const gameDir = $modalStore?.props?.game?.gameDir || $selectedGame?.gameDir;
@@ -28,14 +27,22 @@
       {...$modalStore.props}
       on:close={handleClose}
     />
+  {:else if $modalStore.type === 'metadata-artwork'}
+    <MetadataArtworkModal
+      {...$modalStore.props}
+      on:updated={handleUpdated}
+      on:close={handleClose}
+    />
   {:else if $modalStore.type === 'artwork-picker'}
-    <ArtworkPickerModal
+    <MetadataArtworkModal
+      initialTab="artwork"
       {...$modalStore.props}
       on:updated={handleUpdated}
       on:close={handleClose}
     />
   {:else if $modalStore.type === 'metadata-link'}
-    <MetadataLinkModal
+    <MetadataArtworkModal
+      initialTab="metadata"
       {...$modalStore.props}
       on:updated={handleUpdated}
       on:close={handleClose}

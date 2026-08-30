@@ -69,8 +69,8 @@ func TestGame_EffectiveAccessors(t *testing.T) {
 	if g.EffectiveExeArgs() != "--default" {
 		t.Errorf("expected default ExeArgs from GameRecord, got %s", g.EffectiveExeArgs())
 	}
-	if g.EffectiveOperatingMode() != ModeStandalone {
-		t.Errorf("expected default ModeStandalone, got %s", g.EffectiveOperatingMode())
+	if g.EffectiveOperatingMode() != "" {
+		t.Errorf("expected unset EffectiveOperatingMode (empty string), got %s", g.EffectiveOperatingMode())
 	}
 	if g.EffectiveRunner() != RunnerAuto {
 		t.Errorf("expected default RunnerAuto, got %s", g.EffectiveRunner())

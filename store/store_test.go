@@ -18,6 +18,15 @@ type mockProvider struct {
 
 func (m *mockProvider) ID() string          { return m.id }
 func (m *mockProvider) DisplayName() string { return m.displayName }
+func (m *mockProvider) Description() string { return "Mock provider for testing" }
+func (m *mockProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		CanSearch:         true,
+		CanFetchMetadata:  true,
+		CanProvideArtwork:  true,
+		IsGameStore:       m.id == "steam" || m.id == "gog",
+	}
+}
 func (m *mockProvider) Search(ctx context.Context, query string) ([]SearchResult, error) {
 	return m.results, nil
 }
@@ -486,6 +495,81 @@ func TestRegistry_ListDescriptors(t *testing.T) {
 		t.Errorf("rawg descriptor not found in list")
 	}
 }
+
+func TestSteamProvider_Basics(t *testing.T) {
+	p := NewSteamProvider()
+	if p.ID() != "steam" {
+		t.Errorf("expected ID 'steam', got %s", p.ID())
+	}
+	if p.DisplayName() != "Steam" {
+		t.Errorf("expected DisplayName 'Steam', got %s", p.DisplayName())
+	}
+	caps := p.Capabilities()
+	if !caps.CanSearch || !caps.CanFetchMetadata || !caps.CanProvideArtwork || !caps.IsGameStore {
+		t.Errorf("unexpected capabilities for Steam provider: %+v", caps)
+	}
+
+	art, err := p.GetArtwork(context.Background(), "1091500")
+	if err != nil {
+		t.Fatalf("GetArtwork failed: %v", err)
+	}
+	if art.CoverURL == "" || art.BannerURL == "" || art.HeroURL == "" {
+		t.Errorf("expected non-empty artwork URLs, got: %+v", art)
+	}
+}
+
+func TestArtworkService_CrossAssetFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	reg := NewRegistry()
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameArtDir := filepath.Join(tmpDir, "test-game")
+	_ = os.MkdirAll(gameArtDir, 0755)
+	heroFile := filepath.Join(gameArtDir, "hero.jpg")
+	_ = os.WriteFile(heroFile, []byte("fake-hero-jpeg"), 0644)
+
+	g := domain.NewGame("Test Game", t.TempDir(), "", "linux")
+	g.LocalHero = heroFile
+
+	art, err := svc.Resolve(context.Background(), g)
+	if err != nil {
+		t.Fatalf("resolve artwork: %v", err)
+	}
+
+	// Cover should fallback to heroFile
+	if art.LocalCover == "" {
+		t.Errorf("expected local cover fallback to be populated from hero, got empty")
+	}
+	if art.LocalCoverURL == "" {
+		t.Errorf("expected local cover URL to be populated, got empty")
+	}
+}
+
+func TestRAWGProvider_ExtractLinkedStoreIDs(t *testing.T) {
+	g := &rawgGame{
+		ID:   9767,
+		Name: "Hollow Knight",
+		Stores: []rawgStoreEntry{
+			{
+				ID:  1,
+				URL: "https://store.steampowered.com/app/367520/",
+			},
+			{
+				ID:  2,
+				URL: "https://www.gog.com/game/hollow_knight",
+			},
+		},
+	}
+
+	steamID, gogSlug := ExtractLinkedStoreIDs(g)
+	if steamID != 367520 {
+		t.Errorf("expected steam appid 367520, got %d", steamID)
+	}
+	if gogSlug != "hollow_knight" {
+		t.Errorf("expected gog slug 'hollow_knight', got '%s'", gogSlug)
+	}
+}
+
 
 
 

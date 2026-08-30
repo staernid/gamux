@@ -7,43 +7,39 @@
   export let localCoverUrl = '';
   export let className = 'w-full h-full object-cover';
 
-  let imgFailed = false;
-
   $: isForcedNone = (posterUrl === 'none' || localCoverUrl === 'none');
 
-  $: primaryUrl = (() => {
-    if (isForcedNone) return '';
-    if (localCoverUrl) return localCoverUrl;
-    if (posterUrl) return posterUrl;
+  $: candidateUrls = (() => {
+    if (isForcedNone) return [];
+    const urls = [];
+    if (localCoverUrl && localCoverUrl !== 'none') urls.push(localCoverUrl);
+    if (posterUrl && posterUrl !== 'none' && posterUrl !== localCoverUrl) urls.push(posterUrl);
     if (appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim())) {
-      return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`;
+      urls.push(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`);
+      urls.push(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`);
+      urls.push(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`);
     }
-    return '';
+    return urls;
   })();
 
-  $: secondaryUrl = (() => {
-    if (isForcedNone) return '';
-    if (appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim())) {
-      return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
-    }
-    return '';
-  })();
-
-  let activeUrl = '';
-  let attemptedSecondary = false;
+  let urlIndex = 0;
+  let imgFailed = false;
+  let candidateKey = '';
 
   $: {
-    if (primaryUrl !== activeUrl && !attemptedSecondary) {
-      activeUrl = primaryUrl;
+    const key = `${isForcedNone}|${localCoverUrl}|${posterUrl}|${appId}`;
+    if (key !== candidateKey) {
+      candidateKey = key;
+      urlIndex = 0;
       imgFailed = false;
-      attemptedSecondary = false;
     }
   }
 
+  $: activeUrl = candidateUrls[urlIndex] || '';
+
   function handleImgError() {
-    if (!attemptedSecondary && secondaryUrl && activeUrl !== secondaryUrl) {
-      attemptedSecondary = true;
-      activeUrl = secondaryUrl;
+    if (urlIndex + 1 < candidateUrls.length) {
+      urlIndex += 1;
     } else {
       imgFailed = true;
     }

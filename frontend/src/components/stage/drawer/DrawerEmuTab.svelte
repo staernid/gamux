@@ -1,117 +1,104 @@
 <script>
   import { drawerDraft } from '../../../stores/drawerDraft.js';
-  import StepperRow from '../../common/StepperRow.svelte';
+  import { getOperatingModeDescriptor } from '../../../utils/game.js';
+  import SettingSection from '../../common/SettingSection.svelte';
+  import SettingRow from '../../common/SettingRow.svelte';
+  import SwitcherRow from '../../common/SwitcherRow.svelte';
 
   export let game = null;
   export let globalCfg = {};
   export let languageOptions = [];
 
-  $: defaultModeLabel = globalCfg.gbe_mode ? (globalCfg.gbe_mode === 'portable' ? 'Portable' : (globalCfg.gbe_mode === 'none' ? 'None' : 'Loader')) : 'Loader';
+  $: defaultDescriptor = getOperatingModeDescriptor(globalCfg.operating_mode || globalCfg.gbe_mode || 'loader');
 
   $: modeOptions = [
-    { value: '', label: `Default (${defaultModeLabel})` },
-    { value: 'loader', label: 'Loader (Non-destructive)' },
-    { value: 'portable', label: 'Portable (Direct DLL/SO)' },
-    { value: 'none', label: 'None (DRM-Free / Disabled)' }
+    { value: '', label: `Default (${defaultDescriptor.label})` },
+    { value: 'loader', label: 'Seamless Loader (Recommended)' },
+    { value: 'portable', label: 'Standalone Portable (Direct Files)' },
+    { value: 'none', label: 'Direct Launch (DRM-Free / None)' }
   ];
 
   $: langOptions = [
     { value: '', label: `Default (${globalCfg.language ? (globalCfg.language === 'auto' ? 'Auto / System' : globalCfg.language) : 'Auto / System'})` },
     ...languageOptions.map(l => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))
   ];
-
-  function handleStepperChange() {
-    // Modified in-memory draft
-  }
 </script>
 
-<div class="space-y-3">
-  <!-- Emulator Integration Mode -->
-  <div class="space-y-2">
-    <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-      Steam DRM & Emulation
-    </span>
+<div class="space-y-4">
+  <!-- Steam DRM & Emulation Mode -->
+  <SettingSection
+    title="Steam DRM & Emulation"
+    description="Goldberg Steam emulator mode and language overrides for this title."
+  >
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <SettingRow label="Emulation Mode" description="Loader mode preserves original game files." forId="drawerMode" inline={false}>
+        <select
+          id="drawerMode"
+          bind:value={$drawerDraft.mode}
+          class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none text-xs"
+        >
+          {#each modeOptions as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      </SettingRow>
 
-    <StepperRow
-      label="Emulation Mode"
-      options={modeOptions}
-      bind:value={$drawerDraft.mode}
-      on:change={handleStepperChange}
-    />
-
-    <StepperRow
-      label="Language"
-      options={langOptions}
-      bind:value={$drawerDraft.language}
-      on:change={handleStepperChange}
-    />
-  </div>
-
-  <!-- AppID Override -->
-  <div class="space-y-1.5 p-3 bg-[#0d0d12] border border-[#222230] rounded-xl focus-within:border-sky-500 transition-all">
-    <label for="drawerAppId" class="block font-bold text-slate-200 text-xs">
-      AppID Override
-    </label>
-    <input
-      id="drawerAppId"
-      type="text"
-      bind:value={$drawerDraft.appId}
-      placeholder={game?.appId || '123456'}
-      class="w-full bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-lg px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
-    />
-  </div>
-
-  <!-- One-Shot Re-Apply Actions -->
-  <div class="space-y-2 pt-2 border-t border-[#20202c]">
-    <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-      One-Shot Setup Actions
-    </span>
-
-    <div class="space-y-1.5">
-      <!-- Steamless -->
-      <button
-        type="button"
-        on:click={() => { $drawerDraft.optSteamless = !$drawerDraft.optSteamless; handleStepperChange(); }}
-        class="w-full flex items-center justify-between p-3 bg-[#0d0d12] hover:bg-[#13131a] border border-[#222230] rounded-xl transition-all select-none text-left"
-      >
-        <div>
-          <span class="block font-bold text-slate-200 text-xs">Unpack SteamStub DRM</span>
-          <p class="text-[11px] text-slate-400">Automatically run Steamless-rs unpacker on game binaries.</p>
-        </div>
-        <div class="w-10 h-6 flex items-center rounded-full p-1 transition-colors {$drawerDraft.optSteamless ? 'bg-sky-500 justify-end' : 'bg-[#222232] justify-start'}">
-          <div class="w-4 h-4 rounded-full bg-white shadow-md"></div>
-        </div>
-      </button>
-
-      <!-- Achievements -->
-      <button
-        type="button"
-        on:click={() => { $drawerDraft.optAchievements = !$drawerDraft.optAchievements; handleStepperChange(); }}
-        class="w-full flex items-center justify-between p-3 bg-[#0d0d12] hover:bg-[#13131a] border border-[#222230] rounded-xl transition-all select-none text-left"
-      >
-        <div>
-          <span class="block font-bold text-slate-200 text-xs">Fetch Achievements & DLC</span>
-          <p class="text-[11px] text-slate-400">Download Steam achievement icons and DLC list into steam_settings.</p>
-        </div>
-        <div class="w-10 h-6 flex items-center rounded-full p-1 transition-colors {$drawerDraft.optAchievements ? 'bg-sky-500 justify-end' : 'bg-[#222232] justify-start'}">
-          <div class="w-4 h-4 rounded-full bg-white shadow-md"></div>
-        </div>
-      </button>
-
-      <!-- Normalize Directory -->
-      <button
-        type="button"
-        on:click={() => { $drawerDraft.optNormalize = !$drawerDraft.optNormalize; handleStepperChange(); }}
-        class="w-full flex items-center justify-between p-3 bg-[#0d0d12] hover:bg-[#13131a] border border-[#222230] rounded-xl transition-all select-none text-left"
-      >
-        <div>
-          <span class="block font-bold text-slate-200 text-xs">Normalize Folder Name</span>
-          <p class="text-[11px] text-slate-400">Standardize folder naming to match official title.</p>
-        </div>
-        <div class="w-10 h-6 flex items-center rounded-full p-1 transition-colors {$drawerDraft.optNormalize ? 'bg-sky-500 justify-end' : 'bg-[#222232] justify-start'}">
-          <div class="w-4 h-4 rounded-full bg-white shadow-md"></div>
-        </div>
-      </button>
+      <SettingRow label="Game Language" description="Language locale passed to Goldberg emulator." forId="drawerLang" inline={false}>
+        <select
+          id="drawerLang"
+          bind:value={$drawerDraft.language}
+          class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none capitalize text-xs"
+        >
+          {#each langOptions as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      </SettingRow>
     </div>
-  </div>
+
+    <!-- AppID Override -->
+    <div class="pt-2 border-t border-[#1c1c28]">
+      <SettingRow label="AppID Override" description="Steam Application ID used for save directory mapping and achievements." forId="drawerAppId" inline={false}>
+        <input
+          id="drawerAppId"
+          type="text"
+          bind:value={$drawerDraft.appId}
+          placeholder={game?.appId || '123456'}
+          class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
+        />
+      </SettingRow>
+    </div>
+  </SettingSection>
+
+  <!-- One-Shot Setup Actions -->
+  <SettingSection
+    title="One-Shot Setup Actions"
+    description="Automated actions executed when applying emulator configuration."
+  >
+    <div class="space-y-2">
+      <SwitcherRow
+        label="Unpack SteamStub DRM"
+        description="Automatically run Steamless unpacker on game binaries."
+        tag="STEAMLESS"
+        color="sky"
+        bind:value={$drawerDraft.optSteamless}
+      />
+
+      <SwitcherRow
+        label="Fetch Achievements & DLC"
+        description="Download Steam achievement icons and DLC list into steam_settings."
+        tag="ICONS"
+        color="amber"
+        bind:value={$drawerDraft.optAchievements}
+      />
+
+      <SwitcherRow
+        label="Normalize Folder Name"
+        description="Standardize folder naming to match official Steam title."
+        tag="NORMALIZE"
+        color="purple"
+        bind:value={$drawerDraft.optNormalize}
+      />
+    </div>
+  </SettingSection>
 </div>

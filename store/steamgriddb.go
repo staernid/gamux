@@ -47,6 +47,19 @@ func (s *SGDBProvider) DisplayName() string {
 	return "SteamGridDB"
 }
 
+func (s *SGDBProvider) Description() string {
+	return "Community-driven high-resolution grid, hero, logo, and cover art platform"
+}
+
+func (s *SGDBProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		CanSearch:         true,
+		CanFetchMetadata:  false,
+		CanProvideArtwork:  true,
+		IsGameStore:       false,
+	}
+}
+
 func (s *SGDBProvider) IsGameStore() bool {
 	return false
 }
@@ -198,11 +211,13 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 	}
 
 	lookupType := "game"
-	if _, err := strconv.ParseUint(gameID, 10, 32); err == nil {
+	cleanID := strings.TrimSpace(gameID)
+	if strings.HasPrefix(cleanID, "steam:") {
 		lookupType = "steam"
+		cleanID = strings.TrimPrefix(cleanID, "steam:")
 	}
 
-	cacheKey := fmt.Sprintf("%s_%s", lookupType, gameID)
+	cacheKey := fmt.Sprintf("%s_%s", lookupType, cleanID)
 	if cachedData, ok := cache.GetSGDBArtwork(cacheKey); ok && len(cachedData) > 0 {
 		var cached Artwork
 		if err := json.Unmarshal(cachedData, &cached); err == nil && (cached.CoverURL != "" || cached.HeroURL != "" || cached.LogoURL != "" || cached.IconURL != "") {
@@ -216,7 +231,7 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 
 	// 1. Fetch Vertical Cover Art (600x900)
 	g.Go(func() error {
-		gridURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/grids/%s/%s?dimensions=600x900", lookupType, gameID)
+		gridURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/grids/%s/%s?dimensions=600x900", lookupType, cleanID)
 		var gridRes sgdbImageResponse
 		if err := s.doRequest(gCtx, gridURL, &gridRes); err == nil && gridRes.Success && len(gridRes.Data) > 0 {
 			mu.Lock()
@@ -228,7 +243,7 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 
 	// 2. Fetch Horizontal Banner Header (460x215 / 920x430)
 	g.Go(func() error {
-		bannerURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/grids/%s/%s?dimensions=460x215,920x430", lookupType, gameID)
+		bannerURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/grids/%s/%s?dimensions=460x215,920x430", lookupType, cleanID)
 		var bannerRes sgdbImageResponse
 		if err := s.doRequest(gCtx, bannerURL, &bannerRes); err == nil && bannerRes.Success && len(bannerRes.Data) > 0 {
 			mu.Lock()
@@ -240,7 +255,7 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 
 	// 3. Fetch Hero Wallpaper / Backdrop (1920x620)
 	g.Go(func() error {
-		heroURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/heroes/%s/%s", lookupType, gameID)
+		heroURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/heroes/%s/%s", lookupType, cleanID)
 		var heroRes sgdbImageResponse
 		if err := s.doRequest(gCtx, heroURL, &heroRes); err == nil && heroRes.Success && len(heroRes.Data) > 0 {
 			mu.Lock()
@@ -252,7 +267,7 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 
 	// 4. Fetch Logo (transparent title PNG)
 	g.Go(func() error {
-		logoURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/logos/%s/%s", lookupType, gameID)
+		logoURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/logos/%s/%s", lookupType, cleanID)
 		var logoRes sgdbImageResponse
 		if err := s.doRequest(gCtx, logoURL, &logoRes); err == nil && logoRes.Success && len(logoRes.Data) > 0 {
 			mu.Lock()
@@ -264,7 +279,7 @@ func (s *SGDBProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 
 	// 5. Fetch Icon
 	g.Go(func() error {
-		iconURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/icons/%s/%s", lookupType, gameID)
+		iconURL := fmt.Sprintf("https://www.steamgriddb.com/api/v2/icons/%s/%s", lookupType, cleanID)
 		var iconRes sgdbImageResponse
 		if err := s.doRequest(gCtx, iconURL, &iconRes); err == nil && iconRes.Success && len(iconRes.Data) > 0 {
 			mu.Lock()

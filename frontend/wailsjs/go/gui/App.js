@@ -210,20 +210,8 @@ export function SubmitApply(arg1) {
   return window['go']['gui']['App']['SubmitApply'](arg1);
 }
 
-export function SubmitBatchAchievements() {
-  return window['go']['gui']['App']['SubmitBatchAchievements']();
-}
-
-export function SubmitBatchArtwork() {
-  return window['go']['gui']['App']['SubmitBatchArtwork']();
-}
-
-export function SubmitBatchNormalize() {
-  return window['go']['gui']['App']['SubmitBatchNormalize']();
-}
-
-export function SubmitBatchVerify() {
-  return window['go']['gui']['App']['SubmitBatchVerify']();
+export function SubmitBatchLibraryOp(arg1) {
+  return window['go']['gui']['App']['SubmitBatchLibraryOp'](arg1);
 }
 
 export function SubmitNormalize(arg1) {

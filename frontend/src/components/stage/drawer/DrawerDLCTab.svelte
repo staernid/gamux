@@ -1,11 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
+  import { tasksStore } from '../../../stores/tasks.js';
   import { notificationStore } from '../../../stores/notifications.js';
   import { formatBytes } from '../../../utils/format.js';
 
-
   export let game = null;
+
+  const activeDownloads = tasksStore.activeDownloads;
 
   let depots = [];
   let isLoading = true;
@@ -13,6 +15,9 @@
 
   $: gameDir = game?.gameDir || '';
   $: appID = game?.appId || '';
+  $: activeTransfer = ($activeDownloads || []).find(
+    (t) => String(t.app_id) === String(appID) || (t.game_dir && t.game_dir === gameDir)
+  );
 
   onMount(async () => {
     await loadDepots();
@@ -57,15 +62,16 @@
     if (isActionRunning || !appID) return;
     isActionRunning = true;
     try {
-      await AppAPI.startDownloadTransfer({
+      await tasksStore.start({
         app_id: Number(appID),
         platform: 'soundtrack',
-        target_dir: '~/Music'
+        game_name: `${game?.name || 'Game'} Soundtrack`,
+        auto_apply: false
       });
       notificationStore.items.add({
         type: 'success',
         title: 'Soundtrack Download Queued',
-        message: `Queued download for ${depot.name || 'Soundtrack'} to ~/Music`
+        message: `Queued download for ${depot.name || 'Soundtrack'} to Music folder`
       });
     } catch (err) {
       notificationStore.items.add({
@@ -82,10 +88,12 @@
     if (isActionRunning || !appID) return;
     isActionRunning = true;
     try {
-      await AppAPI.startDownloadTransfer({
+      await tasksStore.start({
         app_id: Number(appID),
         platform: depot.category || 'all',
-        target_dir: gameDir
+        target_dir: gameDir,
+        game_name: `${game?.name || 'Game'} (${depot.name || depot.depot_id})`,
+        auto_apply: true
       });
       notificationStore.items.add({
         type: 'success',
@@ -151,6 +159,26 @@
     </button>
   </div>
 
+  {#if activeTransfer}
+    <!-- Active Transfer Telemetry Banner -->
+    <div class="p-3 bg-indigo-950/30 border border-indigo-500/30 rounded-xl space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+          <span class="font-bold text-indigo-200">{activeTransfer.stage || 'Downloading Depots'}</span>
+        </div>
+        <span class="font-mono text-indigo-300 font-bold">{activeTransfer.percent || 0}%</span>
+      </div>
+      <div class="w-full bg-black/40 rounded-full h-1.5 overflow-hidden">
+        <div class="bg-indigo-500 h-full transition-all duration-300" style="width: {activeTransfer.percent || 0}%"></div>
+      </div>
+      <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+        <span>{formatBytes(activeTransfer.bytes_downloaded || 0)} / {formatBytes(activeTransfer.total_bytes || 0)}</span>
+        <span>{formatBytes(activeTransfer.speed_bps || 0)}/s</span>
+      </div>
+    </div>
+  {/if}
+
   {#if isLoading}
     <div class="py-12 text-center text-slate-500 text-xs">
       Loading content manifests...
@@ -197,7 +225,7 @@
                 disabled={isActionRunning}
                 class="px-2.5 py-1.5 rounded-lg bg-pink-950/40 hover:bg-pink-900/60 text-pink-300 border border-pink-700/50 font-bold text-[11px] transition-colors flex items-center space-x-1"
               >
-                <span>🎵 Save to ~/Music</span>
+                <span>🎵 Save to Music</span>
               </button>
             {:else if !depot.installed}
               <button

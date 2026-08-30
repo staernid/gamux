@@ -243,9 +243,108 @@ func TestResolveEffectiveWinePrefix_DefaultSharedUMU(t *testing.T) {
 		t.Errorf("expected custom prefix %s, got %s", customPrefix, p1)
 	}
 
-	// 2. Unset prefix -> defaults to Games/umu/umu-default
+	// 2. Unset prefix -> defaults to isolated per-game prefix or shared umu-default under Games/umu
 	p2 := resolver.resolveEffectiveWinePrefix("", "1091500", "Cyberpunk 2077")
-	if !strings.HasSuffix(p2, filepath.Join("Games", "umu", "umu-default")) {
-		t.Errorf("expected default shared prefix ending in Games/umu/umu-default, got %s", p2)
+	if !strings.HasSuffix(p2, filepath.Join("Games", "umu", "1091500")) && !strings.HasSuffix(p2, filepath.Join("Games", "umu", "umu-default")) {
+		t.Errorf("expected UMU prefix under Games/umu, got %s", p2)
+	}
+}
+
+func TestService_EndToEndLifecycle(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeGameDir := filepath.Join(tmpDir, "games", "TestRPG")
+	fakePrefix := filepath.Join(tmpDir, "prefix")
+	fakeUserDir := filepath.Join(fakePrefix, "drive_c", "users", "steamuser")
+	fakeSaveDir := filepath.Join(fakeUserDir, "AppData", "LocalLow", "Studio", "TestRPG")
+	backupBaseDir := filepath.Join(tmpDir, "backups")
+
+	_ = os.MkdirAll(fakeGameDir, 0755)
+	_ = os.MkdirAll(fakeSaveDir, 0755)
+	saveContent := "rpg_save_state_123"
+	saveFilePath := filepath.Join(fakeSaveDir, "save.dat")
+	_ = os.WriteFile(saveFilePath, []byte(saveContent), 0644)
+
+	// Write launch_profile.json in fakeGameDir to test automatic parameter resolution
+	settingsDir := filepath.Join(fakeGameDir, "steam_settings")
+	_ = os.MkdirAll(settingsDir, 0755)
+	profileJSON := `{
+		"game_dir": "` + fakeGameDir + `",
+		"app_id": "777777",
+		"platform": "win64",
+		"wine_prefix": "` + fakePrefix + `"
+	}`
+	_ = os.WriteFile(filepath.Join(settingsDir, "launch_profile.json"), []byte(profileJSON), 0644)
+
+	svc := NewService(ServiceConfig{
+		CacheDir:         tmpDir,
+		BackupDir:        backupBaseDir,
+		RetentionCount:   3,
+		GlobalPrefix:     fakePrefix,
+		DisableAutoFetch: true,
+	})
+
+	// Inject manifest rule for 777777
+	svc.manifestMgr.indexMap(map[string]ManifestGame{
+		"TestRPG": {
+			Steam: struct {
+				ID uint32 `json:"id,omitempty"`
+			}{ID: 777777},
+			Files: map[string]ManifestFileRule{
+				"<home>/AppData/LocalLow/Studio/TestRPG": {
+					Tags: []string{"save"},
+					When: []ManifestConstraint{{OS: "windows"}},
+				},
+			},
+		},
+	})
+
+	// 1. Inspect Locations
+	locs, err := svc.InspectLocations(context.Background(), fakeGameDir)
+	if err != nil {
+		t.Fatalf("InspectLocations failed: %v", err)
+	}
+	if len(locs.Locations) == 0 {
+		t.Fatalf("expected at least 1 resolved save location")
+	}
+
+	// 2. Create Backup
+	backup, err := svc.CreateBackup(context.Background(), fakeGameDir, "EndToEnd Test Snapshot", "manual")
+	if err != nil {
+		t.Fatalf("CreateBackup failed: %v", err)
+	}
+	if backup == nil || backup.ID == "" {
+		t.Fatalf("invalid backup returned")
+	}
+
+	// 3. List Backups
+	list, err := svc.ListBackups(context.Background(), fakeGameDir)
+	if err != nil {
+		t.Fatalf("ListBackups failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("expected 1 backup in list, got %d", len(list))
+	}
+
+	// 4. Corrupt and Restore
+	_ = os.Remove(saveFilePath)
+	if err := svc.RestoreBackup(context.Background(), fakeGameDir, backup.ID); err != nil {
+		t.Fatalf("RestoreBackup failed: %v", err)
+	}
+
+	restored, err := os.ReadFile(saveFilePath)
+	if err != nil {
+		t.Fatalf("reading restored save failed: %v", err)
+	}
+	if string(restored) != saveContent {
+		t.Errorf("expected restored content %q, got %q", saveContent, string(restored))
+	}
+
+	// 5. Delete Backup
+	if err := svc.DeleteBackup(context.Background(), fakeGameDir, backup.ID); err != nil {
+		t.Fatalf("DeleteBackup failed: %v", err)
+	}
+	listAfter, _ := svc.ListBackups(context.Background(), fakeGameDir)
+	if len(listAfter) != 0 {
+		t.Errorf("expected 0 backups after deletion, got %d", len(listAfter))
 	}
 }

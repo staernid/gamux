@@ -315,9 +315,10 @@ export class GamuxDevBridge {
         const transferId = 'diag_tr_' + Date.now();
         const gameName = 'Hollow Knight';
 
-        this.emit('gamux:transfer-event', {
-          type: 'transfer:started',
+        this.emit('gamux:task-event', {
+          type: 'task:started',
           task_id: transferId,
+          operation: 'download',
           game_name: gameName,
           app_id: '367520',
           stage: 'Connecting to Steam CDN...',
@@ -326,18 +327,20 @@ export class GamuxDevBridge {
 
         await new Promise(r => setTimeout(r, 50));
 
-        this.emit('gamux:transfer-event', {
-          type: 'transfer:progress',
+        this.emit('gamux:task-event', {
+          type: 'task:progress',
           task_id: transferId,
+          operation: 'download',
           stage: 'Downloading Depot Chunks',
           progress: { percent: 55, current_bytes: 576716800, total_bytes: 1048576000, bytes_per_sec: 15000000, eta_seconds: 31 }
         });
 
         await new Promise(r => setTimeout(r, 50));
 
-        this.emit('gamux:transfer-event', {
-          type: 'transfer:completed',
+        this.emit('gamux:task-event', {
+          type: 'task:completed',
           task_id: transferId,
+          operation: 'download',
           stage: 'Complete',
           details: 'Download and verification complete.'
         });

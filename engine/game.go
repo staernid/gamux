@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/compat"
-	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
@@ -116,21 +115,26 @@ func (eng *Engine) ApplyGame(ctx context.Context, opts ProcessOptions) (*Process
 	return eng.ProcessGame(ctx, opts)
 }
 
-// Rollback restores original backup files and cleans up generated configuration files in a game directory.
+// Rollback restores original backup files and cleans up generated configuration files in a game directory via Rollback pipeline recipe.
 func (eng *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool) error {
-	info, err := detector.Detect(ctx, targetPath)
-	if err != nil {
-		return fmt.Errorf("detect game for rollback: %w", err)
+	ctx = eng.WrapContext(ctx)
+	targetPath = util.CanonicalPath(targetPath)
+	if targetPath == "" {
+		targetPath = "."
 	}
 
-	slog.Info("Starting rollback for game", "name", info.Name, "dir", info.GameDir)
-	restoredCount, err := gbe.Revert(info.GameDir, dryRun)
-	if err != nil {
-		return fmt.Errorf("rollback game %s: %w", info.Name, err)
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:   targetPath,
+			DryRun: dryRun,
+		},
+		Game:     domain.NewGame("", targetPath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
 	}
 
-	slog.Info("Rollback completed", "game", info.Name, "restoredFiles", restoredCount)
-	return nil
+	pipe := pipeline.NewRollback()
+	return pipe.Execute(ctx, pctx)
 }
 
 func (eng *Engine) runnerManager() *runner.Manager {
@@ -157,18 +161,19 @@ func (eng *Engine) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOp
 		if err == nil && status != nil && (status.IsClean() || !status.IsReady) {
 			slog.Info("EnsureAndLaunchGame auto-applying setup before launch", "dir", opts.GameDir, "game", status.Name)
 			applyOpts := ProcessOptions{
-				Path:       opts.GameDir,
-				ApplyGBE:   true,
-				Portable:   true,
-				WinePrefix: opts.WinePrefix,
-				ExePath:    opts.ExePath,
-				ExeArgs:    opts.ExeArgs,
+				Path:          opts.GameDir,
+				OperatingMode: domain.ModePortable,
+				WinePrefix:    opts.WinePrefix,
+				ExePath:       opts.ExePath,
+				ExeArgs:       opts.ExeArgs,
 			}
-			applyOp := &ApplyOperation{
-				Engine:   eng,
+			pctx := &pipeline.Context{
 				Options:  applyOpts,
-				GameName: status.Name,
+				Game:     domain.NewGame(status.Name, opts.GameDir, "", ""),
+				Config:   eng.Config,
+				EventBus: eng.EventBus,
 			}
+			applyOp := pipeline.NewSetupOperation(status.Name, opts.GameDir, pctx)
 			if eng.Tasks != nil {
 				if err := eng.Tasks.RunSyncOp(ctx, applyOp); err != nil {
 					return nil, fmt.Errorf("auto-apply before launch failed: %w", err)
@@ -194,11 +199,38 @@ func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*domai
 	return compat.LoadProfile(gameDir)
 }
 
-// SaveLaunchProfile persists custom launch configuration and synchronizes on-disk integrations.
+// SaveLaunchProfile persists custom launch configuration and synchronizes lightweight on-disk settings.
+//
+// NOTE (Architecture Invariant):
+// Profile saves must NOT trigger heavyweight binary modifications (gbe.Apply) unless the OperatingMode
+// explicitly transitioned (e.g. from portable to loader, or loader to standalone/none).
+// Normal configuration updates (launch arguments, HUD options, environment variables, artwork) are persisted
+// purely via SyncSettings/SaveProfile.
 func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts runner.LaunchOptions) error {
-	opts.GameDir = gameDir
-	game, _ := eng.InspectLocal(ctx, gameDir)
-	return compat.Apply(ctx, eng.Config, game, &opts, false)
+	opts.GameDir = util.CanonicalPath(gameDir)
+	if opts.GameDir == "" {
+		return fmt.Errorf("game directory cannot be empty")
+	}
+
+	existingProf, _ := compat.LoadProfile(opts.GameDir)
+	prevMode := ""
+	if existingProf != nil {
+		prevMode = existingProf.OperatingMode
+	}
+	newMode := opts.OperatingMode
+
+	// Always sync profile and lightweight text configs (steam_appid.txt, force_language.txt)
+	if err := compat.SyncSettings(ctx, &opts, eng.Config); err != nil {
+		return fmt.Errorf("sync launch profile settings: %w", err)
+	}
+
+	// Only trigger binary DRM application if the operating mode transitioned
+	if newMode != "" && !strings.EqualFold(newMode, prevMode) {
+		game, _ := eng.InspectLocal(ctx, opts.GameDir)
+		return compat.Apply(ctx, eng.Config, game, &opts, false)
+	}
+
+	return nil
 }
 
 // GetGameDepots retrieves the structured inventory of all content depots for a game directory.
@@ -544,15 +576,18 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 	}
 	if opts.TargetDir == "" || opts.TargetDir == "." {
 		if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", opts.AppID)); err == nil && installDir != "" {
-			if steam.IsSoundtrack(appType) {
+			if steam.IsSoundtrack(appType) || opts.Platform == "soundtrack" {
 				opts.TargetDir = filepath.Join(util.GetMusicDir(), installDir)
 			} else {
 				opts.TargetDir = installDir
 			}
+		} else if opts.Platform == "soundtrack" {
+			opts.TargetDir = util.GetMusicDir()
 		} else if opts.TargetDir == "" {
 			opts.TargetDir = "."
 		}
 	}
+	opts.TargetDir = util.CanonicalPath(opts.TargetDir)
 
 	hubcapKey := ""
 	if eng.Config != nil {
@@ -595,7 +630,7 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		eng.reportStep(ctx, 3, 3, "Running Post-Download Setup", fmt.Sprintf("Target: %s", opts.TargetDir))
 		applyOpts := ProcessOptions{
 			Path:              opts.TargetDir,
-			ApplyGBE:          true,
+			OperatingMode:     domain.ModeLoader,
 			NormalizeDir:      false,
 			DryRun:            opts.DryRun,
 			AutoYes:           true,
@@ -613,36 +648,50 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 	return res, nil
 }
 
-// UpdateGame checks for available Steam depot updates for an existing game directory, downloads changed files, and re-applies setup.
+// UpdateGame checks for available Steam depot updates for an existing game directory, downloads changed files, and re-applies setup via the Update pipeline recipe.
 func (eng *Engine) UpdateGame(ctx context.Context, gamePath string) (*GameStatus, error) {
 	ctx = eng.WrapContext(ctx)
 	targetPath := gamePath
 	if targetPath == "" {
 		targetPath = "."
 	}
+	targetPath = util.CanonicalPath(targetPath)
 
-	slog.Info("Updating game installation", "target", targetPath)
+	slog.Info("Updating game installation via pipeline", "target", targetPath)
 
-	info, err := detector.Detect(ctx, targetPath)
-	if err != nil {
-		return nil, fmt.Errorf("detect game info: %w", err)
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:          targetPath,
+			OperatingMode: domain.ModePortable,
+			NormalizeDir:  true,
+		},
+		Game:     domain.NewGame("", targetPath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
 	}
 
-	appIDVal, ok := util.ParseAppID(info.AppID)
-	if !ok || appIDVal == 0 {
-		return nil, fmt.Errorf("could not resolve valid numeric AppID for %s (detected %q)", info.Name, info.AppID)
+	pipe := pipeline.NewUpdate()
+	if err := pipe.Execute(ctx, pctx); err != nil {
+		return nil, fmt.Errorf("update pipeline failed: %w", err)
 	}
 
-	dlOpts := DownloadGameOptions{
-		AppID:     appIDVal,
-		TargetDir: info.GameDir,
-		Platform:  info.Platform,
-		AutoApply: true,
-	}
+	return eng.InspectStatus(ctx, pctx.Game.GameDir)
+}
 
-	if _, dlErr := eng.DownloadGame(ctx, dlOpts); dlErr != nil {
-		return nil, fmt.Errorf("update download failed: %w", dlErr)
-	}
+// GetGSEUserConfig returns the global Goldberg user persona settings from configs.user.ini.
+func (eng *Engine) GetGSEUserConfig() (*gbe.GSEUserConfig, error) {
+	return gbe.LoadGSEUserConfig()
+}
 
-	return eng.InspectStatus(ctx, info.GameDir)
+// SaveGSEUserConfig persists the global Goldberg user persona settings to configs.user.ini.
+func (eng *Engine) SaveGSEUserConfig(cfg *gbe.GSEUserConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("gse user config cannot be nil")
+	}
+	return gbe.SaveGSEUserConfig(cfg)
+}
+
+// GetAvailableRunners returns list of detected execution runners on the host.
+func (eng *Engine) GetAvailableRunners() []string {
+	return runner.GetAvailableRunners()
 }

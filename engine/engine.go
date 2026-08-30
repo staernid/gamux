@@ -25,12 +25,10 @@ type Engine struct {
 	RunnerMgr      *runner.Manager
 	StoreRegistry  *store.Registry
 	ArtworkService *store.ArtworkService
+	Saves          *saves.Service
 	Notifier       func(ctx context.Context, title, message string) error
 	StepReporter   func(ctx context.Context, prog StepProgress)
 	toolManager    *tools.Manager
-	savesManifest  *saves.ManifestManager
-	savesResolver  *saves.Resolver
-	savesBackup    *saves.BackupManager
 }
 
 // New creates a new Engine with all domain and infrastructure services initialized.
@@ -62,16 +60,13 @@ func New(cfg *config.Config) *Engine {
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 
-	customSaveURL := cfg.SaveManifestURL
-	backupDir := cfg.BackupDir
-	retention := 5
-	if cfg.BackupRetentionCount > 0 {
-		retention = cfg.BackupRetentionCount
-	}
-
-	manifestMgr := saves.NewManifestManager("", customSaveURL, httpClient)
-	resolver := saves.NewResolver(manifestMgr)
-	backupMgr := saves.NewBackupManager(backupDir, retention, resolver)
+	savesSvc := saves.NewService(saves.ServiceConfig{
+		BackupDir:      cfg.BackupDir,
+		RetentionCount: cfg.BackupRetentionCount,
+		ManifestURL:    cfg.SaveManifestURL,
+		HTTPClient:     httpClient,
+		GlobalPrefix:   cfg.WinePrefix,
+	})
 
 	eng := &Engine{
 		Config:         cfg,
@@ -81,25 +76,18 @@ func New(cfg *config.Config) *Engine {
 		RunnerMgr:      runner.NewManager(bus),
 		StoreRegistry:  reg,
 		ArtworkService: artSvc,
+		Saves:          savesSvc,
 		toolManager:    tools.NewManager(cfg),
-		savesManifest:  manifestMgr,
-		savesResolver:  resolver,
-		savesBackup:    backupMgr,
 	}
 
 	// Auto-backup on game process termination if configured
 	bus.SubscribeFunc(func(ev events.Event) {
 		if ev.Type == events.EventGameExited && eng.Config != nil && eng.Config.AutoBackupSaves && ev.GameDir != "" {
-			go func(gDir, gName, aID string) {
-				_, _ = eng.CreateSaveBackup(context.Background(), gDir, "Automatic post-game snapshot", "auto_exit")
-			}(ev.GameDir, ev.GameName, ev.AppID)
+			go func(gDir string) {
+				_, _ = eng.Saves.CreateBackup(context.Background(), gDir, "Automatic post-game snapshot", "auto_exit")
+			}(ev.GameDir)
 		}
 	})
-
-	// Non-blocking background save manifest load on startup
-	go func() {
-		_ = manifestMgr.LoadOrFetch(context.Background(), false)
-	}()
 
 	eng.registerDefaultTaskRunners()
 	return eng

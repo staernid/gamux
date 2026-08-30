@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
 )
 
@@ -266,97 +268,13 @@ func (r *Resolver) isRuleApplicable(rule ManifestFileRule, platform string) bool
 
 // resolveEffectiveWinePrefix discovers the candidate Wine/Proton prefix on disk in priority order.
 func (r *Resolver) resolveEffectiveWinePrefix(customPrefix, appID, gameName string) string {
-	home, _ := os.UserHomeDir()
-
-	if customPrefix != "" {
-		return util.ExpandPath(customPrefix)
-	}
-
-	// 1. Per-game UMU prefix
-	if appID != "" && appID != "0" {
-		umuApp := filepath.Join(home, "Games", "umu", appID)
-		if util.FileExists(umuApp) {
-			return umuApp
-		}
-	}
-
-	// 2. Shared standard UMU prefix
-	umuDefault := filepath.Join(home, "Games", "umu", "umu-default")
-	if util.FileExists(umuDefault) {
-		return umuDefault
-	}
-
-	// 3. Standard Wine prefixes directory
-	if gameName != "" {
-		slug := util.Slugify(gameName)
-		wineName := filepath.Join(home, ".local", "share", "wineprefixes", slug)
-		if util.FileExists(wineName) {
-			return wineName
-		}
-	}
-
-	// 4. Default Wine prefix
-	wineDefault := filepath.Join(home, ".local", "share", "wineprefixes", "default")
-	if util.FileExists(wineDefault) {
-		return wineDefault
-	}
-
-	// Fallback to shared UMU default path
-	return umuDefault
+	dummyGame := domain.NewGame(gameName, "", appID, "win64")
+	return compat.ResolveGamePrefix(nil, dummyGame, customPrefix)
 }
 
 // detectWineUser finds the active user profile name inside a Wine prefix.
 func (r *Resolver) detectWineUser(winePrefix string) string {
-	usersDir := filepath.Join(winePrefix, "drive_c", "users")
-	if !util.FileExists(usersDir) {
-		if u := os.Getenv("USER"); u != "" {
-			return u
-		}
-		return "steamuser"
-	}
-
-	entries, err := os.ReadDir(usersDir)
-	if err != nil {
-		if u := os.Getenv("USER"); u != "" {
-			return u
-		}
-		return "steamuser"
-	}
-
-	var candidates []string
-	systemUsers := map[string]bool{
-		"public": true, "default": true, "default user": true, "all users": true,
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		nameLower := strings.ToLower(entry.Name())
-		if !systemUsers[nameLower] {
-			candidates = append(candidates, entry.Name())
-		}
-	}
-
-	currentLinuxUser := os.Getenv("USER")
-	for _, c := range candidates {
-		if currentLinuxUser != "" && strings.EqualFold(c, currentLinuxUser) {
-			return c
-		}
-	}
-	for _, c := range candidates {
-		if strings.EqualFold(c, "steamuser") {
-			return c
-		}
-	}
-	if len(candidates) == 1 {
-		return candidates[0]
-	}
-
-	if currentLinuxUser != "" {
-		return currentLinuxUser
-	}
-	return "steamuser"
+	return compat.DetectWineUser(winePrefix)
 }
 
 // expandPlaceholder replaces Ludusavi 16 semantic placeholders with concrete on-disk absolute paths.

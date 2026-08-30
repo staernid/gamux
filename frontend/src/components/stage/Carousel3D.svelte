@@ -219,25 +219,19 @@
   export function step(delta) {
     if (count <= 1) return;
     targetPos = Math.round(targetPos) + delta;
+    lastSoundIndex = wrapIndex(Math.round(targetPos));
     playTick();
     wakeLoop();
   }
 
   // Rotary joystick scrubbing (iPod click wheel on Right Stick)
-  let rotaryAcc = 0;
   export function addRotaryDelta(delta) {
     if (count <= 1) return;
     targetPos += delta;
-    rotaryAcc += Math.abs(delta);
-    if (rotaryAcc >= 0.75) {
-      playTick();
-      rotaryAcc = 0;
-    }
     wakeLoop();
     if (stickStopTimeout) clearTimeout(stickStopTimeout);
     stickStopTimeout = setTimeout(() => {
       targetPos = Math.round(targetPos);
-      rotaryAcc = 0;
       wakeLoop();
     }, 100);
   }
@@ -259,6 +253,7 @@
     if (diff > count / 2) diff -= count;
     if (diff < -count / 2) diff += count;
     targetPos = Math.round(currentPos) + diff;
+    lastSoundIndex = targetIdx;
     playTick();
     wakeLoop();
   }
@@ -271,7 +266,6 @@
     } else {
       const stepDelta = Math.round(diff);
       targetPos = Math.round(currentPos) + stepDelta;
-      playTick();
       wakeLoop();
     }
   }
@@ -297,7 +291,6 @@
       }
       targetPos = Math.round(targetPos) + (stepDir * speedBoost);
       lastWheelTime = now;
-      playTick();
       wakeLoop();
     } else {
       // Continuous touchpad / precision trackpad sweep
@@ -309,7 +302,6 @@
         targetPos = Math.round(targetPos) + stepDir;
         wheelAccumulator -= stepDir * threshold;
         lastWheelTime = now;
-        playTick();
         wakeLoop();
       }
     }

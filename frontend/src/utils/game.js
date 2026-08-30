@@ -33,104 +33,67 @@ export function normalizeGame(g) {
       description: c.description || c.Description || '',
     }));
 
-  const launchProfile = g.launch_profile || g.LaunchProfile || g.launchProfile || null;
-  let rawExePath = launchProfile?.exe_path || launchProfile?.exePath || g.exe_path || g.ExePath || g.exePath || '';
-  if (rawExePath && (rawExePath.toLowerCase().includes('steamclient_loader') || rawExePath.toLowerCase().includes('coldclientloader'))) {
-    rawExePath = launchCandidates[0]?.executable || '';
+  const lp = g.launch_profile || g.LaunchProfile || g.launchProfile || null;
+  let rawExe = lp?.exe_path || lp?.ExePath || lp?.exePath || g.exe_path || g.ExePath || g.exePath || '';
+  if (rawExe && (rawExe.toLowerCase().includes('steamclient_loader') || rawExe.toLowerCase().includes('coldclientloader'))) {
+    rawExe = launchCandidates[0]?.executable || '';
   }
-  const exePath = normalizePath(rawExePath);
 
-  const name = g.name || g.Name || 'Unknown Game';
-  const appId = String(g.app_id || g.AppID || g.appId || '');
-  const gameDir = normalizePath(g.game_dir || g.GameDir || g.gameDir || '');
-  const store = g.store || g.Store || 'Steam';
-  const source = g.source || g.Source || store;
-  const gogId = String(g.gog_id || g.gogId || g.GOGID || launchProfile?.gog_id || launchProfile?.gogId || '');
-  const metadataProvider = launchProfile?.metadata_provider || launchProfile?.metadataProvider || g.metadata_provider || g.MetadataProvider || g.metadataProvider || '';
-  const metadataId = String(launchProfile?.metadata_id || launchProfile?.metadataId || g.metadata_id || g.MetadataID || g.metadataId || '');
-  const platform = g.platform || g.Platform || 'win64';
-  const exeArgs = launchProfile?.exe_args || launchProfile?.exeArgs || g.exe_args || g.ExeArgs || g.exeArgs || '';
-  const isPatched = Boolean(g.is_patched ?? g.isPatched ?? g.IsPatched ?? (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists || g.SettingsDirExists));
-  const isPortable = Boolean(g.is_portable ?? g.isPortable ?? g.IsPortable ?? (g.state === 'Portable-Patched'));
-  const isReady = Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!exePath));
-  const hasUpdatesOrIssues = Boolean(g.has_updates_or_issues ?? g.hasUpdatesOrIssues ?? g.HasUpdatesOrIssues ?? (store === 'Steam' && (g.has_update || g.HasUpdate || (g.modified_files && g.modified_files.length > 0) || (g.missing_files && g.missing_files.length > 0))));
-  const diskSizeBytes = Number(g.disk_size_bytes ?? g.DiskSizeBytes ?? g.diskSizeBytes ?? 0);
-  const fileCount = Number(g.file_count ?? g.FileCount ?? g.fileCount ?? 0);
-  const officialFileCount = Number(g.official_file_count ?? g.OfficialFileCount ?? g.officialFileCount ?? 0);
-  const dlcCount = Number(g.dlc_count ?? g.DLCCount ?? g.dlcCount ?? 0);
-  const achievementCount = Number(g.achievement_count ?? g.AchievementCount ?? g.achievementCount ?? 0);
-  const operatingMode = launchProfile?.operating_mode || launchProfile?.operatingMode || g.operating_mode || g.operatingMode || 'standalone';
-  const runnerType = launchProfile?.runner || g.runner || 'umu';
-  const winePrefix = normalizePath(launchProfile?.wine_prefix || launchProfile?.winePrefix || g.wine_prefix || g.winePrefix || '');
-  const currentLanguage = g.current_language || g.CurrentLanguage || g.currentLanguage || '';
-  const supportedLanguages = g.supported_languages || g.SupportedLanguages || g.supportedLanguages || [];
-  const modifiedFiles = g.modified_files || g.ModifiedFiles || g.modifiedFiles || [];
-  const missingFiles = g.missing_files || g.MissingFiles || g.missingFiles || [];
-  const untrackedFiles = g.untracked_files || g.UntrackedFiles || g.untrackedFiles || [];
-  const hasUpdate = Boolean(g.has_update ?? g.HasUpdate ?? g.hasUpdate ?? false);
-  const manifestId = g.manifest_id || g.ManifestID || g.manifestId || '';
-  const buildId = g.build_id || g.BuildID || g.buildId || '';
-  const remoteManifestId = g.remote_manifest_id || g.RemoteManifestID || g.remoteManifestId || '';
-  const recentPatchNote = g.recent_patch_note || g.RecentPatchNote || g.recentPatchNote || '';
-  const newsItems = g.news_items || g.NewsItems || g.newsItems || [];
-  const coverUrl = g.cover_url || g.coverUrl || g.custom_cover_url || g.customCoverUrl || '';
-  const localCoverUrl = g.local_cover_url || g.localCoverUrl || g.local_cover || g.localCover || '';
-  const heroUrl = g.hero_url || g.heroUrl || g.custom_hero_url || g.customHeroUrl || '';
-  const localHeroUrl = g.local_hero_url || g.localHeroUrl || g.local_hero || g.localHero || '';
-  const bannerUrl = g.banner_url || g.bannerUrl || g.custom_banner_url || g.customBannerUrl || '';
-  const localBannerUrl = g.local_banner_url || g.localBannerUrl || g.local_banner || g.localBanner || '';
-  const logoUrl = g.logo_url || g.logoUrl || g.custom_logo_url || g.customLogoUrl || '';
-  const localLogoUrl = g.local_logo_url || g.localLogoUrl || g.local_logo || g.localLogo || '';
-  const playtimeSeconds = Number(g.playtime_seconds ?? g.playtimeSeconds ?? g.PlaytimeSeconds ?? launchProfile?.playtime_seconds ?? launchProfile?.playtimeSeconds ?? 0);
-  const lastPlayed = Number(g.last_played ?? g.lastPlayed ?? g.LastPlayed ?? launchProfile?.last_played ?? launchProfile?.lastPlayed ?? 0);
+  const isPatched = Boolean(
+    g.is_patched ?? g.isPatched ?? g.IsPatched ??
+    (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists || g.SettingsDirExists)
+  );
 
   return {
-    name,
-    appId,
-    gameDir,
-    store,
-    source,
-    gogId,
-    metadataProvider,
-    metadataId,
-    platform,
-    exePath,
-    exeArgs,
+    name: g.name || g.Name || 'Unknown Game',
+    appId: String(g.app_id ?? g.AppID ?? g.appId ?? ''),
+    gameDir: normalizePath(g.game_dir ?? g.GameDir ?? g.gameDir ?? ''),
+    store: g.store || g.Store || 'Steam',
+    source: g.source || g.Source || g.store || g.Store || 'Steam',
+    gogId: String(g.gog_id ?? g.GOGID ?? g.gogId ?? lp?.gog_id ?? lp?.GOGID ?? lp?.gogId ?? ''),
+    metadataProvider: lp?.metadata_provider || lp?.MetadataProvider || lp?.metadataProvider || g.metadata_provider || g.MetadataProvider || g.metadataProvider || '',
+    metadataId: String(lp?.metadata_id ?? lp?.MetadataID ?? lp?.metadataId ?? g.metadata_id ?? g.MetadataID ?? g.metadataId ?? ''),
+    platform: g.platform || g.Platform || 'win64',
+    exePath: normalizePath(rawExe),
+    exeArgs: lp?.exe_args || lp?.ExeArgs || lp?.exeArgs || g.exe_args || g.ExeArgs || g.exeArgs || '',
     launchCandidates,
-    launchProfile,
+    launchProfile: lp,
     isPatched,
-    isPortable,
-    isReady,
-    hasUpdatesOrIssues,
-    diskSizeBytes,
-    fileCount,
-    officialFileCount,
-    dlcCount,
-    achievementCount,
-    operatingMode,
-    runner: runnerType,
-    winePrefix,
-    currentLanguage,
-    supportedLanguages,
-    modifiedFiles,
-    missingFiles,
-    untrackedFiles,
-    hasUpdate,
-    manifestId,
-    buildId,
-    remoteManifestId,
-    recentPatchNote,
-    newsItems,
-    coverUrl,
-    localCoverUrl,
-    heroUrl,
-    localHeroUrl,
-    bannerUrl,
-    localBannerUrl,
-    logoUrl,
-    localLogoUrl,
-    playtimeSeconds,
-    lastPlayed,
+    isPortable: Boolean(g.is_portable ?? g.isPortable ?? g.IsPortable ?? (g.state === 'Portable-Patched')),
+    isReady: Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!rawExe)),
+    hasUpdatesOrIssues: Boolean(
+      g.has_updates_or_issues ?? g.hasUpdatesOrIssues ?? g.HasUpdatesOrIssues ??
+      ((g.store === 'Steam' || g.Store === 'Steam') && (g.has_update || g.HasUpdate || (g.modified_files?.length > 0) || (g.missing_files?.length > 0)))
+    ),
+    diskSizeBytes: Number(g.disk_size_bytes ?? g.DiskSizeBytes ?? g.diskSizeBytes ?? 0),
+    fileCount: Number(g.file_count ?? g.FileCount ?? g.fileCount ?? 0),
+    officialFileCount: Number(g.official_file_count ?? g.OfficialFileCount ?? g.officialFileCount ?? 0),
+    dlcCount: Number(g.dlc_count ?? g.DLCCount ?? g.dlcCount ?? 0),
+    achievementCount: Number(g.achievement_count ?? g.AchievementCount ?? g.achievementCount ?? 0),
+    operatingMode: lp?.operating_mode || lp?.OperatingMode || lp?.operatingMode || g.operating_mode || g.OperatingMode || g.operatingMode || 'standalone',
+    runner: lp?.runner || lp?.Runner || g.runner || g.Runner || 'umu',
+    winePrefix: normalizePath(lp?.wine_prefix || lp?.WinePrefix || lp?.winePrefix || g.wine_prefix || g.WinePrefix || g.winePrefix || ''),
+    currentLanguage: g.current_language || g.CurrentLanguage || g.currentLanguage || '',
+    supportedLanguages: g.supported_languages || g.SupportedLanguages || g.supportedLanguages || [],
+    modifiedFiles: g.modified_files || g.ModifiedFiles || g.modifiedFiles || [],
+    missingFiles: g.missing_files || g.MissingFiles || g.missingFiles || [],
+    untrackedFiles: g.untracked_files || g.UntrackedFiles || g.untrackedFiles || [],
+    hasUpdate: Boolean(g.has_update ?? g.HasUpdate ?? g.hasUpdate ?? false),
+    manifestId: g.manifest_id || g.ManifestID || g.manifestId || '',
+    buildId: g.build_id || g.BuildID || g.buildId || '',
+    remoteManifestId: g.remote_manifest_id || g.RemoteManifestID || g.remoteManifestId || '',
+    recentPatchNote: g.recent_patch_note || g.RecentPatchNote || g.recentPatchNote || '',
+    newsItems: g.news_items || g.NewsItems || g.newsItems || [],
+    coverUrl: g.cover_url || g.coverUrl || g.custom_cover_url || g.customCoverUrl || '',
+    localCoverUrl: g.local_cover_url || g.localCoverUrl || g.local_cover || g.localCover || '',
+    heroUrl: g.hero_url || g.heroUrl || g.custom_hero_url || g.customHeroUrl || '',
+    localHeroUrl: g.local_hero_url || g.localHeroUrl || g.local_hero || g.localHero || '',
+    bannerUrl: g.banner_url || g.bannerUrl || g.custom_banner_url || g.customBannerUrl || '',
+    localBannerUrl: g.local_banner_url || g.localBannerUrl || g.local_banner || g.localBanner || '',
+    logoUrl: g.logo_url || g.logoUrl || g.custom_logo_url || g.customLogoUrl || '',
+    localLogoUrl: g.local_logo_url || g.localLogoUrl || g.local_logo || g.localLogo || '',
+    playtimeSeconds: Number(g.playtime_seconds ?? g.PlaytimeSeconds ?? g.playtimeSeconds ?? lp?.playtime_seconds ?? lp?.PlaytimeSeconds ?? lp?.playtimeSeconds ?? 0),
+    lastPlayed: Number(g.last_played ?? g.LastPlayed ?? g.lastPlayed ?? lp?.last_played ?? lp?.LastPlayed ?? lp?.lastPlayed ?? 0),
   };
 }
 
@@ -243,6 +206,96 @@ export function getPlatformColors(game) {
         badgeText: '#09090c',
         glow: 'rgba(244, 244, 246, 0.3)',
         ringClass: 'ring-[#f4f4f6]',
+      };
+  }
+}
+
+/**
+ * Returns human-friendly, player-centric readiness status and badge styles
+ */
+export function getGameReadinessLabel(game, isRunning = false) {
+  if (!game) return { label: 'Unknown', type: 'unknown', badgeClass: 'bg-slate-800 text-slate-400' };
+
+  if (isRunning) {
+    return {
+      label: 'Playing',
+      type: 'running',
+      badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    };
+  }
+
+  if (game.hasUpdatesOrIssues || game.hasUpdate) {
+    return {
+      label: 'Update Available',
+      type: 'update',
+      badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    };
+  }
+
+  if (game.isPatched || game.isReady) {
+    if (game.isPortable) {
+      return {
+        label: 'Ready to Play (Standalone)',
+        type: 'ready',
+        badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      };
+    }
+    return {
+      label: 'Ready to Play',
+      type: 'ready',
+      badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    };
+  }
+
+  if (isSteamApp(game.appId) && !game.isPatched) {
+    return {
+      label: 'Setup Required',
+      type: 'setup_required',
+      badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    };
+  }
+
+  return {
+    label: 'Ready (DRM-Free)',
+    type: 'ready',
+    badgeClass: 'bg-slate-700/40 text-slate-300 border-slate-600/50',
+  };
+}
+
+/**
+ * Returns clear, non-jargony descriptions for compatibility & emulation modes
+ */
+export function getOperatingModeDescriptor(mode) {
+  const m = (mode || '').toLowerCase();
+  switch (m) {
+    case 'loader':
+      return {
+        value: 'loader',
+        label: 'Seamless (Recommended)',
+        tag: 'Non-Invasive',
+        description: 'Leaves game directory files pristine; injects Steam emulation cleanly at launch.',
+      };
+    case 'portable':
+      return {
+        value: 'portable',
+        label: 'Standalone Portable',
+        tag: 'Direct File Injection',
+        description: 'Replaces Steam API files directly inside the game folder for standalone portability.',
+      };
+    case 'none':
+    case 'standalone':
+      return {
+        value: 'none',
+        label: 'Direct Launch',
+        tag: 'DRM-Free / No Emulation',
+        description: 'Runs directly without any Steamworks emulator (ideal for GOG or native Linux titles).',
+      };
+    default:
+      return {
+        value: '',
+        label: 'Default (Inherited)',
+        tag: 'Global Setting',
+        description: 'Inherits the global operating mode configured in Settings.',
       };
   }
 }

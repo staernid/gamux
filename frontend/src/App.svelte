@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import TopBar from './components/header/TopBar.svelte';
   import Carousel3D from './components/stage/Carousel3D.svelte';
   import ModalHost from './components/common/ModalHost.svelte';
@@ -45,8 +46,7 @@
   const views = ['library', 'tasks', 'settings'];
 
   function cycleView(dir) {
-    let curr = 'library';
-    activeView.subscribe(v => { curr = v; })();
+    const curr = get(activeView) || 'library';
     const currentBase = curr === 'game-hub' ? 'library' : curr;
     const idx = views.indexOf(currentBase);
     let next = idx + dir;
@@ -76,12 +76,10 @@
   }
 
   function stepGameSelection(dir) {
-    let list = [];
-    filteredGames.subscribe(v => { list = v; })();
+    const list = get(filteredGames) || [];
     if (!list || list.length === 0) return;
 
-    let current = null;
-    selectedGame.subscribe(v => { current = v; })();
+    const current = get(selectedGame);
     const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
 
     let nextIndex = (currentIndex + dir + list.length) % list.length;
@@ -223,10 +221,8 @@
 
       const actions = gamepadTracker.process(pad);
       if (actions) {
-        let currView = 'library';
-        activeView.subscribe(v => { currView = v; })();
-        let modalActive = false;
-        modalStore.subscribe(v => { modalActive = !!v; })();
+        const currView = get(activeView) || 'library';
+        const modalActive = !!get(modalStore);
 
         // 1. If a Modal is open, handle Back/Close
         if (modalActive) {

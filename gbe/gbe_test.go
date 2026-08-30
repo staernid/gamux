@@ -485,3 +485,57 @@ func TestTransition_PortableToLoader_RestoresOriginal(t *testing.T) {
 	}
 }
 
+func TestApplyGBE_Linux32ELFAutoDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+
+	// Set up both 64-bit and 32-bit GBE Linux assets
+	linux64Gbe := filepath.Join(gbeDir, "linux_release", "experimental", "x64")
+	linux32Gbe := filepath.Join(gbeDir, "linux_release", "experimental", "x86")
+	_ = os.MkdirAll(linux64Gbe, 0755)
+	_ = os.MkdirAll(linux32Gbe, 0755)
+
+	_ = os.WriteFile(filepath.Join(linux64Gbe, "libsteam_api.so"), []byte("gbe_x64_so"), 0755)
+	_ = os.WriteFile(filepath.Join(linux32Gbe, "libsteam_api.so"), []byte("gbe_x86_so"), 0755)
+
+	// Create 32-bit Linux ELF mock library (ELFCLASS32: \x7fELF\x01)
+	gameDir := filepath.Join(tmpDir, "Linux32Game")
+	_ = os.MkdirAll(gameDir, 0755)
+	elf32Header := []byte("\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00original_steam_so_32")
+	targetLib := filepath.Join(gameDir, "libsteam_api.so")
+	_ = os.WriteFile(targetLib, elf32Header, 0755)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
+	err := Apply(ctx, Options{
+		Config:    cfg,
+		TargetDir: gameDir,
+		Platform:  "linux",
+		AppID:     "12345",
+		Portable:  true,
+	})
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Verify 32-bit x86 GBE was selected and copied
+	data, err := os.ReadFile(targetLib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "gbe_x86_so" {
+		t.Errorf("expected 32-bit gbe_x86_so, got: %s", string(data))
+	}
+}
+

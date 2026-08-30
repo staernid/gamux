@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/events"
@@ -261,11 +262,11 @@ func TestLaunchProfile_RoundTrip(t *testing.T) {
 		},
 	}
 
-	if err := SaveLaunchProfile(tmpDir, opts); err != nil {
+	if err := compat.SaveProfile(&opts); err != nil {
 		t.Fatalf("failed to save launch profile: %v", err)
 	}
 
-	loaded, err := GetLaunchProfile(tmpDir)
+	loaded, err := compat.LoadProfile(tmpDir)
 	if err != nil {
 		t.Fatalf("failed to get launch profile: %v", err)
 	}
@@ -449,7 +450,7 @@ func TestLaunchProfile_FallbackHydration(t *testing.T) {
 	_ = os.WriteFile(realExe, []byte("exe"), 0755)
 	_ = os.WriteFile(filepath.Join(tmpDir, "ColdClientLoader.ini"), []byte("[Loader]\nExe = MyGame.exe\n"), 0644)
 
-	p, err := LoadLaunchProfile(tmpDir)
+	p, err := compat.LoadProfile(tmpDir)
 	if err != nil {
 		t.Fatalf("LoadLaunchProfile failed: %v", err)
 	}
@@ -483,7 +484,7 @@ func TestLaunchProfile_Sync(t *testing.T) {
 		Runner:        RunnerWine,
 	}
 
-	if err := SyncLaunchProfile(context.Background(), p, cfg); err != nil {
+	if err := compat.SyncSettings(context.Background(), p, cfg); err != nil {
 		t.Fatalf("SyncLaunchProfile failed: %v", err)
 	}
 
@@ -501,7 +502,7 @@ func TestLaunchProfile_Sync(t *testing.T) {
 
 	// Now set Language to "" and re-sync: force_language.txt should be removed
 	p.Language = ""
-	if err := SyncLaunchProfile(context.Background(), p, cfg); err != nil {
+	if err := compat.SyncSettings(context.Background(), p, cfg); err != nil {
 		t.Fatalf("SyncLaunchProfile failed on language reset: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tmpDir, "steam_settings", "force_language.txt")); !os.IsNotExist(err) {
@@ -517,7 +518,7 @@ func TestLaunchProfile_Reset(t *testing.T) {
 		ExePath: "game.exe",
 	}
 
-	if err := SaveProfile(p); err != nil {
+	if err := compat.SaveProfile(p); err != nil {
 		t.Fatalf("SaveProfile failed: %v", err)
 	}
 
@@ -526,7 +527,7 @@ func TestLaunchProfile_Reset(t *testing.T) {
 		t.Fatalf("expected profile to exist before reset")
 	}
 
-	if err := ResetLaunchProfile(tmpDir); err != nil {
+	if err := compat.ResetProfile(tmpDir); err != nil {
 		t.Fatalf("ResetLaunchProfile failed: %v", err)
 	}
 
@@ -658,7 +659,7 @@ func TestResolveEffectiveOptions_CascadingProfile(t *testing.T) {
 			"CASCADED_VAR": "profile_val",
 		},
 	}
-	if err := SaveLaunchProfile(tmpDir, profile); err != nil {
+	if err := compat.SaveProfile(&profile); err != nil {
 		t.Fatalf("SaveLaunchProfile failed: %v", err)
 	}
 
@@ -942,7 +943,7 @@ func TestApplyCompatibility_Modes(t *testing.T) {
 		Language:      "english",
 	}
 
-	err := ApplyCompatibility(context.Background(), cfg, game, profilePortable, false)
+	err := compat.Apply(context.Background(), cfg, game, profilePortable, false)
 	if err != nil {
 		t.Fatalf("ApplyCompatibility(portable) failed: %v", err)
 	}
@@ -966,7 +967,7 @@ func TestApplyCompatibility_Modes(t *testing.T) {
 		ExePath:       "game.exe",
 	}
 
-	err = ApplyCompatibility(context.Background(), cfg, game, profileLoader, false)
+	err = compat.Apply(context.Background(), cfg, game, profileLoader, false)
 	if err != nil {
 		t.Fatalf("ApplyCompatibility(loader) failed: %v", err)
 	}
@@ -988,7 +989,7 @@ func TestApplyCompatibility_Modes(t *testing.T) {
 		ExePath:       "game.exe",
 	}
 
-	err = ApplyCompatibility(context.Background(), cfg, game, profileNone, false)
+	err = compat.Apply(context.Background(), cfg, game, profileNone, false)
 	if err != nil {
 		t.Fatalf("ApplyCompatibility(none) failed: %v", err)
 	}
@@ -1003,7 +1004,7 @@ func TestRevertCompatibility(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(tmpDir, "steam_api64.dll.ORIGINAL"), []byte("pristine"), 0755)
 	_ = os.WriteFile(filepath.Join(tmpDir, "steamclient64.dll"), []byte("loader_link"), 0755)
 
-	restored, err := RevertCompatibility(context.Background(), tmpDir, false)
+	restored, err := compat.Revert(context.Background(), tmpDir, false)
 	if err != nil {
 		t.Fatalf("RevertCompatibility failed: %v", err)
 	}
@@ -1095,6 +1096,82 @@ func TestBuildCommand_UMUProtonfixesAndSharedPrefix(t *testing.T) {
 		t.Errorf("expected standalone STORE 'none', got %s", standaloneEnv["STORE"])
 	}
 }
+
+func TestManager_PlaytimeTracking(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "game.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 0.1\n"), 0755)
+
+	bus := events.NewBus()
+	mgr := NewManager(bus)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		Name:          "Short Game",
+		ExePath:       "game.sh",
+		Platform:      "linux",
+		OperatingMode: domain.ModeStandalone,
+		Runner:        RunnerLinux,
+	}
+
+	cfg := config.DefaultConfig()
+
+	eventsCh, unsub := bus.Subscribe(events.EventGameExited)
+	defer unsub()
+
+	cmd, err := mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("mgr.Start failed: %v", err)
+	}
+	if cmd == nil || cmd.Process == nil {
+		t.Fatalf("expected non-nil process")
+	}
+
+	select {
+	case <-eventsCh:
+		// success
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for game exit event")
+	}
+
+	// Verify profile recorded last played timestamp
+	prof, err := compat.LoadProfile(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadLaunchProfile failed: %v", err)
+	}
+	if prof.LastPlayed <= 0 {
+		t.Errorf("expected LastPlayed > 0, got %d", prof.LastPlayed)
+	}
+}
+
+func TestRunner_Run_PlaytimeTracking(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "game.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 0.05\n"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		Name:          "CLI Game",
+		ExePath:       "game.sh",
+		Platform:      "linux",
+		OperatingMode: domain.ModeStandalone,
+		Runner:        RunnerLinux,
+	}
+
+	cfg := config.DefaultConfig()
+	if err := Run(context.Background(), cfg, opts); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	prof, err := compat.LoadProfile(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadLaunchProfile failed: %v", err)
+	}
+	if prof.LastPlayed <= 0 {
+		t.Errorf("expected LastPlayed > 0, got %d", prof.LastPlayed)
+	}
+}
+
 
 
 

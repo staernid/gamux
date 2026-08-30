@@ -37,10 +37,7 @@ const DEFAULT_MOCKS = {
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
   isGameRunning: () => false,
-  submitBatchAchievements: () => Promise.resolve('task_batch_achievements_1'),
-  submitBatchArtwork: () => Promise.resolve('task_batch_artwork_1'),
-  submitBatchNormalize: () => Promise.resolve('task_batch_normalize_1'),
-  submitBatchVerify: () => Promise.resolve('task_batch_verify_1'),
+  submitBatchLibraryOp: (kind) => Promise.resolve(`task_batch_${kind}_1`),
   getGameLog: (path) => Promise.resolve(`=== Gamux Launch Log ===\nTime: Tue, 25 Aug 2026 20:30:00 CEST\nGame: Mock Game Title\nPlatform: win64\nMode: standalone\nRunner: umu\nExecutable: /mock/game.exe\nWorkingDir: /mock\nCommand: umu-run /mock/game.exe\n========================\n\n[umu-run] Initializing Proton prefix...\n[Proton] Game process started successfully (PID: 12345)\n[DXVK] Found Vulkan 1.3 driver\n[Audio] PulseAudio sink connected\n`),
   getGameAchievements: (path) => Promise.resolve([
     { id: 'ACH_1', name: 'First Steps', description: 'Complete the tutorial', icon_url: '', icon_gray_url: '', hidden: false, unlocked: true, unlock_time: 1690000000 },
@@ -145,6 +142,10 @@ function createMethodDispatcher(prop) {
     // Ensure InspectGame receives (gamePath, newsCount) defaults
     if (prop === 'inspectGame' && args.length === 1) {
       args = [args[0], 0];
+    }
+    // Ensure SelectDirectory receives (title, defaultDir) defaults
+    if (prop === 'selectDirectory' && args.length === 1) {
+      args = [args[0], ''];
     }
 
     // 1. Try Go backend runtime binding (Wails exposes PascalCase methods)

@@ -6,6 +6,7 @@ import (
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/events"
+	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/tasks"
 )
 
@@ -14,8 +15,6 @@ import (
 type Options struct {
 	Path              string                 `json:"path"`
 	OperatingMode     string                 `json:"operating_mode,omitempty"` // "loader", "portable", "standalone", "native", "none"
-	ApplyGBE          bool                   `json:"apply_gbe,omitempty"`      // Convenience flag for backward compatibility
-	Portable          bool                   `json:"portable,omitempty"`       // Convenience flag for backward compatibility
 	NormalizeDir      bool                   `json:"normalize_dir"`
 	DryRun            bool                   `json:"dry_run"`
 	AutoYes           bool                   `json:"auto_yes"`
@@ -28,29 +27,17 @@ type Options struct {
 	Reporter          tasks.ProgressReporter `json:"-"`
 }
 
-// EffectiveOperatingMode resolves the operating mode requested by options,
-// taking into account legacy flags (Portable, ApplyGBE) if OperatingMode is empty.
-func (o *Options) EffectiveOperatingMode() string {
-	if o.OperatingMode != "" {
-		return o.OperatingMode
-	}
-	if o.Portable {
-		return domain.ModePortable
-	}
-	if o.ApplyGBE {
-		return domain.ModeLoader
-	}
-	return ""
-}
-
-// Results tracks mutations, syntheses, unpacks, and errors across executed stages.
+// Results tracks mutations, syntheses, unpacks, reports, and errors across executed stages.
 type Results struct {
-	DirectoryNormalized bool     `json:"directory_normalized"`
-	ACFSynthesized      bool     `json:"acf_synthesized"`
-	SteamlessUnpacked   bool     `json:"steamless_unpacked"`
-	Patched             bool     `json:"patched"`
-	Errors              []string `json:"errors,omitempty"`
-	Mutations           []string `json:"mutations,omitempty"`
+	DirectoryNormalized bool                      `json:"directory_normalized"`
+	ACFSynthesized      bool                      `json:"acf_synthesized"`
+	SteamlessUnpacked   bool                      `json:"steamless_unpacked"`
+	Patched             bool                      `json:"patched"`
+	IntegrityReport     *manifest.IntegrityReport `json:"integrity_report,omitempty"`
+	DownloadedBytes     int64                     `json:"downloaded_bytes,omitempty"`
+	RestoredCount       int                       `json:"restored_count,omitempty"`
+	Errors              []string                  `json:"errors,omitempty"`
+	Mutations           []string                  `json:"mutations,omitempty"`
 }
 
 // Context encapsulates execution state, options, and results passed across pipeline stages.

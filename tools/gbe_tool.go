@@ -3,12 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/github"
-	"github.com/staernid/gamux/util"
 )
 
 // GBETool is the tool adapter for the Goldberg Steam Emulator fork.
@@ -56,15 +54,7 @@ func (g *GBETool) Status(ctx context.Context) (*ToolStatus, error) {
 
 // EnsureAvailable ensures that GBE assets exist locally, updating them from GitHub if missing.
 func (g *GBETool) EnsureAvailable(ctx context.Context) (string, error) {
-	gbeDir := util.ExpandPath(g.Config.GbeDir)
-	if _, err := os.Stat(filepath.Join(gbeDir, "linux_release")); os.IsNotExist(err) {
-		if _, err := os.Stat(filepath.Join(gbeDir, "win_release")); os.IsNotExist(err) {
-			if err := g.Update(ctx); err != nil {
-				return "", fmt.Errorf("ensure GBE available: %w", err)
-			}
-		}
-	}
-	return gbeDir, nil
+	return gbe.EnsureAvailable(ctx, g.Config)
 }
 
 // Update downloads and extracts the latest Goldberg Emulator release assets from GitHub.

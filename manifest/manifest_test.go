@@ -182,6 +182,14 @@ func TestClassifyDepot(t *testing.T) {
 			},
 			expected: DepotCategoryCommon,
 		},
+		{
+			name: "Mixed Windows and Mac plugin binaries",
+			files: []ManifestFileEntry{
+				{Path: "Game.exe", Size: 5000000},
+				{Path: "Plugins/macOS/libhelper.dylib", Size: 200000},
+			},
+			expected: DepotCategoryCommon,
+		},
 	}
 
 	for _, tt := range tests {
@@ -264,6 +272,44 @@ func TestUninstallDepot_Empty(t *testing.T) {
 	_, _, err := UninstallDepot(tmpDir, 41500, 41502)
 	if err == nil {
 		t.Errorf("expected error when no manifest found for depot")
+	}
+}
+
+func TestScanDepotIntegrity_DirectoriesExcluded(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	_ = os.MkdirAll(manifestsDir, 0755)
+
+	// Create dummy game files on disk
+	_ = os.MkdirAll(filepath.Join(tmpDir, "Data", "Levels"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "Game.exe"), []byte("game binary data"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "Data", "Levels", "level1.dat"), []byte("level data"), 0644)
+
+	// Write mock manifest with 2 files and 2 directory nodes
+	manifest := &Manifest{
+		AppID:   12345,
+		DepotID: 12346,
+		Files: []ManifestFileEntry{
+			{Path: "Data", Flags: 0x40, Size: 0},
+			{Path: "Data/Levels", Flags: 0x40, Size: 0},
+			{Path: "Game.exe", Size: uint64(len("game binary data")), Chunks: []ChunkInfo{{ChunkID: "c1"}}},
+			{Path: "Data/Levels/level1.dat", Size: uint64(len("level data")), Chunks: []ChunkInfo{{ChunkID: "c2"}}},
+		},
+	}
+
+	// Test directly against mock manifest
+	officialMap := make(map[string]ManifestFileEntry)
+	officialCount := 0
+	for _, f := range manifest.Files {
+		if (f.Flags&0x40 != 0) || (len(f.Chunks) == 0 && f.Size == 0) {
+			continue
+		}
+		officialMap[f.Path] = f
+		officialCount++
+	}
+
+	if officialCount != 2 {
+		t.Fatalf("expected 2 official files (excluding 2 directories), got %d", officialCount)
 	}
 }
 

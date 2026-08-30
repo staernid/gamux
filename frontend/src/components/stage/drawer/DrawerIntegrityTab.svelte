@@ -1,6 +1,7 @@
 <script>
   export let isCheckingIntegrity = false;
   export let isNormalizing = false;
+  export let isUpdating = false;
   export let integrityError = '';
   export let integrityReport = null;
   export let onRunIntegrityCheck = () => {};
@@ -17,19 +18,36 @@
     <button
       type="button"
       on:click={onRunIntegrityCheck}
-      disabled={isCheckingIntegrity}
-      class="bg-white hover:bg-neutral-200 text-black font-black px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50"
+      disabled={isCheckingIntegrity || isUpdating || isNormalizing}
+      class="bg-white hover:bg-neutral-200 text-black font-black px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed"
     >
-      {isCheckingIntegrity ? 'Verifying Files...' : 'Run Integrity Check'}
+      {#if isCheckingIntegrity}
+        <svg class="animate-spin w-3 h-3 text-black" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>Verifying Files...</span>
+      {:else}
+        <span>Run Integrity Check</span>
+      {/if}
     </button>
 
     <button
       type="button"
       on:click={onUpdateGame}
-      class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl transition-colors text-xs shadow-sm"
+      disabled={isUpdating || isCheckingIntegrity}
+      class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl transition-colors text-xs shadow-sm disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed"
       title="Download missing/updated depot files"
     >
-      Update / Repair Depots
+      {#if isUpdating}
+        <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>Updating in Progress...</span>
+      {:else}
+        <span>Update / Repair Depots</span>
+      {/if}
     </button>
 
     <button

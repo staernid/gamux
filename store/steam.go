@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/steam"
 )
 
@@ -23,6 +24,19 @@ func (s *SteamProvider) ID() string {
 
 func (s *SteamProvider) DisplayName() string {
 	return "Steam"
+}
+
+func (s *SteamProvider) Description() string {
+	return "Valve Steam Store, Community CDN, and Web API"
+}
+
+func (s *SteamProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		CanSearch:         true,
+		CanFetchMetadata:  true,
+		CanProvideArtwork:  true,
+		IsGameStore:       true,
+	}
 }
 
 func (s *SteamProvider) IsGameStore() bool {
@@ -75,13 +89,31 @@ func (s *SteamProvider) GetMetadata(ctx context.Context, gameID string) (*Metada
 		return nil, err
 	}
 
+	var genres []string
+	for _, g := range details.Genres {
+		if g.Description != "" {
+			genres = append(genres, g.Description)
+		}
+	}
+
+	summary := details.ShortDesc
+	if summary == "" {
+		summary = details.About
+	}
+	if summary == "" {
+		summary = details.DetailedDesc
+	}
+
 	return &Metadata{
 		ID:                 gameID,
 		Store:              "steam",
 		Name:               details.Name,
-		Summary:            details.ShortDesc,
+		Summary:            summary,
 		HeaderImage:        details.HeaderImage,
 		PosterImage:        fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", gameID),
+		Developers:         details.Developers,
+		Publishers:         details.Publishers,
+		Genres:             genres,
 		SupportedLanguages: details.GetSupportedLanguageCodes(),
 		ReleaseDate:        details.ReleaseDate.Date,
 	}, nil
@@ -95,6 +127,11 @@ func (s *SteamProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork
 		LogoURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/logo.png", gameID),
 		IconURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", gameID),
 	}, nil
+}
+
+// GetNews retrieves news and patch notes for a Steam AppID.
+func (s *SteamProvider) GetNews(ctx context.Context, gameID string, count int) ([]domain.NewsItem, error) {
+	return steam.FetchAppNewsItems(ctx, gameID, count)
 }
 
 // QueryArtworkCandidates returns official Steam CDN asset options using a typed query.
@@ -141,64 +178,107 @@ func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []Art
 				ID:       idStr + "-cover-2x",
 				Provider: "steam",
 				Type:     "cover",
-				URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", idStr),
-				ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_600x900.jpg", idStr),
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", idStr),
 				Width:    600,
 				Height:   900,
 				Style:    "official",
+				Score:    100,
+			},
+			ArtworkOption{
+				ID:       idStr + "-cover-1x",
+				Provider: "steam",
+				Type:     "cover",
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_600x900.jpg", idStr),
+				Width:    300,
+				Height:   450,
+				Style:    "official",
+				Score:    95,
 			},
 			ArtworkOption{
 				ID:       idStr + "-capsule-main",
 				Provider: "steam",
 				Type:     "cover",
-				URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
-				ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
 				Width:    616,
 				Height:   353,
 				Style:    "capsule",
+				Score:    90,
 			},
 		)
 	case "banner":
-		opts = append(opts, ArtworkOption{
-			ID:       idStr + "-header",
-			Provider: "steam",
-			Type:     "banner",
-			URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/header.jpg", idStr),
-			ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/header.jpg", idStr),
-			Width:    460,
-			Height:   215,
-			Style:    "official",
-		})
+		opts = append(opts,
+			ArtworkOption{
+				ID:       idStr + "-header",
+				Provider: "steam",
+				Type:     "banner",
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+				Width:    460,
+				Height:   215,
+				Style:    "official",
+				Score:    100,
+			},
+			ArtworkOption{
+				ID:       idStr + "-capsule-banner",
+				Provider: "steam",
+				Type:     "banner",
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr),
+				Width:    616,
+				Height:   353,
+				Style:    "capsule",
+				Score:    90,
+			},
+		)
 	case "hero":
-		opts = append(opts, ArtworkOption{
-			ID:       idStr + "-hero",
-			Provider: "steam",
-			Type:     "hero",
-			URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_hero.jpg", idStr),
-			ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_hero.jpg", idStr),
-			Width:    1920,
-			Height:   620,
-			Style:    "official",
-		})
+		opts = append(opts,
+			ArtworkOption{
+				ID:       idStr + "-hero",
+				Provider: "steam",
+				Type:     "hero",
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_hero.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/library_hero.jpg", idStr),
+				Width:    1920,
+				Height:   620,
+				Style:    "official",
+				Score:    100,
+			},
+			ArtworkOption{
+				ID:       idStr + "-hero-header",
+				Provider: "steam",
+				Type:     "hero",
+				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+				Width:    460,
+				Height:   215,
+				Style:    "banner",
+				Score:    80,
+			},
+		)
 	case "logo":
 		opts = append(opts, ArtworkOption{
 			ID:       idStr + "-logo",
 			Provider: "steam",
 			Type:     "logo",
-			URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/logo.png", idStr),
-			ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/logo.png", idStr),
+			URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/logo.png", idStr),
+			ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/logo.png", idStr),
 			Style:    "official",
+			Score:    100,
 		})
 	case "icon":
 		opts = append(opts, ArtworkOption{
 			ID:       idStr + "-icon",
 			Provider: "steam",
 			Type:     "icon",
-			URL:      fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", idStr),
-			ThumbURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", idStr),
+			URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", idStr),
+			ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", idStr),
 			Width:    120,
 			Height:   45,
 			Style:    "official",
+			Score:    100,
 		})
 	}
 	return opts

@@ -180,11 +180,14 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 		s.resolveLocalAsset(ctx, game, spec, gameArtDir)
 	}
 
-	// Step 2: Resolve according to metadata provider
+	// Step 2: Resolve according to metadata provider / known IDs
 	provider := game.EffectiveMetadataProvider()
 	rawgID := ""
 	if provider == "rawg" {
 		rawgID = game.EffectiveMetadataID()
+	}
+	if rawgID == "" {
+		rawgID = game.RAWGID
 	}
 	gogID := game.GOGID
 	if gogID == "" && provider == "gog" {
@@ -206,20 +209,39 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 		}
 	}
 
-	// Step 3: Lazy Provider queries (SteamGridDB, GOG, RAWG) for remaining missing assets
-	if s.registry != nil && !game.LockedArtwork {
-		if s.hasMissingAssets(game) {
-			s.resolveFromSGDB(ctx, game, steamID, hasSteamID, gameArtDir)
-		}
+	// Step 3: Multi-tier Title-Based Cascade for remaining missing assets
+	if s.registry != nil && !game.LockedArtwork && s.hasMissingAssets(game) {
+		// 3a. SteamGridDB query
+		s.resolveFromSGDB(ctx, game, steamID, hasSteamID, gameArtDir)
+
+		// 3b. Known GOG/RAWG IDs if not primary provider
 		if s.hasMissingAssets(game) && gogID != "" {
 			s.resolveFromGOG(ctx, game, gogID, gameArtDir)
 		}
 		if s.hasMissingAssets(game) && rawgID != "" {
 			s.resolveFromRAWG(ctx, game, rawgID, gameArtDir)
 		}
+
+		// 3c. Steam Title Search (discovers Steam AppID for DRM-free/standalone games)
+		if s.hasMissingAssets(game) && game.Name != "" && (!hasSteamID || steamID == 0) {
+			s.resolveFromSteamSearch(ctx, game, gameArtDir)
+		}
+
+		// 3d. GOG Title Search (queries GOG catalog for vertical/horizontal artwork)
+		if s.hasMissingAssets(game) && game.Name != "" && gogID == "" {
+			s.resolveFromGOGSearch(ctx, game, gameArtDir)
+		}
+
+		// 3e. RAWG Title Search (queries open database for high-res wallpapers/screenshots)
+		if s.hasMissingAssets(game) && game.Name != "" && rawgID == "" {
+			s.resolveFromRAWGSearch(ctx, game, gameArtDir)
+		}
 	}
 
-	// Step 4: Finalize local URLs & cache synchronization
+	// Step 4: Cross-Asset Fallback Substitution (ensure no game remains artless)
+	s.applyCrossAssetFallbacks(ctx, game, gameArtDir)
+
+	// Step 5: Finalize local URLs & cache synchronization
 	for _, spec := range canonicalAssetSpecs {
 		s.finalizeAsset(game, spec, slug, gameArtDir)
 	}
@@ -280,19 +302,42 @@ func (s *ArtworkService) resolveSteamCDN(ctx context.Context, game *domain.Game,
 	}
 
 	cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
+	cdnURL := spec.SteamCDNURL(idStr)
 
 	if loc.RemoteURL == "" {
-		loc.RemoteURL = spec.SteamCDNURL(idStr)
+		loc.RemoteURL = cdnURL
 	}
 
 	if loc.LocalPath == "" && spec.AssetType != domain.AssetIcon {
-		if err := s.DownloadFile(ctx, loc.RemoteURL, cachedPath); err == nil {
+		if err := s.DownloadFile(ctx, cdnURL, cachedPath); err == nil {
 			loc.LocalPath = cachedPath
+			loc.RemoteURL = cdnURL
 		} else if spec.SteamCDNFallbackURL != nil {
 			fallbackURL := spec.SteamCDNFallbackURL(idStr)
 			if err := s.DownloadFile(ctx, fallbackURL, cachedPath); err == nil {
 				loc.LocalPath = cachedPath
+				loc.RemoteURL = fallbackURL
+			} else {
+				loc.RemoteURL = ""
 			}
+		} else if spec.AssetType == domain.AssetCover {
+			// Additional capsule/header fallback for older Steam titles
+			capsuleURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/capsule_616x353.jpg", idStr)
+			if err := s.DownloadFile(ctx, capsuleURL, cachedPath); err == nil {
+				loc.LocalPath = cachedPath
+				loc.RemoteURL = capsuleURL
+			} else {
+				headerURL := fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr)
+				if err := s.DownloadFile(ctx, headerURL, cachedPath); err == nil {
+					loc.LocalPath = cachedPath
+					loc.RemoteURL = headerURL
+				} else {
+					loc.RemoteURL = ""
+				}
+			}
+		} else {
+			// Download failed (e.g. 404 for logo.png), reset RemoteURL so downstream providers or fallbacks can resolve
+			loc.RemoteURL = ""
 		}
 	}
 
@@ -350,6 +395,34 @@ func (s *ArtworkService) resolveFromSGDB(ctx context.Context, game *domain.Game,
 	s.applyProviderArtwork(ctx, game, art, gameArtDir)
 }
 
+func (s *ArtworkService) resolveFromSteamSearch(ctx context.Context, game *domain.Game, gameArtDir string) {
+	p, ok := s.registry.Get("steam")
+	if !ok {
+		return
+	}
+
+	results, err := p.Search(ctx, game.Name)
+	if err != nil || len(results) == 0 {
+		return
+	}
+
+	var matchedID string
+	for _, res := range results {
+		if util.IsTitleMatch(res.Name, game.Name) {
+			matchedID = res.ID
+			break
+		}
+	}
+
+	if matchedID == "" {
+		return
+	}
+
+	for _, spec := range canonicalAssetSpecs {
+		s.resolveSteamCDN(ctx, game, spec, matchedID, gameArtDir)
+	}
+}
+
 func (s *ArtworkService) resolveFromGOG(ctx context.Context, game *domain.Game, gogID string, gameArtDir string) {
 	if gogID == "" {
 		return
@@ -368,6 +441,35 @@ func (s *ArtworkService) resolveFromGOG(ctx context.Context, game *domain.Game, 
 	s.applyProviderArtwork(ctx, game, art, gameArtDir)
 }
 
+func (s *ArtworkService) resolveFromGOGSearch(ctx context.Context, game *domain.Game, gameArtDir string) {
+	p, ok := s.registry.Get("gog")
+	if !ok {
+		return
+	}
+
+	results, err := p.Search(ctx, game.Name)
+	if err != nil || len(results) == 0 {
+		return
+	}
+
+	var targetID string
+	for _, res := range results {
+		if util.IsTitleMatch(res.Name, game.Name) {
+			targetID = res.ID
+			break
+		}
+	}
+	if targetID == "" && len(results) > 0 {
+		targetID = results[0].ID
+	}
+
+	if targetID == "" {
+		return
+	}
+
+	s.resolveFromGOG(ctx, game, targetID, gameArtDir)
+}
+
 func (s *ArtworkService) resolveFromRAWG(ctx context.Context, game *domain.Game, rawgID string, gameArtDir string) {
 	if rawgID == "" {
 		return
@@ -384,6 +486,55 @@ func (s *ArtworkService) resolveFromRAWG(ctx context.Context, game *domain.Game,
 	}
 
 	s.applyProviderArtwork(ctx, game, art, gameArtDir)
+
+	// If game still has missing assets (e.g. logo, high-res vertical cover), follow RAWG linked store IDs
+	if s.hasMissingAssets(game) {
+		if rawgProv, ok := p.(*RAWGProvider); ok {
+			if rg, err := rawgProv.FetchRawGame(ctx, rawgID); err == nil && rg != nil {
+				steamAppID, gogSlug := ExtractLinkedStoreIDs(rg)
+				if steamAppID > 0 {
+					idStr := fmt.Sprintf("%d", steamAppID)
+					for _, spec := range canonicalAssetSpecs {
+						if loc := game.GetAsset(spec.AssetType); loc.LocalPath == "" {
+							s.resolveSteamCDN(ctx, game, spec, idStr, gameArtDir)
+						}
+					}
+				}
+				if gogSlug != "" && s.hasMissingAssets(game) {
+					s.resolveFromGOG(ctx, game, gogSlug, gameArtDir)
+				}
+			}
+		}
+	}
+}
+
+func (s *ArtworkService) resolveFromRAWGSearch(ctx context.Context, game *domain.Game, gameArtDir string) {
+	p, ok := s.registry.Get("rawg")
+	if !ok {
+		return
+	}
+
+	results, err := p.Search(ctx, game.Name)
+	if err != nil || len(results) == 0 {
+		return
+	}
+
+	var targetID string
+	for _, res := range results {
+		if util.IsTitleMatch(res.Name, game.Name) {
+			targetID = res.ID
+			break
+		}
+	}
+	if targetID == "" && len(results) > 0 {
+		targetID = results[0].ID
+	}
+
+	if targetID == "" {
+		return
+	}
+
+	s.resolveFromRAWG(ctx, game, targetID, gameArtDir)
 }
 
 func (s *ArtworkService) applyProviderArtwork(ctx context.Context, game *domain.Game, art *Artwork, gameArtDir string) {
@@ -397,16 +548,84 @@ func (s *ArtworkService) applyProviderArtwork(ctx context.Context, game *domain.
 			continue
 		}
 
-		if loc.RemoteURL == "" {
+		if loc.RemoteURL == "" || loc.LocalPath == "" {
 			loc.RemoteURL = providerURL
 		}
 		if loc.LocalPath == "" && spec.AssetType != domain.AssetIcon {
 			cachedPath := filepath.Join(gameArtDir, spec.CacheFilename)
 			if err := s.DownloadFile(ctx, providerURL, cachedPath); err == nil {
 				loc.LocalPath = cachedPath
+				loc.RemoteURL = providerURL
 			}
 		}
 		game.SetAsset(spec.AssetType, loc)
+	}
+}
+
+func (s *ArtworkService) applyCrossAssetFallbacks(ctx context.Context, game *domain.Game, gameArtDir string) {
+	coverLoc := game.GetAsset(domain.AssetCover)
+	heroLoc := game.GetAsset(domain.AssetHero)
+	bannerLoc := game.GetAsset(domain.AssetBanner)
+
+	coverPath := filepath.Join(gameArtDir, "cover.jpg")
+	heroPath := filepath.Join(gameArtDir, "hero.jpg")
+	bannerPath := filepath.Join(gameArtDir, "banner.jpg")
+
+	// 1. If Cover is missing, fallback to hero or banner
+	if coverLoc.LocalPath == "" || !util.FileExists(coverLoc.LocalPath) {
+		if heroLoc.LocalPath != "" && util.FileExists(heroLoc.LocalPath) {
+			_ = util.CopyFile(heroLoc.LocalPath, coverPath)
+			coverLoc.LocalPath = coverPath
+			if coverLoc.RemoteURL == "" {
+				coverLoc.RemoteURL = heroLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetCover, coverLoc)
+		} else if bannerLoc.LocalPath != "" && util.FileExists(bannerLoc.LocalPath) {
+			_ = util.CopyFile(bannerLoc.LocalPath, coverPath)
+			coverLoc.LocalPath = coverPath
+			if coverLoc.RemoteURL == "" {
+				coverLoc.RemoteURL = bannerLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetCover, coverLoc)
+		}
+	}
+
+	// 2. If Hero is missing, fallback to banner or cover
+	if heroLoc.LocalPath == "" || !util.FileExists(heroLoc.LocalPath) {
+		if bannerLoc.LocalPath != "" && util.FileExists(bannerLoc.LocalPath) {
+			_ = util.CopyFile(bannerLoc.LocalPath, heroPath)
+			heroLoc.LocalPath = heroPath
+			if heroLoc.RemoteURL == "" {
+				heroLoc.RemoteURL = bannerLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetHero, heroLoc)
+		} else if coverLoc.LocalPath != "" && util.FileExists(coverLoc.LocalPath) {
+			_ = util.CopyFile(coverLoc.LocalPath, heroPath)
+			heroLoc.LocalPath = heroPath
+			if heroLoc.RemoteURL == "" {
+				heroLoc.RemoteURL = coverLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetHero, heroLoc)
+		}
+	}
+
+	// 3. If Banner is missing, fallback to hero or cover
+	if bannerLoc.LocalPath == "" || !util.FileExists(bannerLoc.LocalPath) {
+		if heroLoc.LocalPath != "" && util.FileExists(heroLoc.LocalPath) {
+			_ = util.CopyFile(heroLoc.LocalPath, bannerPath)
+			bannerLoc.LocalPath = bannerPath
+			if bannerLoc.RemoteURL == "" {
+				bannerLoc.RemoteURL = heroLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetBanner, bannerLoc)
+		} else if coverLoc.LocalPath != "" && util.FileExists(coverLoc.LocalPath) {
+			_ = util.CopyFile(coverLoc.LocalPath, bannerPath)
+			bannerLoc.LocalPath = bannerPath
+			if bannerLoc.RemoteURL == "" {
+				bannerLoc.RemoteURL = coverLoc.RemoteURL
+			}
+			game.SetAsset(domain.AssetBanner, bannerLoc)
+		}
 	}
 }
 

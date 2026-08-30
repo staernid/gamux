@@ -12,7 +12,7 @@ import (
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/manifest"
-	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/store"
 	"github.com/staernid/gamux/util"
@@ -33,29 +33,7 @@ func (eng *Engine) InspectLocal(ctx context.Context, targetPath string) (*GameSt
 
 	if status.LaunchProfile == nil {
 		status.LaunchProfile = &domain.LaunchProfile{
-			GameDir:       status.GameDir,
-			OperatingMode: runner.ModeStandalone,
-		}
-		if eng.Config != nil {
-			if eng.Config.OperatingMode != "" {
-				status.LaunchProfile.OperatingMode = eng.Config.OperatingMode
-			}
-			if eng.Config.DefaultRunner != "" {
-				status.LaunchProfile.Runner = eng.Config.DefaultRunner
-			}
-			if eng.Config.WinePrefix != "" {
-				status.LaunchProfile.WinePrefix = eng.Config.WinePrefix
-			}
-		}
-	} else {
-		if status.LaunchProfile.OperatingMode == "" && eng.Config != nil && eng.Config.OperatingMode != "" {
-			status.LaunchProfile.OperatingMode = eng.Config.OperatingMode
-		}
-		if status.LaunchProfile.Runner == "" && eng.Config != nil && eng.Config.DefaultRunner != "" {
-			status.LaunchProfile.Runner = eng.Config.DefaultRunner
-		}
-		if status.LaunchProfile.WinePrefix == "" && eng.Config != nil && eng.Config.WinePrefix != "" {
-			status.LaunchProfile.WinePrefix = eng.Config.WinePrefix
+			GameDir: status.GameDir,
 		}
 	}
 
@@ -106,18 +84,32 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 		return nil, err
 	}
 
-	// Fetch remote Steam title, news, and languages if AppID is present
-	if status.AppID != "" && status.AppID != "0" {
-		if status.Name == "" || status.Name == status.AppID || status.Name == filepath.Base(status.GameDir) {
-			if name, err := steam.FetchAppName(ctx, status.AppID); err == nil && name != "" {
-				status.Name = name
+	// Fetch remote title, metadata, news, and languages if AppID or metadata provider is present
+	if (status.AppID != "" && status.AppID != "0") || status.HasCustomMetadata() {
+		if eng.StoreRegistry != nil {
+			providerName := status.EffectiveMetadataProvider()
+			if providerName == "" || providerName == "standalone" {
+				providerName = "steam"
 			}
-		}
-		if news, err := steam.FetchAppNews(ctx, status.AppID); err == nil {
-			status.RecentPatchNote = news
-		}
-		if langs, err := steam.FetchSupportedLanguages(ctx, status.AppID); err == nil {
-			status.SupportedLanguages = langs
+			if p, ok := eng.StoreRegistry.Get(providerName); ok {
+				metaID := status.EffectiveMetadataID()
+				if metaID == "" {
+					metaID = status.AppID
+				}
+				if meta, err := p.GetMetadata(ctx, metaID); err == nil && meta != nil {
+					if (status.Name == "" || status.Name == status.AppID || status.Name == filepath.Base(status.GameDir)) && meta.Name != "" {
+						status.Name = meta.Name
+					}
+					if len(status.SupportedLanguages) <= 1 && len(meta.SupportedLanguages) > 0 {
+						status.SupportedLanguages = meta.SupportedLanguages
+					}
+				}
+				if np, ok := p.(store.NewsProvider); ok {
+					if news, err := np.GetNews(ctx, metaID, 1); err == nil && len(news) > 0 {
+						status.RecentPatchNote = news[0].Title + ": " + news[0].Contents
+					}
+				}
+			}
 		}
 	}
 
@@ -131,9 +123,21 @@ func (eng *Engine) InspectStatusEx(ctx context.Context, targetPath string, newsC
 	if err != nil {
 		return nil, err
 	}
-	if newsCount > 1 && status.AppID != "" && status.AppID != "0" {
-		if items, err := steam.FetchAppNewsItems(ctx, status.AppID, newsCount); err == nil {
-			status.NewsItems = items
+	if newsCount > 1 && eng.StoreRegistry != nil {
+		providerName := status.EffectiveMetadataProvider()
+		if providerName == "" || providerName == "standalone" {
+			providerName = "steam"
+		}
+		if p, ok := eng.StoreRegistry.Get(providerName); ok {
+			if np, ok := p.(store.NewsProvider); ok {
+				metaID := status.EffectiveMetadataID()
+				if metaID == "" {
+					metaID = status.AppID
+				}
+				if items, err := np.GetNews(ctx, metaID, newsCount); err == nil {
+					status.NewsItems = items
+				}
+			}
 		}
 	}
 	return status, nil
@@ -226,20 +230,29 @@ func (eng *Engine) BatchInspectLibraries(ctx context.Context, libDirs []string) 
 	return consolidated, nil
 }
 
-// VerifyIntegrity runs an on-demand full depot integrity comparison for a game directory.
+// VerifyIntegrity runs an on-demand full depot integrity comparison for a game directory via the Verify pipeline recipe.
 func (eng *Engine) VerifyIntegrity(ctx context.Context, targetPath string) (*manifest.IntegrityReport, error) {
 	ctx = eng.WrapContext(ctx)
-	info, err := detector.Detect(ctx, targetPath)
-	if err != nil {
-		return nil, fmt.Errorf("detect game for integrity check: %w", err)
+	targetPath = util.CanonicalPath(targetPath)
+	if targetPath == "" {
+		targetPath = "."
 	}
 
-	appIDVal, ok := util.ParseAppID(info.AppID)
-	if !ok {
-		return nil, fmt.Errorf("invalid AppID %q for integrity verification", info.AppID)
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path: targetPath,
+		},
+		Game:     domain.NewGame("", targetPath, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
 	}
 
-	return manifest.ScanDepotIntegrityWithPlatform(info.GameDir, appIDVal, info.Platform)
+	pipe := pipeline.NewVerify()
+	if err := pipe.Execute(ctx, pctx); err != nil {
+		return nil, fmt.Errorf("verify pipeline failed: %w", err)
+	}
+
+	return pctx.Results.IntegrityReport, nil
 }
 
 // CheckLibraryUpdates scans a directory containing game folders and checks for available Steam updates.
@@ -403,9 +416,12 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 		profile.AppID = profile.MetadataID
 		profile.StoreAppID = profile.MetadataID
 		profile.GOGID = ""
-		// Try fetching Steam game name if empty
-		if name, err := steam.FetchAppName(ctx, profile.MetadataID); err == nil && name != "" {
-			profile.Name = name
+		if eng.StoreRegistry != nil {
+			if p, ok := eng.StoreRegistry.Get("steam"); ok {
+				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
+					profile.Name = meta.Name
+				}
+			}
 		}
 	case "gog":
 		profile.GOGID = profile.MetadataID
@@ -467,19 +483,37 @@ func (eng *Engine) UnlinkGameMetadata(ctx context.Context, gameDir string) (*dom
 }
 
 // GetPatchNote fetches and retrieves a single patch note at itemIndex (1-indexed) for a game path or AppID.
-func (eng *Engine) GetPatchNote(ctx context.Context, targetPath string, itemIndex int) (*steam.NewsItem, string, error) {
+func (eng *Engine) GetPatchNote(ctx context.Context, targetPath string, itemIndex int) (*domain.NewsItem, string, error) {
 	ctx = eng.WrapContext(ctx)
 	appID := targetPath
 	gameName := targetPath
+	providerName := "steam"
 
-	if info, err := detector.Detect(ctx, targetPath); err == nil && info.AppID != "" && info.AppID != "0" {
-		appID = info.AppID
-		gameName = info.Name
+	if info, err := detector.Detect(ctx, targetPath); err == nil && info != nil {
+		if info.AppID != "" && info.AppID != "0" {
+			appID = info.AppID
+		}
+		if info.Name != "" {
+			gameName = info.Name
+		}
+		if info.EffectiveMetadataProvider() != "" {
+			providerName = info.EffectiveMetadataProvider()
+		}
 	}
 
-	items, err := steam.FetchAppNewsItems(ctx, appID, itemIndex+5)
-	if err != nil {
-		return nil, gameName, fmt.Errorf("fetch news: %w", err)
+	var items []domain.NewsItem
+	if eng.StoreRegistry != nil {
+		if p, ok := eng.StoreRegistry.Get(providerName); ok {
+			if np, ok := p.(store.NewsProvider); ok {
+				if fetched, err := np.GetNews(ctx, appID, itemIndex+5); err == nil {
+					items = fetched
+				}
+			}
+		}
+	}
+
+	if len(items) == 0 {
+		return nil, gameName, fmt.Errorf("no news items found for %s", appID)
 	}
 
 	if itemIndex <= 0 || itemIndex > len(items) {
@@ -487,4 +521,30 @@ func (eng *Engine) GetPatchNote(ctx context.Context, targetPath string, itemInde
 	}
 
 	return &items[itemIndex-1], gameName, nil
+}
+
+// DetectGame inspects a given game directory and returns detected game metadata.
+func (eng *Engine) DetectGame(ctx context.Context, gamePath string) (*detector.GameInfo, error) {
+	ctx = eng.WrapContext(ctx)
+	gamePath = util.CanonicalPath(gamePath)
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	return detector.Detect(ctx, gamePath)
+}
+
+// FetchNews retrieves news and patch note items for a Steam AppID.
+func (eng *Engine) FetchNews(ctx context.Context, appID string, count int) ([]steam.NewsItem, error) {
+	if appID == "" || appID == "0" {
+		return nil, fmt.Errorf("invalid steam app id")
+	}
+	if count <= 0 {
+		count = 5
+	}
+	return steam.FetchAppNewsItems(eng.WrapContext(ctx), appID, count)
+}
+
+// GetDiskSpace returns filesystem disk usage metrics (total, free, used bytes) for the given path.
+func (eng *Engine) GetDiskSpace(path string) (*util.DiskSpaceInfo, error) {
+	return util.GetDiskSpace(path)
 }

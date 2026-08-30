@@ -11,6 +11,7 @@ import (
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
@@ -330,7 +331,7 @@ func (s *SteamlessStage) Name() string {
 }
 
 func (s *SteamlessStage) Execute(ctx context.Context, pctx *Context) error {
-	if pctx.Options.NoSteamless || pctx.Game.Platform != "windows" {
+	if pctx.Options.NoSteamless || !pctx.Game.IsWindows() {
 		return nil
 	}
 
@@ -348,6 +349,34 @@ func (s *SteamlessStage) Execute(ctx context.Context, pctx *Context) error {
 	return nil
 }
 
+func (s *SteamlessStage) Rollback(ctx context.Context, pctx *Context) error {
+	if pctx.Game == nil || pctx.Game.GameDir == "" || !pctx.Results.SteamlessUnpacked {
+		return nil
+	}
+	slog.Info("Rolling back steamless unpacking", "dir", pctx.Game.GameDir)
+	_ = filepath.WalkDir(pctx.Game.GameDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if strings.Contains(path, ".ORIGINAL") {
+			idx := strings.Index(path, ".20")
+			if idx != -1 {
+				targetFile := path[:idx]
+				if strings.HasSuffix(strings.ToLower(targetFile), ".exe") {
+					if !pctx.Options.DryRun {
+						if err := os.Rename(path, targetFile); err == nil {
+							slog.Info("Restored original executable", "file", targetFile)
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+	pctx.Results.SteamlessUnpacked = false
+	return nil
+}
+
 // GBEStage injects Goldberg Steam Emulator libraries and configurations.
 type GBEStage struct{}
 
@@ -356,7 +385,7 @@ func (s *GBEStage) Name() string {
 }
 
 func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
-	opMode := pctx.Options.EffectiveOperatingMode()
+	opMode := pctx.Options.OperatingMode
 	if opMode == "" {
 		opMode = pctx.Game.EffectiveOperatingMode()
 	}
@@ -421,6 +450,91 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 func (s *GBEStage) Rollback(ctx context.Context, pctx *Context) error {
 	_, err := compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
 	return err
+}
+
+// VerifyStage scans game files and verifies SHA1 checksums against official manifests.
+type VerifyStage struct{}
+
+func (s *VerifyStage) Name() string {
+	return "Verify File Integrity"
+}
+
+func (s *VerifyStage) Execute(ctx context.Context, pctx *Context) error {
+	if pctx.Game == nil || pctx.Game.NumericAppID == 0 {
+		return fmt.Errorf("cannot verify game without numeric Steam AppID")
+	}
+
+	report, err := manifest.ScanDepotIntegrityWithPlatform(pctx.Game.GameDir, pctx.Game.NumericAppID, pctx.Game.Platform)
+	if err != nil {
+		return fmt.Errorf("integrity scan failed: %w", err)
+	}
+
+	pctx.Results.IntegrityReport = report
+	if report != nil {
+		slog.Info("Integrity verification completed", "game", pctx.Game.Name, "intact", report.IntactCount, "official", report.OfficialCount)
+	}
+	return nil
+}
+
+// UpdateStage downloads updated Steam depot chunks and manifests for a game.
+type UpdateStage struct{}
+
+func (s *UpdateStage) Name() string {
+	return "Download Depot Updates"
+}
+
+func (s *UpdateStage) Execute(ctx context.Context, pctx *Context) error {
+	if pctx.Game == nil || pctx.Game.NumericAppID == 0 {
+		return fmt.Errorf("cannot update game without numeric Steam AppID")
+	}
+
+	dlOpts := downloader.DownloadOptions{
+		AppID:     pctx.Game.NumericAppID,
+		TargetDir: pctx.Game.GameDir,
+		Platform:  pctx.Game.Platform,
+		DryRun:    pctx.Options.DryRun,
+	}
+
+	res, err := downloader.DownloadGame(ctx, pctx.Config, dlOpts)
+	if err != nil {
+		return fmt.Errorf("depot update failed: %w", err)
+	}
+
+	if res != nil {
+		pctx.Results.DownloadedBytes = int64(res.DownloadedBytes)
+		slog.Info("Depot update download completed", "game", pctx.Game.Name, "bytes", res.DownloadedBytes)
+	}
+	return nil
+}
+
+// RevertDRMStage restores original backup binaries and cleans up emulator artifacts.
+type RevertDRMStage struct{}
+
+func (s *RevertDRMStage) Name() string {
+	return "Revert DRM & Emulation"
+}
+
+func (s *RevertDRMStage) Execute(ctx context.Context, pctx *Context) error {
+	targetDir := ""
+	if pctx.Game != nil && pctx.Game.GameDir != "" {
+		targetDir = pctx.Game.GameDir
+	} else if pctx.Options.Path != "" {
+		targetDir = pctx.Options.Path
+	}
+	targetDir = util.CanonicalPath(targetDir)
+	if targetDir == "" {
+		return fmt.Errorf("target directory cannot be empty")
+	}
+
+	restoredCount, err := gbe.Revert(targetDir, pctx.Options.DryRun)
+	if err != nil {
+		return fmt.Errorf("revert DRM failed: %w", err)
+	}
+
+	pctx.Results.RestoredCount = restoredCount
+	pctx.Results.Patched = false
+	slog.Info("Revert DRM completed", "gameDir", targetDir, "restoredFiles", restoredCount)
+	return nil
 }
 
 

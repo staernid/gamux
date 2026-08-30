@@ -121,23 +121,14 @@ func ClassifyDepot(files []ManifestFileEntry) DepotCategory {
 	if hasMediaOnly {
 		return DepotCategorySoundtrack
 	}
-	if hasMac && !hasWin && !hasLinux {
-		return DepotCategoryMacOS
+	if hasWin && !hasMac && !hasLinux {
+		return DepotCategoryWindows
 	}
 	if hasLinux && !hasWin && !hasMac {
 		return DepotCategoryLinux
 	}
-	if hasWin && !hasMac && !hasLinux {
-		return DepotCategoryWindows
-	}
-	if hasMac {
+	if hasMac && !hasWin && !hasLinux {
 		return DepotCategoryMacOS
-	}
-	if hasLinux {
-		return DepotCategoryLinux
-	}
-	if hasWin {
-		return DepotCategoryWindows
 	}
 
 	return DepotCategoryCommon
@@ -303,16 +294,22 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 		}
 	}
 
-	report := &IntegrityReport{
-		OfficialCount: len(manifest.Files),
-	}
-
 	officialMap := make(map[string]ManifestFileEntry, len(manifest.Files))
 	foundMap := make(map[string]bool, len(manifest.Files))
+	officialCount := 0
 
 	for _, f := range manifest.Files {
+		// Ignore directory manifest nodes from official file count & verification
+		if (f.Flags&0x40 != 0) || (len(f.Chunks) == 0 && f.Size == 0) {
+			continue
+		}
 		norm := strings.ToLower(NormalizePath(f.Path))
 		officialMap[norm] = f
+		officialCount++
+	}
+
+	report := &IntegrityReport{
+		OfficialCount: officialCount,
 	}
 
 	_ = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {

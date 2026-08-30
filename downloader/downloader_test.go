@@ -3,6 +3,8 @@ package downloader
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"os"
@@ -528,6 +530,77 @@ func TestDownload_MultiPlatformDepotFiltering(t *testing.T) {
 	}
 	if util.FileExists(filepath.Join(macGameDir, "Torchlight.bin.x86_64")) {
 		t.Errorf("Linux binary should NOT be downloaded in macos install")
+	}
+}
+
+func TestDownload_ChunkChecksumValidation(t *testing.T) {
+	chunkPayload := "exact_expected_payload"
+	sum := sha1.Sum([]byte(chunkPayload))
+	validSHA1 := hex.EncodeToString(sum[:])
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(chunkPayload)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	mValid := &manifest.Manifest{
+		AppID:   12345,
+		DepotID: 12346,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "valid.bin",
+				Size: uint64(len(chunkPayload)),
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: validSHA1, UncompressedSize: uint32(len(chunkPayload))},
+				},
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	res, err := DownloadOrUpdateGame(context.Background(), mValid, DownloadOptions{
+		TargetDir:   tmpDir,
+		AppID:       12345,
+		DryRun:      false,
+		WorkerLimit: 1,
+		HTTPClient:  mockClient,
+	})
+	if err != nil {
+		t.Fatalf("Download with valid chunk SHA1 failed: %v", err)
+	}
+	if res.UpdatedFiles != 1 {
+		t.Errorf("expected 1 updated file, got %d", res.UpdatedFiles)
+	}
+
+	// Test with invalid SHA1 mismatch
+	mInvalid := &manifest.Manifest{
+		AppID:   12345,
+		DepotID: 12346,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "invalid.bin",
+				Size: uint64(len(chunkPayload)),
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: "0000000000000000000000000000000000000000", UncompressedSize: uint32(len(chunkPayload))},
+				},
+			},
+		},
+	}
+
+	_, err = DownloadOrUpdateGame(context.Background(), mInvalid, DownloadOptions{
+		TargetDir:   tmpDir,
+		AppID:       12345,
+		DryRun:      false,
+		WorkerLimit: 1,
+		HTTPClient:  mockClient,
+	})
+	if err == nil {
+		t.Errorf("expected checksum mismatch error, got nil")
 	}
 }
 

@@ -4,7 +4,7 @@
   import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { AppAPI } from '../../api/app.js';
-  import { formatBytes } from '../../utils/format.js';
+  import { formatBytes, formatETA } from '../../utils/format.js';
   import PosterArt from '../common/PosterArt.svelte';
 
   let searchQuery = '';
@@ -100,7 +100,7 @@
     isSearching = true;
     try {
       const candidates = await AppAPI.searchStoreGames(q);
-      searchResults = candidates || [];
+      searchResults = (candidates || []).filter(c => !c.store || c.store.toLowerCase() === 'steam');
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
@@ -115,7 +115,7 @@
   function selectCandidate(candidate) {
     selectedID = String(candidate.id || candidate.AppID);
     selectedName = candidate.name || candidate.Name;
-    selectedStore = candidate.store || 'steam';
+    selectedStore = 'steam';
     searchQuery = selectedName;
     searchResults = [];
     const safeName = selectedName.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || selectedName;
@@ -175,8 +175,8 @@
         game_name: selectedName || `Game ${appID}`,
         target_dir: dest,
         platform: selectedPlatform,
-        auto_apply: autoApply,
-        store_type: selectedStore,
+        auto_apply: true,
+        store_type: selectedStore || 'steam',
       });
 
       showAddPanel = false;
@@ -188,15 +188,6 @@
     }
   }
 
-  function formatETA(seconds) {
-    if (!seconds || seconds <= 0) return '--';
-    if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (mins < 60) return `${mins}m ${secs}s`;
-    const hrs = Math.floor(mins / 60);
-    return `${hrs}h ${mins % 60}m`;
-  }
 
   function handleSpeedLimitChange(e) {
     const limit = parseInt(e.target.value, 10);
@@ -431,7 +422,7 @@
       </div>
 
       <!-- Config Details Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
         <div>
           <label for="dlDestFolderInput" class="block text-slate-400 mb-1 font-bold text-[10px] uppercase tracking-wider font-mono">Destination Folder</label>
           <div class="flex space-x-1.5">
@@ -455,20 +446,13 @@
           <select
             id="dlPlatformSelect"
             bind:value={selectedPlatform}
-            class="w-full bg-[#09090d] border border-[#242434] rounded-xl px-3 py-2 text-slate-200 outline-none text-xs"
+            class="w-full bg-[#09090d] border border-[#242434] rounded-xl px-3 py-2 text-slate-200 outline-none text-xs font-mono"
           >
             <option value="win64">Windows (64-bit)</option>
             <option value="linux">Linux Native</option>
+            <option value="macos">macOS Native</option>
             <option value="all">All Available Depots</option>
           </select>
-        </div>
-
-        <div>
-          <label for="dlAutoApplyCheckbox" class="block text-slate-400 mb-1 font-bold text-[10px] uppercase tracking-wider font-mono">Post-Setup</label>
-          <label class="flex items-center space-x-2 bg-[#09090d] border border-[#242434] rounded-xl px-3 py-2 cursor-pointer">
-            <input id="dlAutoApplyCheckbox" type="checkbox" bind:checked={autoApply} class="rounded accent-cyan-400" />
-            <span class="text-xs text-slate-300">Auto-Apply DRM / Setup</span>
-          </label>
         </div>
       </div>
 

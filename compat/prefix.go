@@ -118,3 +118,77 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 
 	return util.CanonicalPath(prefixDir), nil
 }
+
+// ResolveGamePrefix returns the effective Wine/Proton prefix path for a game without mutating the filesystem.
+func ResolveGamePrefix(cfg *config.Config, game *domain.Game, customPrefix string) string {
+	if customPrefix != "" {
+		return util.CanonicalPath(util.ExpandPath(customPrefix))
+	}
+	if cfg != nil && cfg.WinePrefix != "" {
+		return util.CanonicalPath(util.ExpandPath(cfg.WinePrefix))
+	}
+
+	prefixID := ResolvePrefixIdentifier(game)
+	prefixBase := DefaultPrefixesDir()
+	gamePrefix := filepath.Join(prefixBase, prefixID)
+
+	if util.FileExists(gamePrefix) {
+		return util.CanonicalPath(gamePrefix)
+	}
+
+	// If game prefix doesn't exist yet, check shared umu-default
+	umuDefault := filepath.Join(prefixBase, "umu-default")
+	if util.FileExists(umuDefault) {
+		return util.CanonicalPath(umuDefault)
+	}
+
+	return util.CanonicalPath(gamePrefix)
+}
+
+// DetectWineUser discovers the active Windows user profile name inside a Wine prefix.
+func DetectWineUser(winePrefix string) string {
+	if winePrefix == "" {
+		return "steamuser"
+	}
+
+	usersDir := filepath.Join(winePrefix, "drive_c", "users")
+	if !util.FileExists(usersDir) {
+		return "steamuser"
+	}
+
+	entries, err := os.ReadDir(usersDir)
+	if err != nil {
+		return "steamuser"
+	}
+
+	systemUsers := map[string]bool{
+		"public": true, "default": true, "default user": true, "all users": true,
+	}
+
+	var candidates []string
+	for _, entry := range entries {
+		nameLower := strings.ToLower(entry.Name())
+		if !systemUsers[nameLower] {
+			candidates = append(candidates, entry.Name())
+		}
+	}
+
+	for _, c := range candidates {
+		if strings.EqualFold(c, "steamuser") {
+			return c
+		}
+	}
+
+	currentLinuxUser := os.Getenv("USER")
+	for _, c := range candidates {
+		if currentLinuxUser != "" && strings.EqualFold(c, currentLinuxUser) {
+			return c
+		}
+	}
+
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+
+	return "steamuser"
+}

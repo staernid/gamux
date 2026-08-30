@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/ui"
@@ -174,12 +175,11 @@ var launchCommand = &cli.Command{
 			if status.IsClean() || !status.IsReady {
 				ui.RenderStep(1, 2, fmt.Sprintf("Auto-applying setup for %s before launch...", status.Name))
 				applyOpts := engine.ProcessOptions{
-					Path:       targetPath,
-					ApplyGBE:   true,
-					Portable:   true,
-					WinePrefix: status.EffectiveWinePrefix(),
-					ExePath:    status.EffectiveExePath(),
-					ExeArgs:    status.EffectiveExeArgs(),
+					Path:          targetPath,
+					OperatingMode: domain.ModePortable,
+					WinePrefix:    status.EffectiveWinePrefix(),
+					ExePath:       status.EffectiveExePath(),
+					ExeArgs:       status.EffectiveExeArgs(),
 				}
 				if _, applyErr := eng.ApplyGame(c.Context, applyOpts); applyErr != nil {
 					slog.Warn("Auto-apply before launch encountered warning", "error", applyErr)

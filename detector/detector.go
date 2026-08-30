@@ -12,7 +12,6 @@ import (
 
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
-	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/util"
 )
 
@@ -195,12 +194,15 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 
 		// GBE Target Libs (for platform identification)
 		if state.targetLibPath == "" {
-			for plat, cfg := range gbe.PlatformConfig {
-				if name == cfg.Target {
-					state.detectedPlatform = plat
-					state.targetLibPath = p
-					break
-				}
+			if name == "steam_api64.dll" {
+				state.detectedPlatform = "win64"
+				state.targetLibPath = p
+			} else if name == "steam_api.dll" {
+				state.detectedPlatform = "win32"
+				state.targetLibPath = p
+			} else if name == "libsteam_api.so" {
+				state.detectedPlatform = "linux"
+				state.targetLibPath = p
 			}
 		}
 

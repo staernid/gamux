@@ -658,8 +658,6 @@ export namespace pipeline {
 	export class Options {
 	    path: string;
 	    operating_mode?: string;
-	    apply_gbe?: boolean;
-	    portable?: boolean;
 	    normalize_dir: boolean;
 	    dry_run: boolean;
 	    auto_yes: boolean;
@@ -678,8 +676,6 @@ export namespace pipeline {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.operating_mode = source["operating_mode"];
-	        this.apply_gbe = source["apply_gbe"];
-	        this.portable = source["portable"];
 	        this.normalize_dir = source["normalize_dir"];
 	        this.dry_run = source["dry_run"];
 	        this.auto_yes = source["auto_yes"];

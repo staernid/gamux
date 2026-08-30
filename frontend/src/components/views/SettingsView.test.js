@@ -44,7 +44,7 @@ describe('SettingsView Component', () => {
   });
 
   it('triggers batch achievements download from Tools tab', async () => {
-    vi.spyOn(AppAPI, 'submitBatchAchievements').mockResolvedValue('task_achievements_1');
+    vi.spyOn(AppAPI, 'submitBatchLibraryOp').mockResolvedValue('task_achievements_1');
     const toastSpy = vi.spyOn(notificationStore.items, 'add');
 
     render(SettingsView);
@@ -56,7 +56,7 @@ describe('SettingsView Component', () => {
     expect(downloadAchBtn).toBeInTheDocument();
     await fireEvent.click(downloadAchBtn);
 
-    expect(AppAPI.submitBatchAchievements).toHaveBeenCalled();
+    expect(AppAPI.submitBatchLibraryOp).toHaveBeenCalledWith('achievements');
     expect(toastSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'info',

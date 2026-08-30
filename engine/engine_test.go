@@ -250,12 +250,11 @@ func TestEngine_DryRunZeroMutationInvariant(t *testing.T) {
 		}),
 	}
 	opts := ProcessOptions{
-		Path:         gameDir,
-		DryRun:       true,
-		ApplyGBE:     true,
-		Portable:     true,
-		NormalizeDir: false,
-		NoSteamless:  true,
+		Path:          gameDir,
+		DryRun:        true,
+		OperatingMode: domain.ModePortable,
+		NormalizeDir:  false,
+		NoSteamless:   true,
 	}
 
 	res, err := eng.ProcessGame(context.Background(), opts)
@@ -309,12 +308,11 @@ func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
 		}),
 	}
 	opts := ProcessOptions{
-		Path:         gameDir,
-		DryRun:       false,
-		ApplyGBE:     true,
-		Portable:     true,
-		NormalizeDir: false,
-		NoSteamless:  true,
+		Path:          gameDir,
+		DryRun:        false,
+		OperatingMode: domain.ModePortable,
+		NormalizeDir:  false,
+		NoSteamless:   true,
 	}
 
 	res, err := eng.ProcessGame(context.Background(), opts)
@@ -476,8 +474,8 @@ func TestEngine_LaunchProfileAndOperatingMode(t *testing.T) {
 		t.Fatalf("InspectStatus failed: %v", err)
 	}
 
-	if status.EffectiveOperatingMode() != "standalone" {
-		t.Errorf("expected OperatingMode standalone, got %s", status.EffectiveOperatingMode())
+	if status.LaunchProfile.OperatingMode != "" {
+		t.Errorf("expected empty LaunchProfile OperatingMode (inheriting default), got %s", status.LaunchProfile.OperatingMode)
 	}
 	if !status.IsReady {
 		t.Errorf("expected game with executable to be ready in standalone mode")
@@ -605,7 +603,7 @@ func TestEngine_GetGameAchievements_GSE(t *testing.T) {
 	settingsDir := filepath.Join(tmpDir, "steam_settings")
 	_ = os.MkdirAll(settingsDir, 0755)
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("846770\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("999999\n"), 0644)
 
 	schemaJSON := `[
 		{
@@ -776,10 +774,10 @@ func TestEngine_TaskOperations(t *testing.T) {
 
 	// 1. Test ApplyOperation via Engine
 	taskID, err := eng.SubmitApply(ProcessOptions{
-		Path:     gameDir,
-		DryRun:   true,
-		AutoYes:  true,
-		ApplyGBE: false,
+		Path:          gameDir,
+		DryRun:        true,
+		AutoYes:       true,
+		OperatingMode: domain.ModeNone,
 	})
 	if err != nil {
 		t.Fatalf("SubmitApply failed: %v", err)
@@ -818,7 +816,9 @@ func TestEngine_TaskOperations(t *testing.T) {
 	// Wait for operations to process
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if eng.Tasks.ActiveCount() == 0 {
+		t1, _ := eng.Tasks.Get(taskID)
+		t2, _ := eng.Tasks.Get(normID)
+		if t1 != nil && t1.Status == tasks.StatusCompleted && t2 != nil && t2.Status == tasks.StatusCompleted {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -833,6 +833,68 @@ func TestEngine_TaskOperations(t *testing.T) {
 	t2, ok2 := eng.Tasks.Get(normID)
 	if !ok2 || t2.Status != tasks.StatusCompleted {
 		t.Errorf("expected completed normalize task, got %+v", t2)
+	}
+}
+
+func TestSaveLaunchProfile_DecoupledFromDRMMutations(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "DecoupledProfileGame")
+	_ = os.MkdirAll(gameDir, 0755)
+
+	// Create dummy binary file
+	dummyDll := filepath.Join(gameDir, "steam_api64.dll")
+	_ = os.WriteFile(dummyDll, []byte("ORIGINAL_GAME_DLL_CONTENT"), 0755)
+
+	acfContent := "\"AppState\"\n{\n\t\"appid\"\t\"480\"\n\t\"name\"\t\"Decoupled Game\"\n}"
+	_ = os.WriteFile(filepath.Join(gameDir, "appmanifest_480.acf"), []byte(acfContent), 0644)
+
+	eng := New(config.DefaultConfig())
+
+	// 1. Initial save of a launch profile (setting arguments and env vars)
+	enabledMangoHud := true
+	profileOpts := runner.LaunchOptions{
+		GameDir:       gameDir,
+		Name:          "Decoupled Game",
+		AppID:         "480",
+		OperatingMode: "standalone",
+		Runner:        "umu",
+		ExeArgs:       "--fullscreen --novid",
+		MangoHud:      &enabledMangoHud,
+		CustomEnv: map[string]string{
+			"MESA_VK_DEVICE_SELECT": "1002:73bf",
+		},
+	}
+
+	err := eng.SaveLaunchProfile(context.Background(), gameDir, profileOpts)
+	if err != nil {
+		t.Fatalf("SaveLaunchProfile failed: %v", err)
+	}
+
+	// Verify that dummy DLL was NOT touched / overwritten by GBE
+	dllData, err := os.ReadFile(dummyDll)
+	if err != nil {
+		t.Fatalf("Failed to read DLL: %v", err)
+	}
+	if string(dllData) != "ORIGINAL_GAME_DLL_CONTENT" {
+		t.Errorf("DLL was mutated during normal SaveLaunchProfile!")
+	}
+
+	// Verify no .ORIGINAL backups exist
+	backups, _ := filepath.Glob(filepath.Join(gameDir, "*.ORIGINAL"))
+	if len(backups) > 0 {
+		t.Errorf("Expected 0 backup files, found: %v", backups)
+	}
+
+	// Verify profile was saved properly
+	loaded, err := eng.GetLaunchProfile(context.Background(), gameDir)
+	if err != nil {
+		t.Fatalf("GetLaunchProfile failed: %v", err)
+	}
+	if loaded.ExeArgs != "--fullscreen --novid" || loaded.MangoHud == nil || !*loaded.MangoHud {
+		t.Errorf("Profile was not persisted accurately: %+v", loaded)
+	}
+	if loaded.CustomEnv["MESA_VK_DEVICE_SELECT"] != "1002:73bf" {
+		t.Errorf("CustomEnv not saved properly: %+v", loaded.CustomEnv)
 	}
 }
 

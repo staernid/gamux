@@ -1,23 +1,19 @@
 <script>
   import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { notificationStore } from '../../../stores/notifications.js';
-  import StepperRow from '../../common/StepperRow.svelte';
+  import SettingSection from '../../common/SettingSection.svelte';
+  import SettingRow from '../../common/SettingRow.svelte';
+  import InheritSwitcher from '../../common/InheritSwitcher.svelte';
 
   export let game = null;
   export let globalCfg = {};
 
   $: runnerOptions = [
     { value: '', label: `Default (${globalCfg.default_runner ? globalCfg.default_runner.toUpperCase() : 'UMU'})` },
-    { value: 'umu', label: 'UMU (umu-run)' },
+    { value: 'umu', label: 'UMU (umu-run - Recommended)' },
     { value: 'wine', label: 'Direct Wine' },
     { value: 'proton', label: 'Direct Proton' },
     { value: 'linux', label: 'Linux Native' }
-  ];
-
-  $: triStateOptions = (enabledByDefault) => [
-    { value: null, label: `Inherited (${enabledByDefault ? 'On' : 'Off'})` },
-    { value: true, label: 'Force Enabled' },
-    { value: false, label: 'Force Disabled' }
   ];
 
   function isCurrentPlatform(plat) {
@@ -43,114 +39,104 @@
       message: `Configured platform to ${plat}. Click Save to apply launch settings.`
     });
   }
-
-  function handleStepperChange() {
-    // Modified in-memory draft
-  }
 </script>
 
-<div class="space-y-3">
-  <!-- Platform & Compatibility Switcher -->
+<div class="space-y-4">
+  <!-- Platform & Compatibility Tool -->
   {#if game}
-    <div class="p-3.5 bg-[#0d0d12] border border-[#222230] rounded-xl space-y-2.5">
+    <SettingSection
+      title="Platform & Compatibility Tool"
+      description="Choose between native Linux binaries and Windows executables running via Proton/Wine."
+    >
       <div class="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-            Platform & Compatibility Tool
-          </span>
-          <span class="text-slate-100 font-bold text-xs">
-            Active: <span class="text-sky-400 font-mono uppercase">{$drawerDraft.platform || game.platform || 'win64'}</span>
-          </span>
-        </div>
-        <div class="flex items-center space-x-1.5 flex-wrap gap-1">
+        <span class="text-xs font-bold text-slate-200">
+          Target Architecture: <span class="text-cyan-400 font-mono uppercase">{$drawerDraft.platform || game.platform || 'win64'}</span>
+        </span>
+        <div class="flex items-center space-x-1.5">
           {#each (game.available_platforms || game.availablePlatforms || ['Windows']) as plat}
             <button
               type="button"
               on:click={() => handleSwitchPlatform(plat)}
-              class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border {isCurrentPlatform(plat) ? 'bg-sky-950/80 text-sky-300 border-sky-600/60 shadow-sm' : 'bg-[#181822] hover:bg-[#222232] text-slate-400 border-[#2e2e42]'}"
+              class="px-3 py-1 rounded-xl text-xs font-bold transition-all border cursor-pointer {isCurrentPlatform(plat) ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/60 shadow-sm' : 'bg-[#181824] hover:bg-[#222232] text-slate-400 border-[#2e2e40]'}"
             >
               {plat}
             </button>
           {/each}
         </div>
       </div>
-      <p class="text-[11px] text-slate-400 leading-relaxed">
-        Steam compatibility layer. Choose between native Linux executables and Windows binaries running through UMU / Wine / Proton.
-      </p>
-    </div>
+    </SettingSection>
   {/if}
 
-  <!-- Primary Execution Configuration -->
-  <div class="space-y-2">
-    <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-      Execution & Compatibility
-    </span>
+  <!-- Execution & Compatibility -->
+  <SettingSection
+    title="Execution & Compatibility"
+    description="Select compatibility layer runtime and prefix options."
+  >
+    <SettingRow label="Runner Engine" description="Compatibility runner used to launch Windows executables." forId="drawerRunner" inline={false}>
+      <select
+        id="drawerRunner"
+        bind:value={$drawerDraft.runner}
+        class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none text-xs"
+      >
+        {#each runnerOptions as opt}
+          <option value={opt.value}>{opt.label}</option>
+        {/each}
+      </select>
+    </SettingRow>
 
+    <SettingRow label="Wine Prefix Path" description="Custom Wine bottle prefix (leave blank for runner default)." forId="drawerPrefix" inline={false}>
+      <input
+        id="drawerPrefix"
+        type="text"
+        bind:value={$drawerDraft.winePrefix}
+        placeholder={globalCfg.wine_prefix ? `Inherited (${globalCfg.wine_prefix})` : 'Default (Runner-managed prefix)'}
+        class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
+      />
+    </SettingRow>
 
-    <StepperRow
-      label="Runner Engine"
-      options={runnerOptions}
-      bind:value={$drawerDraft.runner}
-      on:change={handleStepperChange}
-    />
-  </div>
+    <SettingRow label="Wine DLL Overrides (WINEDLLOVERRIDES)" description="DLL load order (e.g. version=n,b;dinput8=n,b)." forId="drawerDllOverrides" inline={false}>
+      <input
+        id="drawerDllOverrides"
+        type="text"
+        bind:value={$drawerDraft.dllOverrides}
+        placeholder="e.g. version=n,b;dinput8=n,b"
+        class="w-full bg-[#14141e] border border-[#262638] focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
+      />
+    </SettingRow>
+  </SettingSection>
 
-  <!-- Wine Prefix Path -->
-  <div class="space-y-1.5 p-3 bg-[#0d0d12] border border-[#222230] rounded-xl focus-within:border-sky-500 transition-all">
-    <label for="drawerPrefix" class="block font-bold text-slate-200 text-xs">
-      Wine Prefix Path
-    </label>
-    <input
-      id="drawerPrefix"
-      type="text"
-      bind:value={$drawerDraft.winePrefix}
-      placeholder={globalCfg.wine_prefix ? `Inherited (${globalCfg.wine_prefix})` : 'Default (Runner-managed prefix or ~/.wine)'}
-      class="w-full bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-lg px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
-    />
-  </div>
+  <!-- Graphics & Performance Overlays -->
+  <SettingSection
+    title="Graphics & Performance Overlays"
+    description="Per-game overrides for telemetry, spatial upscaling, and DLSS integration."
+  >
+    <div class="space-y-2">
+      <InheritSwitcher
+        label="MangoHud Performance HUD"
+        description="On-screen FPS, frametime graphs, temperatures, and hardware telemetry overlay."
+        tag="HUD"
+        color="emerald"
+        inheritedValue={!!globalCfg.mangohud}
+        bind:value={$drawerDraft.mangoHud}
+      />
 
-  <!-- Wine DLL Overrides -->
-  <div class="space-y-1.5 p-3 bg-[#0d0d12] border border-[#222230] rounded-xl focus-within:border-sky-500 transition-all">
-    <label for="drawerDllOverrides" class="block font-bold text-slate-200 text-xs">
-      Wine DLL Overrides (WINEDLLOVERRIDES)
-    </label>
-    <input
-      id="drawerDllOverrides"
-      type="text"
-      bind:value={$drawerDraft.dllOverrides}
-      placeholder="e.g. version=n,b;dinput8=n,b"
-      class="w-full bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 rounded-lg px-3 py-2 text-slate-100 outline-none font-mono text-xs transition-colors"
-    />
-    <p class="text-[10px] text-slate-400">
-      Specify custom DLL overrides for mods or native libraries (e.g. version=n,b). Base graphics and Goldberg emulators are configured automatically.
-    </p>
-  </div>
+      <InheritSwitcher
+        label="Wine Fullscreen FSR Upscaling"
+        description="FidelityFX Super Resolution spatial upscaling for non-native display resolutions."
+        tag="FSR"
+        color="cyan"
+        inheritedValue={!!globalCfg.wine_fullscreen_fsr}
+        bind:value={$drawerDraft.wineFullscreenFSR}
+      />
 
-  <!-- Performance & Graphics Overlays -->
-  <div class="space-y-2 pt-2 border-t border-[#20202c]">
-    <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-      Graphics & Performance Overlays
-    </span>
-
-    <StepperRow
-      label="MangoHud"
-      options={triStateOptions(!!globalCfg.mangohud)}
-      bind:value={$drawerDraft.mangoHud}
-      on:change={handleStepperChange}
-    />
-
-    <StepperRow
-      label="Wine Fullscreen FSR"
-      options={triStateOptions(!!globalCfg.wine_fullscreen_fsr)}
-      bind:value={$drawerDraft.wineFullscreenFSR}
-      on:change={handleStepperChange}
-    />
-
-    <StepperRow
-      label="Proton NVAPI / DLSS"
-      options={triStateOptions(!!globalCfg.proton_nvapi)}
-      bind:value={$drawerDraft.protonNVAPI}
-      on:change={handleStepperChange}
-    />
-  </div>
+      <InheritSwitcher
+        label="Proton NVAPI & DLSS Integration"
+        description="Expose NVIDIA DLSS, Reflex, and NVAPI libraries through DXVK-NVAPI."
+        tag="DLSS"
+        color="emerald"
+        inheritedValue={!!globalCfg.proton_nvapi}
+        bind:value={$drawerDraft.protonNVAPI}
+      />
+    </div>
+  </SettingSection>
 </div>

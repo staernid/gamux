@@ -2,6 +2,11 @@ import { writable, get } from 'svelte/store';
 import { saveGameProfile, resetGameProfile, rollbackGame, refreshGame, showInspector } from './library.js';
 import { notificationStore } from './notifications.js';
 import { AppAPI } from '../api/app.js';
+import * as envDraft from './drawer/envDraft.js';
+
+// Re-export environment draft helpers for backward compatibility
+export const computeEnvEntries = envDraft.computeEnvEntries;
+export const generateNextCustomKey = envDraft.generateNextCustomKey;
 
 export function createInitialDraft(game = null, globalCfg = {}) {
   if (!game) {
@@ -21,7 +26,7 @@ export function createInitialDraft(game = null, globalCfg = {}) {
       dxvkHud: '',
       dllOverrides: '',
       customEnv: {},
-      mode: 'loader',
+      mode: '',
       language: '',
       optNormalize: globalCfg.normalize ?? true,
       optSteamless: globalCfg.steamless ?? true,
@@ -29,14 +34,13 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     };
   }
 
-  const candidates = (game.launchCandidates || [])
-    .filter(c => {
-      const exe = (c.executable || '').toLowerCase();
-      return !exe.includes('steamclient_loader') && !exe.includes('coldclientloader');
-    });
+  const candidates = (game.launchCandidates || []).filter(c => {
+    const exe = (c.executable || '').toLowerCase();
+    return !exe.includes('steamclient_loader') && !exe.includes('coldclientloader');
+  });
 
   const lp = game.launchProfile || null;
-  let baseExe = lp?.exe_path || game.exePath || (candidates[0]?.executable || '');
+  let baseExe = lp?.exe_path || game.exePath || candidates[0]?.executable || '';
   if (baseExe.toLowerCase().includes('steamclient_loader') || baseExe.toLowerCase().includes('coldclientloader')) {
     baseExe = candidates[0]?.executable || '';
   }
@@ -44,67 +48,25 @@ export function createInitialDraft(game = null, globalCfg = {}) {
   return {
     gameDir: game.gameDir || '',
     name: game.name || '',
-    platform: game.platform || '',
+    platform: game.platform || 'win64',
     appId: game.appId || '',
     exePath: baseExe,
     exeArgs: lp?.exe_args || game.exeArgs || candidates[0]?.arguments || '',
-    operatingMode: lp?.operating_mode ?? '',
-    runner: lp?.runner ?? '',
+    operatingMode: lp?.operating_mode || game.operatingMode || 'standalone',
+    mode: lp?.operating_mode || game.operatingMode || 'standalone',
+    runner: lp?.runner || game.runner || 'umu',
     winePrefix: lp?.wine_prefix || game.winePrefix || '',
-    dllOverrides: lp?.dll_overrides || game.dllOverrides || '',
-    mangoHud: (lp?.mangohud !== undefined && lp?.mangohud !== null) ? lp.mangohud : null,
-    wineFullscreenFSR: (lp?.wine_fullscreen_fsr !== undefined && lp?.wine_fullscreen_fsr !== null) ? lp.wine_fullscreen_fsr : null,
-    protonNVAPI: (lp?.proton_nvapi !== undefined && lp?.proton_nvapi !== null) ? lp.proton_nvapi : null,
+    dllOverrides: lp?.dll_overrides || '',
+    mangoHud: lp?.mangohud ?? null,
+    wineFullscreenFSR: lp?.wine_fullscreen_fsr ?? null,
+    protonNVAPI: lp?.proton_nvapi ?? null,
     dxvkHud: lp?.dxvk_hud || '',
     customEnv: { ...(lp?.custom_env || {}) },
-    mode: lp?.operating_mode !== undefined && lp?.operating_mode !== null ? lp.operating_mode : '',
-    language: lp?.language || game.currentLanguage || '',
+    language: lp?.language || '',
     optNormalize: globalCfg.normalize ?? true,
     optSteamless: globalCfg.steamless ?? true,
     optAchievements: globalCfg.achievements ?? true,
   };
-}
-
-export function computeEnvEntries(customEnv = {}, globalEnv = {}) {
-  const entries = [];
-  const seen = new Set();
-
-  // 1. Process global envs
-  for (const [k, v] of Object.entries(globalEnv)) {
-    seen.add(k);
-    if (k in customEnv) {
-      entries.push({
-        key: k,
-        value: customEnv[k],
-        globalValue: v,
-        isInherited: false,
-        isOverriding: true
-      });
-    } else {
-      entries.push({
-        key: k,
-        value: v,
-        globalValue: v,
-        isInherited: true,
-        isOverriding: false
-      });
-    }
-  }
-
-  // 2. Process custom game envs not in global
-  for (const [k, v] of Object.entries(customEnv)) {
-    if (!seen.has(k)) {
-      entries.push({
-        key: k,
-        value: v,
-        globalValue: '',
-        isInherited: false,
-        isOverriding: false
-      });
-    }
-  }
-
-  return entries;
 }
 
 function createDrawerDraftStore() {
@@ -128,7 +90,7 @@ function createDrawerDraftStore() {
       update(state => ({
         ...state,
         exePath: candidate.executable || state.exePath,
-        exeArgs: candidate.arguments !== undefined ? candidate.arguments : state.exeArgs
+        exeArgs: candidate.arguments !== undefined ? candidate.arguments : state.exeArgs,
       }));
     },
 
@@ -149,47 +111,38 @@ function createDrawerDraftStore() {
     },
 
     addCustomEnv(globalEnv = {}) {
-      update(state => {
-        let newKey = 'CUSTOM_VAR';
-        let counter = 1;
-        while (newKey in state.customEnv || (globalEnv && newKey in globalEnv)) {
-          newKey = `CUSTOM_VAR_${counter++}`;
-        }
-        return {
-          ...state,
-          customEnv: { ...state.customEnv, [newKey]: '' }
-        };
-      });
+      update(state => ({
+        ...state,
+        customEnv: envDraft.addCustomEnv(state.customEnv, globalEnv),
+      }));
     },
 
     updateCustomEnv(key, value) {
       update(state => ({
         ...state,
-        customEnv: { ...state.customEnv, [key]: value }
+        customEnv: envDraft.updateCustomEnv(state.customEnv, key, value),
       }));
     },
 
     overrideEnv(key, globalValue) {
       update(state => ({
         ...state,
-        customEnv: { ...state.customEnv, [key]: globalValue }
+        customEnv: envDraft.overrideEnv(state.customEnv, key, globalValue),
       }));
     },
 
     revertEnv(key) {
-      update(state => {
-        const next = { ...state.customEnv };
-        delete next[key];
-        return { ...state, customEnv: next };
-      });
+      update(state => ({
+        ...state,
+        customEnv: envDraft.revertEnv(state.customEnv, key),
+      }));
     },
 
     deleteCustomEnv(key) {
-      update(state => {
-        const next = { ...state.customEnv };
-        delete next[key];
-        return { ...state, customEnv: next };
-      });
+      update(state => ({
+        ...state,
+        customEnv: envDraft.deleteCustomEnv(state.customEnv, key),
+      }));
     },
 
     async save(game) {
@@ -201,19 +154,29 @@ function createDrawerDraftStore() {
         game_dir: gameDir,
         exe_path: (draft.exePath || '').trim(),
         exe_args: (draft.exeArgs || '').trim(),
-        app_id: (draft.appId || '').trim(),
+        app_id: (draft.appId || game.appId || '').trim(),
         name: (draft.name || game.name || '').trim(),
-        platform: game.platform || '',
-        operating_mode: draft.mode !== undefined ? draft.mode : draft.operatingMode,
+        platform: game.platform || 'win64',
+        operating_mode: draft.mode !== undefined ? draft.mode : (draft.operatingMode || 'standalone'),
         language: (draft.language || '').trim(),
-        runner: draft.runner,
+        runner: draft.runner || 'umu',
         wine_prefix: (draft.winePrefix || '').trim(),
         dll_overrides: (draft.dllOverrides || '').trim(),
         mangohud: draft.mangoHud,
         wine_fullscreen_fsr: draft.wineFullscreenFSR,
         proton_nvapi: draft.protonNVAPI,
         dxvk_hud: (draft.dxvkHud || '').trim(),
-        custom_env: draft.customEnv,
+        custom_env: draft.customEnv || {},
+        playtime_seconds: game.playtimeSeconds || 0,
+        last_played: game.lastPlayed || 0,
+        custom_cover_url: game.customCoverUrl || '',
+        custom_banner_url: game.customBannerUrl || '',
+        custom_hero_url: game.customHeroUrl || '',
+        custom_logo_url: game.customLogoUrl || '',
+        custom_icon_url: game.customIconUrl || '',
+        locked_artwork: !!game.lockedArtwork,
+        metadata_provider: game.metadataProvider || '',
+        metadata_id: game.metadataId || '',
       };
 
       try {
@@ -249,7 +212,7 @@ function createDrawerDraftStore() {
       if (!game?.gameDir) return;
       rollbackGame(game.gameDir, false);
       showInspector.set(false);
-    }
+    },
   };
 }
 

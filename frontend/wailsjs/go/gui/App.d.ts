@@ -119,13 +119,7 @@ export function StopGame(arg1:string):Promise<void>;
 
 export function SubmitApply(arg1:pipeline.Options):Promise<string>;
 
-export function SubmitBatchAchievements():Promise<string>;
-
-export function SubmitBatchArtwork():Promise<string>;
-
-export function SubmitBatchNormalize():Promise<string>;
-
-export function SubmitBatchVerify():Promise<string>;
+export function SubmitBatchLibraryOp(arg1:string):Promise<string>;
 
 export function SubmitNormalize(arg1:string):Promise<string>;
 

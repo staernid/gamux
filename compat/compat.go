@@ -11,8 +11,13 @@ import (
 	"github.com/staernid/gamux/util"
 )
 
-// Apply orchestrates atomic LaunchProfile persistence, on-disk setting synchronization,
-// and DRM layer application (portable library replacement, loader symlinks/registry, or clean revert).
+// Apply orchestrates DRM layer application (portable library replacement, loader symlinks/registry, or clean revert).
+//
+// NOTE (Architecture Invariant):
+// This function performs direct filesystem mutations (copying DLLs, creating backups, unpacking binaries).
+// It should ONLY be invoked during explicit setup pipelines (e.g. ApplyGame, BatchApply, QuickPlay on clean game)
+// or when an explicit OperatingMode transition occurs (e.g. switching between Portable and Loader mode).
+// Simple profile/settings edits (launch args, env vars, HUD toggles, artwork) must use SyncSettings/SaveProfile instead.
 func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *domain.LaunchProfile, dryRun bool) error {
 	if cfg == nil {
 		cfg = config.DefaultConfig()

@@ -41,16 +41,24 @@ A structured configuration defining executable targets, launch arguments, Wine p
 _Avoid_: Run config, start script
 
 **Pipeline**:
-An ordered, sequential executor coordinating game processing through composable, isolated steps with cooperative cancellation and automatic failure rollback.
+An ordered, sequential executor coordinating game processing through composable, isolated stages with cooperative cancellation, step-level telemetry, and automatic fail-fast LIFO failure rollback.
 _Avoid_: Task runner, workflow, script
 
+**Pipeline Recipe**:
+A pre-assembled, ordered sequence of `Stage` instances configured for a discrete domain lifecycle action (Setup, Verify, Update, Rollback, Normalize).
+_Avoid_: Workflow definition, job script, task sequence
+
 **Stage**:
-A discrete, single-responsibility step within the setup pipeline (e.g. Scan, Manifest, Normalize, Steamless, GBE) that mutates or inspects a `Game` entity.
+A discrete, single-responsibility step within a pipeline recipe (e.g. Scan, Manifest, Normalize, Steamless, GBE, Verify, Update, RevertDRM) that mutates or inspects a `Game` entity.
 _Avoid_: Step, action, middleware
 
 **Job**:
-An asynchronous, cancellable background unit of work tracked by the supervisor worker pool (`jobs.Manager`) with lifecycle states (`Pending`, `Running`, `Completed`, `Failed`, `Cancelled`).
+An asynchronous, cancellable background unit of work tracked by the supervisor worker pool (`tasks.Manager`) with lifecycle states (`Queued`, `Running`, `Paused`, `Completed`, `Failed`, `Cancelled`).
 _Avoid_: Background thread, queue item, worker process
+
+**Pipeline Operation**:
+A direct, first-class binding of a `Pipeline Recipe` and execution `Context` satisfying `tasks.Operation`, bridging pipeline stage lifecycles, progress compositing, and detached context rollback to the supervisor worker pool without intermediary adapters.
+_Avoid_: Task adapter, job wrapper, worker closure
 
 **Event / Telemetry**:
 A typed, non-blocking lifecycle message emitted across `events.Bus` carrying stage status and quantitative progress (`TaskProgress`: throughput, ETA, item counts, percentage).
@@ -59,4 +67,8 @@ _Avoid_: Notification, log stream, console output
 **Directory Normalization**:
 Renaming a downloaded game folder to match Steam's official 1:1 `installdir` from its ACF manifest or Steam API metadata.
 _Avoid_: Folder renaming, sanitization, path cleanup
+
+**Save Snapshot**:
+A point-in-time, self-contained compressed archive (`.zip`) containing semantic mappings, file checksums, and on-disk save/configuration data for a game across Linux native, Wine prefix, and GSE Cloud locations.
+_Avoid_: Save zip, backup file, save export
 

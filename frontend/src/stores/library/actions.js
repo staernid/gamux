@@ -1,3 +1,4 @@
+import { get } from 'svelte/store';
 import { AppAPI } from '../../api/app.js';
 import { normalizeGame, isSamePath } from '../../utils/game.js';
 import { notificationStore } from '../notifications.js';
@@ -10,10 +11,9 @@ export async function scanLibrary(pathOverride = '') {
   if (pathOverride) {
     targetPaths = [pathOverride];
   } else {
-    libraryPaths.subscribe(v => { targetPaths = v; })();
+    targetPaths = get(libraryPaths) || [];
     if (targetPaths.length === 0) {
-      let single = '';
-      libraryPath.subscribe(v => { single = v; })();
+      const single = get(libraryPath);
       if (single) targetPaths = [single];
     }
   }
@@ -47,8 +47,7 @@ setOnPathsChangedHook(() => {
 });
 
 export async function importGame() {
-  let currentLib = '';
-  libraryPath.subscribe(v => { currentLib = v; })();
+  const currentLib = get(libraryPath) || '';
 
   const selected = await AppAPI.selectDirectory('Select Game Folder to Import', currentLib);
   if (!selected) return;
@@ -103,8 +102,7 @@ export async function queueApplyGame(game, customOpts = null) {
 
   const defaultOpts = {
     path: game.gameDir,
-    apply_gbe: true,
-    portable: false,
+    operating_mode: 'loader',
     normalize_dir: true,
     no_steamless: false,
     fetch_achievements: true,
@@ -126,9 +124,7 @@ export async function queueApplyGame(game, customOpts = null) {
 }
 
 export function batchApplyCleanGames() {
-  let allGames = [];
-  games.subscribe(v => { allGames = v; })();
-
+  const allGames = get(games) || [];
   const cleanGames = allGames.filter(g => !g.isPatched);
   if (cleanGames.length === 0) return;
 

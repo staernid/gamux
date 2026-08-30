@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/util"
 )
 
 // GOGProvider implements Provider and ArtworkCandidateProvider for the GOG ecosystem.
@@ -31,6 +33,19 @@ func (g *GOGProvider) ID() string {
 
 func (g *GOGProvider) DisplayName() string {
 	return "GOG.com"
+}
+
+func (g *GOGProvider) Description() string {
+	return "GOG.com DRM-free digital store & catalog"
+}
+
+func (g *GOGProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		CanSearch:         true,
+		CanFetchMetadata:  true,
+		CanProvideArtwork:  true,
+		IsGameStore:       true,
+	}
 }
 
 func (g *GOGProvider) IsGameStore() bool {
@@ -183,6 +198,13 @@ func (g *GOGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata
 		return nil, fmt.Errorf("empty GOG game ID")
 	}
 
+	if cachedData, ok := cache.GetStoreMetadata("gog", gameID); ok && len(cachedData) > 0 {
+		var meta Metadata
+		if err := json.Unmarshal(cachedData, &meta); err == nil && meta.Name != "" {
+			return &meta, nil
+		}
+	}
+
 	meta := &Metadata{
 		ID:    gameID,
 		Store: "gog",
@@ -272,6 +294,10 @@ func (g *GOGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata
 		return nil, fmt.Errorf("GOG metadata not found for %s", gameID)
 	}
 
+	if encoded, err := json.Marshal(meta); err == nil {
+		_ = cache.SaveStoreMetadata("gog", gameID, encoded)
+	}
+
 	return meta, nil
 }
 
@@ -315,13 +341,14 @@ func (g *GOGProvider) QueryArtworkCandidates(ctx context.Context, query ArtworkQ
 	} else if query.Title != "" {
 		results, err := g.Search(ctx, query.Title)
 		if err == nil && len(results) > 0 {
-			qClean := strings.ToLower(strings.TrimSpace(query.Title))
 			for _, r := range results {
-				rClean := strings.ToLower(strings.TrimSpace(r.Name))
-				if strings.Contains(rClean, qClean) || strings.Contains(qClean, rClean) {
+				if util.IsTitleMatch(r.Name, query.Title) {
 					gogID = r.ID
 					break
 				}
+			}
+			if gogID == "" && len(results) > 0 {
+				gogID = results[0].ID
 			}
 		}
 	}
