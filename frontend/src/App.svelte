@@ -369,7 +369,7 @@
               <span class="text-slate-600">Platform:</span>
               <span class="text-slate-400 font-semibold">{$selectedGame.platform || 'Linux'}</span>
               <span class="text-slate-600">·</span>
-              <span class="text-slate-400">{$selectedGame.runner || 'UMU'}</span>
+              <span class="text-slate-400">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
               <span class="text-slate-600">·</span>
               <span class="text-slate-400 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
             </div>

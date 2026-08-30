@@ -316,12 +316,12 @@ func (eng *Engine) resolveGameName(ctx context.Context, path string) string {
 	return filepath.Base(path)
 }
 
-// SearchStoreGames searches across registered game store providers (Steam, GOG).
+// SearchStoreGames searches across registered game store & metadata providers (Steam, GOG, RAWG).
 func (eng *Engine) SearchStoreGames(ctx context.Context, query string) ([]store.SearchResult, error) {
 	if eng.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
-	return eng.StoreRegistry.SearchStores(eng.WrapContext(ctx), query)
+	return eng.StoreRegistry.SearchAll(eng.WrapContext(ctx), query)
 }
 
 // ResolveArtwork resolves covers, banners, heroes, and logos for a game.
@@ -401,21 +401,12 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 	storeNameLower := strings.ToLower(strings.TrimSpace(storeName))
 	profile.MetadataProvider = storeNameLower
 	profile.MetadataID = strings.TrimSpace(storeID)
-	profile.Store = storeName
 
 	switch storeNameLower {
-	case "standalone", "custom", "none", "":
-		profile.MetadataProvider = "standalone"
+	case "none", "standalone", "custom", "":
+		profile.MetadataProvider = ""
 		profile.MetadataID = ""
-		profile.AppID = "0"
-		profile.StoreAppID = ""
-		profile.GOGID = ""
-		profile.Store = domain.StoreStandalone
-		profile.Name = filepath.Base(gameDir)
 	case "steam":
-		profile.AppID = profile.MetadataID
-		profile.StoreAppID = profile.MetadataID
-		profile.GOGID = ""
 		if eng.StoreRegistry != nil {
 			if p, ok := eng.StoreRegistry.Get("steam"); ok {
 				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
@@ -424,9 +415,6 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 			}
 		}
 	case "gog":
-		profile.GOGID = profile.MetadataID
-		profile.StoreAppID = ""
-		profile.AppID = "0"
 		if eng.StoreRegistry != nil {
 			if p, ok := eng.StoreRegistry.Get("gog"); ok {
 				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
@@ -435,10 +423,7 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 			}
 		}
 	default:
-		// Generic metadata provider (e.g. RAWG, PCGW, etc.)
-		profile.AppID = "0"
-		profile.StoreAppID = ""
-		profile.GOGID = ""
+		// Generic metadata provider (e.g. RAWG, etc.)
 		if eng.StoreRegistry != nil {
 			if p, ok := eng.StoreRegistry.Get(storeNameLower); ok {
 				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {

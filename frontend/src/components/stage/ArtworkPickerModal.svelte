@@ -6,10 +6,11 @@
   import { isSamePath } from '../../utils/game.js';
 
   export let game = null;
+  export let initialTab = 'cover';
 
   const dispatch = createEventDispatcher();
 
-  let assetType = 'cover'; // 'cover' | 'banner' | 'hero' | 'logo'
+  let assetType = initialTab || 'cover'; // 'cover' | 'banner' | 'hero' | 'logo'
   let query = '';
   let options = [];
   let isLoading = false;

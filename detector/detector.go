@@ -412,16 +412,12 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		if profile.SourceOverride != "" {
 			info.Source = profile.SourceOverride
 		}
-		if profile.MetadataProvider != "" {
-			info.Store = profile.MetadataProvider
-		} else if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(info.Source)) {
+		if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(info.Source)) {
 			info.Store = profile.Store
 		}
 		if profile.MetadataID != "" {
 			if strings.EqualFold(profile.MetadataProvider, "steam") {
-				info.AppID = profile.MetadataID
 				if num, ok := util.ParseAppID(profile.MetadataID); ok && num > 0 {
-					info.NumericAppID = num
 					info.ExternalIDs.SteamAppID = num
 				}
 			} else if strings.EqualFold(profile.MetadataProvider, "gog") {

@@ -34,8 +34,6 @@ type Config struct {
 	WinePrefix         string            `json:"wine_prefix,omitempty"`
 	MangoHud           bool              `json:"mangohud,omitempty"`
 	DXVKHud            string            `json:"dxvk_hud,omitempty"`
-	WineFullscreenFSR  bool              `json:"wine_fullscreen_fsr,omitempty"`
-	ProtonNVAPI        bool              `json:"proton_nvapi,omitempty"`
 	TransferSpeedLimit int64             `json:"transfer_speed_limit,omitempty"`
 	GlobalEnv          map[string]string `json:"global_env,omitempty"`
 
@@ -110,8 +108,6 @@ func DefaultConfig() *Config {
 		Normalize:            true,
 		WinePrefix:           "",
 		MangoHud:             false,
-		WineFullscreenFSR:    false,
-		ProtonNVAPI:          false,
 	}
 }
 

@@ -290,6 +290,9 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		if info.Source != "GOG" {
 			t.Errorf("expected physical Source to remain 'GOG', got %s", info.Source)
 		}
+		if info.Store != "GOG" {
+			t.Errorf("expected physical Store to remain 'GOG', got %s", info.Store)
+		}
 		if info.EffectiveMetadataProvider() != "steam" {
 			t.Errorf("expected EffectiveMetadataProvider 'steam', got %s", info.EffectiveMetadataProvider())
 		}
@@ -314,6 +317,9 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		}
 		if info.Source != "Standalone" {
 			t.Errorf("expected physical Source 'Standalone', got %s", info.Source)
+		}
+		if info.Store != "Standalone" {
+			t.Errorf("expected physical Store 'Standalone', got %s", info.Store)
 		}
 		if info.EffectiveMetadataProvider() != "gog" {
 			t.Errorf("expected EffectiveMetadataProvider 'gog', got %s", info.EffectiveMetadataProvider())

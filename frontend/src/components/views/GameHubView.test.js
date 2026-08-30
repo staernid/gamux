@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GameHubView from './GameHubView.svelte';
 import { selectedGame, activeView } from '../../stores/library.js';
 import { tasksStore } from '../../stores/tasks.js';
-import { drawerDraft } from '../../stores/drawerDraft.js';
 import { normalizeGame } from '../../utils/game.js';
 import { AppAPI } from '../../api/app.js';
 import { get } from 'svelte/store';
@@ -31,17 +30,18 @@ describe('GameHubView Component', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders hero banner with game title, platform, size, and 5 consolidated primary tabs', async () => {
+  it('renders hero banner with game title, platform, size, and 6 consolidated primary tabs', async () => {
     render(GameHubView);
 
     expect(screen.getByRole('heading', { name: 'Cyberpunk 2077', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText(/#1091500/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Play Now')).toBeInTheDocument();
 
-    // 5 primary tabs
+    // 6 primary tabs
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Community$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Settings$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^General$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Environment$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Saves$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Files & Diagnostics$/i })).toBeInTheDocument();
   });
@@ -59,26 +59,23 @@ describe('GameHubView Component', () => {
     expect(screen.getByText('SteamDB')).toBeInTheDocument();
   });
 
-  it('switches between primary tabs and sub-tabs cleanly', async () => {
+  it('switches between primary tabs cleanly', async () => {
     render(GameHubView);
 
-    // Switch to Settings tab
-    const settingsBtn = screen.getByRole('button', { name: /^Settings$/i });
-    await fireEvent.click(settingsBtn);
-    expect(screen.getByText('Save Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Launch & Identity')).toBeInTheDocument();
-    expect(screen.getByText('Runner & Compatibility')).toBeInTheDocument();
-    expect(screen.getByText('Emulation & DRM')).toBeInTheDocument();
-    expect(screen.getByText('Environment')).toBeInTheDocument();
+    // Switch to General tab
+    const generalBtn = screen.getByRole('button', { name: /^General$/i });
+    await fireEvent.click(generalBtn);
+    expect(screen.getByText('Identity, Source & Artwork')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Configure Source/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Match Metadata|Change Match/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open Artwork Hub/i })).toBeInTheDocument();
+    expect(screen.getByText('Target Executable')).toBeInTheDocument();
 
-    // Switch to Runner & Compatibility sub-tab
-    const runnerSubBtn = screen.getByRole('button', { name: /Runner & Compatibility/i });
-    await fireEvent.click(runnerSubBtn);
-    expect(screen.getByText('Execution & Compatibility')).toBeInTheDocument();
-    expect(screen.getByText('Runner Engine')).toBeInTheDocument();
-    expect(screen.getByText('MangoHud Performance HUD')).toBeInTheDocument();
-    expect(screen.getByText('Wine Fullscreen FSR Upscaling')).toBeInTheDocument();
-    expect(screen.getByText('Proton NVAPI & DLSS Integration')).toBeInTheDocument();
+    // Switch to Environment tab
+    const envBtn = screen.getByRole('button', { name: /^Environment$/i });
+    await fireEvent.click(envBtn);
+    expect(screen.getByText('Runner & Prefix')).toBeInTheDocument();
+    expect(screen.getByText('MangoHud Overlay')).toBeInTheDocument();
 
     // Switch to Files & Diagnostics
     const filesBtn = screen.getByRole('button', { name: /^Files & Diagnostics$/i });
@@ -121,13 +118,12 @@ describe('GameHubView Component', () => {
     expect(openDirSpy).toHaveBeenCalledWith('/home/user/Games/Cyberpunk 2077');
   });
 
-  it('switches to Settings tab when X key is pressed', async () => {
+  it('switches to General tab when X key is pressed', async () => {
     render(GameHubView);
 
     await fireEvent.keyDown(window, { key: 'x' });
 
-    expect(await screen.findByText('Save Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Target Executable')).toBeInTheDocument();
+    expect(await screen.findByText('Target Executable')).toBeInTheDocument();
   });
 
   it('keeps Overview tab accessible and renders unlinked card for standalone titles', async () => {
@@ -153,7 +149,6 @@ describe('GameHubView Component', () => {
   });
 
   it('renders live inline task progress HUD and disables primary action button when an operation is running for the active game', async () => {
-    // Dispatch an active operation event for this game
     tasksStore.handleTaskEvent({
       type: 'task:started',
       id: 'task_test_apply_1',
@@ -172,7 +167,6 @@ describe('GameHubView Component', () => {
 
     render(GameHubView);
 
-    // Live Task Progress HUD is displayed
     expect(screen.getByText('APPLYING SETUP')).toBeInTheDocument();
     expect(screen.getByText('GBE Steam Client Patching')).toBeInTheDocument();
     expect(screen.getByText('Patching steamclient64.dll wrapper...')).toBeInTheDocument();
@@ -180,23 +174,28 @@ describe('GameHubView Component', () => {
     expect(screen.getByRole('button', { name: /View Tasks/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Cancel/i })).toBeInTheDocument();
 
-    // Primary action button reflects active task and is disabled
     const busyBtn = screen.getByRole('button', { name: /Task in Progress\.\.\./i });
     expect(busyBtn).toBeInTheDocument();
     expect(busyBtn).toBeDisabled();
   });
 
-  it('displays save confirmation when configuration is saved', async () => {
-    vi.spyOn(drawerDraft, 'save').mockResolvedValue(true);
+  it('toggles inline Source and Metadata setup wizards in General tab', async () => {
     render(GameHubView);
 
-    // Switch to Settings tab
-    const settingsBtn = screen.getByRole('button', { name: /^Settings$/i });
-    await fireEvent.click(settingsBtn);
+    // Navigate to General tab
+    const generalBtn = screen.getByRole('button', { name: /^General$/i });
+    await fireEvent.click(generalBtn);
 
-    const saveBtn = screen.getByRole('button', { name: /Save Configuration/i });
-    await fireEvent.click(saveBtn);
+    // Toggle Source Setup Wizard
+    const configSourceBtn = screen.getByRole('button', { name: /Configure Source/i });
+    await fireEvent.click(configSourceBtn);
+    expect(screen.getByText('Configure Physical Installation Source')).toBeInTheDocument();
+    expect(screen.getByText('Close Source Setup')).toBeInTheDocument();
 
-    expect(await screen.findByText('Saved ✓')).toBeInTheDocument();
+    // Toggle Metadata Wizard (should close Source Wizard)
+    const matchMetaBtn = screen.getByRole('button', { name: /Match Metadata|Change Match/i });
+    await fireEvent.click(matchMetaBtn);
+    expect(screen.getByText('Match Online Store Metadata')).toBeInTheDocument();
+    expect(screen.queryByText('Configure Physical Installation Source')).not.toBeInTheDocument();
   });
 });

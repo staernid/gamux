@@ -64,6 +64,43 @@ const DEFAULT_MOCKS = {
 
 
   openURL: () => Promise.resolve(),
+  getGameMetadata: (provider, id) => {
+    const p = (provider || 'steam').toLowerCase();
+    if (p === 'rawg') {
+      return Promise.resolve({
+        name: 'RAWG Game Title',
+        short_description: 'Detailed RAWG catalog synopsis and open database lore.',
+        detailed_description: 'Detailed RAWG catalog synopsis and open database lore.',
+        about_the_game: 'Detailed RAWG catalog synopsis and open database lore.',
+        developers: ['RAWG Verified Dev'],
+        publishers: ['RAWG Publisher'],
+        genres: ['Action', 'Adventure'],
+        release_date: '2021-05-18'
+      });
+    }
+    if (p === 'gog') {
+      return Promise.resolve({
+        name: 'GOG DRM-Free Title',
+        short_description: 'DRM-free release on GOG.com with complete offline installers and extras.',
+        detailed_description: 'DRM-free release on GOG.com with complete offline installers and extras.',
+        about_the_game: 'DRM-free release on GOG.com with complete offline installers and extras.',
+        developers: ['CD PROJEKT RED'],
+        publishers: ['GOG Ltd'],
+        genres: ['RPG'],
+        release_date: 'May 19, 2015'
+      });
+    }
+    return Promise.resolve({
+      name: 'Cyberpunk 2077',
+      short_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
+      detailed_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
+      about_the_game: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in the world of Night City.',
+      developers: ['CD PROJEKT RED'],
+      publishers: ['CD PROJEKT RED'],
+      genres: ['RPG', 'Action', 'Open World', 'Sci-Fi'],
+      release_date: 'Dec 10, 2020'
+    });
+  },
   getGameDetails: (appId) => Promise.resolve({
     name: 'Cyberpunk 2077',
     short_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
@@ -81,8 +118,12 @@ const DEFAULT_MOCKS = {
     used_bytes: 606541283328,   // 564 GiB
   }),
   searchStoreGames: () => [
-    { id: '1091500', name: 'Cyberpunk 2077', store: 'steam' },
-    { id: '292030', name: 'The Witcher 3: Wild Hunt', store: 'steam' }
+    { id: '1091500', name: 'Cyberpunk 2077', store: 'steam', release_date: '2020' },
+    { id: '292030', name: 'The Witcher 3: Wild Hunt', store: 'steam', release_date: '2015' },
+    { id: '1207658924', name: 'The Witcher 3: Wild Hunt', store: 'gog', release_date: '2015' },
+    { id: '3498', name: 'Grand Theft Auto V', store: 'rawg', release_date: '2013-09-17' },
+    { id: '4200', name: 'Portal 2', store: 'rawg', release_date: '2011-04-18' },
+    { id: '41494', name: 'Cyberpunk 2077', store: 'rawg', release_date: '2020-12-10' }
   ],
   queryArtworkOptions: (query) => [
     {

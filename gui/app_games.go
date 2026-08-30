@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
@@ -259,19 +260,24 @@ type GameMetadataDetails struct {
 	ReleaseDate         string   `json:"release_date"`
 }
 
-// GetGameDetails fetches store metadata and game description for a given AppID or store.
-func (a *App) GetGameDetails(appID string) (*GameMetadataDetails, error) {
-	if appID == "" || appID == "0" {
-		return nil, fmt.Errorf("invalid app id")
+// GetGameMetadata fetches store metadata and game description for a specific provider (steam, gog, rawg) and ID.
+func (a *App) GetGameMetadata(provider string, id string) (*GameMetadataDetails, error) {
+	cleanID := strings.TrimSpace(id)
+	cleanProvider := strings.ToLower(strings.TrimSpace(provider))
+	if cleanID == "" || cleanID == "0" || cleanProvider == "none" || cleanProvider == "standalone" {
+		return nil, fmt.Errorf("no metadata for unlinked game")
 	}
 
 	if a.Engine == nil || a.Engine.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
 
-	// 1. Try Steam provider first for numeric or Steam AppIDs
-	if p, ok := a.Engine.StoreRegistry.Get("steam"); ok {
-		if meta, err := p.GetMetadata(a.getContext(), appID); err == nil && meta != nil && meta.Name != "" {
+	if cleanProvider == "" {
+		cleanProvider = "steam"
+	}
+
+	if p, ok := a.Engine.StoreRegistry.Get(cleanProvider); ok {
+		if meta, err := p.GetMetadata(a.getContext(), cleanID); err == nil && meta != nil && meta.Name != "" {
 			return &GameMetadataDetails{
 				Name:                meta.Name,
 				ShortDescription:    meta.Summary,
@@ -286,27 +292,12 @@ func (a *App) GetGameDetails(appID string) (*GameMetadataDetails, error) {
 		}
 	}
 
-	// 2. Try remaining registered store/metadata providers (GOG, RAWG, etc.)
-	for _, p := range a.Engine.StoreRegistry.List() {
-		if p.ID() == "steam" || p.ID() == "steamgriddb" {
-			continue
-		}
-		if meta, err := p.GetMetadata(a.getContext(), appID); err == nil && meta != nil && meta.Name != "" {
-			return &GameMetadataDetails{
-				Name:                meta.Name,
-				ShortDescription:    meta.Summary,
-				DetailedDescription: meta.Summary,
-				AboutTheGame:        meta.Summary,
-				HeaderImage:         meta.HeaderImage,
-				Developers:          meta.Developers,
-				Publishers:          meta.Publishers,
-				Genres:              meta.Genres,
-				ReleaseDate:         meta.ReleaseDate,
-			}, nil
-		}
-	}
+	return nil, fmt.Errorf("metadata not found for provider %s and id %s", cleanProvider, cleanID)
+}
 
-	return nil, fmt.Errorf("metadata not found for id %s", appID)
+// GetGameDetails fetches store metadata and game description for a given AppID or store.
+func (a *App) GetGameDetails(appID string) (*GameMetadataDetails, error) {
+	return a.GetGameMetadata("steam", appID)
 }
 
 // FetchNews retrieves news and patch note items for a Steam AppID.

@@ -574,10 +574,26 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 	if opts.AppID == 0 {
 		return nil, fmt.Errorf("invalid Steam AppID")
 	}
-	if opts.TargetDir == "" || opts.TargetDir == "." {
+	// Check if TargetDir is empty, ".", or points directly to a configured games library root
+	isLibraryRoot := false
+	if eng.Config != nil && opts.TargetDir != "" {
+		canonicalTarget := util.CanonicalPath(opts.TargetDir)
+		for _, lib := range eng.Config.LibraryPaths {
+			if canonicalTarget != "" && canonicalTarget == util.CanonicalPath(lib) {
+				isLibraryRoot = true
+				break
+			}
+		}
+	}
+
+	if opts.TargetDir == "" || opts.TargetDir == "." || isLibraryRoot {
 		if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", opts.AppID)); err == nil && installDir != "" {
 			if steam.IsSoundtrack(appType) || opts.Platform == "soundtrack" {
 				opts.TargetDir = filepath.Join(util.GetMusicDir(), installDir)
+			} else if isLibraryRoot {
+				opts.TargetDir = filepath.Join(opts.TargetDir, installDir)
+			} else if opts.TargetDir == "" && eng.Config != nil && len(eng.Config.LibraryPaths) > 0 {
+				opts.TargetDir = filepath.Join(eng.Config.LibraryPaths[0], installDir)
 			} else {
 				opts.TargetDir = installDir
 			}

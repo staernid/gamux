@@ -1,6 +1,7 @@
 <script>
   export let label = '';
   export let description = '';
+  export let tooltip = '';
   export let forId = '';
   export let badge = '';
   export let badgeColor = 'cyan';
@@ -14,19 +15,21 @@
     purple: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     slate: 'bg-slate-800 text-slate-300 border-slate-700'
   };
+
+  $: effectiveDescription = description || tooltip;
 </script>
 
-<div class="{inline ? 'flex flex-col sm:flex-row sm:items-center justify-between gap-3' : 'space-y-2'} p-3 sm:p-3.5 bg-[#0a0a0f] border border-[#1e1e2c] rounded-xl hover:border-[#2a2a3e] transition-colors {className}">
-  {#if label || description}
-    <div class="space-y-0.5 min-w-0 {inline ? 'sm:max-w-md md:max-w-lg' : 'w-full'}">
-      <div class="flex items-center space-x-2">
+<div class="{inline ? 'flex flex-col sm:flex-row sm:items-center justify-between gap-3' : 'space-y-1.5'} p-2 rounded-lg transition-colors {className}">
+  {#if label || effectiveDescription}
+    <div class="space-y-0.5 min-w-0 {inline ? 'flex-1 sm:max-w-md' : 'w-full'}">
+      <div class="flex items-center space-x-1.5 flex-wrap">
         {#if label}
           {#if forId}
-            <label for={forId} class="block text-xs font-bold text-slate-200 cursor-pointer">
+            <label for={forId} class="block text-xs font-bold text-slate-200 cursor-pointer truncate">
               {label}
             </label>
           {:else}
-            <span class="block text-xs font-bold text-slate-200">
+            <span class="block text-xs font-bold text-slate-200 truncate">
               {label}
             </span>
           {/if}
@@ -37,9 +40,9 @@
           </span>
         {/if}
       </div>
-      {#if description}
+      {#if effectiveDescription}
         <p class="text-[11px] text-slate-400 leading-snug">
-          {description}
+          {effectiveDescription}
         </p>
       {/if}
     </div>
@@ -49,3 +52,4 @@
     <slot />
   </div>
 </div>
+

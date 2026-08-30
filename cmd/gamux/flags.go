@@ -69,6 +69,19 @@ func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, stri
 	}
 
 	if customDir != "" {
+		if appID > 0 && activeConfig != nil {
+			canonicalCustom := util.CanonicalPath(customDir)
+			for _, lib := range activeConfig.LibraryPaths {
+				if canonicalCustom != "" && canonicalCustom == util.CanonicalPath(lib) {
+					if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", appID)); err == nil && installDir != "" {
+						if steam.IsSoundtrack(appType) {
+							return appID, filepath.Join(util.GetMusicDir(), installDir)
+						}
+						return appID, filepath.Join(customDir, installDir)
+					}
+				}
+			}
+		}
 		return appID, customDir
 	}
 

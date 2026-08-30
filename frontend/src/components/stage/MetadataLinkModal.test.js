@@ -18,17 +18,17 @@ describe('MetadataLinkModal Component', () => {
     expect(screen.getByText('Steam')).toBeInTheDocument();
     expect(screen.getByText('GOG.com')).toBeInTheDocument();
     expect(screen.getByText('RAWG Video Games Database')).toBeInTheDocument();
-    expect(screen.getByText('Standalone / DRM-Free')).toBeInTheDocument();
+    expect(screen.getByText('None (Unlinked)')).toBeInTheDocument();
   });
 
-  it('switches to Standalone mode explanation', async () => {
+  it('switches to None (Unlinked) explanation', async () => {
     render(MetadataLinkModal, { props: { game: mockGame } });
 
-    const standaloneTab = screen.getByText('Standalone / DRM-Free');
-    await fireEvent.click(standaloneTab);
+    const noneTab = screen.getByText('None (Unlinked)');
+    await fireEvent.click(noneTab);
 
-    expect(screen.getByText(/Standalone \/ Custom Non-Store Configuration/i)).toBeInTheDocument();
-    expect(screen.getByText(/Set as Standalone Game/i)).toBeInTheDocument();
+    expect(screen.getByText(/None \(Unlinked Metadata\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Set None \(Unlinked\)/i)).toBeInTheDocument();
   });
 
   it('renders Reset to Auto button to unset metadata overrides', () => {

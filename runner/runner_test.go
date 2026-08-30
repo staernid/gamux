@@ -17,13 +17,11 @@ import (
 
 func TestResolveEffectiveOptions(t *testing.T) {
 	cfg := &config.Config{
-		OperatingMode:     ModeStandalone,
-		DefaultRunner:     RunnerUMU,
-		WinePrefix:        "~/.wine",
-		MangoHud:          true,
-		WineFullscreenFSR: true,
-		ProtonNVAPI:       true,
-		DXVKHud:           "fps",
+		OperatingMode: ModeStandalone,
+		DefaultRunner: RunnerUMU,
+		WinePrefix:    "~/.wine",
+		MangoHud:      true,
+		DXVKHud:       "fps",
 	}
 
 	opts := LaunchOptions{
@@ -42,12 +40,6 @@ func TestResolveEffectiveOptions(t *testing.T) {
 	}
 	if resolved.MangoHud == nil || !*resolved.MangoHud {
 		t.Errorf("expected MangoHud to be true")
-	}
-	if resolved.WineFullscreenFSR == nil || !*resolved.WineFullscreenFSR {
-		t.Errorf("expected WineFullscreenFSR to be true")
-	}
-	if resolved.ProtonNVAPI == nil || !*resolved.ProtonNVAPI {
-		t.Errorf("expected ProtonNVAPI to be true")
 	}
 	if resolved.DXVKHud != "fps" {
 		t.Errorf("expected DXVKHud 'fps', got %s", resolved.DXVKHud)
@@ -139,18 +131,15 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 	_ = os.WriteFile(loaderExe, []byte("MZ..."), 0755)
 	_ = os.WriteFile(gameExe, []byte("MZ..."), 0755)
 
-	trueVal := true
 	opts := LaunchOptions{
-		GameDir:           tmpDir,
-		ExePath:           "game.exe",
-		AppID:             "123",
-		Platform:          "win64",
-		OperatingMode:     ModeStandalone,
-		Runner:            RunnerLinux, // Test exe resolution directly
-		WineFullscreenFSR: &trueVal,
-		ProtonNVAPI:       &trueVal,
-		DXVKHud:           "compiler",
-		WinePrefix:        filepath.Join(tmpDir, "pfx"),
+		GameDir:       tmpDir,
+		ExePath:       "game.exe",
+		AppID:         "123",
+		Platform:      "win64",
+		OperatingMode: ModeStandalone,
+		Runner:        RunnerLinux, // Test exe resolution directly
+		DXVKHud:       "compiler",
+		WinePrefix:    filepath.Join(tmpDir, "pfx"),
 	}
 
 	cmd, err := BuildCommand(context.Background(), cfg, opts)
@@ -173,14 +162,8 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		t.Errorf("expected command args or path to contain direct game exe %s, got path: %s, args: %v", gameExe, cmd.Path, cmd.Args)
 	}
 
-	var hasFSR, hasNVAPI, hasDXVK, hasLoaderDisable, hasLargeAddr, hasSDL, hasEsync, hasFsync, hasShaderCache, hasWineDebug bool
+	var hasDXVK, hasLoaderDisable, hasLargeAddr, hasSDL, hasEsync, hasFsync, hasShaderCache, hasWineDebug bool
 	for _, env := range cmd.Env {
-		if env == "WINE_FULLSCREEN_FSR=1" {
-			hasFSR = true
-		}
-		if env == "PROTON_ENABLE_NVAPI=1" {
-			hasNVAPI = true
-		}
 		if env == "DXVK_HUD=compiler" {
 			hasDXVK = true
 		}
@@ -207,12 +190,6 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		}
 	}
 
-	if !hasFSR {
-		t.Errorf("expected WINE_FULLSCREEN_FSR=1 in env")
-	}
-	if !hasNVAPI {
-		t.Errorf("expected PROTON_ENABLE_NVAPI=1 in env")
-	}
 	if !hasDXVK {
 		t.Errorf("expected DXVK_HUD=compiler in env")
 	}
@@ -247,16 +224,14 @@ func TestLaunchProfile_RoundTrip(t *testing.T) {
 		GameDir:           tmpDir,
 		ExePath:           "Binaries/Win64/Game.exe",
 		ExeArgs:           "-nostartupmovies",
-		AppID:             "730",
-		Name:              "Counter-Strike 2",
-		Platform:          "win64",
-		OperatingMode:     ModeStandalone,
-		Runner:            RunnerUMU,
-		WinePrefix:        "~/.wine-cs2",
-		MangoHud:          &trueVal,
-		WineFullscreenFSR: &trueVal,
-		ProtonNVAPI:       &trueVal,
-		DXVKHud:           "fps",
+		AppID:         "730",
+		Name:          "Counter-Strike 2",
+		Platform:      "win64",
+		OperatingMode: ModeStandalone,
+		Runner:        RunnerUMU,
+		WinePrefix:    "~/.wine-cs2",
+		MangoHud:      &trueVal,
+		DXVKHud:       "fps",
 		CustomEnv: map[string]string{
 			"CUSTOM_VAR": "1",
 		},
@@ -283,7 +258,7 @@ func TestLaunchProfile_RoundTrip(t *testing.T) {
 	if loaded.Runner != opts.Runner {
 		t.Errorf("expected Runner %s, got %s", opts.Runner, loaded.Runner)
 	}
-	if loaded.MangoHud == nil || !*loaded.MangoHud || loaded.WineFullscreenFSR == nil || !*loaded.WineFullscreenFSR || loaded.ProtonNVAPI == nil || !*loaded.ProtonNVAPI {
+	if loaded.MangoHud == nil || !*loaded.MangoHud {
 		t.Errorf("expected environment flags to persist")
 	}
 	if loaded.CustomEnv["CUSTOM_VAR"] != "1" {
@@ -652,9 +627,8 @@ func TestResolveEffectiveOptions_CascadingProfile(t *testing.T) {
 		OperatingMode:     ModeStandalone,
 		Runner:            RunnerWine,
 		WinePrefix:        "~/.wine-cascaded",
-		MangoHud:          &trueVal,
-		WineFullscreenFSR: &trueVal,
-		DXVKHud:           "fps",
+		MangoHud:   &trueVal,
+		DXVKHud:    "fps",
 		CustomEnv: map[string]string{
 			"CASCADED_VAR": "profile_val",
 		},

@@ -7,12 +7,12 @@
 
   const dispatch = createEventDispatcher();
 
-  let targetStore = 'steam'; // 'steam' | 'gog' | 'rawg' | 'standalone'
+  let targetStore = 'steam'; // 'steam' | 'gog' | 'rawg' | 'none'
   let providers = [
     { id: 'steam', display_name: 'Steam', badge: 'AppID' },
     { id: 'gog', display_name: 'GOG.com', badge: 'GOG ID' },
     { id: 'rawg', display_name: 'RAWG Video Games Database', badge: 'Open DB' },
-    { id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' }
+    { id: 'none', display_name: 'None (Unlinked)', badge: 'Local' }
   ];
   let query = '';
   let customId = '';
@@ -28,14 +28,14 @@
     const providerKey = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
     if (providerKey === 'gog') targetStore = 'gog';
     else if (providerKey === 'rawg') targetStore = 'rawg';
-    else if (providerKey === 'standalone' || providerKey === 'custom') targetStore = 'standalone';
+    else if (providerKey === 'none' || providerKey === 'standalone' || providerKey === 'custom') targetStore = 'none';
     else targetStore = 'steam';
 
     query = gameName || '';
     customId = String(game?.metadataId || game?.metadata_id || game?.appId || '');
     if (customId === '0') customId = '';
 
-    if (targetStore !== 'standalone' && query.trim()) {
+    if (targetStore !== 'none' && targetStore !== 'standalone' && query.trim()) {
       handleSearch();
     }
 
@@ -48,7 +48,7 @@
             display_name: p.display_name,
             badge: p.id === 'steam' ? 'AppID' : (p.id === 'gog' ? 'GOG ID' : (p.id === 'rawg' ? 'Open DB' : 'Direct'))
           }));
-        list.push({ id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' });
+        list.push({ id: 'none', display_name: 'None (Unlinked)', badge: 'Local' });
         providers = list;
       }
     }).catch(() => {});
@@ -81,12 +81,14 @@
     if (!gameDir) return;
     isLinking = true;
     try {
-      const idToLink = targetStore === 'standalone' ? '0' : customId.trim();
+      const idToLink = (targetStore === 'none' || targetStore === 'standalone') ? '0' : customId.trim();
       const updated = await AppAPI.linkGameMetadata(gameDir, targetStore, idToLink);
       notificationStore.items.add({
         type: 'success',
         title: 'Metadata Linked',
-        message: `Linked ${gameName} to ${targetStore.toUpperCase()} ${idToLink ? `(#${idToLink})` : ''}`
+        message: targetStore === 'none' || targetStore === 'standalone' || !idToLink || idToLink === '0'
+          ? `Unlinked metadata for ${gameName}`
+          : `Linked ${gameName} to ${targetStore.toUpperCase()} (#${idToLink})`
       });
       dispatch('updated', updated);
       dispatch('close');
@@ -188,8 +190,8 @@
 
   <!-- Main Modal Content Area -->
   <div class="flex-1 max-w-4xl w-full mx-auto overflow-y-auto pr-2 custom-scrollbar space-y-4">
-    {#if targetStore === 'standalone'}
-      <!-- Standalone Explanation Card -->
+    {#if targetStore === 'none' || targetStore === 'standalone'}
+      <!-- Unlinked Explanation Card -->
       <div class="bg-[#12121c] border border-[#262638] p-6 rounded-2xl space-y-4">
         <div class="flex items-start space-x-3.5">
           <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
@@ -198,9 +200,9 @@
             </svg>
           </div>
           <div class="space-y-1">
-            <h3 class="text-base font-bold text-white">Standalone / Custom Non-Store Configuration</h3>
+            <h3 class="text-base font-bold text-white">None (Unlinked Metadata)</h3>
             <p class="text-xs text-slate-400 leading-relaxed">
-              Configuring this installation as Standalone disables Steamworks emulator injections (Goldberg Emulator / SteamStub unpacking requirements). The game will be executed directly via your selected runner (Wine, Proton, or Native Linux).
+              Unlinks the title from online store scrapers. Gamux will display local directory metadata, custom artwork, and offline launch profiles without pulling online lore or achievements.
             </p>
           </div>
         </div>
@@ -210,9 +212,9 @@
             type="button"
             on:click={handleApplyLink}
             disabled={isLinking}
-            class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-950/50 disabled:opacity-50"
+            class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-950/50 disabled:opacity-50 cursor-pointer"
           >
-            {isLinking ? 'Updating...' : 'Set as Standalone Game'}
+            {isLinking ? 'Updating...' : 'Set None (Unlinked)'}
           </button>
         </div>
       </div>

@@ -66,7 +66,6 @@ func TestSaveConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.OperatingMode = "standalone"
 	cfg.MangoHud = true
-	cfg.WineFullscreenFSR = true
 	cfg.Language = "english"
 
 	if err := SaveConfig(cfg, configFile); err != nil {
@@ -78,7 +77,7 @@ func TestSaveConfig(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if !loaded.MangoHud || !loaded.WineFullscreenFSR || loaded.Language != "english" {
+	if !loaded.MangoHud || loaded.Language != "english" {
 		t.Errorf("expected saved settings to persist, got %+v", loaded)
 	}
 }

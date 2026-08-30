@@ -76,6 +76,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 When touching anything under `frontend/` or the Wails bridge in `gui/`:
 
 ### The Mandatory 4-Stage GUI Diagnostic Gate
+
 Before making code edits on GUI bugs or async lifecycle issues:
 
 1. **Phase 1: Trace Before Touch**:
@@ -99,7 +100,6 @@ Before making code edits on GUI bugs or async lifecycle issues:
 4. **Phase 4: Visual & Invariant Verification Gate**:
      - **Check**: `cd frontend && npm run check` (Svelte type & syntax validation).
      - **Audit & Test**: `make test-frontend` (Vitest test suite + automated invariant audit).
-     - **Visual Snapshot**: `make gui-snap` $\rightarrow$ inspect generated `.gui-snapshots/*.png` with `view_file` to visually verify UI alignment and states.
      - **Build**: `make build-gui` (Full asset bundling and Go WebKit binary compilation).
 
 ---
@@ -107,19 +107,21 @@ Before making code edits on GUI bugs or async lifecycle issues:
 ## Development Workflow
 
 ### One-Command Full Verification
+
 ```bash
 make check             # Runs linters, Go race tests, Svelte check, Vitest suite, GUI invariant audit, and builds binaries
 ```
 
 ### Diagnostic & Inspection Commands
+
 ```bash
 make gui-audit         # Run automated GUI store and event invariant audit
 make gui-trace         # Run lifecycle trace scenario in headless browser and print event table
 make gui-dump          # Dump entire GUI store state, timeline, and audit report as JSON
-make gui-snap          # Capture full suite of headless UI view snapshots into .gui-snapshots/
 ```
 
 ### Individual Target Commands
+
 ```bash
 make test              # Run both Go and Frontend unit tests (including GUI invariant audit)
 make test-go           # Run Go tests with race detection (go test -race ./...)

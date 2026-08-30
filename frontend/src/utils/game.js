@@ -70,8 +70,9 @@ export function normalizeGame(g) {
     officialFileCount: Number(g.official_file_count ?? g.OfficialFileCount ?? g.officialFileCount ?? 0),
     dlcCount: Number(g.dlc_count ?? g.DLCCount ?? g.dlcCount ?? 0),
     achievementCount: Number(g.achievement_count ?? g.AchievementCount ?? g.achievementCount ?? 0),
-    operatingMode: lp?.operating_mode || lp?.OperatingMode || lp?.operatingMode || g.operating_mode || g.OperatingMode || g.operatingMode || 'standalone',
-    runner: lp?.runner || lp?.Runner || g.runner || g.Runner || 'umu',
+    operatingMode: lp?.operating_mode || lp?.OperatingMode || lp?.operatingMode || g.operating_mode || g.OperatingMode || g.operatingMode || '',
+    runner: lp?.runner || lp?.Runner || g.runner || g.Runner || '',
+    protonPath: normalizePath(lp?.proton_path || lp?.ProtonPath || lp?.protonPath || g.proton_path || g.ProtonPath || g.protonPath || ''),
     winePrefix: normalizePath(lp?.wine_prefix || lp?.WinePrefix || lp?.winePrefix || g.wine_prefix || g.WinePrefix || g.winePrefix || ''),
     currentLanguage: g.current_language || g.CurrentLanguage || g.currentLanguage || '',
     supportedLanguages: g.supported_languages || g.SupportedLanguages || g.supportedLanguages || [],
@@ -114,8 +115,11 @@ export function hasMetadataMatch(game) {
   if (!game) return false;
   const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
   const provider = (game.metadataProvider || game.metadata_provider || game.MetadataProvider || lp?.metadata_provider || lp?.MetadataProvider || '').toLowerCase();
+  if (provider === 'none' || provider === 'standalone' || provider === 'custom') {
+    return false;
+  }
   const metaId = String(game.metadataId || game.metadata_id || game.MetadataID || lp?.metadata_id || lp?.MetadataID || '');
-  if (metaId && metaId !== '0' && metaId !== 'undefined' && metaId !== 'null' && provider !== 'standalone' && provider !== 'custom') {
+  if (metaId && metaId !== '0' && metaId !== 'undefined' && metaId !== 'null') {
     return true;
   }
   const appId = String(game.appId || game.app_id || '');
@@ -147,6 +151,9 @@ export function getMetadataInfo(game) {
   if (!game) return { provider: 'None', id: '' };
   const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
   const provider = (game.metadataProvider || game.metadata_provider || game.MetadataProvider || lp?.metadata_provider || lp?.MetadataProvider || '').toLowerCase();
+  if (provider === 'none' || provider === 'standalone' || provider === 'custom') {
+    return { provider: 'None', id: '' };
+  }
   const metaId = String(game.metadataId || game.metadata_id || game.MetadataID || lp?.metadata_id || lp?.MetadataID || '');
   const appId = String(game.appId || game.app_id || game.AppID || '');
   const gogId = String(game.gogId || game.gog_id || game.GOGID || lp?.gog_id || '');
@@ -160,7 +167,7 @@ export function getMetadataInfo(game) {
   if (provider === 'rawg') {
     return { provider: 'RAWG', id: metaId };
   }
-  if (provider && provider !== 'standalone' && provider !== 'custom' && provider !== 'none') {
+  if (provider) {
     return { provider: provider.toUpperCase(), id: metaId };
   }
   if (isSteamApp(appId)) {
@@ -169,7 +176,7 @@ export function getMetadataInfo(game) {
   if (gogId && gogId !== '0') {
     return { provider: 'GOG', id: gogId };
   }
-  return { provider: 'Standalone', id: '' };
+  return { provider: 'None', id: '' };
 }
 
 export function getPlatformType(game) {

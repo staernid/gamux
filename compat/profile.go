@@ -118,8 +118,8 @@ func hydrateFallbacks(p *domain.LaunchProfile, gameDir string) {
 		}
 	}
 
-	if p.Store == "" {
-		if p.AppID != "" && p.AppID != "0" {
+	if p.Store == "" && p.MetadataProvider == "" {
+		if p.AppID != "" && p.AppID != "0" && p.StoreAppID != "" {
 			p.Store = domain.StoreSteam
 		} else if p.GOGID != "" {
 			p.Store = domain.StoreGOG

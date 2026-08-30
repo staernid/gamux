@@ -207,8 +207,6 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 	}
 	if game.LaunchProfile != nil {
 		opts.MangoHud = game.LaunchProfile.MangoHud
-		opts.WineFullscreenFSR = game.LaunchProfile.WineFullscreenFSR
-		opts.ProtonNVAPI = game.LaunchProfile.ProtonNVAPI
 		opts.DXVKHud = game.LaunchProfile.DXVKHud
 		opts.CustomEnv = game.LaunchProfile.CustomEnv
 	}
@@ -231,12 +229,6 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 		}
 		if ov.MangoHud != nil {
 			opts.MangoHud = ov.MangoHud
-		}
-		if ov.WineFullscreenFSR != nil {
-			opts.WineFullscreenFSR = ov.WineFullscreenFSR
-		}
-		if ov.ProtonNVAPI != nil {
-			opts.ProtonNVAPI = ov.ProtonNVAPI
 		}
 		if ov.DXVKHud != "" {
 			opts.DXVKHud = ov.DXVKHud
@@ -271,8 +263,6 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 	}
 	if game.LaunchProfile != nil {
 		opts.MangoHud = game.LaunchProfile.MangoHud
-		opts.WineFullscreenFSR = game.LaunchProfile.WineFullscreenFSR
-		opts.ProtonNVAPI = game.LaunchProfile.ProtonNVAPI
 		opts.DXVKHud = game.LaunchProfile.DXVKHud
 		opts.CustomEnv = game.LaunchProfile.CustomEnv
 	}

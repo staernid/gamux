@@ -1,6 +1,7 @@
 <script>
   export let title = '';
   export let description = '';
+  export let tooltip = '';
   export let badge = '';
   export let badgeColor = 'cyan'; // 'cyan' | 'emerald' | 'amber' | 'purple' | 'slate'
   export let className = '';
@@ -12,33 +13,28 @@
     purple: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     slate: 'bg-slate-800 text-slate-300 border-slate-700'
   };
+
+  $: effectiveTooltip = tooltip || description;
 </script>
 
-<div class="bg-[#101016] border border-[#222232] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm {className}">
+<div class="bg-[#0f0f16] border border-[#1e1e2c] rounded-xl overflow-hidden shadow-sm {className}">
   {#if title || $$slots.icon || $$slots.action || description}
-    <div class="flex items-start justify-between gap-3 border-b border-[#1c1c28] pb-3">
-      <div class="space-y-1 min-w-0">
-        <div class="flex items-center space-x-2.5">
-          {#if $$slots.icon}
-            <div class="text-slate-400 flex-shrink-0 flex items-center justify-center">
-              <slot name="icon" />
-            </div>
-          {/if}
-          {#if title}
-            <h3 class="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
-              {title}
-            </h3>
-          {/if}
-          {#if badge}
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border {badgeColors[badgeColor] || badgeColors.cyan}">
-              {badge}
-            </span>
-          {/if}
-        </div>
-        {#if description}
-          <p class="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
-            {description}
-          </p>
+    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#13131c] border-b border-[#1c1c28]">
+      <div class="flex items-center space-x-2 min-w-0">
+        {#if $$slots.icon}
+          <div class="text-slate-400 flex-shrink-0 flex items-center justify-center">
+            <slot name="icon" />
+          </div>
+        {/if}
+        {#if title}
+          <h3 class="text-xs font-bold text-slate-200 tracking-wide uppercase truncate">
+            {title}
+          </h3>
+        {/if}
+        {#if badge}
+          <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border {badgeColors[badgeColor] || badgeColors.cyan}">
+            {badge}
+          </span>
         {/if}
       </div>
 
@@ -50,7 +46,8 @@
     </div>
   {/if}
 
-  <div class="space-y-3">
+  <div class="p-3 sm:p-4">
     <slot />
   </div>
 </div>
+

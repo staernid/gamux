@@ -53,12 +53,6 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 			if res.MangoHud == nil && profile.MangoHud != nil {
 				res.MangoHud = profile.MangoHud
 			}
-			if res.WineFullscreenFSR == nil && profile.WineFullscreenFSR != nil {
-				res.WineFullscreenFSR = profile.WineFullscreenFSR
-			}
-			if res.ProtonNVAPI == nil && profile.ProtonNVAPI != nil {
-				res.ProtonNVAPI = profile.ProtonNVAPI
-			}
 			if res.DXVKHud == "" && profile.DXVKHud != "" {
 				res.DXVKHud = profile.DXVKHud
 			}
@@ -122,12 +116,6 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 
 	if res.MangoHud == nil && cfg.MangoHud {
 		res.MangoHud = util.Ptr(cfg.MangoHud)
-	}
-	if res.WineFullscreenFSR == nil && cfg.WineFullscreenFSR {
-		res.WineFullscreenFSR = util.Ptr(cfg.WineFullscreenFSR)
-	}
-	if res.ProtonNVAPI == nil && cfg.ProtonNVAPI {
-		res.ProtonNVAPI = util.Ptr(cfg.ProtonNVAPI)
 	}
 	if res.DXVKHud == "" && cfg.DXVKHud != "" {
 		res.DXVKHud = cfg.DXVKHud
@@ -239,12 +227,6 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 	// Gaming environment toggles
 	if resolved.MangoHud != nil && *resolved.MangoHud {
 		envMap["MANGOHUD"] = "1"
-	}
-	if resolved.WineFullscreenFSR != nil && *resolved.WineFullscreenFSR {
-		envMap["WINE_FULLSCREEN_FSR"] = "1"
-	}
-	if resolved.ProtonNVAPI != nil && *resolved.ProtonNVAPI {
-		envMap["PROTON_ENABLE_NVAPI"] = "1"
 	}
 	if resolved.DXVKHud != "" {
 		envMap["DXVK_HUD"] = resolved.DXVKHud

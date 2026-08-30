@@ -20,8 +20,6 @@ export namespace config {
 	    wine_prefix?: string;
 	    mangohud?: boolean;
 	    dxvk_hud?: string;
-	    wine_fullscreen_fsr?: boolean;
-	    proton_nvapi?: boolean;
 	    transfer_speed_limit?: number;
 	    global_env?: Record<string, string>;
 	    language?: string;
@@ -57,8 +55,6 @@ export namespace config {
 	        this.wine_prefix = source["wine_prefix"];
 	        this.mangohud = source["mangohud"];
 	        this.dxvk_hud = source["dxvk_hud"];
-	        this.wine_fullscreen_fsr = source["wine_fullscreen_fsr"];
-	        this.proton_nvapi = source["proton_nvapi"];
 	        this.transfer_speed_limit = source["transfer_speed_limit"];
 	        this.global_env = source["global_env"];
 	        this.language = source["language"];
@@ -219,8 +215,6 @@ export namespace domain {
 	    language?: string;
 	    mangohud?: boolean;
 	    dxvk_hud?: string;
-	    wine_fullscreen_fsr?: boolean;
-	    proton_nvapi?: boolean;
 	    dll_overrides?: string;
 	    custom_env?: Record<string, string>;
 	    working_dir?: string;
@@ -259,8 +253,6 @@ export namespace domain {
 	        this.language = source["language"];
 	        this.mangohud = source["mangohud"];
 	        this.dxvk_hud = source["dxvk_hud"];
-	        this.wine_fullscreen_fsr = source["wine_fullscreen_fsr"];
-	        this.proton_nvapi = source["proton_nvapi"];
 	        this.dll_overrides = source["dll_overrides"];
 	        this.custom_env = source["custom_env"];
 	        this.working_dir = source["working_dir"];

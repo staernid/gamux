@@ -23,15 +23,16 @@ describe('drawerDraft Store', () => {
     launchProfile: {
       exe_path: 'Hades.exe',
       exe_args: '-dx11',
-      operating_mode: 'standalone',
+      operating_mode: 'loader',
       runner: 'umu',
+      proton_path: '/custom/proton',
       mangohud: true,
       custom_env: { MY_FLAG: '1' }
     }
   };
 
   const mockGlobalConfig = {
-    operating_mode: 'standalone',
+    operating_mode: 'loader',
     default_runner: 'umu',
     global_env: { GLOBAL_VAR: 'val', MY_FLAG: 'default' },
     normalize: true,
@@ -51,7 +52,9 @@ describe('drawerDraft Store', () => {
     expect(state.appId).toBe('1145360');
     expect(state.exePath).toBe('Hades.exe');
     expect(state.exeArgs).toBe('-dx11');
+    expect(state.operatingMode).toBe('loader');
     expect(state.runner).toBe('umu');
+    expect(state.protonPath).toBe('/custom/proton');
     expect(state.mangoHud).toBe(true);
     expect(state.customEnv).toEqual({ MY_FLAG: '1' });
   });
@@ -122,19 +125,11 @@ describe('drawerDraft Store', () => {
 
     drawerDraft.init(mockGame, mockGlobalConfig);
 
-    // Initial draft from mockGame with operating_mode 'standalone'
-    expect(get(drawerDraft).mode).toBe('standalone');
-
-    // Switch to 'loader'
-    drawerDraft.setField('mode', 'loader');
-    await drawerDraft.save(mockGame);
-    expect(saveSpy).toHaveBeenLastCalledWith(
-      mockGame.gameDir,
-      expect.objectContaining({ operating_mode: 'loader' })
-    );
+    // Initial draft from mockGame with operating_mode 'loader'
+    expect(get(drawerDraft).operatingMode).toBe('loader');
 
     // Switch to 'portable'
-    drawerDraft.setField('mode', 'portable');
+    drawerDraft.setField('operatingMode', 'portable');
     await drawerDraft.save(mockGame);
     expect(saveSpy).toHaveBeenLastCalledWith(
       mockGame.gameDir,
@@ -142,7 +137,7 @@ describe('drawerDraft Store', () => {
     );
 
     // Switch to 'none'
-    drawerDraft.setField('mode', 'none');
+    drawerDraft.setField('operatingMode', 'none');
     await drawerDraft.save(mockGame);
     expect(saveSpy).toHaveBeenLastCalledWith(
       mockGame.gameDir,
@@ -150,11 +145,36 @@ describe('drawerDraft Store', () => {
     );
 
     // Switch to default/inherited ('')
-    drawerDraft.setField('mode', '');
+    drawerDraft.setField('operatingMode', '');
     await drawerDraft.save(mockGame);
     expect(saveSpy).toHaveBeenLastCalledWith(
       mockGame.gameDir,
       expect.objectContaining({ operating_mode: '' })
+    );
+  });
+
+  it('correctly tracks and persists runner and proton path inheritance', async () => {
+    const saveSpy = vi.spyOn(AppAPI, 'saveLaunchProfile').mockResolvedValue({});
+    vi.spyOn(AppAPI, 'inspectGame').mockResolvedValue(mockGame);
+
+    drawerDraft.init(mockGame, mockGlobalConfig);
+
+    // Explicit overrides
+    drawerDraft.setField('runner', 'wine');
+    drawerDraft.setField('protonPath', '/opt/proton-ge');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ runner: 'wine', proton_path: '/opt/proton-ge' })
+    );
+
+    // Reset to default (empty string)
+    drawerDraft.setField('runner', '');
+    drawerDraft.setField('protonPath', '');
+    await drawerDraft.save(mockGame);
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      mockGame.gameDir,
+      expect.objectContaining({ runner: '', proton_path: '' })
     );
   });
 

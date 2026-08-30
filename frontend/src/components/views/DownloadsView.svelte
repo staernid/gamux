@@ -94,6 +94,25 @@
       selectedName = `AppID ${q}`;
       selectedStore = 'steam';
       searchResults = [];
+      const safeName = `AppID_${q}`;
+      if ($libraryPath) {
+        targetDir = `${$libraryPath}/${safeName}`;
+      } else {
+        targetDir = `./${safeName}`;
+      }
+
+      isSearching = true;
+      try {
+        const candidates = await AppAPI.searchStoreGames(q);
+        const match = (candidates || []).find(c => String(c.id || c.AppID) === q);
+        if (match) {
+          selectCandidate(match);
+        }
+      } catch {
+        // Ignored
+      } finally {
+        isSearching = false;
+      }
       return;
     }
 

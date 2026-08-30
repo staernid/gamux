@@ -6,45 +6,64 @@
 
   export let game = null;
 
+  let metadataCache = {}; // In-memory map of `${provider}:${id}` -> metadata
   let metadata = null;
   let isLoading = false;
-  let loadedAppId = null;
+  let currentLookupKey = '';
 
   $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
   $: gameSource = game ? getGameSource(game) : 'Standalone';
-  $: targetLookupId = metaInfo.id || (isSteamApp(game?.appId) ? game.appId : (game?.gogId && game.gogId !== '0' ? game.gogId : ''));
-  $: isSteam = metaInfo.provider === 'Steam';
+  $: providerKey = (metaInfo.provider || '').toLowerCase();
+  $: targetLookupId = metaInfo.id || '';
+  $: lookupKey = (providerKey && providerKey !== 'none' && targetLookupId && targetLookupId !== '0')
+    ? `${providerKey}:${targetLookupId}`
+    : '';
 
-  async function loadMetadata(targetAppId) {
-    if (!targetAppId || targetAppId === '0') {
+  async function loadMetadata(prov, id, key) {
+    if (!key || !prov || prov === 'none' || !id || id === '0') {
       metadata = null;
+      currentLookupKey = '';
       return;
     }
-    if (loadedAppId === targetAppId && metadata) return;
+
+    if (metadataCache[key]) {
+      metadata = metadataCache[key];
+      currentLookupKey = key;
+      return;
+    }
 
     isLoading = true;
     try {
-      const res = await AppAPI.getGameDetails(targetAppId);
+      const res = await AppAPI.getGameMetadata(prov, id);
       if (res && (res.short_description || res.about_the_game || res.detailed_description || res.developers)) {
-        metadata = res;
-        loadedAppId = targetAppId;
+        metadataCache[key] = res;
+        if (lookupKey === key) {
+          metadata = res;
+          currentLookupKey = key;
+        }
       } else {
-        metadata = null;
+        if (lookupKey === key) {
+          metadata = null;
+          currentLookupKey = key;
+        }
       }
     } catch {
-      metadata = null;
+      if (lookupKey === key) {
+        metadata = null;
+        currentLookupKey = key;
+      }
     } finally {
       isLoading = false;
     }
   }
 
-  $: if (targetLookupId && targetLookupId !== loadedAppId && !isLoading) {
-    loadMetadata(targetLookupId);
+  $: if (lookupKey !== currentLookupKey && !isLoading) {
+    loadMetadata(providerKey, targetLookupId, lookupKey);
   }
 
   onMount(() => {
-    if (targetLookupId) {
-      loadMetadata(targetLookupId);
+    if (lookupKey) {
+      loadMetadata(providerKey, targetLookupId, lookupKey);
     }
   });
 

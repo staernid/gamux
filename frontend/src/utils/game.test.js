@@ -49,7 +49,7 @@ describe('Game Data Model & Normalization Helpers', () => {
       LaunchProfile: {
         exe_path: 'bin/x64/Cyberpunk2077.exe',
         exe_args: '-vulkan',
-        operating_mode: 'standalone',
+        operating_mode: 'portable',
         runner: 'wine',
         wine_prefix: '~/.wine'
       }
@@ -72,7 +72,7 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.fileCount).toBe(1420);
     expect(normalized.dlcCount).toBe(3);
     expect(normalized.achievementCount).toBe(44);
-    expect(normalized.operatingMode).toBe('standalone');
+    expect(normalized.operatingMode).toBe('portable');
     expect(normalized.runner).toBe('wine');
     expect(normalized.winePrefix).toBe('~/.wine');
 
@@ -87,6 +87,23 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.app_id).toBeUndefined();
     expect(normalized.DiskSizeBytes).toBeUndefined();
     expect(normalized.disk_size_bytes).toBeUndefined();
+  });
+
+  it('normalizes a clean game without launch profile by leaving overrides empty', () => {
+    const cleanGame = {
+      name: 'Silksong',
+      app_id: '1030300',
+      game_dir: '/home/user/Games/Silksong',
+      store: 'Steam',
+      platform: 'linux',
+      exe_path: 'Silksong.x86_64',
+      state: 'Original',
+    };
+
+    const normalized = normalizeGame(cleanGame);
+    expect(normalized.operatingMode).toBe('');
+    expect(normalized.runner).toBe('');
+    expect(normalized.protonPath).toBe('');
   });
 
   it('calculates game title initials', () => {
@@ -151,11 +168,11 @@ describe('Game Data Model & Normalization Helpers', () => {
     const standaloneGame = {
       store: 'Standalone',
       source: 'Standalone',
-      metadata_provider: 'standalone',
+      metadata_provider: 'none',
       metadata_id: '0',
       app_id: '0'
     };
-    expect(getMetadataInfo(standaloneGame)).toEqual({ provider: 'Standalone', id: '' });
+    expect(getMetadataInfo(standaloneGame)).toEqual({ provider: 'None', id: '' });
     expect(hasMetadataMatch(standaloneGame)).toBe(false);
   });
 });
