@@ -53,6 +53,18 @@ export function setSfxVolume(vol) {
   }
 }
 
+function withAudioContext(fn) {
+  if (!sfxEnabled || sfxVolume <= 0) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  try {
+    fn(ctx);
+  } catch {}
+}
+
 /**
  * Tactile Mechanical Switch / Dial Ratchet Click
  * Synthesizes a crisp, rich physical switch strike:
@@ -62,18 +74,11 @@ export function setSfxVolume(vol) {
  * 4. Low-end tactile thump (220Hz -> 70Hz over 35ms)
  */
 export function playTick() {
-  if (!sfxEnabled || sfxVolume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
+  withAudioContext((ctx) => {
+    const now = ctx.currentTime;
+    if (now - lastTickTime < 0.02) return;
+    lastTickTime = now;
 
-  const now = ctx.currentTime;
-  if (now - lastTickTime < 0.02) return;
-  lastTickTime = now;
-
-  try {
     // Psychoacoustic loudness compensation for short impulse duration
     const vol = Math.min(1.0, sfxVolume * 2.0);
 
@@ -147,21 +152,14 @@ export function playTick() {
     thumpGain.connect(ctx.destination);
     thumpOsc.start(now);
     thumpOsc.stop(now + 0.037);
-  } catch {}
+  });
 }
 
 /**
  * Harmonious acoustic chime / pop for launching or opening game details
  */
 export function playSelect() {
-  if (!sfxEnabled || sfxVolume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
-
-  try {
+  withAudioContext((ctx) => {
     const now = ctx.currentTime;
     
     // Note 1 (D5 ~ 587Hz)
@@ -187,21 +185,14 @@ export function playSelect() {
     gain2.connect(ctx.destination);
     osc2.start(now + 0.015);
     osc2.stop(now + 0.105);
-  } catch {}
+  });
 }
 
 /**
  * Soft descending tone for escaping / backing out
  */
 export function playBack() {
-  if (!sfxEnabled || sfxVolume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
-
-  try {
+  withAudioContext((ctx) => {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -218,21 +209,14 @@ export function playBack() {
 
     osc.start(now);
     osc.stop(now + 0.07);
-  } catch {}
+  });
 }
 
 /**
  * Soft navigation blip for tab cycling
  */
 export function playNav() {
-  if (!sfxEnabled || sfxVolume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
-
-  try {
+  withAudioContext((ctx) => {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -249,5 +233,5 @@ export function playNav() {
 
     osc.start(now);
     osc.stop(now + 0.045);
-  } catch {}
+  });
 }

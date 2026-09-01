@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GameHubView from './GameHubView.svelte';
 import { selectedGame, activeView } from '../../stores/library.js';
 import { tasksStore } from '../../stores/tasks.js';
+import { drawerDraft } from '../../stores/drawerDraft.js';
 import { normalizeGame } from '../../utils/game.js';
 import { AppAPI } from '../../api/app.js';
 import { get } from 'svelte/store';
@@ -66,7 +67,7 @@ describe('GameHubView Component', () => {
     const generalBtn = screen.getByRole('button', { name: /^General$/i });
     await fireEvent.click(generalBtn);
     expect(screen.getByText('Identity, Source & Artwork')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Configure Source/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Match Store|Change Store Match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Match Metadata|Change Match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open Artwork Hub/i })).toBeInTheDocument();
     expect(screen.getByText('Target Executable')).toBeInTheDocument();
@@ -74,7 +75,7 @@ describe('GameHubView Component', () => {
     // Switch to Environment tab
     const envBtn = screen.getByRole('button', { name: /^Environment$/i });
     await fireEvent.click(envBtn);
-    expect(screen.getByText('Runner & Prefix')).toBeInTheDocument();
+    expect(screen.getByText('Runner & Platform')).toBeInTheDocument();
     expect(screen.getByText('MangoHud Overlay')).toBeInTheDocument();
 
     // Switch to Files & Diagnostics
@@ -187,15 +188,47 @@ describe('GameHubView Component', () => {
     await fireEvent.click(generalBtn);
 
     // Toggle Source Setup Wizard
-    const configSourceBtn = screen.getByRole('button', { name: /Configure Source/i });
-    await fireEvent.click(configSourceBtn);
-    expect(screen.getByText('Configure Physical Installation Source')).toBeInTheDocument();
-    expect(screen.getByText('Close Source Setup')).toBeInTheDocument();
+    const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });
+    await fireEvent.click(matchStoreBtn);
+    expect(screen.getByText('Configure Physical Installation Source & Store')).toBeInTheDocument();
+    expect(screen.getByText('Close Matcher')).toBeInTheDocument();
 
     // Toggle Metadata Wizard (should close Source Wizard)
     const matchMetaBtn = screen.getByRole('button', { name: /Match Metadata|Change Match/i });
     await fireEvent.click(matchMetaBtn);
     expect(screen.getByText('Match Online Store Metadata')).toBeInTheDocument();
-    expect(screen.queryByText('Configure Physical Installation Source')).not.toBeInTheDocument();
+    expect(screen.queryByText('Configure Physical Installation Source & Store')).not.toBeInTheDocument();
+  });
+
+  it('searches store candidates and sets AppID in Match Store wizard', async () => {
+    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '620', name: 'Portal 2', store: 'steam', release_date: '2011-04-19' },
+      { id: '400', name: 'Portal', store: 'steam', release_date: '2007-10-10' },
+    ]);
+
+    render(GameHubView);
+
+    // Navigate to General tab
+    const generalBtn = screen.getByRole('button', { name: /^General$/i });
+    await fireEvent.click(generalBtn);
+
+    // Open Match Store
+    const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });
+    await fireEvent.click(matchStoreBtn);
+
+    const searchInput = screen.getByPlaceholderText(/Search STEAM catalogue for AppID/i);
+    await fireEvent.input(searchInput, { target: { value: 'Portal' } });
+
+    const searchBtn = screen.getByRole('button', { name: /^Search$/i });
+    await fireEvent.click(searchBtn);
+
+    expect(await screen.findByText('Found Store Candidates (2)')).toBeInTheDocument();
+    expect(screen.getByText('Portal 2')).toBeInTheDocument();
+
+    const matchBtns = screen.getAllByRole('button', { name: /Match Store/i });
+    await fireEvent.click(matchBtns[0]);
+
+    expect(get(drawerDraft).appId).toBe('620');
   });
 });
+

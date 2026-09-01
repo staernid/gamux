@@ -16,7 +16,7 @@
   $: gameDir = game?.gameDir || '';
   $: appID = game?.appId || '';
   $: activeTransfer = ($activeDownloads || []).find(
-    (t) => String(t.app_id) === String(appID) || (t.game_dir && t.game_dir === gameDir)
+    (t) => String(t.appId) === String(appID) || (t.gameDir && isSamePath(t.gameDir, gameDir))
   );
 
   onMount(async () => {
@@ -173,8 +173,8 @@
         <div class="bg-indigo-500 h-full transition-all duration-300" style="width: {activeTransfer.percent || 0}%"></div>
       </div>
       <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-        <span>{formatBytes(activeTransfer.bytes_downloaded || 0)} / {formatBytes(activeTransfer.total_bytes || 0)}</span>
-        <span>{formatBytes(activeTransfer.speed_bps || 0)}/s</span>
+        <span>{formatBytes(activeTransfer.currentBytes || 0)} / {formatBytes(activeTransfer.totalBytes || 0)}</span>
+        <span>{formatBytes(activeTransfer.speedBps || 0)}/s</span>
       </div>
     </div>
   {/if}

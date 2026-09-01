@@ -24,6 +24,7 @@ func TestParseACF(t *testing.T) {
 	"name"		"Tiny Rogues"
 	"installdir"	"Tiny Rogues"
 	"buildid"	"20241007"
+	"LastUpdated"	"1728300000"
 }`
 
 	data, err := ParseACF(strings.NewReader(rawACF))
@@ -39,6 +40,9 @@ func TestParseACF(t *testing.T) {
 	}
 	if data.InstallDir != "Tiny Rogues" {
 		t.Errorf("expected InstallDir 'Tiny Rogues', got %s", data.InstallDir)
+	}
+	if data.LastUpdated != 1728300000 {
+		t.Errorf("expected LastUpdated 1728300000, got %d", data.LastUpdated)
 	}
 }
 

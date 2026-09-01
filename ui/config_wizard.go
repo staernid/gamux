@@ -30,6 +30,8 @@ func RenderConfigSummary(cfg *config.Config, configPath string) {
 	renderSectionHeader("🔑 API Keys & Authentication")
 	renderConfigRow("steam_web_api_key", maskKey(cfg.SteamWebAPIKey), "(not set)")
 	renderConfigRow("hubcap_api_key", maskKey(cfg.HubcapAPIKey), "(not set)")
+	renderConfigRow("steamgriddb_api_key", maskKey(cfg.SteamGridDBAPIKey), "(not set)")
+	renderConfigRow("rawg_api_key", maskKey(cfg.RAWGAPIKey), "(not set)")
 
 	renderSectionHeader("⚡ Operational Settings")
 	renderConfigRow("operating_mode", fallback(cfg.OperatingMode, defaults.OperatingMode), defaults.OperatingMode)
@@ -99,6 +101,8 @@ func RunConfigWizard(cfg *config.Config, configPath string) error {
 	fmt.Printf("\n%s\n", bold("🔑 CATEGORY 2: API Keys & Remote Services"))
 	cfg.HubcapAPIKey = promptString(reader, "Hubcap Manifest API Key [hubcap_api_key]", cfg.HubcapAPIKey, "(not set)")
 	cfg.SteamWebAPIKey = promptString(reader, "Steam Web API Key [steam_web_api_key]", cfg.SteamWebAPIKey, "(not set)")
+	cfg.SteamGridDBAPIKey = promptString(reader, "SteamGridDB Artwork API Key [steamgriddb_api_key]", cfg.SteamGridDBAPIKey, "(not set)")
+	cfg.RAWGAPIKey = promptString(reader, "RAWG Metadata API Key [rawg_api_key]", cfg.RAWGAPIKey, "(not set)")
 
 	// Section 3: Operational Settings
 	fmt.Printf("\n%s\n", bold("⚡ CATEGORY 3: Operational Settings"))

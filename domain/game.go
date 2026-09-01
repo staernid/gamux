@@ -147,10 +147,15 @@ type ManifestStatus struct {
 	HasUpdate         bool     `json:"has_update"`
 }
 
-// StoreMetadata holds store-sourced remote metadata (news, patch notes).
+// StoreMetadata holds store-sourced remote metadata (news, patch notes, synopsis, credits).
 type StoreMetadata struct {
 	RecentPatchNote string     `json:"recent_patch_note,omitempty"`
 	NewsItems       []NewsItem `json:"news_items,omitempty"`
+	Summary         string     `json:"summary,omitempty"`
+	ReleaseDate     string     `json:"release_date,omitempty"`
+	Developers      []string   `json:"developers,omitempty"`
+	Publishers      []string   `json:"publishers,omitempty"`
+	Genres          []string   `json:"genres,omitempty"`
 }
 
 // AssetLocation encapsulates paths and URLs for a specific graphical asset.
@@ -206,6 +211,9 @@ type GameRecord struct {
 	FileCount          int               `json:"file_count"`
 	DLCCount           int               `json:"dlc_count,omitempty"`
 	AchievementCount   int               `json:"achievement_count,omitempty"`
+	InstalledAt        int64             `json:"installed_at,omitempty"`
+	PlaytimeSeconds    int64             `json:"playtime_seconds,omitempty"`
+	LastPlayed         int64             `json:"last_played,omitempty"`
 	LaunchCandidates   []LaunchCandidate `json:"launch_candidates,omitempty"`
 	Depots             []DepotSummary    `json:"depots,omitempty"`
 	AvailablePlatforms []string          `json:"available_platforms,omitempty"`
@@ -256,6 +264,7 @@ type LaunchProfile struct {
 	CustomLogoURL    string `json:"custom_logo_url,omitempty"`
 	CustomIconURL    string `json:"custom_icon_url,omitempty"`
 	LockedArtwork    bool   `json:"locked_artwork,omitempty"`
+	InstalledAt      int64  `json:"installed_at,omitempty"`
 	PlaytimeSeconds  int64  `json:"playtime_seconds,omitempty"`
 	LastPlayed       int64  `json:"last_played,omitempty"`
 }
@@ -327,7 +336,10 @@ func NewGame(name, gameDir, appID, platform string) *Game {
 			RedistMissing:  make([]string, 0),
 		},
 		StoreMetadata: StoreMetadata{
-			NewsItems: make([]NewsItem, 0),
+			NewsItems:  make([]NewsItem, 0),
+			Developers: make([]string, 0),
+			Publishers: make([]string, 0),
+			Genres:     make([]string, 0),
 		},
 	}
 }
@@ -360,10 +372,27 @@ func (g *Game) EffectiveExeArgs() string {
 	return ""
 }
 
+// NormalizeOperatingMode normalizes alias strings (e.g. "injected", "standalone", "drm-free") to canonical operating modes.
+func NormalizeOperatingMode(mode string) string {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	switch m {
+	case "portable", "injected", "patch", "patched", "portable-patched":
+		return ModePortable
+	case "loader", "loader-configured":
+		return ModeLoader
+	case "none", "standalone", "clean", "drm-free":
+		return ModeNone
+	case "native":
+		return ModeNative
+	default:
+		return m
+	}
+}
+
 // EffectiveOperatingMode returns the active operating mode override from the profile or empty string if unset.
 func (g *Game) EffectiveOperatingMode() string {
 	if g.LaunchProfile != nil && g.LaunchProfile.OperatingMode != "" {
-		return g.LaunchProfile.OperatingMode
+		return NormalizeOperatingMode(g.LaunchProfile.OperatingMode)
 	}
 	return ""
 }
@@ -386,10 +415,18 @@ func (g *Game) EffectiveWinePrefix() string {
 
 // EffectivePlaytime returns the total playtime in seconds and last played timestamp.
 func (g *Game) EffectivePlaytime() (int64, int64) {
-	if g.LaunchProfile != nil {
+	if g.LaunchProfile != nil && (g.LaunchProfile.PlaytimeSeconds > 0 || g.LaunchProfile.LastPlayed > 0) {
 		return g.LaunchProfile.PlaytimeSeconds, g.LaunchProfile.LastPlayed
 	}
-	return 0, 0
+	return g.GameRecord.PlaytimeSeconds, g.GameRecord.LastPlayed
+}
+
+// EffectiveInstalledAt returns the resolved installation timestamp (profile override taking priority over recorded on-disk timestamp).
+func (g *Game) EffectiveInstalledAt() int64 {
+	if g.LaunchProfile != nil && g.LaunchProfile.InstalledAt > 0 {
+		return g.LaunchProfile.InstalledAt
+	}
+	return g.GameRecord.InstalledAt
 }
 
 // SteamAppID returns the numeric AppID if present.
@@ -442,21 +479,22 @@ func (g *Game) IsClean() bool {
 
 // IsLoaderConfigured returns true if Goldberg loader configuration files or binaries are active.
 func (g *Game) IsLoaderConfigured() bool {
-	mode := g.EffectiveOperatingMode()
-	return mode == string(ModeLoader) ||
+	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
+	return mode == ModeLoader ||
 		g.State == "Loader-Configured" ||
 		strings.Contains(strings.ToLower(g.EffectiveExePath()), "steamclient_loader")
 }
 
 // IsPortablePatched returns true if Goldberg emulator libraries are directly injected into the game tree.
 func (g *Game) IsPortablePatched() bool {
-	return g.IsPortable || g.State == "Portable-Patched" || g.HasBackups()
+	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
+	return mode == ModePortable || g.IsPortable || g.State == "Portable-Patched" || g.HasBackups()
 }
 
 // RequiresSteamEmulator returns true if the game requires Steamworks mocking.
 func (g *Game) RequiresSteamEmulator() bool {
-	mode := g.EffectiveOperatingMode()
-	if mode == string(ModeNone) {
+	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
+	if mode == ModeNone || mode == ModeStandalone {
 		return false
 	}
 	if !g.IsSteam() && g.AppID == "" {
@@ -467,19 +505,19 @@ func (g *Game) RequiresSteamEmulator() bool {
 
 // RecomputeState recalculates computed flags (IsPatched, IsPortable, IsReady, HasUpdatesOrIssues).
 func (g *Game) RecomputeState() {
-	mode := g.EffectiveOperatingMode()
-	if len(g.OriginalBackups) > 0 {
+	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
+	if len(g.OriginalBackups) > 0 || mode == ModePortable {
 		g.State = "Portable-Patched"
-	} else if mode == string(ModeNone) {
+	} else if mode == ModeNone {
 		g.State = "Original"
-	} else if g.SettingsDirExists || g.SteamAppIDTxtFound {
+	} else if g.SettingsDirExists || g.SteamAppIDTxtFound || mode == ModeLoader {
 		g.State = "Loader-Configured"
 	} else if g.State == "" {
 		g.State = "Original"
 	}
 
 	g.IsPortable = g.State == "Portable-Patched"
-	g.IsPatched = g.IsPortable || (g.State == "Loader-Configured" && mode != string(ModeNone))
+	g.IsPatched = g.IsPortable || (g.State == "Loader-Configured" && mode != ModeNone)
 	g.HasUpdatesOrIssues = g.IsSteam() && (g.HasUpdate || len(g.ModifiedFiles) > 0 || len(g.MissingFiles) > 0)
 	g.IsReady = g.IsPatched || g.EffectiveExePath() != ""
 }

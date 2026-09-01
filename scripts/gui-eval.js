@@ -266,8 +266,8 @@ async function handleTrace(chromeBin, scenario = 'apply-game-lifecycle') {
   );
 
   console.log(`\n📊 Store Summary:`);
-  console.log(`  • Active Task:`, result.stores.taskQueue.activeTask ? `${result.stores.taskQueue.activeTask.title} (${result.stores.taskQueue.activeTask.percent}%)` : 'None');
-  console.log(`  • Total Active Tasks:`, result.stores.taskQueue.totalCount);
+  console.log(`  • Active Task:`, result.stores.tasks.activeTask ? `${result.stores.tasks.activeTask.title} (${result.stores.tasks.activeTask.percent}%)` : 'None');
+  console.log(`  • Total Active Tasks:`, result.stores.tasks.activeCount);
   console.log(`  • Active Transfers:`, result.stores.transfers.activeCount);
 
   console.log(`\n🩺 Invariant Audit Report:`);

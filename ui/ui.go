@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/staernid/gamux/domain"
@@ -675,6 +676,23 @@ func RenderDetectionSummary(info *domain.Game) {
 	}
 	if info.DiskSizeBytes > 0 {
 		fmt.Printf("  %-18s %s (%d files)\n", bold("Size on Disk:"), green(FormatBytes(info.DiskSizeBytes)), info.FileCount)
+	}
+	playtime, lastPlayed := info.EffectivePlaytime()
+	if playtime > 0 {
+		hours := float64(playtime) / 3600.0
+		if hours < 1.0 {
+			mins := playtime / 60
+			fmt.Printf("  %-18s %s\n", bold("Playtime:"), cyan(fmt.Sprintf("%d mins", mins)))
+		} else {
+			fmt.Printf("  %-18s %s\n", bold("Playtime:"), cyan(fmt.Sprintf("%.1f hrs", hours)))
+		}
+	}
+	if lastPlayed > 0 {
+		fmt.Printf("  %-18s %s\n", bold("Last Played:"), time.Unix(lastPlayed, 0).Format("2006-01-02 15:04:05"))
+	}
+	installedAt := info.EffectiveInstalledAt()
+	if installedAt > 0 {
+		fmt.Printf("  %-18s %s\n", bold("Installed:"), time.Unix(installedAt, 0).Format("2006-01-02 15:04:05"))
 	}
 
 	fmt.Println(dim("------------------------------------------------------------------------"))

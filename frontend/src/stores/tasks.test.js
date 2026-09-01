@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { tasksStore } from './tasks.js';
+import { tasksStore, extractTaskProgress } from './tasks.js';
 
 describe('tasksStore', () => {
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('tasksStore', () => {
     expect(active.length).toBe(1);
     expect(active[0].id).toBe('task_download_1');
     expect(active[0].status).toBe('running');
-    expect(active[0].game_name).toBe('Cyberpunk 2077');
+    expect(active[0].gameName).toBe('Cyberpunk 2077');
 
     // 2. Progress update with speed and eta
     tasksStore.handleTaskEvent({
@@ -42,8 +42,8 @@ describe('tasksStore', () => {
 
     active = get(tasksStore.active);
     expect(active[0].percent).toBe(50.0);
-    expect(active[0].bytes_downloaded).toBe(50000000);
-    expect(active[0].speed_bps).toBe(25000000);
+    expect(active[0].currentBytes).toBe(50000000);
+    expect(active[0].speedBps).toBe(25000000);
     expect(get(tasksStore.totalSpeedBps)).toBe(25000000);
 
     // 3. Pause task
@@ -57,7 +57,7 @@ describe('tasksStore', () => {
     const paused = get(tasksStore.paused);
     expect(paused.length).toBe(1);
     expect(paused[0].status).toBe('paused');
-    expect(paused[0].speed_bps).toBe(0);
+    expect(paused[0].speedBps).toBe(0);
 
     // 4. Resume task
     tasksStore.handleTaskEvent({
@@ -111,7 +111,7 @@ describe('tasksStore', () => {
 
     active = get(tasksStore.active);
     expect(active[0].percent).toBe(45.5);
-    expect(active[0].bytes_downloaded).toBe(45500000);
+    expect(active[0].currentBytes).toBe(45500000);
     expect(get(tasksStore.totalSpeedBps)).toBe(25000000);
 
     tasksStore.handleTransferEvent({
@@ -166,7 +166,7 @@ describe('tasksStore', () => {
 
     expect(successResult).toEqual({ applied: true });
     const items = get(tasksStore.items);
-    const match = items.find((t) => t.game_name === 'Portal 2');
+    const match = items.find((t) => t.gameName === 'Portal 2');
     expect(match).toBeDefined();
     expect(match.status).toBe('completed');
   });
@@ -261,5 +261,45 @@ describe('tasksStore', () => {
     await tasksStore.remove('action_test_1');
     item = get(tasksStore.items).find(t => t.id === 'action_test_1');
     expect(item).toBeUndefined();
+  });
+
+  it('extractTaskProgress correctly extracts camelCase and snake_case properties', () => {
+    const emptyProg = extractTaskProgress(null);
+    expect(emptyProg.percent).toBe(0);
+    expect(emptyProg.currentBytes).toBe(0);
+
+    const snakeObj = {
+      progress: {
+        percent: 75.5,
+        current_bytes: 7500,
+        total_bytes: 10000,
+        bytes_per_sec: 2500,
+        eta_seconds: 1,
+        current_items: 3,
+        total_items: 4,
+      }
+    };
+    const extractedSnake = extractTaskProgress(snakeObj);
+    expect(extractedSnake.percent).toBe(75.5);
+    expect(extractedSnake.currentBytes).toBe(7500);
+    expect(extractedSnake.totalBytes).toBe(10000);
+    expect(extractedSnake.speedBps).toBe(2500);
+    expect(extractedSnake.etaSeconds).toBe(1);
+    expect(extractedSnake.currentItems).toBe(3);
+    expect(extractedSnake.totalItems).toBe(4);
+
+    const camelObj = {
+      currentBytes: 1234,
+      totalBytes: 5678,
+      speedBps: 999,
+      etaSeconds: 5,
+      currentItems: 1,
+      totalItems: 2,
+    };
+    const extractedCamel = extractTaskProgress(camelObj);
+    expect(extractedCamel.currentBytes).toBe(1234);
+    expect(extractedCamel.totalBytes).toBe(5678);
+    expect(extractedCamel.speedBps).toBe(999);
+    expect(extractedCamel.etaSeconds).toBe(5);
   });
 });

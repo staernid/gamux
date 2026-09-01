@@ -4,9 +4,8 @@ import InheritSelect from './InheritSelect.svelte';
 
 describe('InheritSelect Component', () => {
   const options = [
-    { value: 'umu', label: 'UMU Launcher' },
-    { value: 'proton', label: 'Proton Direct' },
-    { value: 'wine', label: 'Wine Direct' }
+    { value: 'umu', label: 'UMU' },
+    { value: 'wine', label: 'Wine' }
   ];
 
   it('renders standard select dropdown without inheritance', () => {
@@ -24,7 +23,7 @@ describe('InheritSelect Component', () => {
     expect(screen.queryByLabelText('Reset to global default')).not.toBeInTheDocument();
   });
 
-  it('renders inherited dropdown showing Default (UMU Launcher) when value is empty', () => {
+  it('renders inherited dropdown selecting global value without override badge when value is empty', () => {
     render(InheritSelect, {
       props: {
         label: 'Runner Layer',
@@ -35,7 +34,7 @@ describe('InheritSelect Component', () => {
     });
 
     expect(screen.getByText('Runner Layer')).toBeInTheDocument();
-    expect(screen.getByText('Default (UMU Launcher)')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveValue('umu');
     expect(screen.queryByText('(Override)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Reset to global default')).not.toBeInTheDocument();
   });
@@ -44,7 +43,7 @@ describe('InheritSelect Component', () => {
     render(InheritSelect, {
       props: {
         label: 'Runner Layer',
-        value: 'proton',
+        value: 'wine',
         globalValue: 'umu',
         options
       }

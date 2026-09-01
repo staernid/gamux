@@ -80,9 +80,10 @@ func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *
 		if cfg.OperatingMode != "" {
 			opMode = cfg.OperatingMode
 		} else {
-			opMode = domain.ModeStandalone
+			opMode = domain.ModeLoader
 		}
 	}
+	opMode = domain.NormalizeOperatingMode(opMode)
 
 	// 3. Apply or revert DRM according to operating mode
 	switch opMode {
@@ -116,10 +117,13 @@ func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *
 			slog.Warn("Failed to apply loader DRM", "dir", gameDir, "error", err)
 			return err
 		}
-	case domain.ModeNone:
+	case domain.ModeNone, domain.ModeStandalone:
 		if _, err := gbe.Revert(gameDir, dryRun); err != nil {
 			slog.Warn("Failed to revert DRM for ModeNone", "dir", gameDir, "error", err)
 			return err
+		}
+		if profile != nil && !dryRun {
+			_ = SaveProfileDirect(profile)
 		}
 	}
 

@@ -15,14 +15,20 @@
   const dispatch = createEventDispatcher();
 
   $: hasInheritance = globalValue !== undefined && globalValue !== null && globalValue !== '';
-  $: isInherited = hasInheritance && (!value || value === '');
+  $: isInherited = hasInheritance && (!value || value === '' || value === globalValue);
   $: isOverridden = hasInheritance && !isInherited;
-  $: resolvedGlobalLabel = globalLabel || options.find(o => o.value === globalValue)?.label || globalValue || 'None';
+  $: selectedValue = hasInheritance ? (isOverridden ? value : globalValue) : value;
+  $: resolvedGlobalLabel = globalLabel || options.find(o => o.value === globalValue)?.label || globalValue || '';
   $: effectiveDescription = description || tooltip;
 
   function handleChange(e) {
     if (disabled) return;
-    value = e.target.value;
+    const selectedVal = e.target.value;
+    if (hasInheritance) {
+      value = (selectedVal === globalValue) ? '' : selectedVal;
+    } else {
+      value = selectedVal;
+    }
     dispatch('change', value);
   }
 
@@ -69,7 +75,7 @@
       <div class="relative flex-1 min-w-0">
         <select
           {id}
-          {value}
+          value={selectedValue}
           {disabled}
           on:change={handleChange}
           class="w-full bg-[#14141e] border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
@@ -77,9 +83,6 @@
               ? 'border-sky-500/60 text-white font-medium focus:border-sky-400'
               : 'border-[#262638] text-slate-300 focus:border-slate-500'}"
         >
-          {#if hasInheritance}
-            <option value="">Default ({resolvedGlobalLabel})</option>
-          {/if}
           {#each options as opt}
             <option value={opt.value}>{opt.label}</option>
           {/each}
@@ -97,7 +100,7 @@
           type="button"
           on:click={revertToInherit}
           class="p-1.5 rounded-lg bg-[#181824] hover:bg-[#242438] border border-[#2c2c3e] text-slate-400 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
-          title={`Reset to default (${resolvedGlobalLabel})`}
+          title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +145,7 @@
       <div class="relative flex-1 sm:w-60">
         <select
           {id}
-          {value}
+          value={selectedValue}
           {disabled}
           on:change={handleChange}
           class="w-full bg-[#14141e] border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
@@ -150,9 +153,6 @@
               ? 'border-sky-500/60 text-white font-medium focus:border-sky-400'
               : 'border-[#262638] text-slate-300 focus:border-slate-500'}"
         >
-          {#if hasInheritance}
-            <option value="">Default ({resolvedGlobalLabel})</option>
-          {/if}
           {#each options as opt}
             <option value={opt.value}>{opt.label}</option>
           {/each}
@@ -170,7 +170,7 @@
           type="button"
           on:click={revertToInherit}
           class="p-1.5 rounded-lg bg-[#181824] hover:bg-[#242438] border border-[#2c2c3e] text-slate-400 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
-          title={`Reset to default (${resolvedGlobalLabel})`}
+          title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

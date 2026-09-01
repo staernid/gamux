@@ -31,7 +31,16 @@
   import { configStore } from './stores/config.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
   import { formatBytes } from './utils/format.js';
-  import { getPlatformColors, getPlatformType, getGameSource, getMetadataInfo, isSamePath } from './utils/game.js';
+  import {
+    getPlatformColors,
+    getPlatformType,
+    getGameSource,
+    getMetadataInfo,
+    isSamePath,
+    formatPlaytime,
+    formatLastPlayed,
+    formatInstallDate
+  } from './utils/game.js';
   import { playTick, playSelect, playBack, playNav } from './utils/audio.js';
   import { GamepadTracker } from './input/gamepad.js';
   import { gamuxDev } from './debug/debugBridge.js';
@@ -88,9 +97,10 @@
   }
 
   onMount(() => {
-    // 1. Initialize UI scale
+    // 1. Initialize UI scale & config
     const savedScale = localStorage.getItem('gamux_ui_scale') || '18';
     configStore.setScale(savedScale);
+    configStore.load();
 
     // 2. Setup runtime event bridges
     function handleEventWithStoreSync(ev) {
@@ -372,6 +382,18 @@
               <span class="text-slate-400">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
               <span class="text-slate-600">·</span>
               <span class="text-slate-400 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
+              {#if $selectedGame.playtimeSeconds > 0}
+                <span class="text-slate-600">·</span>
+                <span class="text-sky-300 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
+              {/if}
+              {#if $selectedGame.lastPlayed > 0}
+                <span class="text-slate-600">·</span>
+                <span class="text-slate-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
+              {/if}
+              {#if $selectedGame.installedAt > 0}
+                <span class="text-slate-600">·</span>
+                <span class="text-slate-500">Installed {formatInstallDate($selectedGame.installedAt)}</span>
+              {/if}
             </div>
             <div class="truncate max-w-full text-slate-600" title={$selectedGame.gameDir}>
               <span class="text-slate-600">Path:</span>

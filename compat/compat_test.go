@@ -87,6 +87,7 @@ func TestProfilePreservationOnSave(t *testing.T) {
 		GameDir:         gameDir,
 		Name:            "Preserve Game",
 		AppID:           "777",
+		InstalledAt:     1650000000,
 		PlaytimeSeconds: 7200,
 		LastPlayed:      1700000000,
 		CustomCoverURL:  "https://example.com/cover.png",
@@ -116,6 +117,9 @@ func TestProfilePreservationOnSave(t *testing.T) {
 		t.Fatalf("LoadProfile failed: %v", err)
 	}
 
+	if loaded.InstalledAt != 1650000000 {
+		t.Errorf("expected InstalledAt 1650000000 to be preserved, got %d", loaded.InstalledAt)
+	}
 	if loaded.PlaytimeSeconds != 7200 {
 		t.Errorf("expected PlaytimeSeconds 7200 to be preserved, got %d", loaded.PlaytimeSeconds)
 	}
@@ -202,5 +206,42 @@ func TestSyncSettings_DoesNotMutateBinaries(t *testing.T) {
 	langFile := filepath.Join(gameDir, "steam_settings", "force_language.txt")
 	if data, err := os.ReadFile(langFile); err != nil || string(data) != "german\n" {
 		t.Errorf("force_language.txt not synced properly, got: %s (err: %v)", string(data), err)
+	}
+}
+
+func TestApply_InjectedOperatingMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	winGbe := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(winGbe, 0755)
+	_ = os.WriteFile(filepath.Join(winGbe, "steam_api64.dll"), []byte("emulated_dll_bytes"), 0644)
+
+	gameDir := filepath.Join(tmpDir, "InjectedGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("original_dll_bytes"), 0644)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	profile := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "1091500",
+		Platform:      "win64",
+		OperatingMode: "injected",
+	}
+	game := domain.NewGame("InjectedGame", gameDir, "1091500", "win64")
+
+	err := compat.Apply(context.Background(), cfg, game, profile, false)
+	if err != nil {
+		t.Fatalf("compat.Apply failed with injected mode: %v", err)
+	}
+
+	// Verify original file was backed up and replaced with emulator dll
+	backups, _ := filepath.Glob(filepath.Join(gameDir, "*.ORIGINAL"))
+	if len(backups) == 0 {
+		t.Errorf("expected .ORIGINAL backup to be created for injected mode")
+	}
+
+	currentBytes, _ := os.ReadFile(filepath.Join(gameDir, "steam_api64.dll"))
+	if string(currentBytes) != "emulated_dll_bytes" {
+		t.Errorf("expected steam_api64.dll to be replaced with emulator bytes, got %s", string(currentBytes))
 	}
 }

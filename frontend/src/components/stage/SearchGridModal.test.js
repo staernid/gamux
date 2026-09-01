@@ -45,4 +45,17 @@ describe('SearchGridModal Component', () => {
     selectedGame.subscribe(v => current = v)();
     expect(current?.name).toBe('Balatro');
   });
+
+  it('renders sort chips and updates sort order on click', async () => {
+    render(SearchGridModal);
+
+    const playtimeChip = screen.getByText('Playtime');
+    expect(playtimeChip).toBeInTheDocument();
+    await fireEvent.click(playtimeChip);
+
+    let currentSort = null;
+    const { sortBy } = await import('../../stores/library.js');
+    sortBy.subscribe(v => currentSort = v)();
+    expect(currentSort).toBe('playtime_desc');
+  });
 });

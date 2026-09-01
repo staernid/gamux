@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
@@ -37,35 +36,31 @@ func (a *App) InspectLibraries(dirs []string) ([]*engine.GameStatus, error) {
 
 // InspectGame inspects a game directory and returns its full GameStatus, optionally fetching news/patch notes.
 func (a *App) InspectGame(gamePath string, newsCount int) (*engine.GameStatus, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
 	}
 	if newsCount > 0 {
-		return a.Engine.InspectStatusEx(a.getContext(), gamePath, newsCount)
+		return a.Engine.InspectStatusEx(a.getContext(), path, newsCount)
 	}
-	return a.Engine.InspectStatus(a.getContext(), gamePath)
+	return a.Engine.InspectStatus(a.getContext(), path)
 }
 
 // DetectGame inspects a given game directory and returns detected game metadata.
 func (a *App) DetectGame(gamePath string) (*detector.GameInfo, error) {
-	if a.Engine != nil {
-		return a.Engine.DetectGame(a.getContext(), gamePath)
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
 	}
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
-	}
-	return detector.Detect(a.getContext(), gamePath)
+	return a.Engine.DetectGame(a.getContext(), gamePath)
 }
 
 // VerifyIntegrity runs full depot integrity verification for a game directory on-demand.
 func (a *App) VerifyIntegrity(gamePath string) (*manifest.IntegrityReport, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
 	}
-	return a.Engine.VerifyIntegrity(a.getContext(), gamePath)
+	return a.Engine.VerifyIntegrity(a.getContext(), path)
 }
 
 // -----------------------------------------------------------------------------
@@ -92,15 +87,15 @@ func (a *App) IsGameRunning(gamePath string) bool {
 	if a.Engine != nil && a.Engine.RunnerMgr != nil {
 		return a.Engine.RunnerMgr.IsRunning(gamePath)
 	}
-	return runner.DefaultManager().IsRunning(gamePath)
+	return false
 }
 
 // StopGame terminates an active game process and its process tree.
 func (a *App) StopGame(gamePath string) error {
-	if a.Engine != nil && a.Engine.RunnerMgr != nil {
-		return a.Engine.RunnerMgr.Stop(gamePath)
+	if a.Engine == nil || a.Engine.RunnerMgr == nil {
+		return fmt.Errorf("engine not initialized")
 	}
-	return runner.DefaultManager().Stop(gamePath)
+	return a.Engine.RunnerMgr.Stop(gamePath)
 }
 
 // GetAvailableRunners returns list of detected execution runners on the host.
@@ -108,95 +103,86 @@ func (a *App) GetAvailableRunners() []string {
 	if a.Engine != nil {
 		return a.Engine.GetAvailableRunners()
 	}
-	return runner.GetAvailableRunners()
+	return nil
 }
 
 // GetGameLog returns the stdout/stderr log content from the current or last execution of a game.
 func (a *App) GetGameLog(gamePath string) (string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
 	}
-	return a.Engine.GetGameLog(a.getContext(), gamePath)
+	return a.Engine.GetGameLog(a.getContext(), path)
 }
 
 // GetGameAchievements returns list of achievements and unlocked status for a game.
 func (a *App) GetGameAchievements(gamePath string) ([]domain.AchievementItem, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
 	}
-	return a.Engine.GetGameAchievements(a.getContext(), gamePath)
+	return a.Engine.GetGameAchievements(a.getContext(), path)
 }
 
 // -----------------------------------------------------------------------------
 // Configuration & Launch Profiles
 // -----------------------------------------------------------------------------
 
+func (a *App) mutateAndInspect(gamePath string, mutate func(cleanPath string) error) (*engine.GameStatus, error) {
+	cleanPath, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := mutate(cleanPath); err != nil {
+		return nil, err
+	}
+	return a.Engine.InspectStatus(a.getContext(), cleanPath)
+}
+
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.
 func (a *App) GetLaunchProfile(gamePath string) (*runner.LaunchOptions, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
 	}
-	return a.Engine.GetLaunchProfile(a.getContext(), gamePath)
+	return a.Engine.GetLaunchProfile(a.getContext(), path)
 }
 
 // SaveLaunchProfile persists custom launch configuration for a game directory and returns updated GameStatus.
 func (a *App) SaveLaunchProfile(gamePath string, opts runner.LaunchOptions) (*engine.GameStatus, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
-	}
-	if err := a.Engine.SaveLaunchProfile(a.getContext(), gamePath, opts); err != nil {
-		return nil, err
-	}
-	return a.Engine.InspectStatus(a.getContext(), gamePath)
+	return a.mutateAndInspect(gamePath, func(p string) error {
+		return a.Engine.SaveLaunchProfile(a.getContext(), p, opts)
+	})
 }
 
 // ResetLaunchProfile removes custom launch configuration and returns updated GameStatus.
 func (a *App) ResetLaunchProfile(gamePath string) (*engine.GameStatus, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
-	}
-	if err := a.Engine.ResetLaunchProfile(a.getContext(), gamePath); err != nil {
-		return nil, err
-	}
-	return a.Engine.InspectStatus(a.getContext(), gamePath)
+	return a.mutateAndInspect(gamePath, func(p string) error {
+		return a.Engine.ResetLaunchProfile(a.getContext(), p)
+	})
 }
 
 // GetGameDepots retrieves structured metadata and installation state for all depots of a game.
 func (a *App) GetGameDepots(gamePath string) ([]domain.DepotSummary, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
 	}
-	return a.Engine.GetGameDepots(a.getContext(), gamePath)
+	return a.Engine.GetGameDepots(a.getContext(), path)
 }
 
 // SwitchGamePlatform switches the active execution platform and runner for a game directory.
 func (a *App) SwitchGamePlatform(gamePath, targetPlatform string) (*engine.GameStatus, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
-	}
-	if err := a.Engine.SwitchGamePlatform(a.getContext(), gamePath, targetPlatform); err != nil {
-		return nil, err
-	}
-	return a.Engine.InspectStatus(a.getContext(), gamePath)
+	return a.mutateAndInspect(gamePath, func(p string) error {
+		return a.Engine.SwitchGamePlatform(a.getContext(), p, targetPlatform)
+	})
 }
 
 // UninstallDepot removes on-disk files belonging to a specific depot ID while preserving shared assets and manifests.
 func (a *App) UninstallDepot(gamePath string, depotID uint32) (*engine.GameStatus, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, fmt.Errorf("game path cannot be empty")
-	}
-	if err := a.Engine.UninstallDepot(a.getContext(), gamePath, depotID); err != nil {
-		return nil, err
-	}
-	return a.Engine.InspectStatus(a.getContext(), gamePath)
+	return a.mutateAndInspect(gamePath, func(p string) error {
+		return a.Engine.UninstallDepot(a.getContext(), p, depotID)
+	})
 }
 
 // -----------------------------------------------------------------------------
@@ -262,63 +248,41 @@ type GameMetadataDetails struct {
 
 // GetGameMetadata fetches store metadata and game description for a specific provider (steam, gog, rawg) and ID.
 func (a *App) GetGameMetadata(provider string, id string) (*GameMetadataDetails, error) {
-	cleanID := strings.TrimSpace(id)
-	cleanProvider := strings.ToLower(strings.TrimSpace(provider))
-	if cleanID == "" || cleanID == "0" || cleanProvider == "none" || cleanProvider == "standalone" {
-		return nil, fmt.Errorf("no metadata for unlinked game")
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
 	}
 
-	if a.Engine == nil || a.Engine.StoreRegistry == nil {
-		return nil, fmt.Errorf("store registry not initialized")
+	meta, err := a.Engine.GetGameMetadata(a.getContext(), provider, id)
+	if err != nil {
+		return nil, err
 	}
 
-	if cleanProvider == "" {
-		cleanProvider = "steam"
-	}
-
-	if p, ok := a.Engine.StoreRegistry.Get(cleanProvider); ok {
-		if meta, err := p.GetMetadata(a.getContext(), cleanID); err == nil && meta != nil && meta.Name != "" {
-			return &GameMetadataDetails{
-				Name:                meta.Name,
-				ShortDescription:    meta.Summary,
-				DetailedDescription: meta.Summary,
-				AboutTheGame:        meta.Summary,
-				HeaderImage:         meta.HeaderImage,
-				Developers:          meta.Developers,
-				Publishers:          meta.Publishers,
-				Genres:              meta.Genres,
-				ReleaseDate:         meta.ReleaseDate,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("metadata not found for provider %s and id %s", cleanProvider, cleanID)
-}
-
-// GetGameDetails fetches store metadata and game description for a given AppID or store.
-func (a *App) GetGameDetails(appID string) (*GameMetadataDetails, error) {
-	return a.GetGameMetadata("steam", appID)
+	return &GameMetadataDetails{
+		Name:                meta.Name,
+		ShortDescription:    meta.Summary,
+		DetailedDescription: meta.Summary,
+		AboutTheGame:        meta.Summary,
+		HeaderImage:         meta.HeaderImage,
+		Developers:          meta.Developers,
+		Publishers:          meta.Publishers,
+		Genres:              meta.Genres,
+		ReleaseDate:         meta.ReleaseDate,
+	}, nil
 }
 
 // FetchNews retrieves news and patch note items for a Steam AppID.
 func (a *App) FetchNews(appID string, count int) ([]steam.NewsItem, error) {
-	if a.Engine != nil {
-		return a.Engine.FetchNews(a.getContext(), appID, count)
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
 	}
-	if appID == "" || appID == "0" {
-		return nil, fmt.Errorf("invalid steam app id")
-	}
-	if count <= 0 {
-		count = 5
-	}
-	return steam.FetchAppNewsItems(a.getContext(), appID, count)
+	return a.Engine.FetchNews(a.getContext(), appID, count)
 }
 
 // GetPatchNote fetches a specific patch note for a game.
 func (a *App) GetPatchNote(gamePath string, itemIndex int) (*steam.NewsItem, string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return nil, "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, "", err
 	}
-	return a.Engine.GetPatchNote(a.getContext(), gamePath, itemIndex)
+	return a.Engine.GetPatchNote(a.getContext(), path, itemIndex)
 }

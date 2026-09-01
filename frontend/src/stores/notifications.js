@@ -1,4 +1,5 @@
 import { writable, derived } from 'svelte/store';
+import { generateId } from '../utils/format.js';
 
 const STORAGE_KEY = 'gamux_notifications_v2';
 
@@ -39,7 +40,7 @@ function createNotificationStore() {
     icon = '',
   }) {
     const notif = {
-      id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      id: generateId('notif'),
       type, // 'success' | 'error' | 'warning' | 'info' | 'osd'
       title: title || '',
       message: message || '',

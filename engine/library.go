@@ -103,6 +103,21 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 					if len(status.SupportedLanguages) <= 1 && len(meta.SupportedLanguages) > 0 {
 						status.SupportedLanguages = meta.SupportedLanguages
 					}
+					if meta.Summary != "" {
+						status.Summary = meta.Summary
+					}
+					if meta.ReleaseDate != "" {
+						status.ReleaseDate = meta.ReleaseDate
+					}
+					if len(meta.Developers) > 0 {
+						status.Developers = meta.Developers
+					}
+					if len(meta.Publishers) > 0 {
+						status.Publishers = meta.Publishers
+					}
+					if len(meta.Genres) > 0 {
+						status.Genres = meta.Genres
+					}
 				}
 				if np, ok := p.(store.NewsProvider); ok {
 					if news, err := np.GetNews(ctx, metaID, 1); err == nil && len(news) > 0 {
@@ -322,6 +337,38 @@ func (eng *Engine) SearchStoreGames(ctx context.Context, query string) ([]store.
 		return nil, fmt.Errorf("store registry not initialized")
 	}
 	return eng.StoreRegistry.SearchAll(eng.WrapContext(ctx), query)
+}
+
+// GetGameMetadata fetches store metadata for a specific provider (steam, gog, rawg, etc.) and ID.
+func (eng *Engine) GetGameMetadata(ctx context.Context, provider string, id string) (*store.Metadata, error) {
+	cleanID := strings.TrimSpace(id)
+	cleanProvider := strings.ToLower(strings.TrimSpace(provider))
+	if cleanID == "" || cleanID == "0" || cleanProvider == "none" || cleanProvider == "standalone" {
+		return nil, fmt.Errorf("no metadata for unlinked game")
+	}
+
+	if eng.StoreRegistry == nil {
+		return nil, fmt.Errorf("store registry not initialized")
+	}
+
+	if cleanProvider == "" {
+		cleanProvider = "steam"
+	}
+
+	p, ok := eng.StoreRegistry.Get(cleanProvider)
+	if !ok {
+		return nil, fmt.Errorf("provider %s not found", cleanProvider)
+	}
+
+	meta, err := p.GetMetadata(eng.WrapContext(ctx), cleanID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch metadata for %s/%s: %w", cleanProvider, cleanID, err)
+	}
+	if meta == nil || meta.Name == "" {
+		return nil, fmt.Errorf("metadata not found for provider %s and id %s", cleanProvider, cleanID)
+	}
+
+	return meta, nil
 }
 
 // ResolveArtwork resolves covers, banners, heroes, and logos for a game.

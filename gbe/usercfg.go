@@ -140,7 +140,7 @@ func SaveGSEUserConfigToPath(path string, cfg *GSEUserConfig) error {
 		buf.WriteString("ip_country=US\n")
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+	if err := util.WriteFileAtomic(path, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("write configs.user.ini: %w", err)
 	}
 

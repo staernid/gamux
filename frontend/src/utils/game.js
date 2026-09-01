@@ -1,3 +1,5 @@
+import { formatTimeAgo } from './format.js';
+
 // Game data normalization and status helpers
 
 export function normalizePath(p) {
@@ -16,12 +18,8 @@ export function isSamePath(pathA, pathB) {
   return normalizePath(pathA) === normalizePath(pathB);
 }
 
-export function normalizeGame(g) {
-  if (!g) return null;
-
-  // Filter launch candidates to exclude technical loader helpers
-  const rawCandidates = g.launch_candidates || g.LaunchCandidates || g.launchCandidates || [];
-  const launchCandidates = rawCandidates
+export function filterLaunchCandidates(candidates = []) {
+  return (candidates || [])
     .filter(c => {
       const exe = (c.executable || c.Executable || '').toLowerCase();
       return !exe.includes('steamclient_loader') && !exe.includes('coldclientloader');
@@ -32,30 +30,48 @@ export function normalizeGame(g) {
       arguments: c.arguments || c.Arguments || '',
       description: c.description || c.Description || '',
     }));
+}
 
-  const lp = g.launch_profile || g.LaunchProfile || g.launchProfile || null;
-  let rawExe = lp?.exe_path || lp?.ExePath || lp?.exePath || g.exe_path || g.ExePath || g.exePath || '';
+export function getExecutablePath(game, candidates = []) {
+  if (!game) return '';
+  const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
+  let rawExe = lp?.exe_path || lp?.exePath || lp?.ExePath || game.exe_path || game.exePath || game.ExePath || '';
   if (rawExe && (rawExe.toLowerCase().includes('steamclient_loader') || rawExe.toLowerCase().includes('coldclientloader'))) {
-    rawExe = launchCandidates[0]?.executable || '';
+    rawExe = candidates[0]?.executable || '';
   }
+  if (!rawExe && candidates.length > 0) {
+    rawExe = candidates[0]?.executable || '';
+  }
+  return normalizePath(rawExe);
+}
+
+export function normalizeGame(g) {
+  if (!g) return null;
+
+  // Filter launch candidates to exclude technical loader helpers
+  const rawCandidates = g.launch_candidates || g.launchCandidates || g.LaunchCandidates || [];
+  const launchCandidates = filterLaunchCandidates(rawCandidates);
+
+  const lp = g.launch_profile || g.launchProfile || g.LaunchProfile || null;
+  const rawExe = getExecutablePath(g, launchCandidates);
 
   const isPatched = Boolean(
     g.is_patched ?? g.isPatched ?? g.IsPatched ??
-    (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists || g.SettingsDirExists)
+    (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists)
   );
 
   return {
     name: g.name || g.Name || 'Unknown Game',
-    appId: String(g.app_id ?? g.AppID ?? g.appId ?? ''),
-    gameDir: normalizePath(g.game_dir ?? g.GameDir ?? g.gameDir ?? ''),
+    appId: String(g.app_id ?? g.appId ?? g.AppID ?? ''),
+    gameDir: normalizePath(g.game_dir ?? g.gameDir ?? g.GameDir ?? ''),
     store: g.store || g.Store || 'Steam',
     source: g.source || g.Source || g.store || g.Store || 'Steam',
-    gogId: String(g.gog_id ?? g.GOGID ?? g.gogId ?? lp?.gog_id ?? lp?.GOGID ?? lp?.gogId ?? ''),
-    metadataProvider: lp?.metadata_provider || lp?.MetadataProvider || lp?.metadataProvider || g.metadata_provider || g.MetadataProvider || g.metadataProvider || '',
-    metadataId: String(lp?.metadata_id ?? lp?.MetadataID ?? lp?.metadataId ?? g.metadata_id ?? g.MetadataID ?? g.metadataId ?? ''),
+    gogId: String(g.gog_id ?? g.gogId ?? g.GOGID ?? lp?.gog_id ?? lp?.gogId ?? ''),
+    metadataProvider: lp?.metadata_provider || lp?.metadataProvider || g.metadata_provider || g.metadataProvider || '',
+    metadataId: String(lp?.metadata_id ?? lp?.metadataId ?? g.metadata_id ?? g.metadataId ?? ''),
     platform: g.platform || g.Platform || 'win64',
     exePath: normalizePath(rawExe),
-    exeArgs: lp?.exe_args || lp?.ExeArgs || lp?.exeArgs || g.exe_args || g.ExeArgs || g.exeArgs || '',
+    exeArgs: lp?.exe_args || lp?.exeArgs || lp?.ExeArgs || g.exe_args || g.exeArgs || g.ExeArgs || '',
     launchCandidates,
     launchProfile: lp,
     isPatched,
@@ -63,28 +79,28 @@ export function normalizeGame(g) {
     isReady: Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!rawExe)),
     hasUpdatesOrIssues: Boolean(
       g.has_updates_or_issues ?? g.hasUpdatesOrIssues ?? g.HasUpdatesOrIssues ??
-      ((g.store === 'Steam' || g.Store === 'Steam') && (g.has_update || g.HasUpdate || (g.modified_files?.length > 0) || (g.missing_files?.length > 0)))
+      (g.store === 'Steam' && (g.has_update || (g.modified_files?.length > 0) || (g.missing_files?.length > 0)))
     ),
-    diskSizeBytes: Number(g.disk_size_bytes ?? g.DiskSizeBytes ?? g.diskSizeBytes ?? 0),
-    fileCount: Number(g.file_count ?? g.FileCount ?? g.fileCount ?? 0),
-    officialFileCount: Number(g.official_file_count ?? g.OfficialFileCount ?? g.officialFileCount ?? 0),
-    dlcCount: Number(g.dlc_count ?? g.DLCCount ?? g.dlcCount ?? 0),
-    achievementCount: Number(g.achievement_count ?? g.AchievementCount ?? g.achievementCount ?? 0),
-    operatingMode: lp?.operating_mode || lp?.OperatingMode || lp?.operatingMode || g.operating_mode || g.OperatingMode || g.operatingMode || '',
+    diskSizeBytes: Number(g.disk_size_bytes ?? g.diskSizeBytes ?? g.DiskSizeBytes ?? 0),
+    fileCount: Number(g.file_count ?? g.fileCount ?? g.FileCount ?? 0),
+    officialFileCount: Number(g.official_file_count ?? g.officialFileCount ?? g.OfficialFileCount ?? 0),
+    dlcCount: Number(g.dlc_count ?? g.dlcCount ?? g.DLCCount ?? 0),
+    achievementCount: Number(g.achievement_count ?? g.achievementCount ?? g.AchievementCount ?? 0),
+    operatingMode: lp?.operating_mode || lp?.operatingMode || g.operating_mode || g.operatingMode || '',
     runner: lp?.runner || lp?.Runner || g.runner || g.Runner || '',
-    protonPath: normalizePath(lp?.proton_path || lp?.ProtonPath || lp?.protonPath || g.proton_path || g.ProtonPath || g.protonPath || ''),
-    winePrefix: normalizePath(lp?.wine_prefix || lp?.WinePrefix || lp?.winePrefix || g.wine_prefix || g.WinePrefix || g.winePrefix || ''),
-    currentLanguage: g.current_language || g.CurrentLanguage || g.currentLanguage || '',
-    supportedLanguages: g.supported_languages || g.SupportedLanguages || g.supportedLanguages || [],
-    modifiedFiles: g.modified_files || g.ModifiedFiles || g.modifiedFiles || [],
-    missingFiles: g.missing_files || g.MissingFiles || g.missingFiles || [],
-    untrackedFiles: g.untracked_files || g.UntrackedFiles || g.untrackedFiles || [],
-    hasUpdate: Boolean(g.has_update ?? g.HasUpdate ?? g.hasUpdate ?? false),
-    manifestId: g.manifest_id || g.ManifestID || g.manifestId || '',
-    buildId: g.build_id || g.BuildID || g.buildId || '',
-    remoteManifestId: g.remote_manifest_id || g.RemoteManifestID || g.remoteManifestId || '',
-    recentPatchNote: g.recent_patch_note || g.RecentPatchNote || g.recentPatchNote || '',
-    newsItems: g.news_items || g.NewsItems || g.newsItems || [],
+    protonPath: normalizePath(lp?.proton_path || lp?.protonPath || lp?.ProtonPath || g.proton_path || g.protonPath || g.ProtonPath || ''),
+    winePrefix: normalizePath(lp?.wine_prefix || lp?.winePrefix || lp?.WinePrefix || g.wine_prefix || g.winePrefix || g.WinePrefix || ''),
+    currentLanguage: g.current_language || g.currentLanguage || '',
+    supportedLanguages: g.supported_languages || g.supportedLanguages || [],
+    modifiedFiles: g.modified_files || g.modifiedFiles || [],
+    missingFiles: g.missing_files || g.missingFiles || [],
+    untrackedFiles: g.untracked_files || g.untrackedFiles || [],
+    hasUpdate: Boolean(g.has_update ?? g.hasUpdate ?? false),
+    manifestId: g.manifest_id || g.manifestId || '',
+    buildId: g.build_id || g.buildId || '',
+    remoteManifestId: g.remote_manifest_id || g.remoteManifestId || '',
+    recentPatchNote: g.recent_patch_note || g.recentPatchNote || '',
+    newsItems: g.news_items || g.newsItems || [],
     coverUrl: g.cover_url || g.coverUrl || g.custom_cover_url || g.customCoverUrl || '',
     localCoverUrl: g.local_cover_url || g.localCoverUrl || g.local_cover || g.localCover || '',
     heroUrl: g.hero_url || g.heroUrl || g.custom_hero_url || g.customHeroUrl || '',
@@ -93,8 +109,14 @@ export function normalizeGame(g) {
     localBannerUrl: g.local_banner_url || g.localBannerUrl || g.local_banner || g.localBanner || '',
     logoUrl: g.logo_url || g.logoUrl || g.custom_logo_url || g.customLogoUrl || '',
     localLogoUrl: g.local_logo_url || g.localLogoUrl || g.local_logo || g.localLogo || '',
-    playtimeSeconds: Number(g.playtime_seconds ?? g.PlaytimeSeconds ?? g.playtimeSeconds ?? lp?.playtime_seconds ?? lp?.PlaytimeSeconds ?? lp?.playtimeSeconds ?? 0),
-    lastPlayed: Number(g.last_played ?? g.LastPlayed ?? g.lastPlayed ?? lp?.last_played ?? lp?.LastPlayed ?? lp?.lastPlayed ?? 0),
+    installedAt: Number(g.installed_at ?? g.installedAt ?? lp?.installed_at ?? lp?.installedAt ?? 0),
+    playtimeSeconds: Number(g.playtime_seconds ?? g.playtimeSeconds ?? lp?.playtime_seconds ?? lp?.playtimeSeconds ?? 0),
+    lastPlayed: Number(g.last_played ?? g.lastPlayed ?? lp?.last_played ?? lp?.lastPlayed ?? 0),
+    summary: g.summary || g.Summary || lp?.summary || '',
+    releaseDate: g.release_date || g.releaseDate || '',
+    developers: g.developers || g.Developers || [],
+    publishers: g.publishers || g.Publishers || [],
+    genres: g.genres || g.Genres || [],
   };
 }
 
@@ -109,24 +131,6 @@ export function getInitials(name) {
 
 export function isSteamApp(appId) {
   return Boolean(appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim()));
-}
-
-export function hasMetadataMatch(game) {
-  if (!game) return false;
-  const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
-  const provider = (game.metadataProvider || game.metadata_provider || game.MetadataProvider || lp?.metadata_provider || lp?.MetadataProvider || '').toLowerCase();
-  if (provider === 'none' || provider === 'standalone' || provider === 'custom') {
-    return false;
-  }
-  const metaId = String(game.metadataId || game.metadata_id || game.MetadataID || lp?.metadata_id || lp?.MetadataID || '');
-  if (metaId && metaId !== '0' && metaId !== 'undefined' && metaId !== 'null') {
-    return true;
-  }
-  const appId = String(game.appId || game.app_id || '');
-  if (isSteamApp(appId)) return true;
-  const gogId = String(game.gogId || game.gog_id || game.GOGID || lp?.gog_id || '');
-  if (gogId && gogId !== '0' && gogId !== 'undefined' && gogId !== 'null') return true;
-  return false;
 }
 
 export function getGameSource(game) {
@@ -149,14 +153,14 @@ export function getGameSource(game) {
 
 export function getMetadataInfo(game) {
   if (!game) return { provider: 'None', id: '' };
-  const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
-  const provider = (game.metadataProvider || game.metadata_provider || game.MetadataProvider || lp?.metadata_provider || lp?.MetadataProvider || '').toLowerCase();
+  const lp = game.launchProfile || null;
+  const provider = (game.metadataProvider || game.metadata_provider || lp?.metadataProvider || lp?.metadata_provider || '').toLowerCase();
   if (provider === 'none' || provider === 'standalone' || provider === 'custom') {
     return { provider: 'None', id: '' };
   }
-  const metaId = String(game.metadataId || game.metadata_id || game.MetadataID || lp?.metadata_id || lp?.MetadataID || '');
-  const appId = String(game.appId || game.app_id || game.AppID || '');
-  const gogId = String(game.gogId || game.gog_id || game.GOGID || lp?.gog_id || '');
+  const metaId = String(game.metadataId || game.metadata_id || lp?.metadataId || lp?.metadata_id || '');
+  const appId = String(game.appId || game.app_id || '');
+  const gogId = String(game.gogId || game.gog_id || lp?.gogId || lp?.gog_id || '');
 
   if (provider === 'steam' || (!provider && isSteamApp(appId))) {
     return { provider: 'Steam', id: metaId || appId };
@@ -179,9 +183,91 @@ export function getMetadataInfo(game) {
   return { provider: 'None', id: '' };
 }
 
-export function getPlatformType(game) {
-  return getGameSource(game);
+export function hasMetadataMatch(game) {
+  const info = getMetadataInfo(game);
+  return info.provider !== 'None' && Boolean(info.id && info.id !== '0' && info.id !== 'undefined' && info.id !== 'null');
 }
+
+export function countOverrides(draft, game = null, globalCfg = {}) {
+  if (!draft) return 0;
+  let count = 0;
+
+  // 1. Title Override (if explicitly set and different from detected game name)
+  if (draft.name && draft.name.trim() !== '' && draft.name.trim() !== (game?.name || '').trim()) {
+    count++;
+  }
+
+  // 2. Target Platform Override (if different from detected game platform)
+  if (draft.platform && game?.platform && draft.platform !== game.platform) {
+    count++;
+  }
+
+  // 3. Executable Path Override (if different from primary launch candidate or base detected exe)
+  const defaultExe = game?.launchCandidates?.[0]?.executable || game?.exePath || '';
+  if (draft.exePath && defaultExe && normalizePath(draft.exePath) !== normalizePath(defaultExe)) {
+    count++;
+  }
+
+  // 4. Executable Arguments Override
+  const defaultArgs = game?.launchCandidates?.[0]?.arguments || '';
+  if (draft.exeArgs && draft.exeArgs.trim() !== '' && draft.exeArgs.trim() !== defaultArgs.trim()) {
+    count++;
+  }
+
+  // 5. Operating Mode Override (if set and not empty)
+  if (draft.operatingMode && draft.operatingMode.trim() !== '') {
+    count++;
+  }
+
+  // 6. Runner Layer Override (if set, not empty, and different from global default)
+  if (draft.runner && draft.runner.trim() !== '' && draft.runner !== (globalCfg?.default_runner || 'umu')) {
+    count++;
+  }
+
+  // 7. Wine Prefix Override
+  if (draft.winePrefix && draft.winePrefix.trim() !== '') {
+    count++;
+  }
+
+  // 8. Proton Path Override
+  if (draft.protonPath && draft.protonPath.trim() !== '') {
+    count++;
+  }
+
+  // 9. DLL Overrides
+  if (draft.dllOverrides && draft.dllOverrides.trim() !== '') {
+    count++;
+  }
+
+  // 10. MangoHud Overlay Override (if explicit boolean different from global setting)
+  if (draft.mangoHud !== null && draft.mangoHud !== undefined && draft.mangoHud !== Boolean(globalCfg?.mangohud)) {
+    count++;
+  }
+
+  // 11. Custom / Overridden Environment Variables
+  if (draft.customEnv && typeof draft.customEnv === 'object' && Object.keys(draft.customEnv).length > 0) {
+    count += Object.keys(draft.customEnv).length;
+  }
+
+  // 12. Game Language Override (if set and not 'auto')
+  if (draft.language && draft.language.trim() !== '' && draft.language !== 'auto' && draft.language !== (globalCfg?.language || 'auto')) {
+    count++;
+  }
+
+  // 13. Physical Installation Source Override
+  if (draft.sourceOverride && draft.sourceOverride.trim() !== '') {
+    count++;
+  }
+
+  // 14. Store Metadata Provider Override (if custom metadata provider set)
+  if (draft.metadataProvider && draft.metadataProvider.trim() !== '' && draft.metadataProvider !== 'none') {
+    count++;
+  }
+
+  return count;
+}
+
+export const getPlatformType = getGameSource;
 
 export function getPlatformColors(game) {
   const pType = getPlatformType(game);
@@ -462,14 +548,10 @@ export function formatPlaytime(seconds) {
 }
 
 export function formatLastPlayed(timestamp) {
-  if (!timestamp || timestamp <= 0) return '';
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatTimeAgo(timestamp);
+}
+
+export function formatInstallDate(timestamp) {
+  return formatTimeAgo(timestamp);
 }
 

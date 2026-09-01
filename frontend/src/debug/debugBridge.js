@@ -126,12 +126,6 @@ export class GamuxDevBridge {
         activeCount: get(tasksStore.activeCount),
         speedLimit: get(tasksStore.speedLimit),
       },
-      taskQueue: {
-        activeTask: get(tasksStore.activeTask),
-        queue: get(tasksStore.queued),
-        allJobs: get(tasksStore.items),
-        totalCount: get(tasksStore.activeCount)
-      },
       transfers: {
         items: get(tasksStore.items).filter(t => t.type === 'download' || t.operation === 'download'),
         active: get(tasksStore.activeDownloads),
@@ -153,9 +147,9 @@ export class GamuxDevBridge {
     const state = customState || this.getStoreSnapshots();
 
     // 1. Task Queue Invariants
-    const taskState = state.tasks || state.taskQueue || {};
+    const taskState = state.tasks || {};
     const activeTask = taskState.activeTask;
-    const allJobs = taskState.items || taskState.allJobs || [];
+    const allJobs = taskState.items || [];
 
     if (activeTask) {
       if (activeTask.status !== 'running' && activeTask.status !== 'downloading') {
@@ -212,7 +206,7 @@ export class GamuxDevBridge {
           severity: 'error',
           component: 'transfers',
           rule: 'transfer_missing_id',
-          message: `Transfer found without an ID for game: ${tr.game_name || 'unknown'}`,
+          message: `Transfer found without an ID for game: ${tr.gameName || 'unknown'}`,
           context: tr
         });
       }

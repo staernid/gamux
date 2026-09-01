@@ -19,11 +19,7 @@ function createConfigStore() {
       config.set(cfg);
       return cfg;
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Config Load Error',
-        message: err?.message || String(err)
-      });
+      notificationStore.error('Config Load Error', err);
     }
   }
 
@@ -31,18 +27,10 @@ function createConfigStore() {
     try {
       await AppAPI.saveConfig(newCfg);
       config.set(newCfg);
-      notificationStore.items.add({
-        type: 'success',
-        title: 'Settings Saved',
-        message: 'Configuration written to ~/.config/gamux/config.json'
-      });
+      notificationStore.success('Settings Saved', 'Configuration written to ~/.config/gamux/config.json');
       return true;
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Failed to Save Settings',
-        message: err?.message || String(err)
-      });
+      notificationStore.error('Failed to Save Settings', err);
       return false;
     }
   }
@@ -51,6 +39,7 @@ function createConfigStore() {
     subscribe: config.subscribe,
     uiScale: { subscribe: uiScale.subscribe, set: setScale },
     load,
+    reload: load,
     save,
     setScale
   };

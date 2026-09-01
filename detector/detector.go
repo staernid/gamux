@@ -279,11 +279,19 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	info.ManifestID = state.manifestID
 	info.RawDepotLayout = state.rawDepotLayout
 
+	// Baseline install timestamp from directory stat
+	if dirFi, err := os.Stat(absPath); err == nil {
+		info.InstalledAt = dirFi.ModTime().Unix()
+	}
+
 	// 2. Process ACF Data
 	if state.manifestACFData != nil {
 		info.AppID = state.manifestACFData.AppID
 		info.Name = state.manifestACFData.Name
 		info.InstallDir = state.manifestACFData.InstallDir
+		if state.manifestACFData.LastUpdated > 0 {
+			info.InstalledAt = state.manifestACFData.LastUpdated
+		}
 
 		if len(state.manifestACFData.LaunchOptions) > 0 {
 			for _, option := range state.manifestACFData.LaunchOptions {
@@ -455,6 +463,13 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		if profile.LockedArtwork {
 			info.LockedArtwork = true
 		}
+		if profile.InstalledAt > 0 {
+			info.InstalledAt = profile.InstalledAt
+		} else if info.InstalledAt > 0 {
+			profile.InstalledAt = info.InstalledAt
+		}
+		info.PlaytimeSeconds = profile.PlaytimeSeconds
+		info.LastPlayed = profile.LastPlayed
 	}
 
 	if info.ExePath == "" && len(info.LaunchCandidates) > 0 {

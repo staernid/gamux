@@ -315,4 +315,36 @@ func TestVSZaDecompression(t *testing.T) {
 	}
 }
 
+func TestWriteFileAtomic(t *testing.T) {
+	tmpDir := t.TempDir()
+	targetFile := filepath.Join(tmpDir, "sub", "atomic.txt")
+
+	data := []byte("atomic content payload 12345")
+	if err := WriteFileAtomic(targetFile, data, 0644); err != nil {
+		t.Fatalf("WriteFileAtomic failed: %v", err)
+	}
+
+	readData, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("Failed to read atomic file: %v", err)
+	}
+	if !bytes.Equal(readData, data) {
+		t.Errorf("expected %q, got %q", string(data), string(readData))
+	}
+
+	// Verify overwrite
+	newData := []byte("updated atomic content")
+	if err := WriteFileAtomic(targetFile, newData, 0644); err != nil {
+		t.Fatalf("WriteFileAtomic overwrite failed: %v", err)
+	}
+
+	readNew, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("Failed to read overwritten file: %v", err)
+	}
+	if !bytes.Equal(readNew, newData) {
+		t.Errorf("expected %q, got %q", string(newData), string(readNew))
+	}
+}
+
 

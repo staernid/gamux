@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/domain"
@@ -19,6 +20,8 @@ type ACFData struct {
 	InstallDir    string
 	BuildID       string
 	Language      string
+	LastUpdated   int64
+	SizeOnDisk    int64
 	LaunchOptions []LaunchCandidate
 }
 
@@ -29,12 +32,23 @@ func ParseACF(r io.Reader) (*ACFData, error) {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidManifest, err.Error())
 	}
 
+	lastUpdated, _ := strconv.ParseInt(node.GetString("LastUpdated"), 10, 64)
+	if lastUpdated == 0 {
+		lastUpdated, _ = strconv.ParseInt(node.GetString("lastupdated"), 10, 64)
+	}
+	sizeOnDisk, _ := strconv.ParseInt(node.GetString("SizeOnDisk"), 10, 64)
+	if sizeOnDisk == 0 {
+		sizeOnDisk, _ = strconv.ParseInt(node.GetString("sizeondisk"), 10, 64)
+	}
+
 	data := &ACFData{
-		AppID:      node.GetString("appid"),
-		Name:       node.GetString("name"),
-		InstallDir: node.GetString("installdir"),
-		BuildID:    node.GetString("buildid"),
-		Language:   node.GetString("UserConfig/language"),
+		AppID:       node.GetString("appid"),
+		Name:        node.GetString("name"),
+		InstallDir:  node.GetString("installdir"),
+		BuildID:     node.GetString("buildid"),
+		Language:    node.GetString("UserConfig/language"),
+		LastUpdated: lastUpdated,
+		SizeOnDisk:  sizeOnDisk,
 	}
 
 	if data.Language == "" {

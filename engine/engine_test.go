@@ -22,9 +22,12 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
+	defer restoreEnv()
 	restore := testutil.SilenceLogging()
 	code := m.Run()
 	restore()
+	restoreEnv()
 	os.Exit(code)
 }
 
@@ -990,6 +993,54 @@ func TestEngine_NestedDepotInspectionAndSetup(t *testing.T) {
 		t.Errorf("expected LaunchCandidates to contain %s, got %+v", dummyExe, status.LaunchCandidates)
 	}
 }
+
+func TestEngine_SetTransferSpeedLimit_PreservesExistingConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgDir := filepath.Join(tmpDir, "gamux")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgFile := filepath.Join(cfgDir, "config.json")
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	initialJSON := `{
+		"hubcap_api_key": "PERSISTENT_HUBCAP_KEY",
+		"library_paths": ["/Games/MyLib"],
+		"operating_mode": "loader",
+		"transfer_speed_limit": 1000
+	}`
+	if err := os.WriteFile(cfgFile, []byte(initialJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Instantiate an Engine with bare DefaultConfig
+	eng := New(config.DefaultConfig())
+
+	// Call SetTransferSpeedLimit
+	if err := eng.SetTransferSpeedLimit(9876543); err != nil {
+		t.Fatalf("SetTransferSpeedLimit failed: %v", err)
+	}
+
+	if eng.GetTransferSpeedLimit() != 9876543 {
+		t.Errorf("expected GetTransferSpeedLimit = 9876543, got %d", eng.GetTransferSpeedLimit())
+	}
+
+	// Verify disk contents preserved unrelated keys
+	loaded, err := config.LoadConfig(cfgFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if loaded.TransferSpeedLimit != 9876543 {
+		t.Errorf("expected disk TransferSpeedLimit = 9876543, got %d", loaded.TransferSpeedLimit)
+	}
+	if loaded.HubcapAPIKey != "PERSISTENT_HUBCAP_KEY" {
+		t.Errorf("expected disk HubcapAPIKey 'PERSISTENT_HUBCAP_KEY', got %q", loaded.HubcapAPIKey)
+	}
+	if len(loaded.LibraryPaths) != 1 || loaded.LibraryPaths[0] != "/Games/MyLib" {
+		t.Errorf("expected disk LibraryPaths preserved, got %+v", loaded.LibraryPaths)
+	}
+}
+
 
 
 

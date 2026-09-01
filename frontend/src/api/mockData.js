@@ -37,6 +37,9 @@ export const MOCK_GAMES = [
     operating_mode: 'portable',
     runner: 'wine',
     state: 'Portable-Patched',
+    installed_at: 1700000000,
+    playtime_seconds: 180000,
+    last_played: 1724589000,
     current_language: 'english',
     supported_languages: ['english', 'german', 'french', 'spanish', 'japanese'],
     launch_candidates: [
@@ -67,6 +70,9 @@ export const MOCK_GAMES = [
     operating_mode: 'portable',
     runner: 'umu',
     state: 'Portable-Patched',
+    installed_at: 1690000000,
+    playtime_seconds: 72000,
+    last_played: 1720000000,
     current_language: 'english',
     supported_languages: ['english', 'japanese'],
     launch_candidates: [],
@@ -91,6 +97,9 @@ export const MOCK_GAMES = [
     operating_mode: 'loader',
     runner: 'wine',
     state: 'Loader-Configured',
+    installed_at: 1715000000,
+    playtime_seconds: 36000,
+    last_played: 1722000000,
     current_language: 'english',
     supported_languages: ['english'],
     launch_candidates: [],
@@ -115,6 +124,9 @@ export const MOCK_GAMES = [
     operating_mode: '',
     runner: 'linux',
     state: 'Original',
+    installed_at: 1720000000,
+    playtime_seconds: 0,
+    last_played: 0,
     current_language: 'english',
     supported_languages: ['english'],
     launch_candidates: [],
@@ -139,6 +151,9 @@ export const MOCK_GAMES = [
     operating_mode: 'portable',
     runner: 'wine',
     state: 'Portable-Patched',
+    installed_at: 1695000000,
+    playtime_seconds: 250000,
+    last_played: 1723000000,
     launch_candidates: [
       { name: 'Baldur\'s Gate 3 (DX11)', executable: 'bin/bg3_dx11.exe', arguments: '' },
       { name: 'Baldur\'s Gate 3 (Vulkan)', executable: 'bin/bg3.exe', arguments: '' }
@@ -163,6 +178,9 @@ export const MOCK_GAMES = [
     operating_mode: '',
     runner: 'linux',
     state: 'Clean',
+    installed_at: 1680000000,
+    playtime_seconds: 14400,
+    last_played: 1710000000,
     launch_candidates: [
       { name: 'Celeste', executable: 'Celeste.bin.x86_64', arguments: '' }
     ]

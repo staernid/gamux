@@ -10,6 +10,7 @@ import (
 	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/saves"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/store"
 	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/tools"
@@ -58,7 +59,10 @@ func New(cfg *config.Config) *Engine {
 		Limiter:                 limiter,
 	})
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	httpClient := steam.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
 
 	savesSvc := saves.NewService(saves.ServiceConfig{
 		BackupDir:      cfg.BackupDir,

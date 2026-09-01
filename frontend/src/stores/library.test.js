@@ -120,39 +120,60 @@ describe('Decoupled Library Stores', () => {
     expect(s.totalBytes).toBe(6000);
   });
 
-  it('cycles sort order between Name A-Z and Size and updates filteredGames', () => {
-    const gameSmall = {
+  it('sorts and cycles sort orders across metadata dimensions', () => {
+    const gameZeta = {
       name: 'Zeta Game',
       app_id: '100',
       game_dir: '/games/zeta',
       is_patched: true,
       disk_size_bytes: 100,
+      installed_at: 1720000000,
+      last_played: 1725000000,
+      playtime_seconds: 500,
     };
-    const gameLarge = {
+    const gameAlpha = {
       name: 'Alpha Game',
       app_id: '200',
       game_dir: '/games/alpha',
       is_patched: false,
       disk_size_bytes: 9000,
+      installed_at: 1710000000,
+      last_played: 1715000000,
+      playtime_seconds: 15000,
     };
 
-    updateGameInStore(gameSmall);
-    updateGameInStore(gameLarge);
+    updateGameInStore(gameZeta);
+    updateGameInStore(gameAlpha);
 
-    // Initial: name_asc (Alpha Game first)
+    // 1. Initial: name_asc (Alpha Game first)
+    sortBy.set('name_asc');
     expect(get(sortBy)).toBe('name_asc');
     expect(get(filteredGames)[0].name).toBe('Alpha Game');
 
-    // Cycle sort -> size_desc (Alpha Game is larger so still first, but test sorting)
-    const next = cycleSortOrder();
-    expect(next).toBe('size_desc');
-    expect(get(sortBy)).toBe('size_desc');
-    expect(getSortLabel('size_desc')).toBe('Size (Largest)');
-    expect(getSortLabel('name_asc')).toBe('Name (A-Z)');
+    // 2. Sort by last_played_desc (Zeta Game played more recently)
+    sortBy.set('last_played_desc');
+    expect(get(filteredGames)[0].name).toBe('Zeta Game');
+    expect(getSortLabel('last_played_desc')).toBe('Last Played (Recent)');
 
-    // Cycle back -> name_asc
-    const next2 = cycleSortOrder();
-    expect(next2).toBe('name_asc');
-    expect(get(sortBy)).toBe('name_asc');
+    // 3. Sort by playtime_desc (Alpha Game has more playtime)
+    sortBy.set('playtime_desc');
+    expect(get(filteredGames)[0].name).toBe('Alpha Game');
+    expect(getSortLabel('playtime_desc')).toBe('Playtime (Most Played)');
+
+    // 4. Sort by install_desc (Zeta Game installed more recently)
+    sortBy.set('install_desc');
+    expect(get(filteredGames)[0].name).toBe('Zeta Game');
+    expect(getSortLabel('install_desc')).toBe('Installed (Newest)');
+
+    // 5. Sort by size_desc (Alpha Game is larger)
+    sortBy.set('size_desc');
+    expect(get(filteredGames)[0].name).toBe('Alpha Game');
+    expect(getSortLabel('size_desc')).toBe('Size (Largest)');
+
+    // 6. Test cycleSortOrder from name_asc
+    sortBy.set('name_asc');
+    const next = cycleSortOrder();
+    expect(next).toBe('last_played_desc');
+    expect(get(sortBy)).toBe('last_played_desc');
   });
 });

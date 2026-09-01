@@ -52,7 +52,7 @@ export function renameGameInStore(oldDir, rawOrNormalizedGame) {
   if (!updated) return null;
 
   games.update(list => {
-    const idx = list.findIndex(g => isSamePath(g.gameDir, oldDir) || isSamePath(g.gameDir, updated.gameDir));
+    const idx = list.findIndex(g => (oldDir && isSamePath(g.gameDir, oldDir)) || isSamePath(g.gameDir, updated.gameDir));
     if (idx >= 0) {
       const copy = [...list];
       copy[idx] = updated;
@@ -62,7 +62,7 @@ export function renameGameInStore(oldDir, rawOrNormalizedGame) {
   });
 
   selectedGame.update(current => {
-    if (current && (isSamePath(current.gameDir, oldDir) || isSamePath(current.gameDir, updated.gameDir))) {
+    if (current && ((oldDir && isSamePath(current.gameDir, oldDir)) || isSamePath(current.gameDir, updated.gameDir))) {
       return updated;
     }
     return current;
@@ -72,26 +72,5 @@ export function renameGameInStore(oldDir, rawOrNormalizedGame) {
 }
 
 export function updateGameInStore(rawOrNormalizedGame) {
-  if (!rawOrNormalizedGame) return null;
-  const updated = normalizeGame(rawOrNormalizedGame);
-  if (!updated) return null;
-
-  games.update(list => {
-    const idx = list.findIndex(g => isSamePath(g.gameDir, updated.gameDir));
-    if (idx >= 0) {
-      const copy = [...list];
-      copy[idx] = updated;
-      return copy;
-    }
-    return [updated, ...list];
-  });
-
-  selectedGame.update(current => {
-    if (current && isSamePath(current.gameDir, updated.gameDir)) {
-      return updated;
-    }
-    return current;
-  });
-
-  return updated;
+  return renameGameInStore(null, rawOrNormalizedGame);
 }

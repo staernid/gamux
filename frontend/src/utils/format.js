@@ -28,8 +28,15 @@ export function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+export function generateId(prefix = 'id') {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function formatTimeAgo(ts) {
-  if (!ts) return '';
+  if (!ts || ts <= 0) return '';
   const tsMs = ts > 1e11 ? ts : ts * 1000;
   const sec = Math.floor((Date.now() - tsMs) / 1000);
   if (sec < 60) return 'Just now';
@@ -37,7 +44,9 @@ export function formatTimeAgo(ts) {
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
-  return new Date(tsMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const days = Math.floor(hr / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(tsMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export function formatNewsHTML(raw) {
@@ -138,8 +147,4 @@ export function formatNewsHTML(raw) {
   s = s.replace(/(?:<br\s*\/?>\s*){3,}/gi, '<br/><br/>');
 
   return s;
-}
-
-export function cleanBBCode(bbcode) {
-  return formatNewsHTML(bbcode);
 }

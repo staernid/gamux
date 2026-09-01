@@ -255,7 +255,8 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		}
 
 		// If in loader or emulator mode, automatically redirect Steam client libraries through Wine DLL overrides
-		if resolved.OperatingMode == ModeLoader || resolved.OperatingMode == "loader" {
+		resolvedMode := domain.NormalizeOperatingMode(resolved.OperatingMode)
+		if resolvedMode == ModeLoader {
 			overridesParts = append(overridesParts, "steamclient,steamclient64=n,b")
 		}
 
@@ -280,7 +281,7 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 				envMap["PROTON_VERB"] = "waitforexitandrun"
 			}
 		}
-	} else if resolved.OperatingMode == ModeLoader || resolved.OperatingMode == "loader" {
+	} else if domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
 		// Linux native loader support (only when ModeLoader is active)
 		gbeBase := cfg.GbeDir
 		if !filepath.IsAbs(gbeBase) {

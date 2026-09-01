@@ -100,23 +100,29 @@ export async function rollbackGame(gameDir, dryRun = false) {
 export async function queueApplyGame(game, customOpts = null) {
   if (!game) return;
 
+  const gameDir = typeof game === 'string' ? game : (game.gameDir || game.GameDir);
+  const gameName = typeof game === 'string' ? '' : (game.name || game.Name || '');
+  const gameMode = typeof game === 'object' ? (game.operatingMode || game.operating_mode || game.OperatingMode || 'loader') : 'loader';
+
+  if (!gameDir) return;
+
   const defaultOpts = {
-    path: game.gameDir,
-    operating_mode: 'loader',
+    path: gameDir,
+    operating_mode: gameMode,
     normalize_dir: true,
     no_steamless: false,
     fetch_achievements: true,
   };
 
-  const opts = customOpts ? { ...defaultOpts, ...customOpts, path: game.gameDir } : defaultOpts;
+  const opts = customOpts ? { ...defaultOpts, ...customOpts, path: gameDir } : defaultOpts;
 
   try {
     await AppAPI.submitApply(opts);
     notificationStore.items.add({
       type: 'info',
       title: 'Task Enqueued',
-      message: `Configuring ${game.name}...`,
-      gameName: game.name
+      message: `Configuring ${gameName || 'game'}...`,
+      gameName: gameName
     });
   } catch (err) {
     notificationStore.error('Apply Failed', err);

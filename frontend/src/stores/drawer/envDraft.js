@@ -74,8 +74,4 @@ export function revertEnv(currentCustomEnv = {}, key) {
   return next;
 }
 
-export function deleteCustomEnv(currentCustomEnv = {}, key) {
-  const next = { ...currentCustomEnv };
-  delete next[key];
-  return next;
-}
+export const deleteCustomEnv = revertEnv;

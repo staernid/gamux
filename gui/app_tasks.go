@@ -3,11 +3,9 @@ package gui
 import (
 	"fmt"
 
-	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/tools"
-	"github.com/staernid/gamux/util"
 )
 
 // -----------------------------------------------------------------------------
@@ -16,47 +14,48 @@ import (
 
 // SubmitApply enqueues an asynchronous game post-processing setup task.
 func (a *App) SubmitApply(opts engine.ProcessOptions) (string, error) {
-	opts.Path = util.CanonicalPath(opts.Path)
-	if opts.Path == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(opts.Path)
+	if err != nil {
+		return "", err
 	}
+	opts.Path = path
 	return a.Engine.SubmitApply(opts)
 }
 
 // SubmitNormalize enqueues an asynchronous directory normalization task.
 func (a *App) SubmitNormalize(gamePath string) (string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
 	}
-	return a.Engine.SubmitNormalize(gamePath)
+	return a.Engine.SubmitNormalize(path)
 }
 
 // SubmitRollback enqueues an asynchronous game rollback task.
 func (a *App) SubmitRollback(gamePath string, dryRun bool) (string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
 	}
-	return a.Engine.SubmitRollback(gamePath, dryRun)
+	return a.Engine.SubmitRollback(path, dryRun)
 }
 
 // SubmitVerify enqueues an asynchronous depot integrity verification task.
 func (a *App) SubmitVerify(gamePath string) (string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
 	}
-	return a.Engine.SubmitVerify(gamePath)
+	return a.Engine.SubmitVerify(path)
 }
 
 // SubmitUpdate enqueues an asynchronous game update task.
 func (a *App) SubmitUpdate(gamePath string) (string, error) {
-	gamePath = util.CanonicalPath(gamePath)
-	if gamePath == "" {
-		return "", fmt.Errorf("game path cannot be empty")
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
 	}
-	return a.Engine.SubmitUpdate(gamePath)
+	return a.Engine.SubmitUpdate(path)
 }
 
 // StartDownloadTransfer enqueues a new resumable file/depot download in the unified tasks engine.
@@ -79,87 +78,101 @@ func (a *App) SubmitBatchLibraryOp(kind string) (string, error) {
 // Unified Task Management
 // -----------------------------------------------------------------------------
 
+func (a *App) requireTasks() (*tasks.Manager, error) {
+	if a.Engine == nil || a.Engine.Tasks == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
+	return a.Engine.Tasks, nil
+}
+
 // ListTasks returns all background tasks tracked by the unified tasks manager.
 func (a *App) ListTasks() []*tasks.Task {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return []*tasks.Task{}
+	if tm, err := a.requireTasks(); err == nil {
+		return tm.List()
 	}
-	return a.Engine.Tasks.List()
+	return []*tasks.Task{}
 }
 
 // GetTask retrieves details for a single task.
 func (a *App) GetTask(id string) (*tasks.Task, bool) {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return nil, false
+	if tm, err := a.requireTasks(); err == nil {
+		return tm.Get(id)
 	}
-	return a.Engine.Tasks.Get(id)
+	return nil, false
 }
 
 // PauseTask suspends an active or queued task.
 func (a *App) PauseTask(id string) error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return fmt.Errorf("task manager not initialized")
+	tm, err := a.requireTasks()
+	if err != nil {
+		return err
 	}
-	return a.Engine.Tasks.Pause(id)
+	return tm.Pause(id)
 }
 
 // ResumeTask continues a paused task.
 func (a *App) ResumeTask(id string) error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return fmt.Errorf("task manager not initialized")
+	tm, err := a.requireTasks()
+	if err != nil {
+		return err
 	}
-	return a.Engine.Tasks.Resume(id)
+	return tm.Resume(id)
 }
 
 // CancelTask terminates a running, queued, or paused task.
 func (a *App) CancelTask(id string) error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return fmt.Errorf("task manager not initialized")
+	tm, err := a.requireTasks()
+	if err != nil {
+		return err
 	}
-	return a.Engine.Tasks.Cancel(id)
+	return tm.Cancel(id)
 }
 
 // RemoveTask removes a finished task from the history list.
 func (a *App) RemoveTask(id string) error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return fmt.Errorf("task manager not initialized")
+	tm, err := a.requireTasks()
+	if err != nil {
+		return err
 	}
-	return a.Engine.Tasks.Remove(id)
+	return tm.Remove(id)
 }
 
 // ReorderTasks rearranges queued tasks by ID priority.
 func (a *App) ReorderTasks(ids []string) error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return fmt.Errorf("task manager not initialized")
+	tm, err := a.requireTasks()
+	if err != nil {
+		return err
 	}
-	return a.Engine.Tasks.Reorder(ids)
+	return tm.Reorder(ids)
 }
 
 // ClearFinishedTasks purges finished tasks from manager memory.
 func (a *App) ClearFinishedTasks() error {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return nil
+	if tm, err := a.requireTasks(); err == nil {
+		return tm.ClearFinished()
 	}
-	return a.Engine.Tasks.ClearFinished()
+	return nil
 }
 
 // SetTransferSpeedLimit configures the download bandwidth limiter (bytes/sec, 0 for unlimited) and persists it.
 func (a *App) SetTransferSpeedLimit(bps int64) {
-	if a.Engine != nil && a.Engine.Tasks != nil {
-		a.Engine.Tasks.SetSpeedLimit(bps)
+	if a.Engine != nil {
+		_ = a.Engine.SetTransferSpeedLimit(bps)
 	}
 	if a.Config != nil {
 		a.Config.TransferSpeedLimit = bps
-		_ = config.SaveConfig(a.Config, "")
 	}
 }
 
 // GetTransferSpeedLimit returns the active download bandwidth limit.
 func (a *App) GetTransferSpeedLimit() int64 {
-	if a.Engine == nil || a.Engine.Tasks == nil {
-		return 0
+	if a.Engine != nil {
+		return a.Engine.GetTransferSpeedLimit()
 	}
-	return a.Engine.Tasks.SpeedLimit()
+	if a.Config != nil {
+		return a.Config.TransferSpeedLimit
+	}
+	return 0
 }
 
 // GetToolsStatus returns version, release notes, and update status for GBE fork and steamless-rs.

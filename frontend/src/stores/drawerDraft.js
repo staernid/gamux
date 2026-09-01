@@ -2,6 +2,7 @@ import { writable, get } from 'svelte/store';
 import { saveGameProfile, resetGameProfile, rollbackGame, refreshGame, showInspector } from './library.js';
 import { notificationStore } from './notifications.js';
 import { AppAPI } from '../api/app.js';
+import { filterLaunchCandidates, getExecutablePath } from '../utils/game.js';
 import * as envDraft from './drawer/envDraft.js';
 
 // Re-export environment draft helpers for backward compatibility
@@ -33,35 +34,28 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     };
   }
 
-  const candidates = (game.launchCandidates || []).filter(c => {
-    const exe = (c.executable || '').toLowerCase();
-    return !exe.includes('steamclient_loader') && !exe.includes('coldclientloader');
-  });
-
+  const candidates = filterLaunchCandidates(game.launchCandidates || []);
+  const baseExe = getExecutablePath(game, candidates);
   const lp = game.launchProfile || null;
-  let baseExe = lp?.exe_path || game.exePath || candidates[0]?.executable || '';
-  if (baseExe.toLowerCase().includes('steamclient_loader') || baseExe.toLowerCase().includes('coldclientloader')) {
-    baseExe = candidates[0]?.executable || '';
-  }
 
   return {
     gameDir: game.gameDir || '',
-    name: game.name || '',
-    platform: game.platform || 'win64',
-    appId: game.appId || '',
+    name: lp?.name || '',
+    platform: lp?.platform || game.platform || 'win64',
+    appId: lp?.app_id || lp?.appId || '',
     exePath: baseExe,
-    exeArgs: lp?.exe_args || game.exeArgs || candidates[0]?.arguments || '',
-    operatingMode: lp?.operating_mode || lp?.operatingMode || game.operatingMode || '',
-    runner: lp?.runner || lp?.Runner || game.runner || '',
-    winePrefix: lp?.wine_prefix || lp?.winePrefix || game.winePrefix || '',
-    protonPath: lp?.proton_path || lp?.protonPath || game.protonPath || '',
+    exeArgs: lp?.exe_args || lp?.exeArgs || '',
+    operatingMode: lp?.operating_mode || lp?.operatingMode || '',
+    runner: lp?.runner || lp?.Runner || '',
+    winePrefix: lp?.wine_prefix || lp?.winePrefix || '',
+    protonPath: lp?.proton_path || lp?.protonPath || '',
     dllOverrides: lp?.dll_overrides || lp?.dllOverrides || '',
     mangoHud: lp?.mangohud ?? lp?.mangoHud ?? null,
     customEnv: { ...(lp?.custom_env || lp?.customEnv || {}) },
     language: lp?.language || '',
     sourceOverride: lp?.source_override || lp?.sourceOverride || '',
-    metadataProvider: lp?.metadata_provider || lp?.metadataProvider || game.metadataProvider || '',
-    metadataId: lp?.metadata_id || lp?.metadataId || game.metadataId || '',
+    metadataProvider: lp?.metadata_provider || lp?.metadataProvider || '',
+    metadataId: lp?.metadata_id || lp?.metadataId || '',
     optNormalize: globalCfg.normalize ?? true,
     optSteamless: globalCfg.steamless ?? true,
     optAchievements: globalCfg.achievements ?? true,
@@ -153,9 +147,9 @@ function createDrawerDraftStore() {
         game_dir: gameDir,
         exe_path: (draft.exePath || '').trim(),
         exe_args: (draft.exeArgs || '').trim(),
-        app_id: (draft.appId || game.appId || '').trim(),
-        name: (draft.name || game.name || '').trim(),
-        platform: game.platform || 'win64',
+        app_id: (draft.appId || '').trim(),
+        name: (draft.name || '').trim(),
+        platform: draft.platform || game.platform || 'win64',
         operating_mode: (draft.operatingMode || '').trim(),
         language: (draft.language || '').trim(),
         runner: (draft.runner || '').trim(),
@@ -173,13 +167,15 @@ function createDrawerDraftStore() {
         custom_icon_url: game.customIconUrl || '',
         locked_artwork: !!game.lockedArtwork,
         source_override: (draft.sourceOverride || '').trim(),
-        metadata_provider: (draft.metadataProvider ?? game.metadataProvider ?? '').trim(),
-        metadata_id: (draft.metadataId ?? game.metadataId ?? '').trim(),
+        metadata_provider: (draft.metadataProvider || '').trim(),
+        metadata_id: (draft.metadataId || '').trim(),
       };
 
       try {
-        await saveGameProfile(gameDir, launchProfile);
-        await refreshGame(gameDir);
+        const updated = await saveGameProfile(gameDir, launchProfile);
+        if (updated) {
+          this.init(updated);
+        }
         showInspector.set(false);
         notificationStore.success('Settings Saved', `Updated configuration for ${game.name || 'game'}`);
         return true;
@@ -193,11 +189,11 @@ function createDrawerDraftStore() {
       showInspector.set(false);
     },
 
-    async resetDefaults(game) {
+    async resetDefaults(game, globalCfg = {}) {
       if (!game?.gameDir) return false;
       try {
-        await resetGameProfile(game.gameDir);
-        await refreshGame(game.gameDir);
+        const updated = await resetGameProfile(game.gameDir);
+        this.init(updated || { ...game, launchProfile: null }, globalCfg);
         notificationStore.info('Defaults Restored', `Restored default configuration for ${game.name || 'game'}`);
         return true;
       } catch (err) {

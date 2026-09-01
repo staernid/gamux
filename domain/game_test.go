@@ -82,9 +82,10 @@ func TestGame_EffectiveAccessors(t *testing.T) {
 		ExeArgs:       "--custom",
 		OperatingMode: ModePortable,
 		Runner:        RunnerLinux,
-		WinePrefix:    "/prefixes/custom",
+		WinePrefix:      "/prefixes/custom",
 		PlaytimeSeconds: 3600,
-		LastPlayed:    1700000000,
+		LastPlayed:      1700000000,
+		InstalledAt:     1680000000,
 	}
 
 	if g.EffectiveExePath() != "/games/test/custom.sh" {
@@ -105,6 +106,9 @@ func TestGame_EffectiveAccessors(t *testing.T) {
 	playtime, lastPlayed := g.EffectivePlaytime()
 	if playtime != 3600 || lastPlayed != 1700000000 {
 		t.Errorf("expected playtime 3600 / 1700000000, got %d / %d", playtime, lastPlayed)
+	}
+	if g.EffectiveInstalledAt() != 1680000000 {
+		t.Errorf("expected installed at 1680000000, got %d", g.EffectiveInstalledAt())
 	}
 }
 
@@ -174,4 +178,52 @@ func TestGame_AssetGetSet(t *testing.T) {
 		t.Errorf("unexpected hero location: %+v", heroLoc)
 	}
 }
+
+func TestNormalizeOperatingMode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"portable", ModePortable},
+		{"injected", ModePortable},
+		{"Injected", ModePortable},
+		{"patch", ModePortable},
+		{"portable-patched", ModePortable},
+		{"loader", ModeLoader},
+		{"LOADER", ModeLoader},
+		{"loader-configured", ModeLoader},
+		{"none", ModeNone},
+		{"standalone", ModeNone},
+		{"clean", ModeNone},
+		{"drm-free", ModeNone},
+		{"native", ModeNative},
+	}
+
+	for _, tt := range tests {
+		actual := NormalizeOperatingMode(tt.input)
+		if actual != tt.expected {
+			t.Errorf("NormalizeOperatingMode(%q) = %q, expected %q", tt.input, actual, tt.expected)
+		}
+	}
+}
+
+func TestGame_InjectedOperatingMode(t *testing.T) {
+	g := NewGame("Injected Game", "/games/injected", "1091500", "win64")
+	g.LaunchProfile = &LaunchProfile{
+		OperatingMode: "injected",
+	}
+
+	if g.EffectiveOperatingMode() != ModePortable {
+		t.Errorf("expected EffectiveOperatingMode to normalize 'injected' to ModePortable, got %s", g.EffectiveOperatingMode())
+	}
+	if !g.IsPortablePatched() {
+		t.Error("expected IsPortablePatched to be true for 'injected' mode")
+	}
+
+	g.RecomputeState()
+	if g.State != "Portable-Patched" || !g.IsPortable || !g.IsPatched {
+		t.Errorf("expected Portable-Patched state for injected mode, got State=%s, IsPortable=%v, IsPatched=%v", g.State, g.IsPortable, g.IsPatched)
+	}
+}
+
 

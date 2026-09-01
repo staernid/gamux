@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -52,6 +53,36 @@ func safeEmit(ctx context.Context, eventName string, data ...any) {
 	wailsRuntime.EventsEmit(ctx, eventName, data...)
 }
 
+func parseMetaInt(md map[string]string, key string) int {
+	if md == nil {
+		return 0
+	}
+	if val, ok := md[key]; ok {
+		n, _ := strconv.Atoi(val)
+		return n
+	}
+	return 0
+}
+
+func parseMetaInt64(md map[string]string, key string) int64 {
+	if md == nil {
+		return 0
+	}
+	if val, ok := md[key]; ok {
+		n, _ := strconv.ParseInt(val, 10, 64)
+		return n
+	}
+	return 0
+}
+
+func requireGamePath(gamePath string) (string, error) {
+	c := util.CanonicalPath(gamePath)
+	if c == "" {
+		return "", fmt.Errorf("game path cannot be empty")
+	}
+	return c, nil
+}
+
 // Startup is called when the Wails application starts up.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
@@ -75,42 +106,26 @@ func (a *App) Startup(ctx context.Context) {
 				})
 			}
 			if ev.Type == events.EventGameLaunched {
-				pid := 0
-				if pStr, ok := ev.Metadata["pid"]; ok {
-					pid, _ = strconv.Atoi(pStr)
-				}
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
 					"gameDir":   ev.GameDir,
 					"isRunning": true,
-					"pid":       pid,
+					"pid":       parseMetaInt(ev.Metadata, "pid"),
 				})
 			}
 			if ev.Type == events.EventGameExited {
-				var sessionSec, playtimeSec, lastPlayed int64
-				if sStr, ok := ev.Metadata["session_seconds"]; ok {
-					sessionSec, _ = strconv.ParseInt(sStr, 10, 64)
-				}
-				if pStr, ok := ev.Metadata["playtime_seconds"]; ok {
-					playtimeSec, _ = strconv.ParseInt(pStr, 10, 64)
-				}
-				if lStr, ok := ev.Metadata["last_played"]; ok {
-					lastPlayed, _ = strconv.ParseInt(lStr, 10, 64)
-				}
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
 					"gameDir":         ev.GameDir,
 					"isRunning":       false,
 					"pid":             0,
-					"sessionSeconds":  sessionSec,
-					"playtimeSeconds": playtimeSec,
-					"lastPlayed":      lastPlayed,
+					"sessionSeconds":  parseMetaInt64(ev.Metadata, "session_seconds"),
+					"playtimeSeconds": parseMetaInt64(ev.Metadata, "playtime_seconds"),
+					"lastPlayed":      parseMetaInt64(ev.Metadata, "last_played"),
 				})
 			}
 			if ev.Type == events.EventTaskProgress && ev.Metadata != nil && ev.Metadata["step"] != "" {
-				step, _ := strconv.Atoi(ev.Metadata["step"])
-				total, _ := strconv.Atoi(ev.Metadata["total"])
 				safeEmit(a.ctx, "gamux:step-progress", map[string]any{
-					"step":    step,
-					"total":   total,
+					"step":    parseMetaInt(ev.Metadata, "step"),
+					"total":   parseMetaInt(ev.Metadata, "total"),
 					"title":   ev.Stage,
 					"details": ev.Details,
 					"percent": ev.Progress.Percent,

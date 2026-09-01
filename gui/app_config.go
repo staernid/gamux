@@ -21,7 +21,7 @@ func (a *App) GetConfig() (*config.Config, error) {
 	return a.Config, nil
 }
 
-// SaveConfig validates and saves new configuration settings.
+// SaveConfig validates, merges, and saves new configuration settings.
 func (a *App) SaveConfig(newCfg *config.Config) error {
 	if newCfg == nil {
 		return fmt.Errorf("configuration cannot be nil")
@@ -29,18 +29,25 @@ func (a *App) SaveConfig(newCfg *config.Config) error {
 	if err := config.SaveConfig(newCfg, ""); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
-	a.Config = newCfg
-	a.Engine = engine.New(newCfg)
+	// Reload full merged config from disk so in-memory engine and state reflect complete configuration
+	loadedCfg, err := config.LoadConfig("")
+	if err == nil {
+		a.Config = loadedCfg
+		a.Engine = engine.New(loadedCfg)
+	} else {
+		a.Config = newCfg
+		a.Engine = engine.New(newCfg)
+	}
 	slog.Info("Configuration updated and saved via GUI")
 	return nil
 }
 
 // GetGSEUserConfig returns the global Goldberg user persona settings from configs.user.ini.
 func (a *App) GetGSEUserConfig() (*gbe.GSEUserConfig, error) {
-	if a.Engine != nil {
-		return a.Engine.GetGSEUserConfig()
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
 	}
-	return gbe.LoadGSEUserConfig()
+	return a.Engine.GetGSEUserConfig()
 }
 
 // SaveGSEUserConfig persists the global Goldberg user persona settings to configs.user.ini.
@@ -48,8 +55,8 @@ func (a *App) SaveGSEUserConfig(cfg *gbe.GSEUserConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("gse user config cannot be nil")
 	}
-	if a.Engine != nil {
-		return a.Engine.SaveGSEUserConfig(cfg)
+	if a.Engine == nil {
+		return fmt.Errorf("engine not initialized")
 	}
-	return gbe.SaveGSEUserConfig(cfg)
+	return a.Engine.SaveGSEUserConfig(cfg)
 }

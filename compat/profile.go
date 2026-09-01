@@ -148,6 +148,9 @@ func SaveProfile(p *domain.LaunchProfile) error {
 		if data, err := os.ReadFile(profilePath); err == nil {
 			var existing domain.LaunchProfile
 			if err := json.Unmarshal(data, &existing); err == nil {
+				if p.InstalledAt <= 0 && existing.InstalledAt > 0 {
+					p.InstalledAt = existing.InstalledAt
+				}
 				if p.PlaytimeSeconds <= 0 && existing.PlaytimeSeconds > 0 {
 					p.PlaytimeSeconds = existing.PlaytimeSeconds
 				}
@@ -218,7 +221,7 @@ func SaveProfileDirect(p *domain.LaunchProfile) error {
 		return fmt.Errorf("marshal launch profile: %w", err)
 	}
 
-	return os.WriteFile(profilePath, data, 0644)
+	return util.WriteFileAtomic(profilePath, data, 0644)
 }
 
 // IncrementPlaytime atomically adds delta seconds to a game's accumulated playtime and updates last played timestamp.

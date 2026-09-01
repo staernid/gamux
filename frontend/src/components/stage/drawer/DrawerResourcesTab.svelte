@@ -6,8 +6,8 @@
   export let game = null;
 
   $: name = game?.name || '';
-  $: appId = game?.appId || game?.app_id || '';
-  $: gogId = game?.gogId || game?.gog_id || '';
+  $: appId = game?.appId || '';
+  $: gogId = game?.gogId || '';
   $: isSteam = isSteamApp(appId);
   $: isGOG = Boolean(gogId || (game?.store && game.store.toLowerCase().includes('gog')));
 

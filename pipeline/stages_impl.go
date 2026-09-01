@@ -396,6 +396,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 			opMode = domain.ModeLoader
 		}
 	}
+	opMode = domain.NormalizeOperatingMode(opMode)
 
 	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
 	if !pctx.Game.RequiresSteamEmulator() || opMode == domain.ModeNone || opMode == domain.ModeStandalone {

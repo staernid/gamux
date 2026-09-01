@@ -11,6 +11,9 @@ import {
   formatLastPlayed,
   hasMetadataMatch,
   getMetadataInfo,
+  filterLaunchCandidates,
+  getExecutablePath,
+  countOverrides,
 } from './game.js';
 
 describe('Game Data Model & Normalization Helpers', () => {
@@ -42,6 +45,14 @@ describe('Game Data Model & Normalization Helpers', () => {
       dlc_count: 3,
       achievement_count: 44,
       state: 'Portable-Patched',
+      installed_at: 1700000000,
+      playtime_seconds: 7200,
+      last_played: 1720000000,
+      summary: 'An open-world RPG set in Night City.',
+      release_date: 'Dec 10, 2020',
+      developers: ['CD PROJEKT RED'],
+      publishers: ['CD PROJEKT RED'],
+      genres: ['RPG', 'Action'],
       LaunchCandidates: [
         { Name: 'Main Game', Executable: 'bin/x64/Cyberpunk2077.exe', Arguments: '-vulkan' },
         { Name: 'Technical Loader', Executable: 'steamclient_loader.exe', Arguments: '' }
@@ -75,6 +86,14 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.operatingMode).toBe('portable');
     expect(normalized.runner).toBe('wine');
     expect(normalized.winePrefix).toBe('~/.wine');
+    expect(normalized.installedAt).toBe(1700000000);
+    expect(normalized.playtimeSeconds).toBe(7200);
+    expect(normalized.lastPlayed).toBe(1720000000);
+    expect(normalized.summary).toBe('An open-world RPG set in Night City.');
+    expect(normalized.releaseDate).toBe('Dec 10, 2020');
+    expect(normalized.developers).toEqual(['CD PROJEKT RED']);
+    expect(normalized.publishers).toEqual(['CD PROJEKT RED']);
+    expect(normalized.genres).toEqual(['RPG', 'Action']);
 
     // Technical loader should be filtered out from candidates
     expect(normalized.launchCandidates.length).toBe(1);
@@ -174,5 +193,72 @@ describe('Game Data Model & Normalization Helpers', () => {
     };
     expect(getMetadataInfo(standaloneGame)).toEqual({ provider: 'None', id: '' });
     expect(hasMetadataMatch(standaloneGame)).toBe(false);
+  });
+
+  it('filters launch candidates to exclude technical loader helpers', () => {
+    const raw = [
+      { name: 'Loader', executable: 'C:/Game/steamclient_loader.exe' },
+      { name: 'Cold Loader', executable: 'C:/Game/coldclientloader.exe' },
+      { name: 'Main Game', executable: 'C:/Game/game.exe', arguments: '-debug' },
+    ];
+    const filtered = filterLaunchCandidates(raw);
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].name).toBe('Main Game');
+    expect(filtered[0].executable).toBe('C:/Game/game.exe');
+    expect(filtered[0].arguments).toBe('-debug');
+  });
+
+  it('extracts executable path avoiding loader binaries', () => {
+    const candidates = [{ name: 'Main', executable: '/games/main.exe' }];
+    const gameWithLoader = {
+      exe_path: '/games/steamclient_loader.exe',
+      launchCandidates: candidates,
+    };
+    expect(getExecutablePath(gameWithLoader, candidates)).toBe('/games/main.exe');
+
+    const gameNormal = {
+      exe_path: '/games/custom.exe',
+    };
+    expect(getExecutablePath(gameNormal, candidates)).toBe('/games/custom.exe');
+  });
+
+  it('accurately calculates active overrides against baseline defaults', () => {
+    const game = {
+      name: 'Cyberpunk 2077',
+      platform: 'win64',
+      exePath: 'bin/x64/Cyberpunk2077.exe',
+      launchCandidates: [{ executable: 'bin/x64/Cyberpunk2077.exe', arguments: '' }],
+    };
+    const globalCfg = { default_runner: 'umu', mangohud: false, language: 'auto' };
+
+    // Clean baseline
+    const cleanDraft = {
+      name: '',
+      platform: 'win64',
+      exePath: 'bin/x64/Cyberpunk2077.exe',
+      exeArgs: '',
+      operatingMode: '',
+      runner: '',
+      winePrefix: '',
+      protonPath: '',
+      dllOverrides: '',
+      mangoHud: null,
+      customEnv: {},
+      language: '',
+      sourceOverride: '',
+      metadataProvider: '',
+    };
+    expect(countOverrides(cleanDraft, game, globalCfg)).toBe(0);
+
+    // Add runner, mangohud, env override, and title override
+    const modifiedDraft = {
+      ...cleanDraft,
+      name: 'Cyberpunk Custom Edition',
+      runner: 'wine',
+      mangoHud: true,
+      customEnv: { PROTON_FORCE_NVAPI: '1' },
+      dllOverrides: 'dxgi=n,b',
+    };
+    expect(countOverrides(modifiedDraft, game, globalCfg)).toBe(5);
   });
 });

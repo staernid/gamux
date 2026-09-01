@@ -804,3 +804,51 @@ func GetMusicDir() string {
 	}
 	return "~/Music"
 }
+
+// WriteFileAtomic writes data to a temporary file in the same directory as filePath
+// and renames it atomically to filePath to prevent file corruption or truncation.
+func WriteFileAtomic(filePath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create dir %s: %w", dir, err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, filepath.Base(filePath)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp file in %s: %w", dir, err)
+	}
+	tmpPath := tmpFile.Name()
+
+	cleanUp := true
+	defer func() {
+		if cleanUp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("write temp file %s: %w", tmpPath, err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("sync temp file %s: %w", tmpPath, err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file %s: %w", tmpPath, err)
+	}
+
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("chmod temp file %s: %w", tmpPath, err)
+	}
+
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("rename %s to %s: %w", tmpPath, filePath, err)
+	}
+
+	cleanUp = false
+	return nil
+}
+

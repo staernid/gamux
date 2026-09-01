@@ -90,8 +90,8 @@ func (a *App) OpenURL(rawURL string) error {
 
 // GetDiskSpace returns filesystem disk usage metrics (total, free, used bytes) for the given path.
 func (a *App) GetDiskSpace(path string) (*util.DiskSpaceInfo, error) {
-	if a.Engine != nil {
-		return a.Engine.GetDiskSpace(path)
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
 	}
-	return util.GetDiskSpace(path)
+	return a.Engine.GetDiskSpace(path)
 }

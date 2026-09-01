@@ -45,9 +45,9 @@ export function GetGameBackups(arg1:string):Promise<Array<saves.BackupInfo>>;
 
 export function GetGameDepots(arg1:string):Promise<Array<domain.DepotSummary>>;
 
-export function GetGameDetails(arg1:string):Promise<gui.GameMetadataDetails>;
-
 export function GetGameLog(arg1:string):Promise<string>;
+
+export function GetGameMetadata(arg1:string,arg2:string):Promise<gui.GameMetadataDetails>;
 
 export function GetGameSaveLocations(arg1:string):Promise<saves.SaveLocationsResult>;
 

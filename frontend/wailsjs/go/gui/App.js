@@ -62,12 +62,12 @@ export function GetGameDepots(arg1) {
   return window['go']['gui']['App']['GetGameDepots'](arg1);
 }
 
-export function GetGameDetails(arg1) {
-  return window['go']['gui']['App']['GetGameDetails'](arg1);
-}
-
 export function GetGameLog(arg1) {
   return window['go']['gui']['App']['GetGameLog'](arg1);
+}
+
+export function GetGameMetadata(arg1, arg2) {
+  return window['go']['gui']['App']['GetGameMetadata'](arg1, arg2);
 }
 
 export function GetGameSaveLocations(arg1) {

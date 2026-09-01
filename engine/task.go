@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/pipeline"
@@ -373,4 +374,34 @@ func (eng *Engine) registerDefaultTaskRunners() {
 		}
 		return op.Execute(ctx, ctrl)
 	})
+}
+
+// SetTransferSpeedLimit updates the task limiter speed and granularly persists the updated setting via read-modify-write.
+func (eng *Engine) SetTransferSpeedLimit(bps int64) error {
+	if eng.Tasks != nil {
+		eng.Tasks.SetSpeedLimit(bps)
+	}
+	if eng.Config != nil {
+		eng.Config.TransferSpeedLimit = bps
+	}
+	// Granularly update config on disk via read-modify-write without dumping arbitrary in-memory state
+	_, err := config.UpdateConfig("", func(c *config.Config) error {
+		c.TransferSpeedLimit = bps
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("save config speed limit: %w", err)
+	}
+	return nil
+}
+
+// GetTransferSpeedLimit returns the current active download bandwidth limiter setting.
+func (eng *Engine) GetTransferSpeedLimit() int64 {
+	if eng.Tasks != nil {
+		return eng.Tasks.SpeedLimit()
+	}
+	if eng.Config != nil {
+		return eng.Config.TransferSpeedLimit
+	}
+	return 0
 }

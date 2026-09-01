@@ -214,10 +214,16 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 
 	existingProf, _ := compat.LoadProfile(opts.GameDir)
 	prevMode := ""
-	if existingProf != nil {
-		prevMode = existingProf.OperatingMode
+	if existingProf != nil && existingProf.OperatingMode != "" {
+		prevMode = domain.NormalizeOperatingMode(existingProf.OperatingMode)
+	} else if eng.Config != nil && eng.Config.OperatingMode != "" {
+		prevMode = domain.NormalizeOperatingMode(eng.Config.OperatingMode)
 	}
-	newMode := opts.OperatingMode
+	newMode := ""
+	if opts.OperatingMode != "" {
+		newMode = domain.NormalizeOperatingMode(opts.OperatingMode)
+		opts.OperatingMode = newMode
+	}
 
 	// Always sync profile and lightweight text configs (steam_appid.txt, force_language.txt)
 	if err := compat.SyncSettings(ctx, &opts, eng.Config); err != nil {

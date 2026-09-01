@@ -2,8 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/staernid/gamux/util"
 )
 
 // Config holds user-configurable paths and settings for gamux.
@@ -157,33 +161,89 @@ func hydrateAPIKeys(cfg *Config) {
 	if cfg == nil {
 		return
 	}
-	if cfg.SteamGridDBAPIKey == "" {
-		if envKey := os.Getenv("STEAMGRIDDB_API_KEY"); envKey != "" {
-			cfg.SteamGridDBAPIKey = envKey
-		} else if home, err := os.UserHomeDir(); err == nil {
-			keyFile := filepath.Join(home, ".config", "gamux", "steamgriddb_key.txt")
+	home, _ := os.UserHomeDir()
+	configDir := ""
+	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
+		configDir = filepath.Join(configHome, "gamux")
+	} else if home != "" {
+		configDir = filepath.Join(home, ".config", "gamux")
+	}
+
+	loadKey := func(currentVal, envVar, fileName string) string {
+		if currentVal != "" {
+			return currentVal
+		}
+		if envKey := strings.TrimSpace(os.Getenv(envVar)); envKey != "" {
+			return envKey
+		}
+		if configDir != "" {
+			keyFile := filepath.Join(configDir, fileName)
 			if data, err := os.ReadFile(keyFile); err == nil {
-				cfg.SteamGridDBAPIKey = string(data)
+				return strings.TrimSpace(string(data))
 			}
 		}
+		return ""
 	}
+
+	cfg.SteamGridDBAPIKey = loadKey(cfg.SteamGridDBAPIKey, "STEAMGRIDDB_API_KEY", "steamgriddb_key.txt")
+	cfg.SteamWebAPIKey = loadKey(cfg.SteamWebAPIKey, "STEAM_WEB_API_KEY", "steam_web_key.txt")
+	cfg.HubcapAPIKey = loadKey(cfg.HubcapAPIKey, "HUBCAP_API_KEY", "hubcap_key.txt")
+	cfg.RAWGAPIKey = loadKey(cfg.RAWGAPIKey, "RAWG_API_KEY", "rawg_key.txt")
 }
 
-// SaveConfig writes a Config struct cleanly to a JSON file on disk.
+// SaveConfig writes a Config struct cleanly and atomically to a JSON file on disk,
+// merging updates with any existing configuration on disk to prevent accidental field deletion.
 func SaveConfig(cfg *Config, path string) error {
 	if cfg == nil {
 		return nil
 	}
 	path = GetConfigPath(path)
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+
+	diskMap := make(map[string]any)
+	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+		_ = json.Unmarshal(data, &diskMap)
 	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
+
+	incomingBytes, err := json.Marshal(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal incoming config: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+
+	var incomingMap map[string]any
+	if err := json.Unmarshal(incomingBytes, &incomingMap); err != nil {
+		return fmt.Errorf("unmarshal incoming config map: %w", err)
+	}
+
+	for k, v := range incomingMap {
+		diskMap[k] = v
+	}
+
+	mergedData, err := json.MarshalIndent(diskMap, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal merged config: %w", err)
+	}
+
+	return util.WriteFileAtomic(path, mergedData, 0644)
+}
+
+// UpdateConfig loads the existing configuration from disk (or uses DefaultConfig if non-existent),
+// executes a mutation callback to update specific fields, and writes the updated config atomically.
+func UpdateConfig(path string, mutate func(cfg *Config) error) (*Config, error) {
+	resolvedPath := GetConfigPath(path)
+	cfg, err := LoadConfig(resolvedPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("load config for update: %w", err)
+	}
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+	if err := mutate(cfg); err != nil {
+		return nil, fmt.Errorf("mutate config: %w", err)
+	}
+	if err := SaveConfig(cfg, resolvedPath); err != nil {
+		return nil, fmt.Errorf("save updated config: %w", err)
+	}
+	return cfg, nil
 }
 
 // InitConfig initializes the configuration or loads it from a file.
@@ -191,3 +251,4 @@ func InitConfig(customPath string) error {
 	_, err := LoadConfig(customPath)
 	return err
 }
+

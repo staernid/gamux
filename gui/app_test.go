@@ -18,6 +18,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
+	defer restoreEnv()
 	restore := testutil.SilenceLogging()
 	
 	// Stub HTTP requests to avoid live network latency and external rate limits
@@ -45,6 +47,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	restore()
+	restoreEnv()
 	os.Exit(code)
 }
 
@@ -89,6 +92,61 @@ func TestApp_GetAndSaveConfig(t *testing.T) {
 	}
 	if loadedFromFile.SteamWebAPIKey != "test-api-key" || !loadedFromFile.MangoHud {
 		t.Errorf("config on disk did not persist, got: %+v", loadedFromFile)
+	}
+}
+
+func TestApp_SaveConfig_MergeOnSave(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgDir := filepath.Join(tmpDir, "gamux")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(cfgDir, "config.json")
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Pre-create config file with HubcapAPIKey and LibraryPaths
+	existingJSON := `{
+		"hubcap_api_key": "LIVE_HUBCAP_KEY_123",
+		"library_paths": ["/My/Games"],
+		"operating_mode": "loader"
+	}`
+	if err := os.WriteFile(cfgPath, []byte(existingJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(nil)
+	if app.Config.HubcapAPIKey != "LIVE_HUBCAP_KEY_123" {
+		t.Errorf("expected initial loaded HubcapAPIKey 'LIVE_HUBCAP_KEY_123', got %q", app.Config.HubcapAPIKey)
+	}
+
+	// Suppose a partial UI payload is submitted without HubcapAPIKey
+	partialDraft := &config.Config{
+		OperatingMode: "standalone",
+		MangoHud:      true,
+	}
+
+	if err := app.SaveConfig(partialDraft); err != nil {
+		t.Fatalf("app.SaveConfig failed: %v", err)
+	}
+
+	// Verify app.Config retained HubcapAPIKey and updated OperatingMode
+	if app.Config.HubcapAPIKey != "LIVE_HUBCAP_KEY_123" {
+		t.Errorf("expected app.Config to retain HubcapAPIKey, got %q", app.Config.HubcapAPIKey)
+	}
+	if app.Config.OperatingMode != "standalone" {
+		t.Errorf("expected app.Config OperatingMode 'standalone', got %q", app.Config.OperatingMode)
+	}
+
+	// Verify disk contents
+	loaded, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if loaded.HubcapAPIKey != "LIVE_HUBCAP_KEY_123" {
+		t.Errorf("expected disk HubcapAPIKey 'LIVE_HUBCAP_KEY_123', got %q", loaded.HubcapAPIKey)
+	}
+	if len(loaded.LibraryPaths) != 1 || loaded.LibraryPaths[0] != "/My/Games" {
+		t.Errorf("expected disk LibraryPaths preserved, got %+v", loaded.LibraryPaths)
 	}
 }
 
@@ -356,5 +414,37 @@ func TestApp_SubmitTasks(t *testing.T) {
 	task, exists := app.GetTask(taskID)
 	if !exists || task == nil {
 		t.Errorf("GetTask(%s) not found", taskID)
+	}
+}
+
+func TestApp_MetadataAndSpeedLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	app := NewApp(config.DefaultConfig())
+
+	// Test GetGameMetadata with invalid/unlinked provider
+	if _, err := app.GetGameMetadata("none", "12345"); err == nil {
+		t.Error("expected error for unlinked provider, got nil")
+	}
+	if _, err := app.GetGameMetadata("steam", ""); err == nil {
+		t.Error("expected error for empty id, got nil")
+	}
+
+	// Test GetGameMetadata with valid mocked steam provider
+	meta, err := app.GetGameMetadata("steam", "12345")
+	if err != nil {
+		t.Fatalf("GetGameMetadata failed: %v", err)
+	}
+	if meta.Name != "Test Game" {
+		t.Errorf("expected game name 'Test Game', got %q", meta.Name)
+	}
+
+	// Test TransferSpeedLimit
+	if limit := app.GetTransferSpeedLimit(); limit != 0 {
+		t.Errorf("expected default speed limit 0, got %d", limit)
+	}
+	app.SetTransferSpeedLimit(5242880)
+	if limit := app.GetTransferSpeedLimit(); limit != 5242880 {
+		t.Errorf("expected updated speed limit 5242880, got %d", limit)
 	}
 }

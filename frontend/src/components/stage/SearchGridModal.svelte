@@ -1,8 +1,10 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte';
   import PosterArt from '../common/PosterArt.svelte';
-  import { games, selectedGame } from '../../stores/library.js';
-  import { getPlatformColors, isSamePath } from '../../utils/game.js';
+  import ModalShell from '../common/ModalShell.svelte';
+  import { games, selectedGame, sortBy, getSortLabel } from '../../stores/library.js';
+  import { getPlatformColors, isSamePath, formatPlaytime, formatLastPlayed, formatInstallDate } from '../../utils/game.js';
+  import { formatBytes } from '../../utils/format.js';
 
   const dispatch = createEventDispatcher();
 
@@ -11,8 +13,16 @@
   let focusedIndex = 0;
   let gridContainerEl;
 
+  const quickSortOptions = [
+    { id: 'name_asc', label: 'Name' },
+    { id: 'last_played_desc', label: 'Last Played' },
+    { id: 'playtime_desc', label: 'Playtime' },
+    { id: 'install_desc', label: 'Installed' },
+    { id: 'size_desc', label: 'Size' },
+  ];
+
   $: allGames = $games || [];
-  $: filtered = query.trim()
+  $: searchedGames = query.trim()
     ? allGames.filter(g => {
         const q = query.toLowerCase();
         const name = (g.name || '').toLowerCase();
@@ -20,6 +30,62 @@
         return name.includes(q) || appId.includes(q);
       })
     : allGames;
+
+  $: filtered = [...searchedGames].sort((a, b) => {
+    if ($sortBy === 'name_asc') {
+      return (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'name_desc') {
+      return (b.name || '').localeCompare(a.name || '');
+    } else if ($sortBy === 'last_played_desc') {
+      const diff = (b.lastPlayed || 0) - (a.lastPlayed || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'last_played_asc') {
+      const diff = (a.lastPlayed || 0) - (b.lastPlayed || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'playtime_desc') {
+      const diff = (b.playtimeSeconds || 0) - (a.playtimeSeconds || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'playtime_asc') {
+      const diff = (a.playtimeSeconds || 0) - (b.playtimeSeconds || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'install_desc') {
+      const diff = (b.installedAt || 0) - (a.installedAt || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'install_asc') {
+      const diff = (a.installedAt || 0) - (b.installedAt || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'size_desc') {
+      const diff = (b.diskSizeBytes || 0) - (a.diskSizeBytes || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'size_asc') {
+      const diff = (a.diskSizeBytes || 0) - (b.diskSizeBytes || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'appid') {
+      const diff = (parseInt(a.appId, 10) || 0) - (parseInt(b.appId, 10) || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    } else if ($sortBy === 'status') {
+      const diff = (b.isPatched ? 1 : 0) - (a.isPatched ? 1 : 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    }
+    return 0;
+  });
+
+  function getCardMetaBadge(g, sortMode) {
+    if (!g) return '';
+    if (sortMode === 'last_played_desc' || sortMode === 'last_played_asc') {
+      return g.lastPlayed > 0 ? formatLastPlayed(g.lastPlayed) : 'Never';
+    }
+    if (sortMode === 'playtime_desc' || sortMode === 'playtime_asc') {
+      return g.playtimeSeconds > 0 ? formatPlaytime(g.playtimeSeconds) : '0 hrs';
+    }
+    if (sortMode === 'install_desc' || sortMode === 'install_asc') {
+      return g.installedAt > 0 ? formatInstallDate(g.installedAt) : '';
+    }
+    if (sortMode === 'size_desc' || sortMode === 'size_asc') {
+      return g.diskSizeBytes > 0 ? formatBytes(g.diskSizeBytes) : '';
+    }
+    return '';
+  }
 
   $: {
     if (focusedIndex >= filtered.length) {
@@ -79,51 +145,63 @@
   }
 </script>
 
-<div
-  role="dialog"
-  aria-modal="true"
-  tabindex="-1"
-  on:keydown={handleKeydown}
-  class="fixed inset-0 z-50 bg-[#09090c]/92 backdrop-blur-2xl flex flex-col p-6 sm:p-10 select-none animate-in fade-in duration-150 outline-none"
->
+<svelte:window on:keydown={handleKeydown} />
+
+<ModalShell customHeader={true} padding="p-6 sm:p-10" on:close={() => dispatch('close')}>
   <!-- Top Search Bar Header -->
-  <div class="flex items-center justify-between max-w-5xl w-full mx-auto mb-6 flex-shrink-0">
-    <div class="relative flex-1 max-w-xl flex items-center">
-      <svg class="w-5 h-5 text-slate-400 absolute left-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input
-        bind:this={searchInputEl}
-        bind:value={query}
-        type="text"
-        placeholder="Type to filter titles..."
-        class="w-full bg-[#14141d] border border-[#262638] focus:border-[#1a9fff] rounded-2xl pl-12 pr-10 py-3 text-base text-white outline-none font-mono transition-all shadow-xl placeholder:text-slate-500"
-      />
-      {#if query}
+  <div class="flex flex-col gap-3 max-w-5xl w-full mx-auto mb-6 flex-shrink-0">
+    <div class="flex items-center justify-between gap-4">
+      <div class="relative flex-1 max-w-xl flex items-center">
+        <svg class="w-5 h-5 text-slate-400 absolute left-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          bind:this={searchInputEl}
+          bind:value={query}
+          type="text"
+          placeholder="Type to filter titles..."
+          class="w-full bg-[#14141d] border border-[#262638] focus:border-[#1a9fff] rounded-2xl pl-12 pr-10 py-3 text-base text-white outline-none font-mono transition-all shadow-xl placeholder:text-slate-500"
+        />
+        {#if query}
+          <button
+            type="button"
+            on:click={() => { query = ''; searchInputEl?.focus(); }}
+            class="absolute right-4 text-slate-400 hover:text-white p-1 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+            aria-label="Clear search"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        {/if}
+      </div>
+
+      <!-- Stats & Close Hint -->
+      <div class="flex items-center space-x-4 text-xs font-mono text-slate-400">
+        <span>{filtered.length} {filtered.length === 1 ? 'game' : 'games'}</span>
         <button
           type="button"
-          on:click={() => { query = ''; searchInputEl?.focus(); }}
-          class="absolute right-4 text-slate-400 hover:text-white p-1 rounded-lg transition-colors flex items-center justify-center"
-          aria-label="Clear search"
+          on:click={() => dispatch('close')}
+          class="px-3 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <span class="px-1.5 py-0.5 rounded bg-[#161622] border border-[#262638] text-slate-400 font-bold text-[10px]">Esc / B</span>
+          <span class="text-slate-400">Close</span>
         </button>
-      {/if}
+      </div>
     </div>
 
-    <!-- Stats & Close Hint -->
-    <div class="flex items-center space-x-4 pl-4 text-xs font-mono text-slate-400">
-      <span>{filtered.length} {filtered.length === 1 ? 'game' : 'games'}</span>
-      <button
-        type="button"
-        on:click={() => dispatch('close')}
-        class="px-3 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white transition-colors flex items-center space-x-1.5"
-      >
-        <span class="px-1.5 py-0.5 rounded bg-[#161622] border border-[#262638] text-slate-400 font-bold text-[10px]">Esc / B</span>
-        <span class="text-slate-400">Close</span>
-      </button>
+    <!-- Quick Sort Chips Toolbar -->
+    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+      <span class="text-[11px] font-mono text-slate-500 uppercase tracking-wider font-bold mr-1">Sort:</span>
+      {#each quickSortOptions as opt}
+        <button
+          type="button"
+          on:click={() => { $sortBy = opt.id; }}
+          class="px-2.5 py-1 rounded-xl text-xs font-mono font-medium transition-all cursor-pointer {$sortBy === opt.id ? 'bg-[#1a9fff]/20 border border-[#1a9fff]/50 text-[#1a9fff] shadow-sm' : 'bg-[#14141d] border border-[#222232] text-slate-400 hover:text-slate-200 hover:border-slate-600'}"
+        >
+          {opt.label}
+        </button>
+      {/each}
     </div>
   </div>
 
@@ -174,13 +252,20 @@
               </div>
             </div>
 
-            <!-- Title Below -->
-            <span class="mt-2 text-xs font-semibold text-slate-200 group-hover:text-white line-clamp-2 max-w-full px-1">
-              {game.name}
-            </span>
+            <!-- Title & Metadata Subtitle Below -->
+            <div class="mt-2 flex flex-col items-center max-w-full px-1 space-y-0.5">
+              <span class="text-xs font-semibold text-slate-200 group-hover:text-white line-clamp-2">
+                {game.name}
+              </span>
+              {#if getCardMetaBadge(game, $sortBy)}
+                <span class="text-[10px] font-mono text-slate-400 truncate">
+                  {getCardMetaBadge(game, $sortBy)}
+                </span>
+              {/if}
+            </div>
           </button>
         {/each}
       </div>
     {/if}
   </div>
-</div>
+</ModalShell>

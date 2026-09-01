@@ -1,8 +1,22 @@
 package main
 
 import (
+	"os"
 	"testing"
+
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
+	defer restoreEnv()
+	restore := testutil.SilenceLogging()
+	code := m.Run()
+	restore()
+	restoreEnv()
+	os.Exit(code)
+}
+
 
 func TestCLIRegistrySanity(t *testing.T) {
 	// Verify main CLI commands are well-formed and categorized

@@ -21,6 +21,8 @@ describe('drawerDraft Store', () => {
     isPatched: true,
     isPortable: false,
     launchProfile: {
+      name: 'Hades',
+      app_id: '1145360',
       exe_path: 'Hades.exe',
       exe_args: '-dx11',
       operating_mode: 'loader',
@@ -188,8 +190,11 @@ describe('drawerDraft Store', () => {
       lastPlayed: 1720000000,
       customCoverUrl: 'https://example.com/art.jpg',
       lockedArtwork: true,
-      metadataProvider: 'steam',
-      metadataId: '1145360',
+      launchProfile: {
+        ...mockGame.launchProfile,
+        metadata_provider: 'steam',
+        metadata_id: '1145360',
+      },
     };
 
     drawerDraft.init(gameWithStats, mockGlobalConfig);

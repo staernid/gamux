@@ -14,8 +14,31 @@ if (typeof localStorage !== 'undefined') {
   });
 }
 
+export const SORT_MODES = [
+  'name_asc',
+  'last_played_desc',
+  'playtime_desc',
+  'install_desc',
+  'size_desc',
+  'name_desc',
+  'status',
+  'appid'
+];
+
 export function getSortLabel(sortKey) {
   switch (sortKey) {
+    case 'last_played_desc':
+      return 'Last Played (Recent)';
+    case 'last_played_asc':
+      return 'Last Played (Oldest)';
+    case 'playtime_desc':
+      return 'Playtime (Most Played)';
+    case 'playtime_asc':
+      return 'Playtime (Least Played)';
+    case 'install_desc':
+      return 'Installed (Newest)';
+    case 'install_asc':
+      return 'Installed (Oldest)';
     case 'size_desc':
       return 'Size (Largest)';
     case 'size_asc':
@@ -34,8 +57,8 @@ export function getSortLabel(sortKey) {
 
 export function cycleSortOrder() {
   const current = get(sortBy);
-  // Cycle between name_asc and size_desc
-  const next = current === 'name_asc' ? 'size_desc' : 'name_asc';
+  const idx = SORT_MODES.indexOf(current);
+  const next = (idx >= 0 && idx < SORT_MODES.length - 1) ? SORT_MODES[idx + 1] : SORT_MODES[0];
   sortBy.set(next);
   notificationStore.osd(`Sort: ${getSortLabel(next)}`);
   return next;
@@ -72,14 +95,36 @@ export const filteredGames = derived(
         return (a.name || '').localeCompare(b.name || '');
       } else if ($sortBy === 'name_desc') {
         return (b.name || '').localeCompare(a.name || '');
+      } else if ($sortBy === 'last_played_desc') {
+        const diff = (b.lastPlayed || 0) - (a.lastPlayed || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+      } else if ($sortBy === 'last_played_asc') {
+        const diff = (a.lastPlayed || 0) - (b.lastPlayed || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+      } else if ($sortBy === 'playtime_desc') {
+        const diff = (b.playtimeSeconds || 0) - (a.playtimeSeconds || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+      } else if ($sortBy === 'playtime_asc') {
+        const diff = (a.playtimeSeconds || 0) - (b.playtimeSeconds || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+      } else if ($sortBy === 'install_desc') {
+        const diff = (b.installedAt || 0) - (a.installedAt || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+      } else if ($sortBy === 'install_asc') {
+        const diff = (a.installedAt || 0) - (b.installedAt || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
       } else if ($sortBy === 'size_desc') {
-        return (b.diskSizeBytes || 0) - (a.diskSizeBytes || 0);
+        const diff = (b.diskSizeBytes || 0) - (a.diskSizeBytes || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
       } else if ($sortBy === 'size_asc') {
-        return (a.diskSizeBytes || 0) - (b.diskSizeBytes || 0);
+        const diff = (a.diskSizeBytes || 0) - (b.diskSizeBytes || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
       } else if ($sortBy === 'appid') {
-        return (parseInt(a.appId, 10) || 0) - (parseInt(b.appId, 10) || 0);
+        const diff = (parseInt(a.appId, 10) || 0) - (parseInt(b.appId, 10) || 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
       } else if ($sortBy === 'status') {
-        return (b.isPatched ? 1 : 0) - (a.isPatched ? 1 : 0);
+        const diff = (b.isPatched ? 1 : 0) - (a.isPatched ? 1 : 0);
+        return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
       }
       return 0;
     });

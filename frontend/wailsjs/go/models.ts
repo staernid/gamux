@@ -231,6 +231,7 @@ export namespace domain {
 	    custom_logo_url?: string;
 	    custom_icon_url?: string;
 	    locked_artwork?: boolean;
+	    installed_at?: number;
 	    playtime_seconds?: number;
 	    last_played?: number;
 	
@@ -269,6 +270,7 @@ export namespace domain {
 	        this.custom_logo_url = source["custom_logo_url"];
 	        this.custom_icon_url = source["custom_icon_url"];
 	        this.locked_artwork = source["locked_artwork"];
+	        this.installed_at = source["installed_at"];
 	        this.playtime_seconds = source["playtime_seconds"];
 	        this.last_played = source["last_played"];
 	    }
@@ -310,6 +312,9 @@ export namespace domain {
 	    file_count: number;
 	    dlc_count?: number;
 	    achievement_count?: number;
+	    installed_at?: number;
+	    playtime_seconds?: number;
+	    last_played?: number;
 	    launch_candidates?: LaunchCandidate[];
 	    depots?: DepotSummary[];
 	    available_platforms?: string[];
@@ -361,6 +366,11 @@ export namespace domain {
 	    has_update: boolean;
 	    recent_patch_note?: string;
 	    news_items?: NewsItem[];
+	    summary?: string;
+	    release_date?: string;
+	    developers?: string[];
+	    publishers?: string[];
+	    genres?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Game(source);
@@ -386,6 +396,9 @@ export namespace domain {
 	        this.file_count = source["file_count"];
 	        this.dlc_count = source["dlc_count"];
 	        this.achievement_count = source["achievement_count"];
+	        this.installed_at = source["installed_at"];
+	        this.playtime_seconds = source["playtime_seconds"];
+	        this.last_played = source["last_played"];
 	        this.launch_candidates = this.convertValues(source["launch_candidates"], LaunchCandidate);
 	        this.depots = this.convertValues(source["depots"], DepotSummary);
 	        this.available_platforms = source["available_platforms"];
@@ -437,6 +450,11 @@ export namespace domain {
 	        this.has_update = source["has_update"];
 	        this.recent_patch_note = source["recent_patch_note"];
 	        this.news_items = this.convertValues(source["news_items"], NewsItem);
+	        this.summary = source["summary"];
+	        this.release_date = source["release_date"];
+	        this.developers = source["developers"];
+	        this.publishers = source["publishers"];
+	        this.genres = source["genres"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
