@@ -14,6 +14,7 @@ import (
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/manifest"
+	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/steamless"
 	"github.com/staernid/gamux/util"
@@ -358,15 +359,11 @@ func (s *SteamlessStage) Rollback(ctx context.Context, pctx *Context) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if strings.Contains(path, ".ORIGINAL") {
-			idx := strings.Index(path, ".20")
-			if idx != -1 {
-				targetFile := path[:idx]
-				if strings.HasSuffix(strings.ToLower(targetFile), ".exe") {
-					if !pctx.Options.DryRun {
-						if err := os.Rename(path, targetFile); err == nil {
-							slog.Info("Restored original executable", "file", targetFile)
-						}
+		if targetFile, isBak := util.ResolveOriginalBackupPath(path); isBak {
+			if strings.HasSuffix(strings.ToLower(targetFile), ".exe") {
+				if !pctx.Options.DryRun {
+					if err := os.Rename(path, targetFile); err == nil {
+						slog.Info("Restored original executable", "file", targetFile)
 					}
 				}
 			}
@@ -433,6 +430,9 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 		pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("gbe patch: %v", err))
 	} else {
 		pctx.Results.Patched = true
+		if !pctx.Options.DryRun {
+			_ = runner.GenerateLaunchScript(ctx, pctx.Config, *profile)
+		}
 	}
 
 	if pctx.Options.FetchAchievements && pctx.Game.NumericAppID > 0 {

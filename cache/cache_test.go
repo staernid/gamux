@@ -3,6 +3,8 @@ package cache
 import (
 	"os"
 	"testing"
+
+	"github.com/staernid/gamux/domain"
 )
 
 func TestCache_AppNames(t *testing.T) {
@@ -117,5 +119,53 @@ func TestCache_SGDBArtwork(t *testing.T) {
 	data, ok := GetSGDBArtwork("1091500")
 	if !ok || string(data) != string(artPayload) {
 		t.Errorf("sgdb artwork mismatch")
+	}
+}
+
+func TestCache_WarmLibraryCache(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "gamux_games_cache_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	SetCacheDir(tmpDir)
+
+	gameDir := "/tmp/TestGameDir"
+	if _, ok := GetCachedGame(gameDir, 1000, 2000); ok {
+		t.Errorf("expected cache miss for unadded game")
+	}
+
+	game := &domain.Game{
+		GameRecord: domain.GameRecord{
+			Name:    "Cached Test Game",
+			GameDir: gameDir,
+			AppID:   "12345",
+		},
+	}
+
+	if err := SaveCachedGame(gameDir, 1000, 2000, game); err != nil {
+		t.Fatalf("failed to save cached game: %v", err)
+	}
+
+	// 1. Exact timestamp match
+	cached, ok := GetCachedGame(gameDir, 1000, 2000)
+	if !ok || cached == nil || cached.Name != "Cached Test Game" {
+		t.Fatalf("expected to retrieve cached game, got %+v (ok=%v)", cached, ok)
+	}
+
+	// 2. Modified directory mtime -> cache miss
+	if _, ok := GetCachedGame(gameDir, 1001, 2000); ok {
+		t.Errorf("expected cache miss on changed dirMtime")
+	}
+
+	// 3. Modified profile mtime -> cache miss
+	if _, ok := GetCachedGame(gameDir, 1000, 2001); ok {
+		t.Errorf("expected cache miss on changed profileMtime")
+	}
+
+	// 4. Invalidate cache
+	InvalidateGameCache(gameDir)
+	if _, ok := GetCachedGame(gameDir, 1000, 2000); ok {
+		t.Errorf("expected cache miss after InvalidateGameCache")
 	}
 }

@@ -18,6 +18,10 @@ export function ClearFinishedTasks() {
   return window['go']['gui']['App']['ClearFinishedTasks']();
 }
 
+export function CreateGameStub(arg1, arg2, arg3, arg4) {
+  return window['go']['gui']['App']['CreateGameStub'](arg1, arg2, arg3, arg4);
+}
+
 export function CreateSaveBackup(arg1, arg2) {
   return window['go']['gui']['App']['CreateSaveBackup'](arg1, arg2);
 }

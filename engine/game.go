@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
@@ -44,6 +45,10 @@ func (eng *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*Proce
 	pipeErr := pipe.Execute(ctx, pctx)
 
 	pctx.Game.RecomputeState()
+	cache.InvalidateGameCache(pctx.Game.GameDir)
+	if targetPath != pctx.Game.GameDir {
+		cache.InvalidateGameCache(targetPath)
+	}
 
 	res := &ProcessResult{
 		Info:                pctx.Game,
@@ -134,7 +139,9 @@ func (eng *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool)
 	}
 
 	pipe := pipeline.NewRollback()
-	return pipe.Execute(ctx, pctx)
+	err := pipe.Execute(ctx, pctx)
+	cache.InvalidateGameCache(targetPath)
+	return err
 }
 
 func (eng *Engine) runnerManager() *runner.Manager {
@@ -229,6 +236,9 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 	if err := compat.SyncSettings(ctx, &opts, eng.Config); err != nil {
 		return fmt.Errorf("sync launch profile settings: %w", err)
 	}
+
+	// Ensure portable .gamux/launch.sh is regenerated with new profile options
+	_ = runner.GenerateLaunchScript(ctx, eng.Config, opts)
 
 	// Only trigger binary DRM application if the operating mode transitioned
 	if newMode != "" && !strings.EqualFold(newMode, prevMode) {

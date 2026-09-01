@@ -336,8 +336,9 @@ func (eng *Engine) SearchStoreGames(ctx context.Context, query string) ([]store.
 	if eng.StoreRegistry == nil {
 		return nil, fmt.Errorf("store registry not initialized")
 	}
-	return eng.StoreRegistry.SearchAll(eng.WrapContext(ctx), query)
+	return eng.StoreRegistry.SearchGameProviders(eng.WrapContext(ctx), query)
 }
+
 
 // GetGameMetadata fetches store metadata for a specific provider (steam, gog, rawg, etc.) and ID.
 func (eng *Engine) GetGameMetadata(ctx context.Context, provider string, id string) (*store.Metadata, error) {

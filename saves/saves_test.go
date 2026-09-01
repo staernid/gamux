@@ -265,15 +265,15 @@ func TestService_EndToEndLifecycle(t *testing.T) {
 	_ = os.WriteFile(saveFilePath, []byte(saveContent), 0644)
 
 	// Write launch_profile.json in fakeGameDir to test automatic parameter resolution
-	settingsDir := filepath.Join(fakeGameDir, "steam_settings")
-	_ = os.MkdirAll(settingsDir, 0755)
+	gamuxDir := filepath.Join(fakeGameDir, ".gamux")
+	_ = os.MkdirAll(gamuxDir, 0755)
 	profileJSON := `{
 		"game_dir": "` + fakeGameDir + `",
 		"app_id": "777777",
 		"platform": "win64",
 		"wine_prefix": "` + fakePrefix + `"
 	}`
-	_ = os.WriteFile(filepath.Join(settingsDir, "launch_profile.json"), []byte(profileJSON), 0644)
+	_ = os.WriteFile(filepath.Join(gamuxDir, "launch_profile.json"), []byte(profileJSON), 0644)
 
 	svc := NewService(ServiceConfig{
 		CacheDir:         tmpDir,
@@ -346,5 +346,40 @@ func TestService_EndToEndLifecycle(t *testing.T) {
 	listAfter, _ := svc.ListBackups(context.Background(), fakeGameDir)
 	if len(listAfter) != 0 {
 		t.Errorf("expected 0 backups after deletion, got %d", len(listAfter))
+	}
+}
+
+func TestDeriveSemanticPrefix(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{
+			path:     "/games/My Documents Game/prefix/drive_c/users/steamuser/AppData/Roaming",
+			expected: "<winAppData>",
+		},
+		{
+			path:     "/games/prefix/drive_c/users/steamuser/AppData/Roaming/Company/Game/save.dat",
+			expected: filepath.Join("<winAppData>", "Company/Game/save.dat"),
+		},
+		{
+			path:     "/games/prefix/drive_c/users/steamuser/AppData/LocalLow/Game/save.dat",
+			expected: filepath.Join("<winLocalAppDataLow>", "Game/save.dat"),
+		},
+		{
+			path:     "/games/prefix/drive_c/users/steamuser/Saved Games/Game/save.dat",
+			expected: filepath.Join("<winSavedGames>", "Game/save.dat"),
+		},
+		{
+			path:     "/games/My Documents Game/prefix/drive_c/users/steamuser/Documents/My Games/save.dat",
+			expected: filepath.Join("<winDocuments>", "My Games/save.dat"),
+		},
+	}
+
+	for _, tt := range tests {
+		got := deriveSemanticPrefix(tt.path, "", "123", "win64")
+		if got != tt.expected {
+			t.Errorf("deriveSemanticPrefix(%q) = %q, want %q", tt.path, got, tt.expected)
+		}
 	}
 }

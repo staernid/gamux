@@ -46,6 +46,9 @@ func Launch(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.
 		return nil, nil, fmt.Errorf("build launch command: %w", err)
 	}
 
+	// Ensure portable .gamux/launch.sh is kept up-to-date
+	_ = GenerateLaunchScript(ctx, cfg, resolved)
+
 	logPath := ResolveLogPath(resolved.GameDir, resolved.Name, resolved.AppID)
 	logFile, lErr := createLogFile(logPath, resolved, cmd)
 	if lErr == nil && logFile != nil {
@@ -72,6 +75,9 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	if err != nil {
 		return fmt.Errorf("build launch command: %w", err)
 	}
+
+	// Ensure portable .gamux/launch.sh is kept up-to-date
+	_ = GenerateLaunchScript(ctx, cfg, resolved)
 
 	logPath := ResolveLogPath(resolved.GameDir, resolved.Name, resolved.AppID)
 	logFile, _ := createLogFile(logPath, resolved, cmd)
@@ -136,6 +142,7 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	}
 
 	if pgid > 1 && ctx.Err() == nil {
+	supervise:
 		for {
 			if err := syscall.Kill(-pgid, 0); err != nil {
 				break
@@ -143,7 +150,8 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 			select {
 			case <-ctx.Done():
 				_ = syscall.Kill(-pgid, syscall.SIGTERM)
-				break
+				waitErr = ctx.Err()
+				break supervise
 			case <-ticker.C:
 				flushDelta()
 			case <-time.After(1 * time.Second):

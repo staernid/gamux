@@ -13,20 +13,24 @@
   let loadedNewsAppID = '';
   let newsError = '';
 
-  $: isSteam = game ? isSteamApp(game.appId) : false;
+  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
+    ? String(game.appId).trim()
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
 
-  $: if (activeCommunitySubTab === 'news' && loadedNewsAppID !== game?.appId && !isLoadingNews && game?.appId) {
+  $: isSteam = Boolean(effectiveAppId);
+
+  $: if (activeCommunitySubTab === 'news' && loadedNewsAppID !== effectiveAppId && !isLoadingNews && effectiveAppId) {
     loadNews();
   }
 
   async function loadNews(force = false) {
-    if (!game?.appId || (!force && loadedNewsAppID === game.appId && newsItems.length > 0)) return;
+    if (!effectiveAppId || (!force && loadedNewsAppID === effectiveAppId && newsItems.length > 0)) return;
     isLoadingNews = true;
     newsError = '';
     try {
-      const items = await AppAPI.getGameNews(game.appId, 15);
+      const items = await AppAPI.fetchNews(effectiveAppId, 15);
       newsItems = items || [];
-      loadedNewsAppID = game.appId;
+      loadedNewsAppID = effectiveAppId;
       expandedNewsIndex = 0;
     } catch (err) {
       newsError = err?.message || 'Failed to load Steam community news.';

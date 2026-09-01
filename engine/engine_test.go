@@ -348,6 +348,10 @@ func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
 		}
 	}
 	for k := range postRollback {
+		// Launch profile is intentionally preserved to prevent data loss of user settings and playtime
+		if k == ".gamux/launch_profile.json" {
+			continue
+		}
 		if _, ok := baseline[k]; !ok {
 			t.Errorf("Rollback left unexpected leftover file: %s", k)
 		}

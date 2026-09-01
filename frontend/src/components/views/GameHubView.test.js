@@ -78,6 +78,12 @@ describe('GameHubView Component', () => {
     expect(screen.getByText('Runner & Platform')).toBeInTheDocument();
     expect(screen.getByText('MangoHud Overlay')).toBeInTheDocument();
 
+    // Switch to Community tab and test subtabs
+    const communityBtn = screen.getByRole('button', { name: /^Community$/i });
+    await fireEvent.click(communityBtn);
+    expect(screen.getByRole('button', { name: /^Achievements$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /News & Updates/i })).toBeInTheDocument();
+
     // Switch to Files & Diagnostics
     const filesBtn = screen.getByRole('button', { name: /^Files & Diagnostics$/i });
     await fireEvent.click(filesBtn);
@@ -222,13 +228,99 @@ describe('GameHubView Component', () => {
     const searchBtn = screen.getByRole('button', { name: /^Search$/i });
     await fireEvent.click(searchBtn);
 
-    expect(await screen.findByText('Found Store Candidates (2)')).toBeInTheDocument();
-    expect(screen.getByText('Portal 2')).toBeInTheDocument();
+    expect(await screen.findByText('Portal 2')).toBeInTheDocument();
 
     const matchBtns = screen.getAllByRole('button', { name: /Match Store/i });
     await fireEvent.click(matchBtns[0]);
 
     expect(get(drawerDraft).appId).toBe('620');
   });
+
+
+  it('renders Download and Add to Library buttons for uninstalled virtual titles', async () => {
+    const virtualGame = normalizeGame({
+      name: 'Hades II',
+      app_id: '1145350',
+      store: 'Steam',
+      game_dir: '',
+      is_installed: false,
+      is_stub: false,
+      is_virtual: true,
+      is_ready: false,
+      file_count: 0,
+      disk_size_bytes: 0,
+    });
+    selectedGame.set(virtualGame);
+
+    render(GameHubView);
+
+    expect(screen.getByText('Download')).toBeInTheDocument();
+    expect(screen.getByText('Add to Library')).toBeInTheDocument();
+    expect(screen.getByText('Online Store Title')).toBeInTheDocument();
+  });
+
+  it('triggers download transfer when clicking Download on uninstalled game', async () => {
+    const virtualGame = normalizeGame({
+      name: 'Hades II',
+      app_id: '1145350',
+      store: 'Steam',
+      game_dir: '',
+      is_installed: false,
+      is_stub: false,
+      is_virtual: true,
+      is_ready: false,
+      file_count: 0,
+      disk_size_bytes: 0,
+    });
+    selectedGame.set(virtualGame);
+
+    const startSpy = vi.spyOn(tasksStore, 'start').mockResolvedValue('dl_123');
+
+    render(GameHubView);
+
+    const downloadBtn = screen.getByText('Download');
+    await fireEvent.click(downloadBtn);
+
+    expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({
+      app_id: 1145350,
+      game_name: 'Hades II'
+    }));
+  });
+
+  it('creates skeleton stub when clicking Add to Library on virtual title', async () => {
+    const virtualGame = normalizeGame({
+      name: 'Hades II',
+      app_id: '1145350',
+      store: 'Steam',
+      game_dir: '',
+      is_installed: false,
+      is_stub: false,
+      is_virtual: true,
+      is_ready: false,
+      file_count: 0,
+      disk_size_bytes: 0,
+    });
+    selectedGame.set(virtualGame);
+
+    const stubSpy = vi.spyOn(AppAPI, 'createGameStub').mockResolvedValue({
+      name: 'Hades II',
+      app_id: '1145350',
+      game_dir: '/home/user/Games/Hades II',
+      store: 'Steam',
+      file_count: 0,
+      disk_size_bytes: 0,
+      is_installed: false,
+      is_stub: true,
+      is_ready: false,
+    });
+
+    render(GameHubView);
+
+    const addBtn = screen.getByText('Add to Library');
+    await fireEvent.click(addBtn);
+
+    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam');
+  });
 });
+
 

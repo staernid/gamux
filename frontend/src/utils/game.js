@@ -60,6 +60,17 @@ export function normalizeGame(g) {
     (g.state === 'Portable-Patched' || g.state === 'Loader-Configured' || g.settings_dir_exists)
   );
 
+  const fileCount = Number(g.file_count ?? g.fileCount ?? g.FileCount ?? 0);
+  const isInstalled = Boolean(
+    g.is_installed ?? g.isInstalled ?? g.IsInstalled ??
+    (Boolean(rawExe) || fileCount > 0)
+  );
+  const isStub = Boolean(
+    g.is_stub ?? g.isStub ?? g.IsStub ??
+    (!isInstalled && Boolean(g.game_dir ?? g.gameDir ?? g.GameDir ?? ''))
+  );
+  const isVirtual = Boolean(g.is_virtual ?? g.isVirtual ?? (!isInstalled && !isStub && !g.game_dir && !g.gameDir));
+
   return {
     name: g.name || g.Name || 'Unknown Game',
     appId: String(g.app_id ?? g.appId ?? g.AppID ?? ''),
@@ -74,9 +85,12 @@ export function normalizeGame(g) {
     exeArgs: lp?.exe_args || lp?.exeArgs || lp?.ExeArgs || g.exe_args || g.exeArgs || g.ExeArgs || '',
     launchCandidates,
     launchProfile: lp,
+    isInstalled,
+    isStub,
+    isVirtual,
     isPatched,
     isPortable: Boolean(g.is_portable ?? g.isPortable ?? g.IsPortable ?? (g.state === 'Portable-Patched')),
-    isReady: Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!rawExe)),
+    isReady: isInstalled && Boolean(g.is_ready ?? g.isReady ?? g.IsReady ?? (isPatched || !!rawExe)),
     hasUpdatesOrIssues: Boolean(
       g.has_updates_or_issues ?? g.hasUpdatesOrIssues ?? g.HasUpdatesOrIssues ??
       (g.store === 'Steam' && (g.has_update || (g.modified_files?.length > 0) || (g.missing_files?.length > 0)))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -216,7 +217,7 @@ func (m *Manager) runWorker(ctx context.Context, t *Task, slot chan struct{}) {
 
 	t.FinishedAt = time.Now().UnixMilli()
 
-	if ctx.Err() == context.Canceled || (runErr != nil && runErr == context.Canceled) {
+	if ctx.Err() == context.Canceled || (runErr != nil && errors.Is(runErr, context.Canceled)) {
 		t.Status = StatusCancelled
 		t.Details = "Task cancelled by user"
 		taskCopy := *t

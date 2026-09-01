@@ -15,14 +15,77 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/bodgit/sevenzip"
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz/lzma"
 )
+
+var backupTimestampRegex = regexp.MustCompile(`\.\d{8}-\d{6}$`)
+
+// ResolveOriginalBackupPath inspects a file path and determines the original target path if the file is a backup (.ORIGINAL).
+// It reliably preserves directory paths containing dates or numbers (e.g. Anno.2070, Cyberpunk.2077).
+func ResolveOriginalBackupPath(path string) (string, bool) {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	if !strings.HasSuffix(base, ".ORIGINAL") {
+		return path, false
+	}
+	trimmed := strings.TrimSuffix(base, ".ORIGINAL")
+	trimmed = backupTimestampRegex.ReplaceAllString(trimmed, "")
+	return filepath.Join(dir, trimmed), true
+}
+
+// SplitArgs parses a command-line argument string into individual arguments respecting quotes and backslash escaping.
+func SplitArgs(argsStr string) []string {
+	var args []string
+	var cur strings.Builder
+	var inQuote rune
+	var escaped bool
+
+	for _, r := range strings.TrimSpace(argsStr) {
+		if escaped {
+			cur.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		if r == '\\' && inQuote != '\'' {
+			escaped = true
+			continue
+		}
+
+		if (r == '"' || r == '\'') && (inQuote == 0 || inQuote == r) {
+			if inQuote == r {
+				inQuote = 0
+			} else {
+				inQuote = r
+			}
+			continue
+		}
+
+		if unicode.IsSpace(r) && inQuote == 0 {
+			if cur.Len() > 0 {
+				args = append(args, cur.String())
+				cur.Reset()
+			}
+			continue
+		}
+
+		cur.WriteRune(r)
+	}
+
+	if cur.Len() > 0 {
+		args = append(args, cur.String())
+	}
+
+	return args
+}
 
 // runCmd executes a command and returns its output or an error.
 func RunCmd(name string, args ...string) ([]byte, error) {

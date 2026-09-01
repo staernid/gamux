@@ -409,6 +409,7 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	cp := loadCheckpoint(checkpointFile)
 
 	if !req.DryRun {
+		defer cp.Flush(checkpointFile)
 		if err := os.MkdirAll(absTargetDir, 0755); err != nil {
 			return nil, fmt.Errorf("create target directory %s: %w", absTargetDir, err)
 		}
@@ -854,6 +855,8 @@ type Checkpoint struct {
 	AppID           uint32          `json:"app_id"`
 	DepotID         uint32          `json:"depot_id"`
 	CompletedChunks map[string]bool `json:"completed_chunks"`
+	lastSaved       time.Time
+	dirty           bool
 	mu              sync.Mutex
 }
 
@@ -879,11 +882,30 @@ func (cp *Checkpoint) markCompleted(path string, chunkID string) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.CompletedChunks[chunkID] = true
+	cp.dirty = true
+
+	// Throttle disk writes to at most once per second
+	if time.Since(cp.lastSaved) >= 1*time.Second {
+		cp.saveLocked(path)
+	}
+}
+
+func (cp *Checkpoint) Flush(path string) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	if cp.dirty {
+		cp.saveLocked(path)
+	}
+}
+
+func (cp *Checkpoint) saveLocked(path string) {
 	data, err := json.Marshal(cp)
 	if err == nil {
 		tmpPath := path + ".tmp"
 		if err := os.WriteFile(tmpPath, data, 0644); err == nil {
 			_ = os.Rename(tmpPath, path)
+			cp.lastSaved = time.Now()
+			cp.dirty = false
 		}
 	}
 }

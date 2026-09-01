@@ -286,3 +286,12 @@ func (a *App) GetPatchNote(gamePath string, itemIndex int) (*steam.NewsItem, str
 	}
 	return a.Engine.GetPatchNote(a.getContext(), path, itemIndex)
 }
+
+// CreateGameStub creates a skeleton game directory in the library path without downloading game files.
+func (a *App) CreateGameStub(libraryPath, appID, name, storeName string) (*domain.Game, error) {
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.CreateGameStub(a.getContext(), libraryPath, appID, name, storeName)
+}
+

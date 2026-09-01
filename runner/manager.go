@@ -297,13 +297,28 @@ func (m *Manager) Stop(gameDir string) error {
 
 	slog.Info("Terminating running game process", "dir", gameDir, "pid", cmd.Process.Pid)
 
-	// Send SIGTERM to process group, fallback to SIGKILL
+	// Send SIGTERM to process group, fallback to SIGKILL after graceful grace period
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err == nil {
+	if err == nil && pgid > 1 {
 		_ = syscall.Kill(-pgid, syscall.SIGTERM)
-		time.Sleep(150 * time.Millisecond)
+		deadline := time.Now().Add(2500 * time.Millisecond)
+		for time.Now().Before(deadline) {
+			if err := syscall.Kill(-pgid, 0); err != nil {
+				return nil // Process group exited cleanly
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		// Force kill if still running after grace period
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	} else {
+	} else if cmd.Process != nil {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		deadline := time.Now().Add(2500 * time.Millisecond)
+		for time.Now().Before(deadline) {
+			if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+				return nil
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 		_ = cmd.Process.Kill()
 	}
 

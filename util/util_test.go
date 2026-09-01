@@ -347,4 +347,75 @@ func TestWriteFileAtomic(t *testing.T) {
 	}
 }
 
+func TestResolveOriginalBackupPath(t *testing.T) {
+	tests := []struct {
+		input       string
+		expected    string
+		isBackup    bool
+	}{
+		{
+			input:    "/games/Cyberpunk.2077/bin/x64/Cyberpunk2077.exe.20260901-155237.ORIGINAL",
+			expected: "/games/Cyberpunk.2077/bin/x64/Cyberpunk2077.exe",
+			isBackup: true,
+		},
+		{
+			input:    "/games/Anno.2070/main.exe.ORIGINAL",
+			expected: "/games/Anno.2070/main.exe",
+			isBackup: true,
+		},
+		{
+			input:    "/games/20xx/game.exe",
+			expected: "/games/20xx/game.exe",
+			isBackup: false,
+		},
+	}
+
+	for _, tt := range tests {
+		got, isBak := ResolveOriginalBackupPath(tt.input)
+		if isBak != tt.isBackup {
+			t.Errorf("ResolveOriginalBackupPath(%q) isBackup = %v, want %v", tt.input, isBak, tt.isBackup)
+		}
+		if got != tt.expected {
+			t.Errorf("ResolveOriginalBackupPath(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestSplitArgs(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{
+			input:    `-arg1 -arg2 --data-dir="My Games/Saves" -name='Hero Quest'`,
+			expected: []string{"-arg1", "-arg2", "--data-dir=My Games/Saves", "-name=Hero Quest"},
+		},
+		{
+			input:    `  foo   bar   "baz qux"  `,
+			expected: []string{"foo", "bar", "baz qux"},
+		},
+		{
+			input:    `--eval="hello \"world\""`,
+			expected: []string{`--eval=hello "world"`},
+		},
+		{
+			input:    "",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		got := SplitArgs(tt.input)
+		if len(got) != len(tt.expected) {
+			t.Errorf("SplitArgs(%q) len = %d (%v), want %d (%v)", tt.input, len(got), got, len(tt.expected), tt.expected)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.expected[i] {
+				t.Errorf("SplitArgs(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
+			}
+		}
+	}
+}
+
 

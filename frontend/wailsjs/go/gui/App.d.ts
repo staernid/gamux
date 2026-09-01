@@ -23,6 +23,8 @@ export function CancelTask(arg1:string):Promise<void>;
 
 export function ClearFinishedTasks():Promise<void>;
 
+export function CreateGameStub(arg1:string,arg2:string,arg3:string,arg4:string):Promise<domain.Game>;
+
 export function CreateSaveBackup(arg1:string,arg2:string):Promise<saves.BackupInfo>;
 
 export function DeleteSaveBackup(arg1:string,arg2:string):Promise<void>;

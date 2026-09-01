@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -497,7 +498,7 @@ func TestLaunchProfile_Reset(t *testing.T) {
 		t.Fatalf("SaveProfile failed: %v", err)
 	}
 
-	profilePath := filepath.Join(tmpDir, "steam_settings", "launch_profile.json")
+	profilePath := filepath.Join(tmpDir, ".gamux", "launch_profile.json")
 	if !util.FileExists(profilePath) {
 		t.Fatalf("expected profile to exist before reset")
 	}
@@ -694,6 +695,16 @@ func TestDetectBinaryPlatform(t *testing.T) {
 	peBin := filepath.Join(tmpDir, "win_bin.exe")
 	_ = os.WriteFile(peBin, []byte("MZfakebinary"), 0755)
 
+	// Create valid 32-bit PE binary with DOS header and COFF machine 0x014c
+	pe32Bin := filepath.Join(tmpDir, "win32_bin.exe")
+	pe32Data := make([]byte, 128)
+	copy(pe32Data[:2], "MZ")
+	pe32Data[0x3C] = 0x40 // e_lfanew = 64
+	copy(pe32Data[0x40:], "PE\x00\x00")
+	pe32Data[0x44] = 0x4c // IMAGE_FILE_MACHINE_I386
+	pe32Data[0x45] = 0x01
+	_ = os.WriteFile(pe32Bin, pe32Data, 0755)
+
 	txtFile := filepath.Join(tmpDir, "text.txt")
 	_ = os.WriteFile(txtFile, []byte("plain text"), 0644)
 
@@ -701,7 +712,10 @@ func TestDetectBinaryPlatform(t *testing.T) {
 		t.Errorf("expected linux for ELF, got %s", p)
 	}
 	if p := detectBinaryPlatform(peBin); p != "win64" {
-		t.Errorf("expected win64 for PE, got %s", p)
+		t.Errorf("expected win64 for fallback PE, got %s", p)
+	}
+	if p := detectBinaryPlatform(pe32Bin); p != "win32" {
+		t.Errorf("expected win32 for PE32 binary, got %s", p)
 	}
 	if p := detectBinaryPlatform(txtFile); p != "" {
 		t.Errorf("expected empty platform for text, got %s", p)
@@ -1145,6 +1159,246 @@ func TestRunner_Run_PlaytimeTracking(t *testing.T) {
 		t.Errorf("expected LastPlayed > 0, got %d", prof.LastPlayed)
 	}
 }
+
+func TestGenerateLaunchScript_Windows(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "WinGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	exePath := filepath.Join(gameDir, "Binaries", "Win64", "Game.exe")
+	_ = os.MkdirAll(filepath.Dir(exePath), 0755)
+	_ = os.WriteFile(exePath, []byte("fake_exe"), 0755)
+
+	trueVal := true
+	profile := LaunchOptions{
+		GameDir:       gameDir,
+		Name:          "Test Win Game",
+		AppID:         "1091500",
+		Platform:      "win64",
+		ExePath:       exePath,
+		ExeArgs:       "-fullscreen -v",
+		OperatingMode: ModeLoader,
+		Runner:        RunnerUMU,
+		WinePrefix:    "prefix",
+		MangoHud:      &trueVal,
+		DXVKHud:       "fps",
+		CustomEnv: map[string]string{
+			"MY_CUSTOM_VAR": "custom_val",
+		},
+	}
+
+	cfg := config.DefaultConfig()
+	if err := GenerateLaunchScript(context.Background(), cfg, profile); err != nil {
+		t.Fatalf("GenerateLaunchScript failed: %v", err)
+	}
+
+	scriptPath := filepath.Join(gameDir, ".gamux", "launch.sh")
+	if !util.FileExists(scriptPath) {
+		t.Fatalf("expected launch.sh to be created at %s", scriptPath)
+	}
+
+	fi, err := os.Stat(scriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&0111 == 0 {
+		t.Errorf("expected launch.sh to be executable (0755), got %v", fi.Mode())
+	}
+
+	contentBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(contentBytes)
+
+	if !strings.Contains(content, `export SteamAppId="1091500"`) {
+		t.Errorf("expected SteamAppId in launch.sh")
+	}
+	if !strings.Contains(content, `export MANGOHUD="1"`) {
+		t.Errorf("expected MANGOHUD in launch.sh")
+	}
+	if !strings.Contains(content, `export DXVK_HUD="fps"`) {
+		t.Errorf("expected DXVK_HUD in launch.sh")
+	}
+	if !strings.Contains(content, `export MY_CUSTOM_VAR="custom_val"`) {
+		t.Errorf("expected MY_CUSTOM_VAR in launch.sh")
+	}
+	if !strings.Contains(content, "steamclient,steamclient64=n,b") {
+		t.Errorf("expected loader dll overrides in launch.sh")
+	}
+	if !strings.Contains(content, `"$GAME_DIR/Binaries/Win64/Game.exe"`) {
+		t.Errorf("expected relative game exe path in launch.sh, got content:\n%s", content)
+	}
+	if !strings.Contains(content, `"$@"`) {
+		t.Errorf("expected $@ pass-through arguments in launch.sh")
+	}
+}
+
+func TestGenerateLaunchScript_Linux(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "LinuxGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	exePath := filepath.Join(gameDir, "game.x86_64")
+	_ = os.WriteFile(exePath, []byte("#!/bin/sh\n"), 0755)
+
+	profile := LaunchOptions{
+		GameDir:       gameDir,
+		Name:          "Test Linux Game",
+		Platform:      "linux",
+		ExePath:       exePath,
+		OperatingMode: domain.ModeStandalone,
+		Runner:        RunnerLinux,
+	}
+
+	cfg := config.DefaultConfig()
+	if err := GenerateLaunchScript(context.Background(), cfg, profile); err != nil {
+		t.Fatalf("GenerateLaunchScript failed: %v", err)
+	}
+
+	scriptPath := filepath.Join(gameDir, ".gamux", "launch.sh")
+	contentBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(contentBytes)
+
+	if !strings.Contains(content, `exec "$GAME_DIR/game.x86_64" "$@"`) {
+		t.Errorf("expected direct native exec in launch.sh, got:\n%s", content)
+	}
+}
+
+func TestGenerateLaunchScript_MatchesBuildCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "MatchGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	exePath := filepath.Join(gameDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("binary"), 0755)
+
+	cfg := config.DefaultConfig()
+	cfg.GlobalEnv = map[string]string{
+		"GLOBAL_KEY": "global_val",
+	}
+
+	opts := LaunchOptions{
+		GameDir:       gameDir,
+		Name:          "Match Game",
+		AppID:         "55555",
+		Platform:      "win64",
+		ExePath:       "game.exe",
+		ExeArgs:       "-arg1 -arg2",
+		OperatingMode: ModeLoader,
+		Runner:        RunnerWine,
+		WinePrefix:    "prefix",
+		CustomEnv: map[string]string{
+			"LOCAL_KEY": "local_val",
+		},
+	}
+
+	spec, err := BuildLaunchSpec(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildLaunchSpec failed: %v", err)
+	}
+
+	content := GenerateLaunchScriptContent(spec)
+
+	// Verify all spec.Env keys are in generated script
+	for k, v := range spec.Env {
+		expectedVar := fmt.Sprintf("export %s=", k)
+		if !strings.Contains(content, expectedVar) {
+			t.Errorf("missing expected env var %s in generated script", k)
+		}
+		_ = v
+	}
+
+	// Verify global and local envs exist
+	if !strings.Contains(content, `export GLOBAL_KEY="global_val"`) {
+		t.Errorf("expected GLOBAL_KEY in script")
+	}
+	if !strings.Contains(content, `export LOCAL_KEY="local_val"`) {
+		t.Errorf("expected LOCAL_KEY in script")
+	}
+
+	// Verify execution line has all args and $@
+	if !strings.Contains(content, `exec`) || !strings.Contains(content, `"$@"`) {
+		t.Errorf("invalid exec line in script:\n%s", content)
+	}
+}
+
+func TestRun_ContextCancelNoBusySpin(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "sleep_loop.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 30\n"), 0755)
+
+	cfg := config.DefaultConfig()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       scriptPath,
+		Platform:      "linux",
+		OperatingMode: ModeNative,
+		Runner:        RunnerLinux,
+	}
+
+	start := time.Now()
+	err := Run(ctx, cfg, opts)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Errorf("expected context error on cancellation")
+	}
+	if elapsed > 3*time.Second {
+		t.Errorf("Run took too long to terminate on cancellation: %v", elapsed)
+	}
+}
+
+func TestManager_Stop_GracefulExit(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "game_mock.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\ntrap 'exit 0' TERM\nwhile true; do sleep 1; done\n"), 0755)
+
+	cfg := config.DefaultConfig()
+	mgr := NewManager()
+
+	opts := LaunchOptions{
+		Name:          "Graceful Game",
+		GameDir:       tmpDir,
+		ExePath:       scriptPath,
+		Platform:      "linux",
+		OperatingMode: ModeNative,
+		Runner:        RunnerLinux,
+	}
+
+	cmd, err := mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("failed to start game: %v", err)
+	}
+	if cmd == nil || cmd.Process == nil {
+		t.Fatalf("expected active command handle")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if !mgr.IsRunning(tmpDir) {
+		t.Fatalf("expected game to be running")
+	}
+
+	start := time.Now()
+	if err := mgr.Stop(tmpDir); err != nil {
+		t.Fatalf("failed to stop game: %v", err)
+	}
+	elapsed := time.Since(start)
+
+	if elapsed > 2*time.Second {
+		t.Errorf("expected fast graceful exit, took %v", elapsed)
+	}
+
+	// Give supervision goroutine a moment to clean up process map
+	time.Sleep(200 * time.Millisecond)
+	if mgr.IsRunning(tmpDir) {
+		t.Errorf("expected game to be stopped in manager")
+	}
+}
+
 
 
 

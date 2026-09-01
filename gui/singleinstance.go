@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -16,6 +17,7 @@ import (
 // SingleInstanceGuard manages exclusive process ownership and IPC activation.
 type SingleInstanceGuard struct {
 	sockPath string
+	lockFile *os.File
 	listener net.Listener
 	mu       sync.Mutex
 	closed   bool
@@ -31,29 +33,51 @@ func AcquireOrActivate(appCtxGetter func() context.Context) (*SingleInstanceGuar
 	return AcquireOrActivateSocket(sockPath, appCtxGetter)
 }
 
-// AcquireOrActivateSocket attempts to acquire exclusive ownership using a specific socket path.
+// AcquireOrActivateSocket attempts to acquire exclusive ownership using a specific socket path with flock-based race safety.
 func AcquireOrActivateSocket(sockPath string, appCtxGetter func() context.Context) (*SingleInstanceGuard, bool) {
-	// Try to connect to existing socket
-	conn, err := net.DialTimeout("unix", sockPath, 500*time.Millisecond)
+	lockPath := sockPath + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if err == nil {
-		// Existing instance is alive! Send focus command
+		if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			// Another process holds the lock file; dial socket to send FOCUS
+			conn, dErr := net.DialTimeout("unix", sockPath, 500*time.Millisecond)
+			if dErr == nil {
+				_, _ = conn.Write([]byte("FOCUS\n"))
+				_ = conn.Close()
+				slog.Info("Another gamux-gui instance is already running; activated existing window and exiting")
+			}
+			_ = lockFile.Close()
+			return nil, false
+		}
+	}
+
+	// We hold the advisory file lock. Try to connect to existing socket in case of lingering connection
+	conn, err := net.DialTimeout("unix", sockPath, 200*time.Millisecond)
+	if err == nil {
 		_, _ = conn.Write([]byte("FOCUS\n"))
 		_ = conn.Close()
+		if lockFile != nil {
+			_ = lockFile.Close()
+		}
 		slog.Info("Another gamux-gui instance is already running; activated existing window and exiting")
 		return nil, false
 	}
 
-	// Remove stale socket if present
+	// Remove stale socket safely while holding flock
 	_ = os.Remove(sockPath)
 
 	listener, err := net.Listen("unix", sockPath)
 	if err != nil {
 		slog.Warn("Failed to create single-instance IPC socket, proceeding without guard", "error", err)
+		if lockFile != nil {
+			_ = lockFile.Close()
+		}
 		return nil, true
 	}
 
 	guard := &SingleInstanceGuard{
 		sockPath: sockPath,
+		lockFile: lockFile,
 		listener: listener,
 	}
 
@@ -111,4 +135,9 @@ func (g *SingleInstanceGuard) Release() {
 		_ = g.listener.Close()
 	}
 	_ = os.Remove(g.sockPath)
+	if g.lockFile != nil {
+		_ = syscall.Flock(int(g.lockFile.Fd()), syscall.LOCK_UN)
+		_ = g.lockFile.Close()
+		_ = os.Remove(g.sockPath + ".lock")
+	}
 }

@@ -539,3 +539,44 @@ func TestApplyGBE_Linux32ELFAutoDetection(t *testing.T) {
 	}
 }
 
+func TestRevert_PreservesGamuxProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "GameWithProfile")
+	gamuxDir := filepath.Join(gameDir, ".gamux")
+	_ = os.MkdirAll(gamuxDir, 0755)
+
+	profileJSON := filepath.Join(gamuxDir, "launch_profile.json")
+	launchSh := filepath.Join(gamuxDir, "launch.sh")
+	steamSettings := filepath.Join(gameDir, "steam_settings")
+	_ = os.MkdirAll(steamSettings, 0755)
+
+	_ = os.WriteFile(profileJSON, []byte(`{"name":"My Game","playtime_seconds":3600}`), 0644)
+	_ = os.WriteFile(launchSh, []byte("#!/bin/sh\nexec ./game.exe"), 0755)
+	_ = os.WriteFile(filepath.Join(steamSettings, "force_language.txt"), []byte("english"), 0644)
+
+	// Call Revert
+	restored, err := Revert(gameDir, false)
+	if err != nil {
+		t.Fatalf("Revert failed: %v", err)
+	}
+	_ = restored
+
+	// Verify .gamux/launch_profile.json is preserved
+	profData, err := os.ReadFile(profileJSON)
+	if err != nil {
+		t.Fatalf("expected .gamux/launch_profile.json to remain intact after Revert: %v", err)
+	}
+	if !strings.Contains(string(profData), "playtime_seconds") {
+		t.Errorf("profile contents corrupted: %s", string(profData))
+	}
+
+	// Verify .gamux/launch.sh and steam_settings were removed
+	if _, err := os.Stat(launchSh); !os.IsNotExist(err) {
+		t.Errorf("expected .gamux/launch.sh to be removed during Revert")
+	}
+	if _, err := os.Stat(steamSettings); !os.IsNotExist(err) {
+		t.Errorf("expected steam_settings directory to be removed during Revert")
+	}
+}
+
+

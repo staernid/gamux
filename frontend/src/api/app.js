@@ -61,6 +61,18 @@ const DEFAULT_MOCKS = {
   switchGamePlatform: (path, plat) => Promise.resolve({ ...mockData.MOCK_GAMES[0], platform: plat }),
   uninstallDepot: (path, depotId) => Promise.resolve({ ...mockData.MOCK_GAMES[0] }),
   openDirectory: () => Promise.resolve(),
+  createGameStub: (libraryPath, appID, name, storeName) => Promise.resolve({
+    ...mockData.MOCK_GAMES[0],
+    name: name || `Game ${appID}`,
+    app_id: appID,
+    game_dir: `${libraryPath || '/home/staernid/Games'}/${name || appID}`,
+    store: storeName || 'Steam',
+    file_count: 0,
+    disk_size_bytes: 0,
+    is_installed: false,
+    is_stub: true,
+    is_ready: false
+  }),
 
 
   openURL: () => Promise.resolve(),
@@ -161,7 +173,8 @@ const DEFAULT_MOCKS = {
     { id: 'rawg', display_name: 'RAWG Video Games Database', capabilities: { can_search: true, can_fetch_metadata: true, can_provide_artwork: true, is_game_store: false } }
   ]),
   resolveArtwork: () => Promise.resolve({ cover_url: '', local_cover: '' }),
-  fetchNews: (appId, count) => mockData.MOCK_GAMES[0].news_items || [],
+  fetchNews: (appId, count) => Promise.resolve(mockData.MOCK_GAMES[0].news_items || []),
+  getGameNews: (appId, count) => Promise.resolve(mockData.MOCK_GAMES[0].news_items || []),
   getPatchNote: () => Promise.resolve([null, '']),
   selectDirectory: (title, defaultPath) => defaultPath || '/mock/path',
   selectFile: (title, filterName, filterPattern) => '/mock/file.exe',

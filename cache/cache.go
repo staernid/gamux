@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/staernid/gamux/domain"
 )
 
 var (
@@ -24,6 +27,10 @@ var (
 	// In-memory thread-safe cache for Steam store AppDetails
 	detailsMu          sync.RWMutex
 	detailsMemoryCache = make(map[string][]byte)
+
+	// In-memory thread-safe cache for inspected game records (Warm Library Cache)
+	gamesMu          sync.RWMutex
+	gamesMemoryCache = make(map[string]CachedGameRecord)
 )
 
 var cacheSubdirs = []string{
@@ -35,6 +42,7 @@ var cacheSubdirs = []string{
 	"steamdepotdb",
 	"sgdb",
 	"store_meta",
+	"games",
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -56,6 +64,10 @@ func SetCacheDir(dir string) {
 	detailsMu.Lock()
 	detailsMemoryCache = make(map[string][]byte)
 	detailsMu.Unlock()
+
+	gamesMu.Lock()
+	gamesMemoryCache = make(map[string]CachedGameRecord)
+	gamesMu.Unlock()
 }
 
 func getCacheDir() string {
@@ -542,5 +554,104 @@ func SaveStoreMetadata(storeName, gameID string, data []byte) error {
 	safeID := filepath.Clean(gameID)
 	path := filepath.Join(dir, "store_meta", fmt.Sprintf("%s_%s.json", storeName, safeID))
 	return writeTTLFile(path, data)
+}
+
+// ==========================================
+// 9. Warm Library Cache
+// ==========================================
+
+// CachedGameRecord stores an inspected domain.Game entity validated against directory and profile timestamps.
+type CachedGameRecord struct {
+	DirMtime     int64        `json:"dir_mtime"`
+	ProfileMtime int64        `json:"profile_mtime"`
+	Game         *domain.Game `json:"game"`
+}
+
+func getGameCacheKey(gameDir string) string {
+	h := sha256.Sum256([]byte(gameDir))
+	return fmt.Sprintf("%x", h[:16])
+}
+
+// GetCachedGame retrieves a cached domain.Game record if dirMtime and profileMtime match.
+func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.Game, bool) {
+	if DisableCache || gameDir == "" {
+		return nil, false
+	}
+
+	// 1. Fast in-memory check
+	gamesMu.RLock()
+	if cached, ok := gamesMemoryCache[gameDir]; ok {
+		if cached.DirMtime == dirMtime && cached.ProfileMtime == profileMtime && cached.Game != nil {
+			gamesMu.RUnlock()
+			return cached.Game, true
+		}
+	}
+	gamesMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	cacheFile := filepath.Join(dir, "games", fmt.Sprintf("%s.json", getGameCacheKey(gameDir)))
+	data, err := os.ReadFile(cacheFile)
+	if err != nil {
+		return nil, false
+	}
+
+	var rec CachedGameRecord
+	if err := json.Unmarshal(data, &rec); err == nil && rec.Game != nil {
+		if rec.DirMtime == dirMtime && rec.ProfileMtime == profileMtime {
+			gamesMu.Lock()
+			gamesMemoryCache[gameDir] = rec
+			gamesMu.Unlock()
+			return rec.Game, true
+		}
+	}
+	return nil, false
+}
+
+// SaveCachedGame persists an inspected domain.Game record with timestamps to in-memory and disk cache.
+func SaveCachedGame(gameDir string, dirMtime int64, profileMtime int64, game *domain.Game) error {
+	if DisableCache || gameDir == "" || game == nil {
+		return nil
+	}
+
+	rec := CachedGameRecord{
+		DirMtime:     dirMtime,
+		ProfileMtime: profileMtime,
+		Game:         game,
+	}
+
+	gamesMu.Lock()
+	gamesMemoryCache[gameDir] = rec
+	gamesMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	cacheFile := filepath.Join(dir, "games", fmt.Sprintf("%s.json", getGameCacheKey(gameDir)))
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cacheFile, data, 0644)
+}
+
+// InvalidateGameCache clears in-memory and disk cache entries for a specific game path.
+func InvalidateGameCache(gameDir string) {
+	if gameDir == "" {
+		return
+	}
+	gamesMu.Lock()
+	delete(gamesMemoryCache, gameDir)
+	gamesMu.Unlock()
+
+	dir := getCacheDir()
+	if dir != "" {
+		cacheFile := filepath.Join(dir, "games", fmt.Sprintf("%s.json", getGameCacheKey(gameDir)))
+		_ = os.Remove(cacheFile)
+	}
 }
 

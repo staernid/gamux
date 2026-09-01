@@ -170,6 +170,22 @@ func (r *Registry) SearchStores(ctx context.Context, query string) ([]SearchResu
 	return r.searchProviders(ctx, query, providers)
 }
 
+// SearchGameProviders queries registered game catalog store and game metadata database providers (Steam, GOG, RAWG), excluding artwork-only providers (e.g. SteamGridDB).
+func (r *Registry) SearchGameProviders(ctx context.Context, query string) ([]SearchResult, error) {
+	r.mu.RLock()
+	providers := make([]Provider, 0, len(r.providers))
+	for _, p := range r.providers {
+		caps := p.Capabilities()
+		if caps.CanSearch && (caps.IsGameStore || caps.CanFetchMetadata) {
+			providers = append(providers, p)
+		}
+	}
+	r.mu.RUnlock()
+
+	return r.searchProviders(ctx, query, providers)
+}
+
+
 // SearchAll queries all registered providers concurrently for game matches.
 func (r *Registry) SearchAll(ctx context.Context, query string) ([]SearchResult, error) {
 	r.mu.RLock()

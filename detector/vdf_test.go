@@ -106,3 +106,29 @@ func FuzzParseVDF(f *testing.F) {
 	})
 }
 
+func TestParseVDF_URLsAndComments(t *testing.T) {
+	vdfContent := `
+"Config"
+{
+	"url"		"https://store.steampowered.com/app/1091500" // Store page URL
+	"args"		"//nologo -windowed"
+	// Full line comment
+	"title"		"Game // Subtitle"
+}
+`
+	node, err := ParseVDF(strings.NewReader(vdfContent))
+	if err != nil {
+		t.Fatalf("ParseVDF failed: %v", err)
+	}
+
+	if url := node.GetString("url"); url != "https://store.steampowered.com/app/1091500" {
+		t.Errorf("expected url 'https://store.steampowered.com/app/1091500', got %q", url)
+	}
+	if args := node.GetString("args"); args != "//nologo -windowed" {
+		t.Errorf("expected args '//nologo -windowed', got %q", args)
+	}
+	if title := node.GetString("title"); title != "Game // Subtitle" {
+		t.Errorf("expected title 'Game // Subtitle', got %q", title)
+	}
+}
+

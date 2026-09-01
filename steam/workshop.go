@@ -119,16 +119,7 @@ func DownloadWorkshopItem(ctx context.Context, input string, targetDir string, d
 
 	if details.HContentFile != "" {
 		slog.Info("Modern workshop item with manifest ID found", "manifestUGCID", details.HContentFile)
-		if dryRun {
-			slog.Info("[DRY RUN] Would download workshop item manifest UGC ID", "ugcID", details.HContentFile, "outDir", outDir)
-			return nil
-		}
-
-		if err := os.MkdirAll(outDir, 0755); err != nil {
-			return fmt.Errorf("create workshop item dir: %w", err)
-		}
-		slog.Info("Workshop item manifest registered", "outDir", outDir, "ugcID", details.HContentFile)
-		return nil
+		return fmt.Errorf("workshop item %d (%s) uses modern SteamPipe UGC manifest storage (UGC ID: %s) which has no direct HTTP download URL; downloading requires SteamCMD/Steam client integration", workshopID, details.Title, details.HContentFile)
 	}
 
 	return fmt.Errorf("workshop item %d has neither direct download URL nor manifest UGC ID", workshopID)

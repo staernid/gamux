@@ -26,7 +26,19 @@ beforeEach(() => {
         GetGBEStatus: vi.fn().mockResolvedValue({ has_update: true, latest_tag: 'v0.2.7' }),
         GetSteamlessStatus: vi.fn().mockResolvedValue({ has_update: false }),
         SelectDirectory: vi.fn().mockResolvedValue('/home/staernid/Games'),
+        CreateGameStub: vi.fn().mockImplementation((lib, id, name, store) => Promise.resolve({
+          name: name || `Game ${id}`,
+          app_id: id,
+          game_dir: `${lib}/${name || id}`,
+          store: store || 'Steam',
+          file_count: 0,
+          disk_size_bytes: 0,
+          is_installed: false,
+          is_stub: true,
+          is_ready: false,
+        })),
       }
     }
   };
 });
+

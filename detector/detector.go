@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
@@ -75,13 +76,33 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
 
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+	dirFi, err := os.Stat(absPath)
+	if os.IsNotExist(err) {
 		return nil, fmt.Errorf("%w: %s", ErrGameNotFound, absPath)
 	}
 
 	// Guard against scanning runner prefix roots or system folders as games
-	if isRunnerPrefixDir(absPath) && !util.FileExists(filepath.Join(absPath, "steam_settings", "launch_profile.json")) {
+	hasProfile := util.FileExists(filepath.Join(absPath, ".gamux", "launch_profile.json")) ||
+		util.FileExists(filepath.Join(absPath, "steam_settings", "launch_profile.json"))
+	if isRunnerPrefixDir(absPath) && !hasProfile {
 		return nil, fmt.Errorf("path %s is a runner/wine prefix directory, not a game", absPath)
+	}
+
+	// Warm Library Cache lookup
+	var profileMtime int64
+	if pFi, err := os.Stat(filepath.Join(absPath, ".gamux", "launch_profile.json")); err == nil {
+		profileMtime = pFi.ModTime().UnixNano()
+	} else if legFi, err := os.Stat(filepath.Join(absPath, "steam_settings", "launch_profile.json")); err == nil {
+		profileMtime = legFi.ModTime().UnixNano()
+	}
+
+	var dirMtime int64
+	if dirFi != nil {
+		dirMtime = dirFi.ModTime().UnixNano()
+	}
+
+	if cached, ok := cache.GetCachedGame(absPath, dirMtime, profileMtime); ok && cached != nil {
+		return cached, nil
 	}
 
 	var state scanState
@@ -96,7 +117,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		lowerName := strings.ToLower(name)
 
 		if d.IsDir() {
-			if p != absPath && (lowerName == "drive_c" || lowerName == "dosdevices" || lowerName == "pfx" || lowerName == ".git" || lowerName == ".gamux_backup" || lowerName == "node_modules") {
+			if p != absPath && (lowerName == "drive_c" || lowerName == "dosdevices" || lowerName == "pfx" || lowerName == ".git" || lowerName == ".gamux" || lowerName == ".gamux_backup" || lowerName == "node_modules") {
 				return filepath.SkipDir
 			}
 			if lowerName == "steam_settings" {
@@ -413,8 +434,8 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	// 9. Load custom LaunchProfile if present
-	launchProfilePath := filepath.Join(info.GameDir, "steam_settings", "launch_profile.json")
-	launchProfileExists := util.FileExists(launchProfilePath)
+	launchProfilePath := filepath.Join(info.GameDir, ".gamux", "launch_profile.json")
+	launchProfileExists := util.FileExists(launchProfilePath) || util.FileExists(filepath.Join(info.GameDir, "steam_settings", "launch_profile.json"))
 	if profile, err := compat.LoadProfile(info.GameDir); err == nil && profile != nil {
 		info.LaunchProfile = profile
 		if profile.SourceOverride != "" {
@@ -496,6 +517,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 
 	// 10. Recompute state
 	info.RecomputeState()
+
+	// Persist to Warm Library Cache
+	_ = cache.SaveCachedGame(absPath, dirMtime, profileMtime, info)
 
 	return info, nil
 }

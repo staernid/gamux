@@ -6,14 +6,16 @@
     queueApplyGame,
     setGameRunning,
     runningGames,
-    refreshGame
+    refreshGame,
+    libraryPath,
+    updateGameInStore
   } from '../../stores/library.js';
   import { tasksStore } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
   import { AppAPI } from '../../api/app.js';
-  import { isSamePath, countOverrides } from '../../utils/game.js';
+  import { isSamePath, countOverrides, normalizeGame } from '../../utils/game.js';
   import DrawerSavesTab from '../stage/drawer/DrawerSavesTab.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
   import GameTaskHud from './hub/GameTaskHud.svelte';
@@ -116,6 +118,31 @@
     }
   }
 
+  async function handleAddToLibrary() {
+    if (!game) return;
+    const lib = $libraryPath || '/home/staernid/Games';
+    try {
+      const stub = await AppAPI.createGameStub(lib, game.appId, game.name, game.store || 'Steam');
+      if (stub) {
+        const normalized = updateGameInStore(stub);
+        if (normalized) {
+          selectedGame.set(normalized);
+        }
+        notificationStore.items.add({
+          type: 'success',
+          title: 'Added to Library',
+          message: `Saved skeleton metadata stub for ${game.name}`
+        });
+      }
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Failed to Add to Library',
+        message: err?.message || String(err)
+      });
+    }
+  }
+
   async function handlePrimaryAction() {
     if (!game) return;
 
@@ -127,6 +154,39 @@
         notificationStore.items.add({
           type: 'error',
           title: 'Failed to Stop Game',
+          message: err?.message || String(err)
+        });
+      }
+      return;
+    }
+
+    const isInstalled = game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0));
+    if (!isInstalled) {
+      const appID = parseInt(game.appId, 10);
+      if (!appID || isNaN(appID)) {
+        notificationStore.items.add({
+          type: 'error',
+          title: 'Identifier Required',
+          message: 'This title does not have a valid Steam AppID for depot downloading.'
+        });
+        return;
+      }
+      const cleanName = game.name.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || game.name;
+      const lib = $libraryPath || '/home/staernid/Games';
+      const dest = game.gameDir || `${lib}/${cleanName}`;
+      try {
+        await tasksStore.start({
+          app_id: appID,
+          game_name: game.name,
+          target_dir: dest,
+          platform: game.platform || 'win64',
+          auto_apply: true,
+          store_type: (game.store || 'steam').toLowerCase(),
+        });
+      } catch (err) {
+        notificationStore.items.add({
+          type: 'error',
+          title: 'Download Failed',
           message: err?.message || String(err)
         });
       }
@@ -157,6 +217,7 @@
       });
     }
   }
+
 
   async function handleSaveSettings() {
     if (!game?.gameDir) return;
@@ -361,6 +422,7 @@
       {globalCfg}
       on:returnToShelf={returnToShelf}
       on:primaryAction={handlePrimaryAction}
+      on:addToLibrary={handleAddToLibrary}
       on:openDirectory={openDirectory}
     />
 
@@ -455,6 +517,26 @@
           <HubOverviewTab {game} />
         {:else if activeTab === 'community'}
           <HubCommunityTab {game} />
+        {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
+          <!-- Uninstalled State Placeholder for Technical Tabs -->
+          <div class="bg-[#0c0c12]/80 border border-[#1e1e2c] rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
+            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </div>
+            <div class="space-y-1">
+              <h3 class="font-bold text-white text-base">Game Files Not Installed</h3>
+              <p class="text-xs text-slate-400">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
+            </div>
+            <button
+              type="button"
+              on:click={handlePrimaryAction}
+              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/20 cursor-pointer"
+            >
+              Download Game Now
+            </button>
+          </div>
         {:else if activeTab === 'general'}
           <HubGeneralTab
             {game}
@@ -501,3 +583,4 @@
     </div>
   </div>
 {/if}
+

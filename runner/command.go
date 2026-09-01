@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -145,8 +146,17 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 	return res
 }
 
-// BuildCommand constructs an *exec.Cmd configured for the specified operating mode and runner.
-func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.Cmd, error) {
+// LaunchSpec contains the complete resolved execution specification for a game.
+type LaunchSpec struct {
+	GameDir    string            // Absolute path to game directory
+	WorkingDir string            // Working directory for execution
+	TargetExe  string            // Absolute path to game executable
+	Env        map[string]string // Explicit Gamux/Game environment variables to set
+	Args       []string          // Command line arguments including executable: [binary/wrapper, ...args]
+}
+
+// BuildLaunchSpec resolves all configuration, environment variables, runners, and wrappers into a LaunchSpec.
+func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*LaunchSpec, error) {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
@@ -166,38 +176,20 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		targetExe = filepath.Join(absGameDir, targetExe)
 	}
 
-	// Assemble Environment Variables
-	envMap := make(map[string]string)
-	for _, envStr := range os.Environ() {
-		parts := strings.SplitN(envStr, "=", 2)
-		if len(parts) == 2 {
-			envMap[parts[0]] = parts[1]
-		}
-	}
+	// Assemble explicit Gamux/Game environment variables
+	gameEnv := make(map[string]string)
 
 	// Steam / UMU / AppID identification & Protonfixes mapping
 	if resolved.AppID != "" && resolved.AppID != "0" {
-		envMap["SteamAppId"] = resolved.AppID
-		envMap["SteamGameId"] = resolved.AppID
-		if _, exists := envMap["GAMEID"]; !exists {
-			envMap["GAMEID"] = resolved.AppID
-		}
-		if _, exists := envMap["UMU_ID"]; !exists {
-			envMap["UMU_ID"] = resolved.AppID
-		}
-		if _, exists := envMap["STORE"]; !exists {
-			envMap["STORE"] = "steam"
-		}
+		gameEnv["SteamAppId"] = resolved.AppID
+		gameEnv["SteamGameId"] = resolved.AppID
+		gameEnv["GAMEID"] = resolved.AppID
+		gameEnv["UMU_ID"] = resolved.AppID
+		gameEnv["STORE"] = "steam"
 	} else {
-		if _, exists := envMap["GAMEID"]; !exists {
-			envMap["GAMEID"] = "umu-default"
-		}
-		if _, exists := envMap["UMU_ID"]; !exists {
-			envMap["UMU_ID"] = "umu-default"
-		}
-		if _, exists := envMap["STORE"]; !exists {
-			envMap["STORE"] = "none"
-		}
+		gameEnv["GAMEID"] = "umu-default"
+		gameEnv["UMU_ID"] = "umu-default"
+		gameEnv["STORE"] = "none"
 	}
 
 	// Wine / Proton prefix isolation with central Syncthing user data symlinking
@@ -214,37 +206,34 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		}
 		prefixDir, pErr := compat.EnsurePrefix(ctx, cfg, gameStub, resolved.WinePrefix)
 		if pErr == nil && prefixDir != "" {
-			envMap["WINEPREFIX"] = prefixDir
-			envMap["STEAM_COMPAT_DATA_PATH"] = prefixDir
+			gameEnv["WINEPREFIX"] = prefixDir
+			gameEnv["STEAM_COMPAT_DATA_PATH"] = prefixDir
 		}
 	}
 
 	// Proton path override
 	if resolved.ProtonPath != "" {
-		envMap["PROTONPATH"] = resolved.ProtonPath
+		gameEnv["PROTONPATH"] = resolved.ProtonPath
 	}
 
 	// Gaming environment toggles
 	if resolved.MangoHud != nil && *resolved.MangoHud {
-		envMap["MANGOHUD"] = "1"
+		gameEnv["MANGOHUD"] = "1"
 	}
 	if resolved.DXVKHud != "" {
-		envMap["DXVK_HUD"] = resolved.DXVKHud
+		gameEnv["DXVK_HUD"] = resolved.DXVKHud
 	}
 
 	// Wine / Proton / Graphics performance & stability defaults for Windows games
 	if resolved.Platform != "linux" || resolved.Runner == RunnerWine || resolved.Runner == RunnerProton || resolved.Runner == RunnerUMU {
-		envMap["PROTON_DISABLE_LSTEAMCLIENT"] = "1"
-		envMap["WINE_LARGE_ADDRESS_AWARE"] = "1"
-		envMap["PROTON_FORCE_LARGE_ADDRESS_AWARE"] = "1"
-		envMap["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
-		envMap["WINEESYNC"] = "1"
-		envMap["WINEFSYNC"] = "1"
-		envMap["__GL_SHADER_DISK_CACHE"] = "1"
-
-		if _, exists := envMap["WINEDEBUG"]; !exists {
-			envMap["WINEDEBUG"] = "-all"
-		}
+		gameEnv["PROTON_DISABLE_LSTEAMCLIENT"] = "1"
+		gameEnv["WINE_LARGE_ADDRESS_AWARE"] = "1"
+		gameEnv["PROTON_FORCE_LARGE_ADDRESS_AWARE"] = "1"
+		gameEnv["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
+		gameEnv["WINEESYNC"] = "1"
+		gameEnv["WINEFSYNC"] = "1"
+		gameEnv["__GL_SHADER_DISK_CACHE"] = "1"
+		gameEnv["WINEDEBUG"] = "-all"
 
 		// Construct and merge WINEDLLOVERRIDES
 		baseOverrides := "d3d10core,d3d11,d3d12,d3d12core,d3d8,d3d9,dxgi,nvapi,nvapi64,nvofapi64=n;winemenubuilder="
@@ -260,26 +249,20 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 			overridesParts = append(overridesParts, "steamclient,steamclient64=n,b")
 		}
 
-		if customOverrides, ok := envMap["WINEDLLOVERRIDES"]; ok && customOverrides != "" {
-			overridesParts = append(overridesParts, customOverrides)
-		}
-
 		if len(overridesParts) == 0 {
-			envMap["WINEDLLOVERRIDES"] = baseOverrides
+			gameEnv["WINEDLLOVERRIDES"] = baseOverrides
 		} else {
 			merged := strings.Join(overridesParts, ";")
 			if !strings.Contains(merged, "winemenubuilder=") {
 				merged = baseOverrides + ";" + merged
 			}
-			envMap["WINEDLLOVERRIDES"] = merged
+			gameEnv["WINEDLLOVERRIDES"] = merged
 		}
 		if resolved.Runner == RunnerUMU || resolved.Runner == RunnerAuto || resolved.Runner == "" {
-			if _, exists := envMap["PROTONPATH"]; !exists && resolved.ProtonPath == "" {
-				envMap["PROTONPATH"] = "GE-Proton"
+			if resolved.ProtonPath == "" {
+				gameEnv["PROTONPATH"] = "GE-Proton"
 			}
-			if _, exists := envMap["PROTON_VERB"]; !exists {
-				envMap["PROTON_VERB"] = "waitforexitandrun"
-			}
+			gameEnv["PROTON_VERB"] = "waitforexitandrun"
 		}
 	} else if domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
 		// Linux native loader support (only when ModeLoader is active)
@@ -304,28 +287,18 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 			gbeSO = filepath.Join(gbeBase, "linux_release", "experimental", "x64", "steamclient.so")
 		}
 		if util.FileExists(gbeSO) {
-			existingPreload := envMap["LD_PRELOAD"]
-			if existingPreload != "" && !strings.Contains(existingPreload, "steamclient.so") {
-				envMap["LD_PRELOAD"] = gbeSO + ":" + existingPreload
-			} else if existingPreload == "" {
-				envMap["LD_PRELOAD"] = gbeSO
-			}
+			gameEnv["LD_PRELOAD"] = gbeSO
 		}
 	}
 
-	// Custom environment overrides
+	// Custom environment overrides (global + profile CustomEnv)
 	for k, v := range resolved.CustomEnv {
-		envMap[k] = v
-	}
-
-	var envList []string
-	for k, v := range envMap {
-		envList = append(envList, fmt.Sprintf("%s=%s", k, v))
+		gameEnv[k] = v
 	}
 
 	var exeArgs []string
 	if resolved.ExeArgs != "" {
-		exeArgs = strings.Fields(resolved.ExeArgs)
+		exeArgs = util.SplitArgs(resolved.ExeArgs)
 	}
 
 	workingDir := resolved.WorkingDir
@@ -344,7 +317,7 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		return nil, fmt.Errorf("build runner args (%s): %w", runnerAdapter.Name(), err)
 	}
 
-	var cmd *exec.Cmd
+	finalArgs := append([]string{cmdBinary}, cmdArgs...)
 
 	// For Windows runners, apply gamemoderun and mangohud wrappers when available
 	if resolved.Platform != "linux" || resolved.Runner != RunnerLinux {
@@ -357,28 +330,167 @@ func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (
 		if gamemodeBin, err := exec.LookPath("gamemoderun"); err == nil {
 			wrappers = append([]string{gamemodeBin}, wrappers...)
 		}
-
 		if len(wrappers) > 0 {
-			finalArgs := append(wrappers[1:], cmdBinary)
-			finalArgs = append(finalArgs, cmdArgs...)
-			cmd = exec.CommandContext(ctx, wrappers[0], finalArgs...)
-		} else {
-			cmd = exec.CommandContext(ctx, cmdBinary, cmdArgs...)
+			finalArgs = append(wrappers, finalArgs...)
 		}
-	} else {
-		cmd = exec.CommandContext(ctx, cmdBinary, cmdArgs...)
 	}
 
-	cmd.Dir = workingDir
+	return &LaunchSpec{
+		GameDir:    absGameDir,
+		WorkingDir: workingDir,
+		TargetExe:  targetExe,
+		Env:        gameEnv,
+		Args:       finalArgs,
+	}, nil
+}
+
+// BuildCommand constructs an *exec.Cmd configured for the specified operating mode and runner.
+func BuildCommand(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.Cmd, error) {
+	spec, err := BuildLaunchSpec(ctx, cfg, opts)
+	if err != nil {
+		return nil, fmt.Errorf("build launch spec: %w", err)
+	}
+
+	// Live environment: overlay spec.Env over os.Environ()
+	envMap := make(map[string]string)
+	for _, envStr := range os.Environ() {
+		parts := strings.SplitN(envStr, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+	for k, v := range spec.Env {
+		if k == "LD_PRELOAD" && envMap["LD_PRELOAD"] != "" && !strings.Contains(envMap["LD_PRELOAD"], v) {
+			envMap["LD_PRELOAD"] = v + ":" + envMap["LD_PRELOAD"]
+		} else {
+			envMap[k] = v
+		}
+	}
+
+	var envList []string
+	for k, v := range envMap {
+		envList = append(envList, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	cmd := exec.CommandContext(ctx, spec.Args[0], spec.Args[1:]...)
+	cmd.Dir = spec.WorkingDir
 	cmd.Env = envList
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	slog.Info("Constructed launch command",
-		"mode", resolved.OperatingMode,
-		"runner", runnerAdapter.Name(),
-		"targetExe", targetExe,
-		"workingDir", workingDir,
+		"targetExe", spec.TargetExe,
+		"workingDir", spec.WorkingDir,
+		"args", spec.Args,
 	)
 
 	return cmd, nil
+}
+
+// GenerateLaunchScriptContent serializes a LaunchSpec into a standalone portable POSIX bash script.
+func GenerateLaunchScriptContent(spec *LaunchSpec) string {
+	var sb strings.Builder
+	sb.WriteString("#!/usr/bin/env bash\n")
+	sb.WriteString("# Generated by gamux - Standalone Portable Game Launcher\n")
+	sb.WriteString("set -e\n\n")
+
+	sb.WriteString("# Resolve game directory relative to this script (.gamux/launch.sh)\n")
+	sb.WriteString(`GAME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"` + "\n")
+
+	// Resolve working directory relative to GAME_DIR if applicable
+	if spec.WorkingDir != "" {
+		if spec.WorkingDir == spec.GameDir {
+			sb.WriteString(`cd "$GAME_DIR"` + "\n\n")
+		} else if strings.HasPrefix(spec.WorkingDir, spec.GameDir+"/") {
+			rel := strings.TrimPrefix(spec.WorkingDir, spec.GameDir+"/")
+			sb.WriteString(fmt.Sprintf(`cd "$GAME_DIR/%s"`+"\n\n", rel))
+		} else {
+			sb.WriteString(fmt.Sprintf(`cd %s`+"\n\n", formatBashArg(spec.WorkingDir, spec.GameDir)))
+		}
+	} else {
+		sb.WriteString(`cd "$GAME_DIR"` + "\n\n")
+	}
+
+	// Explicit environment variables (sorted alphabetically for deterministic output)
+	keys := make([]string, 0, len(spec.Env))
+	for k := range spec.Env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := spec.Env[k]
+		sb.WriteString(fmt.Sprintf("export %s=%s\n", k, formatBashEnvVal(v, spec.GameDir)))
+	}
+	sb.WriteString("\n")
+
+	// Exec command with pass-through arguments ($@)
+	var cmdParts []string
+	for _, arg := range spec.Args {
+		cmdParts = append(cmdParts, formatBashArg(arg, spec.GameDir))
+	}
+	cmdParts = append(cmdParts, `"$@"`)
+	sb.WriteString("exec " + strings.Join(cmdParts, " ") + "\n")
+
+	return sb.String()
+}
+
+// formatBashEnvVal formats an environment variable value for shell output.
+func formatBashEnvVal(val, gameDir string) string {
+	if val == "" {
+		return `""`
+	}
+	if gameDir != "" {
+		if val == gameDir {
+			return `"$GAME_DIR"`
+		}
+		if strings.HasPrefix(val, gameDir+"/") {
+			rel := strings.TrimPrefix(val, gameDir+"/")
+			return fmt.Sprintf(`"$GAME_DIR/%s"`, rel)
+		}
+	}
+	escaped := strings.ReplaceAll(val, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	escaped = strings.ReplaceAll(escaped, `$`, `\$`)
+	escaped = strings.ReplaceAll(escaped, "`", "\\`")
+	return fmt.Sprintf(`"%s"`, escaped)
+}
+
+// formatBashArg formats a command-line argument for shell output.
+func formatBashArg(arg, gameDir string) string {
+	if arg == "" {
+		return `""`
+	}
+	if gameDir != "" {
+		if arg == gameDir {
+			return `"$GAME_DIR"`
+		}
+		if strings.HasPrefix(arg, gameDir+"/") {
+			rel := strings.TrimPrefix(arg, gameDir+"/")
+			return fmt.Sprintf(`"$GAME_DIR/%s"`, rel)
+		}
+	}
+	if strings.ContainsAny(arg, " \t\n\"'\\$`<>&|;*?~#()[]{}") {
+		escaped := strings.ReplaceAll(arg, `\`, `\\`)
+		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+		escaped = strings.ReplaceAll(escaped, `$`, `\$`)
+		escaped = strings.ReplaceAll(escaped, "`", "\\`")
+		return fmt.Sprintf(`"%s"`, escaped)
+	}
+	return arg
+}
+
+// GenerateLaunchScript writes .gamux/launch.sh in the game's directory.
+func GenerateLaunchScript(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
+	spec, err := BuildLaunchSpec(ctx, cfg, opts)
+	if err != nil {
+		return fmt.Errorf("build launch spec: %w", err)
+	}
+
+	content := GenerateLaunchScriptContent(spec)
+	gamuxDir := filepath.Join(spec.GameDir, ".gamux")
+	if err := os.MkdirAll(gamuxDir, 0755); err != nil {
+		return fmt.Errorf("create .gamux directory: %w", err)
+	}
+	scriptPath := filepath.Join(gamuxDir, "launch.sh")
+	return util.WriteFileAtomic(scriptPath, []byte(content), 0755)
 }

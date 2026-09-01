@@ -47,9 +47,16 @@
             class="text-left space-y-0.5 flex-1 pr-3 truncate cursor-pointer select-none"
             on:click={() => onToggleExpand(idx)}
           >
-            <strong class="text-slate-100 font-bold text-xs block truncate">{item.title}</strong>
+            <div class="flex items-center space-x-2">
+              <strong class="text-slate-100 font-bold text-xs block truncate">{item.title}</strong>
+              {#if item.feedlabel || item.feed_label}
+                <span class="text-[10px] font-mono text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-[#2a2a3a]">
+                  {item.feedlabel || item.feed_label}
+                </span>
+              {/if}
+            </div>
             <span class="text-[10px] text-slate-500 font-mono">
-              {item.author ? `${item.author} · ` : ''}{new Date(item.date * 1000).toLocaleDateString()}
+              {item.author ? `${item.author} · ` : ''}{item.date ? new Date(item.date > 1e11 ? item.date : item.date * 1000).toLocaleDateString() : ''}
             </span>
           </button>
 
@@ -81,7 +88,7 @@
         </div>
 
         {#if isExpanded}
-          <div class="p-4 border-t border-[#202030] bg-[#101017] text-slate-200 leading-relaxed text-xs space-y-2 max-h-96 overflow-y-auto">
+          <div class="p-4 border-t border-[#202030] bg-[#101017] text-slate-200 leading-relaxed text-xs space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
             {@html formatNewsHTML(item.contents)}
           </div>
         {/if}

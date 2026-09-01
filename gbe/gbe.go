@@ -605,10 +605,10 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 		if d.IsDir() {
 			if d.Name() == "steam_settings" {
 				if dryRun {
-					slog.Info("[DRY RUN] Would remove steam_settings directory", "path", path)
+					slog.Info("[DRY RUN] Would remove directory", "path", path)
 				} else {
 					_ = os.RemoveAll(path)
-					slog.Info("Removed steam_settings directory", "path", path)
+					slog.Info("Removed directory", "path", path)
 				}
 				return filepath.SkipDir
 			}
@@ -616,15 +616,7 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 		}
 
 		name := d.Name()
-		if strings.Contains(name, ".ORIGINAL") {
-			idx := strings.Index(path, ".20")
-			origPath := path
-			if idx != -1 {
-				origPath = path[:idx]
-			} else {
-				origPath = strings.TrimSuffix(path, ".ORIGINAL")
-			}
-
+		if origPath, isBak := util.ResolveOriginalBackupPath(path); isBak {
 			if dryRun {
 				slog.Info("[DRY RUN] Would restore original file", "from", path, "to", origPath)
 			} else {
@@ -657,6 +649,19 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 		} else {
 			_ = os.Remove(appIDTxt)
 			slog.Info("Removed steam_appid.txt", "path", appIDTxt)
+		}
+	}
+
+	// Clean up .gamux/launch.sh and legacy root launch.sh
+	for _, scriptRel := range []string{filepath.Join(".gamux", "launch.sh"), "launch.sh"} {
+		launchSh := filepath.Join(absTargetDir, scriptRel)
+		if util.FileExists(launchSh) {
+			if dryRun {
+				slog.Info("[DRY RUN] Would remove launch script", "path", launchSh)
+			} else {
+				_ = os.Remove(launchSh)
+				slog.Info("Removed launch script", "path", launchSh)
+			}
 		}
 	}
 

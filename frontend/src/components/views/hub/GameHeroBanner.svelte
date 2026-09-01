@@ -32,14 +32,25 @@
   $: pColors = game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' };
   $: platformLabel = game ? getPlatformType(game) : 'Windows';
   $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
+  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
+  $: isStub = game ? (game.isStub ?? (!isInstalled && Boolean(game.gameDir))) : false;
+  $: isVirtual = game ? (game.isVirtual ?? (!isInstalled && !isStub && !game.gameDir)) : false;
   $: isReady = game ? (game.isReady || game.isPatched || !!game.exePath) : false;
   $: isSteam = game ? isSteamApp(game.appId) : false;
   $: heroBackdropUrl = game ? (game.localHeroUrl || game.heroUrl || game.localBannerUrl || game.bannerUrl || (isSteam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/library_hero.jpg` : '') || game.localCoverUrl || game.coverUrl || '') : '';
 
   $: primaryButtonLabel = isTaskActive
-    ? (activeGameTask?.status === 'queued' ? 'Queued...' : 'Task in Progress...')
+    ? (activeGameTask?.status === 'queued'
+        ? 'Queued...'
+        : (activeGameTask?.type === 'download' || activeGameTask?.operation === 'download')
+        ? (typeof activeGameTask?.percent === 'number' && activeGameTask.percent > 0
+            ? `Downloading... ${activeGameTask.percent}%`
+            : 'Downloading...')
+        : 'Task in Progress...')
     : isGameRunning
     ? 'Stop Game'
+    : !isInstalled
+    ? 'Download'
     : isReady
     ? 'Play Now'
     : 'Setup & Play';
@@ -185,10 +196,18 @@
           {/if}
 
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-400 font-mono">
-            <span>{formatBytes(game.diskSizeBytes)}</span>
-            <span class="text-slate-600">·</span>
+            {#if isInstalled && game.diskSizeBytes > 0}
+              <span>{formatBytes(game.diskSizeBytes)}</span>
+              <span class="text-slate-600">·</span>
+            {:else if isStub}
+              <span class="text-purple-400 font-bold">In Library (Uninstalled)</span>
+              <span class="text-slate-600">·</span>
+            {:else if isVirtual}
+              <span class="text-cyan-400 font-bold">Online Store Title</span>
+              <span class="text-slate-600">·</span>
+            {/if}
             <span class="truncate max-w-sm">{game.runner || globalCfg?.default_runner || 'UMU'}</span>
-            {#if !game.isReady}
+            {#if isInstalled && !game.isReady}
               <span class="text-slate-600">·</span>
               <span class="text-amber-400">Setup Required</span>
             {/if}
@@ -219,11 +238,25 @@
 
       <!-- Right: Primary CTA & Actions -->
       <div class="flex items-center space-x-3 flex-shrink-0">
+        {#if isVirtual}
+          <button
+            type="button"
+            on:click={() => dispatch('addToLibrary')}
+            class="px-4 py-3 rounded-2xl font-bold text-xs bg-[#181826] hover:bg-[#242436] border border-[#2e2e46] text-slate-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
+            title="Add skeleton metadata stub to your library without downloading files"
+          >
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Add to Library</span>
+          </button>
+        {/if}
+
         <button
           type="button"
           on:click={handlePrimaryAction}
           disabled={isTaskActive}
-          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-[#1e1e2c] border border-cyan-500/50 text-cyan-300 shadow-cyan-950/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : isReady ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'}"
+          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-[#1e1e2c] border border-cyan-500/50 text-cyan-300 shadow-cyan-950/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : !isInstalled ? 'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 shadow-cyan-500/30' : isReady ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'}"
         >
           {#if isTaskActive}
             <svg class="animate-spin w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24">
@@ -233,6 +266,10 @@
           {:else if isGameRunning}
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+            </svg>
+          {:else if !isInstalled}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
           {:else if isReady}
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -246,18 +283,21 @@
           <span>{primaryButtonLabel}</span>
         </button>
 
-        <!-- Files Button (Y) -->
-        <button
-          type="button"
-          on:click={handleOpenDirectory}
-          class="p-3 rounded-2xl bg-[#14141e]/90 hover:bg-[#1f1f2e] border border-[#2b2b3e] text-slate-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
-          title="Open Directory in File Manager (Y)"
-        >
-          <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-          </svg>
-        </button>
+        {#if isInstalled && game.gameDir}
+          <!-- Files Button (Y) -->
+          <button
+            type="button"
+            on:click={handleOpenDirectory}
+            class="p-3 rounded-2xl bg-[#14141e]/90 hover:bg-[#1f1f2e] border border-[#2b2b3e] text-slate-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
+            title="Open Directory in File Manager (Y)"
+          >
+            <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+          </button>
+        {/if}
       </div>
     </div>
   {/if}
 </div>
+

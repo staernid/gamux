@@ -276,6 +276,8 @@ type LaunchProfile struct {
 // ReadinessStatus holds computed operational flags derived from inspection data and configurations.
 type ReadinessStatus struct {
 	State              string   `json:"state"` // "Original", "Loader-Configured", "Portable-Patched"
+	IsInstalled        bool     `json:"is_installed"`
+	IsStub             bool     `json:"is_stub"`
 	IsPatched          bool     `json:"is_patched"`
 	IsPortable         bool     `json:"is_portable"`
 	HasUpdatesOrIssues bool     `json:"has_updates_or_issues"`
@@ -503,7 +505,7 @@ func (g *Game) RequiresSteamEmulator() bool {
 	return true
 }
 
-// RecomputeState recalculates computed flags (IsPatched, IsPortable, IsReady, HasUpdatesOrIssues).
+// RecomputeState recalculates computed flags (IsPatched, IsPortable, IsReady, HasUpdatesOrIssues, IsInstalled, IsStub).
 func (g *Game) RecomputeState() {
 	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
 	if len(g.OriginalBackups) > 0 || mode == ModePortable {
@@ -519,7 +521,9 @@ func (g *Game) RecomputeState() {
 	g.IsPortable = g.State == "Portable-Patched"
 	g.IsPatched = g.IsPortable || (g.State == "Loader-Configured" && mode != ModeNone)
 	g.HasUpdatesOrIssues = g.IsSteam() && (g.HasUpdate || len(g.ModifiedFiles) > 0 || len(g.MissingFiles) > 0)
-	g.IsReady = g.IsPatched || g.EffectiveExePath() != ""
+	g.IsInstalled = g.EffectiveExePath() != "" || g.FileCount > 0
+	g.IsStub = g.GameDir != "" && !g.IsInstalled
+	g.IsReady = g.IsInstalled && (g.IsPatched || g.EffectiveExePath() != "")
 }
 
 // GetAsset returns the location information for a specific asset type.

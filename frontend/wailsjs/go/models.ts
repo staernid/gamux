@@ -326,6 +326,8 @@ export namespace domain {
 	    exe_args?: string;
 	    launch_profile?: LaunchProfile;
 	    state: string;
+	    is_installed: boolean;
+	    is_stub: boolean;
 	    is_patched: boolean;
 	    is_portable: boolean;
 	    has_updates_or_issues: boolean;
@@ -410,6 +412,8 @@ export namespace domain {
 	        this.exe_args = source["exe_args"];
 	        this.launch_profile = this.convertValues(source["launch_profile"], LaunchProfile);
 	        this.state = source["state"];
+	        this.is_installed = source["is_installed"];
+	        this.is_stub = source["is_stub"];
 	        this.is_patched = source["is_patched"];
 	        this.is_portable = source["is_portable"];
 	        this.has_updates_or_issues = source["has_updates_or_issues"];

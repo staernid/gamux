@@ -163,17 +163,17 @@ func tokenizeVDF(r io.Reader) ([]string, error) {
 			continue
 		}
 
-		// Strip inline comments
-		if idx := strings.Index(line, "//"); idx != -1 {
-			line = strings.TrimSpace(line[:idx])
-		}
-
 		inQuote := false
 		var curToken strings.Builder
 		runes := []rune(line)
 
 		for i := 0; i < len(runes); i++ {
 			ch := runes[i]
+
+			// If not inside quotes and we encounter //, the rest of the line is a comment
+			if !inQuote && ch == '/' && i+1 < len(runes) && runes[i+1] == '/' {
+				break
+			}
 
 			if ch == '"' {
 				if inQuote {

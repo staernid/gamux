@@ -72,7 +72,7 @@ func TestProfilePersistence(t *testing.T) {
 		t.Fatalf("ResetProfile failed: %v", err)
 	}
 
-	profileFile := filepath.Join(gameDir, "steam_settings", "launch_profile.json")
+	profileFile := filepath.Join(gameDir, ".gamux", "launch_profile.json")
 	if util.FileExists(profileFile) {
 		t.Fatalf("Profile file should have been removed")
 	}
@@ -243,5 +243,37 @@ func TestApply_InjectedOperatingMode(t *testing.T) {
 	currentBytes, _ := os.ReadFile(filepath.Join(gameDir, "steam_api64.dll"))
 	if string(currentBytes) != "emulated_dll_bytes" {
 		t.Errorf("expected steam_api64.dll to be replaced with emulator bytes, got %s", string(currentBytes))
+	}
+}
+
+func TestLegacyProfileMigration(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "LegacyGame")
+	legacySettingsDir := filepath.Join(gameDir, "steam_settings")
+	_ = os.MkdirAll(legacySettingsDir, 0755)
+
+	legacyProfile := filepath.Join(legacySettingsDir, "launch_profile.json")
+	_ = os.WriteFile(legacyProfile, []byte(`{
+		"game_dir": "`+gameDir+`",
+		"name": "Migrated Title",
+		"app_id": "99999",
+		"runner": "umu"
+	}`), 0644)
+
+	// LoadProfile should load, migrate to .gamux, and delete legacy file
+	loaded, err := compat.LoadProfile(gameDir)
+	if err != nil {
+		t.Fatalf("LoadProfile failed: %v", err)
+	}
+	if loaded.Name != "Migrated Title" || loaded.AppID != "99999" {
+		t.Fatalf("unexpected loaded profile data: %+v", loaded)
+	}
+
+	newProfilePath := filepath.Join(gameDir, ".gamux", "launch_profile.json")
+	if !util.FileExists(newProfilePath) {
+		t.Errorf("expected migrated profile at %s", newProfilePath)
+	}
+	if util.FileExists(legacyProfile) {
+		t.Errorf("expected legacy profile %s to be deleted after migration", legacyProfile)
 	}
 }

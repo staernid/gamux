@@ -283,25 +283,40 @@ func deriveSemanticPrefix(physicalPath, gameDir, appID, platform string) string 
 	// Wine prefix mappings
 	if strings.Contains(physicalPath, "drive_c") {
 		lower := strings.ToLower(physicalPath)
-		if strings.Contains(lower, "appdata/locallow") {
-			idx := strings.Index(lower, "appdata/locallow")
-			return filepath.Join("<winLocalAppDataLow>", physicalPath[idx+len("appdata/locallow")+1:])
+		userPatternIdx := strings.Index(lower, "drive_c/users/")
+		searchScope := lower
+		offset := 0
+		if userPatternIdx != -1 {
+			afterUser := lower[userPatternIdx+len("drive_c/users/"):]
+			if slashIdx := strings.Index(afterUser, "/"); slashIdx != -1 {
+				offset = userPatternIdx + len("drive_c/users/") + slashIdx + 1
+				searchScope = lower[offset:]
+			}
 		}
-		if strings.Contains(lower, "appdata/roaming") {
-			idx := strings.Index(lower, "appdata/roaming")
-			return filepath.Join("<winAppData>", physicalPath[idx+len("appdata/roaming")+1:])
+
+		rules := []struct {
+			tag    string
+			prefix string
+		}{
+			{"appdata/locallow", "<winLocalAppDataLow>"},
+			{"appdata/roaming", "<winAppData>"},
+			{"appdata/local", "<winLocalAppData>"},
+			{"saved games", "<winSavedGames>"},
+			{"documents", "<winDocuments>"},
 		}
-		if strings.Contains(lower, "appdata/local") {
-			idx := strings.Index(lower, "appdata/local")
-			return filepath.Join("<winLocalAppData>", physicalPath[idx+len("appdata/local")+1:])
-		}
-		if strings.Contains(lower, "saved games") {
-			idx := strings.Index(lower, "saved games")
-			return filepath.Join("<winSavedGames>", physicalPath[idx+len("saved games")+1:])
-		}
-		if strings.Contains(lower, "documents") {
-			idx := strings.Index(lower, "documents")
-			return filepath.Join("<winDocuments>", physicalPath[idx+len("documents")+1:])
+
+		for _, r := range rules {
+			if idx := strings.Index(searchScope, r.tag); idx != -1 {
+				absIdx := offset + idx + len(r.tag)
+				subPath := ""
+				if absIdx < len(physicalPath) {
+					subPath = strings.TrimPrefix(physicalPath[absIdx:], "/")
+				}
+				if subPath == "" {
+					return r.prefix
+				}
+				return filepath.Join(r.prefix, subPath)
+			}
 		}
 	}
 
