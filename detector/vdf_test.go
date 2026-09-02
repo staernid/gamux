@@ -132,3 +132,53 @@ func TestParseVDF_URLsAndComments(t *testing.T) {
 	}
 }
 
+func TestParseVDF_EscapedQuotesAndBackslashes(t *testing.T) {
+	vdfContent := `
+"AppState"
+{
+	"appid"		"1091500"
+	"LaunchOptions"		"\"-vulkan\" -novid \"-dx12\""
+	"Description"		"Game with \"quotes\" and \\backslash\\ test"
+	"NextKey"		"NextValue"
+}
+`
+	node, err := ParseVDF(strings.NewReader(vdfContent))
+	if err != nil {
+		t.Fatalf("ParseVDF failed: %v", err)
+	}
+
+	if opts := node.GetString("LaunchOptions"); opts != `"-vulkan" -novid "-dx12"` {
+		t.Errorf("expected LaunchOptions '\"-vulkan\" -novid \"-dx12\"', got %q", opts)
+	}
+	if desc := node.GetString("Description"); desc != `Game with "quotes" and \backslash\ test` {
+		t.Errorf("expected Description 'Game with \"quotes\" and \\backslash\\ test', got %q", desc)
+	}
+	if next := node.GetString("NextKey"); next != "NextValue" {
+		t.Errorf("expected NextKey 'NextValue', got %q", next)
+	}
+}
+
+func TestParseVDF_MultilineStrings(t *testing.T) {
+	vdfContent := `"AppState"
+{
+	"appid"		"1091500"
+	"Description"		"Line 1
+Line 2
+Line 3"
+	"NextKey"		"ValueAfterMultiline"
+}`
+	node, err := ParseVDF(strings.NewReader(vdfContent))
+	if err != nil {
+		t.Fatalf("ParseVDF failed for multiline string: %v", err)
+	}
+
+	expectedDesc := "Line 1\nLine 2\nLine 3"
+	if desc := node.GetString("Description"); desc != expectedDesc {
+		t.Errorf("expected Description %q, got %q", expectedDesc, desc)
+	}
+	if next := node.GetString("NextKey"); next != "ValueAfterMultiline" {
+		t.Errorf("expected NextKey 'ValueAfterMultiline', got %q", next)
+	}
+}
+
+

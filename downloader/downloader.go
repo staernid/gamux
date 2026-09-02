@@ -46,6 +46,8 @@ type DownloadRequest struct {
 	Platform     string // "win64", "linux", "all"
 	LuaPath      string
 	HubcapAPIKey string
+	ManifestGIDs map[uint32]string // Optional map of DepotID -> ManifestGID to acquire via GMRC
+	GMRCEndpoint string            // Optional custom GMRC endpoint URL
 	WorkerLimit  int
 	DryRun       bool
 	HTTPClient   *http.Client
@@ -63,6 +65,8 @@ type DownloadOptions struct {
 	AppID                uint32
 	LuaPath              string
 	Platform             string // "win64", "linux", "all"
+	ManifestGIDs         map[uint32]string
+	GMRCEndpoint         string
 	DryRun               bool
 	WorkerLimit          int
 	AuditTrace           []string
@@ -121,6 +125,33 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 	parsedLua, err := manifest.ResolveKeys(ctx, req.AppID, req.LuaPath, req.HubcapAPIKey)
 	if err != nil {
 		return nil, fmt.Errorf("resolve keys and manifests for AppID %d: %w", req.AppID, err)
+	}
+
+	// 1.5 Attempt GMRC direct SteamPipe CDN manifest acquisition if manifest GIDs were provided and manifests are missing
+	if (parsedLua.ManifestFiles == nil || len(parsedLua.ManifestFiles) == 0) && len(req.ManifestGIDs) > 0 {
+		for depotID, gid := range req.ManifestGIDs {
+			if gid == "" {
+				continue
+			}
+			reqCode, err := manifest.FetchGMRCRequestCode(ctx, gid, req.GMRCEndpoint)
+			if err != nil {
+				slog.Warn("Failed to resolve GMRC request code", "depotID", depotID, "manifestGID", gid, "error", err)
+				parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("GMRC Request Code (%d_%s): %v", depotID, gid, err))
+				continue
+			}
+			mBytes, err := manifest.DownloadManifestFromSteamCDN(ctx, depotID, gid, reqCode, "")
+			if err != nil {
+				slog.Warn("Failed to download manifest from Steam CDN", "depotID", depotID, "manifestGID", gid, "error", err)
+				parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("Steam CDN Manifest Download (%d_%s): %v", depotID, gid, err))
+				continue
+			}
+			if parsedLua.ManifestFiles == nil {
+				parsedLua.ManifestFiles = make(map[string][]byte)
+			}
+			fname := fmt.Sprintf("%d_%s.manifest", depotID, gid)
+			parsedLua.ManifestFiles[fname] = mBytes
+			parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("GMRC + Steam CDN: Successfully downloaded manifest %s (%d bytes)", fname, len(mBytes)))
+		}
 	}
 
 	req.AppID = parsedLua.AppID
@@ -253,6 +284,8 @@ func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions)
 		Platform:     opts.Platform,
 		LuaPath:      opts.LuaPath,
 		HubcapAPIKey: hubcapKey,
+		ManifestGIDs: opts.ManifestGIDs,
+		GMRCEndpoint: opts.GMRCEndpoint,
 		WorkerLimit:  opts.WorkerLimit,
 		DryRun:       opts.DryRun,
 		HTTPClient:   opts.HTTPClient,

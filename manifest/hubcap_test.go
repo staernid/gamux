@@ -56,8 +56,19 @@ func TestResolveKeys_Priority(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	mockClient := &http.Client{
+		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("not found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := WithHTTPClient(context.Background(), mockClient)
+
 	// 1. Local file priority
-	parsed, err := ResolveKeys(context.Background(), 99999, luaFile, "HUBCAPKEY")
+	parsed, err := ResolveKeys(ctx, 99999, luaFile, "HUBCAPKEY")
 	if err != nil {
 		t.Fatalf("ResolveKeys failed: %v", err)
 	}
@@ -66,7 +77,7 @@ func TestResolveKeys_Priority(t *testing.T) {
 	}
 
 	// 2. Error when neither is supplied
-	_, err = ResolveKeys(context.Background(), 0, "", "")
+	_, err = ResolveKeys(ctx, 0, "", "")
 	if err == nil {
 		t.Error("expected error when neither lua nor hubcap key is present")
 	}

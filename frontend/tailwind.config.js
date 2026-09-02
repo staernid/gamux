@@ -7,16 +7,22 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontSize: {
+        '2xs': ['0.6875rem', { lineHeight: '0.95rem' }], // ~11px at base, scales dynamically with root font size
+        '3xs': ['0.625rem', { lineHeight: '0.85rem' }],  // ~10px at base
+        '4xs': ['0.5625rem', { lineHeight: '0.75rem' }],  // ~9px at base
+      },
       colors: {
         surface: {
-          base: '#101013',
-          header: '#16161a',
-          card: '#1a1a20',
-          cardHover: '#22222a',
-          elevated: '#1e1e26',
-          border: '#2c2c36',
-          borderSubtle: '#22222a',
-          pill: '#24242e',
+          base: '#09090b',
+          header: '#121214',
+          card: '#18181b',
+          cardHover: '#222225',
+          elevated: '#202024',
+          border: '#27272a',
+          borderSubtle: '#1f1f23',
+          borderHighlight: '#3f3f46',
+          pill: '#222226',
         }
       }
     },

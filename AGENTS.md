@@ -75,6 +75,24 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 When touching anything under `frontend/` or the Wails bridge in `gui/`:
 
+### UI & Design Guidelines
+
+Keep the design serious, high-contrast, and monochrome:
+
+1. **Monochrome Palette**:
+   - Stick to neutral dark surfaces (`#09090b`, `#121214`, `#18181b`, `#222225`, `#27272a`, `#3f3f46`) and clean whites/grays.
+   - **No neon aesthetic**: avoid cyan, purple, or pastel gradients, glows, and rainbow tab colors.
+   - Color is reserved strictly for meaningful semantic states (e.g. green for active processes, red for destructive actions). Game cover art provides all organic color.
+
+2. **Scalable Typography (`rem`)**:
+   - **Never hardcode pixel font sizes** (e.g. `text-[10px]`, `text-[11px]`).
+   - Always use `rem`-based Tailwind tokens (`text-xs`, `text-2xs`, `text-3xs`, `text-4xs`) so typography scales with the user's UI scale setting.
+
+3. **Readability & Wrapping**:
+   - Never truncate setting descriptions or helper copy with `truncate`. Allow text to wrap naturally (`leading-relaxed`) with readable contrast (`text-neutral-400` or lighter).
+
+---
+
 ### The Mandatory 4-Stage GUI Diagnostic Gate
 
 Before making code edits on GUI bugs or async lifecycle issues:

@@ -24,7 +24,7 @@ type ParsedLua struct {
 
 var (
 	// Matches addappid(12345, 1, "key") or addappid(12345, 1, 'key')
-	addAppIDKeyRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)\s*,\s*\d\s*,\s*(?:"|')([a-fA-F0-9]+)(?:"|')\s*\)`)
+	addAppIDKeyRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)\s*,\s*\d+\s*,\s*(?:"|')([^"']+)(?:"|')\s*\)`)
 	// Matches addappid(12345)
 	addAppIDNoKeyRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)\s*\)`)
 	// General addappid match to detect AppID
@@ -37,17 +37,19 @@ func ParseLua(content string) (*ParsedLua, error) {
 		return nil, fmt.Errorf("empty lua content")
 	}
 
-	genMatch := generalAddAppIDRegex.FindStringSubmatch(content)
-	if len(genMatch) < 2 {
-		return nil, fmt.Errorf("could not find valid addappid(...) entry in lua content")
-	}
-
-	appIDVal, err := strconv.ParseUint(genMatch[1], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("invalid appid %s: %w", genMatch[1], err)
-	}
-
 	depotMap := make(map[uint32]string)
+	var standaloneAppIDs []uint32
+
+	noKeyMatches := addAppIDNoKeyRegex.FindAllStringSubmatch(content, -1)
+	for _, m := range noKeyMatches {
+		id, err := strconv.ParseUint(m[1], 10, 32)
+		if err == nil {
+			standaloneAppIDs = append(standaloneAppIDs, uint32(id))
+			if _, exists := depotMap[uint32(id)]; !exists {
+				depotMap[uint32(id)] = ""
+			}
+		}
+	}
 
 	keyMatches := addAppIDKeyRegex.FindAllStringSubmatch(content, -1)
 	for _, m := range keyMatches {
@@ -57,14 +59,17 @@ func ParseLua(content string) (*ParsedLua, error) {
 		}
 	}
 
-	noKeyMatches := addAppIDNoKeyRegex.FindAllStringSubmatch(content, -1)
-	for _, m := range noKeyMatches {
-		depotID, err := strconv.ParseUint(m[1], 10, 32)
-		if err == nil {
-			if _, exists := depotMap[uint32(depotID)]; !exists {
-				depotMap[uint32(depotID)] = ""
-			}
-		}
+	if len(depotMap) == 0 && len(standaloneAppIDs) == 0 {
+		return nil, fmt.Errorf("could not find valid addappid(...) entry in lua content")
+	}
+
+	var appIDVal uint32
+	if len(standaloneAppIDs) > 0 {
+		appIDVal = standaloneAppIDs[0]
+	} else if len(keyMatches) > 0 {
+		// Fallback to first key match if no standalone addappid(id) line was found
+		firstKeyID, _ := strconv.ParseUint(keyMatches[0][1], 10, 32)
+		appIDVal = uint32(firstKeyID)
 	}
 
 	depots := make([]DepotKeyPair, 0, len(depotMap))
@@ -76,7 +81,7 @@ func ParseLua(content string) (*ParsedLua, error) {
 	}
 
 	return &ParsedLua{
-		AppID:  uint32(appIDVal),
+		AppID:  appIDVal,
 		Depots: depots,
 	}, nil
 }

@@ -142,6 +142,8 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	}
 
 	if pgid > 1 && ctx.Err() == nil {
+		superviseTicker := time.NewTicker(1 * time.Second)
+		defer superviseTicker.Stop()
 	supervise:
 		for {
 			if err := syscall.Kill(-pgid, 0); err != nil {
@@ -154,7 +156,7 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 				break supervise
 			case <-ticker.C:
 				flushDelta()
-			case <-time.After(1 * time.Second):
+			case <-superviseTicker.C:
 			}
 		}
 	}

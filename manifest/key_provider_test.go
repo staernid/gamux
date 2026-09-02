@@ -92,3 +92,25 @@ func TestLocalLuaProvider(t *testing.T) {
 		t.Error("expected error for empty lua path, got nil")
 	}
 }
+
+func TestParseLua_AppIDDisambiguation(t *testing.T) {
+	// Lua file where depot keys appear before the standalone appid
+	luaContent := `
+addappid(1091501, 1, "deadbeef101")
+addappid(1091502, 1, "deadbeef102")
+addappid(1091500)
+`
+	res, err := ParseLua(luaContent)
+	if err != nil {
+		t.Fatalf("ParseLua failed: %v", err)
+	}
+
+	if res.AppID != 1091500 {
+		t.Errorf("expected AppID 1091500, got %d", res.AppID)
+	}
+
+	if len(res.Depots) != 3 {
+		t.Errorf("expected 3 depots parsed, got %d", len(res.Depots))
+	}
+}
+

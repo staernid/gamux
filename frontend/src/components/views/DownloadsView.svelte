@@ -4,13 +4,10 @@
   import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
   import { AppAPI } from '../../api/app.js';
   import { formatBytes } from '../../utils/format.js';
-  import DownloadAddPanel from './tasks/DownloadAddPanel.svelte';
   import TaskCard from './tasks/TaskCard.svelte';
   import TaskQueueSection from './tasks/TaskQueueSection.svelte';
   import TaskHistorySection from './tasks/TaskHistorySection.svelte';
 
-  let showAddPanel = false;
-  let isSubmitting = false;
   let currentFilter = 'all'; // 'all' | 'downloads' | 'operations' | 'completed'
 
   let diskSpace = null;
@@ -30,7 +27,6 @@
     activeOperations,
     queuedOperations,
     totalSpeedBps,
-    speedLimit,
   } = tasksStore;
 
   async function loadDiskSpace(path) {
@@ -71,25 +67,6 @@
       loadDiskSpace($libraryPath);
     }
   });
-
-  async function handleStartDownload(e) {
-    if (isSubmitting) return;
-    const taskSpec = e.detail;
-    try {
-      isSubmitting = true;
-      await tasksStore.start(taskSpec);
-      showAddPanel = false;
-    } catch {
-      // Handled in store
-    } finally {
-      isSubmitting = false;
-    }
-  }
-
-  function handleSpeedLimitChange(e) {
-    const limit = parseInt(e.target.value, 10);
-    tasksStore.setLimit(limit);
-  }
 
   function handleOpenDirectory(e) {
     const dir = typeof e === 'string' ? e : e.detail;
@@ -135,8 +112,8 @@
       </h2>
     </div>
 
-    <!-- Right Controls: Bandwidth HUD + Speed Cap + New Download CTA -->
-    <div class="flex items-center space-x-2.5 w-full sm:w-auto justify-between sm:justify-end">
+    <!-- Right Controls: Bandwidth HUD -->
+    <div class="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
       {#if $totalSpeedBps > 0}
         <div class="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-[#12121a] border border-[#222232]">
           <span class="font-mono text-xs font-bold text-cyan-400">{formatBytes($totalSpeedBps)}/s</span>
@@ -154,30 +131,6 @@
           {/if}
         </div>
       {/if}
-
-      <div class="flex items-center space-x-1.5 bg-[#12121a] border border-[#222232] rounded-xl px-2.5 py-1 text-xs">
-        <span class="text-[10px] text-slate-500 font-mono uppercase font-bold">Cap:</span>
-        <select
-          value={$speedLimit}
-          on:change={handleSpeedLimitChange}
-          class="bg-transparent text-slate-300 text-xs outline-none font-mono cursor-pointer"
-        >
-          <option value="0" class="bg-[#12121a] text-slate-200">Unlimited</option>
-          <option value="5242880" class="bg-[#12121a] text-slate-200">5 MB/s</option>
-          <option value="10485760" class="bg-[#12121a] text-slate-200">10 MB/s</option>
-          <option value="26214400" class="bg-[#12121a] text-slate-200">25 MB/s</option>
-          <option value="52428800" class="bg-[#12121a] text-slate-200">50 MB/s</option>
-        </select>
-      </div>
-
-      <button
-        type="button"
-        on:click={() => showAddPanel = !showAddPanel}
-        class="bg-[#1e1e2c] hover:bg-[#2a2a3c] text-white font-bold px-3 py-1.5 rounded-xl border border-[#323246] transition text-xs flex items-center space-x-1.5 shadow-sm cursor-pointer"
-      >
-        <span class="text-slate-400 font-bold">+</span>
-        <span>{showAddPanel ? 'Close' : 'New Download'}</span>
-      </button>
     </div>
   </div>
 
@@ -247,15 +200,6 @@
       </button>
     {/if}
   </div>
-
-  <!-- Collapsible Add Download Panel -->
-  {#if showAddPanel}
-    <DownloadAddPanel
-      {isSubmitting}
-      on:start={handleStartDownload}
-      on:close={() => showAddPanel = false}
-    />
-  {/if}
 
   <!-- Active Tasks Section -->
   <div class="space-y-3">

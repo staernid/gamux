@@ -13,13 +13,11 @@ export namespace config {
 	    enable_launch_notify: boolean;
 	    operating_mode?: string;
 	    default_runner?: string;
-	    proton_path?: string;
 	    steamless: boolean;
 	    achievements: boolean;
 	    normalize: boolean;
 	    wine_prefix?: string;
 	    mangohud?: boolean;
-	    dxvk_hud?: string;
 	    transfer_speed_limit?: number;
 	    global_env?: Record<string, string>;
 	    language?: string;
@@ -48,13 +46,11 @@ export namespace config {
 	        this.enable_launch_notify = source["enable_launch_notify"];
 	        this.operating_mode = source["operating_mode"];
 	        this.default_runner = source["default_runner"];
-	        this.proton_path = source["proton_path"];
 	        this.steamless = source["steamless"];
 	        this.achievements = source["achievements"];
 	        this.normalize = source["normalize"];
 	        this.wine_prefix = source["wine_prefix"];
 	        this.mangohud = source["mangohud"];
-	        this.dxvk_hud = source["dxvk_hud"];
 	        this.transfer_speed_limit = source["transfer_speed_limit"];
 	        this.global_env = source["global_env"];
 	        this.language = source["language"];
@@ -998,6 +994,7 @@ export namespace tools {
 	    release_url: string;
 	    published_at: string;
 	    has_update: boolean;
+	    is_installed: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolStatus(source);
@@ -1015,6 +1012,7 @@ export namespace tools {
 	        this.release_url = source["release_url"];
 	        this.published_at = source["published_at"];
 	        this.has_update = source["has_update"];
+	        this.is_installed = source["is_installed"];
 	    }
 	}
 

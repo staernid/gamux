@@ -40,6 +40,7 @@ var cacheSubdirs = []string{
 	"github",
 	"revobd",
 	"steamdepotdb",
+	"manifesthub",
 	"sgdb",
 	"store_meta",
 	"games",
@@ -465,7 +466,37 @@ func SaveSteamDepotDB(data []byte) error {
 }
 
 // ==========================================
-// 6. GitHub Release Cache (1 Hour TTL)
+// 6. Manifesthub Cache (24h TTL)
+// ==========================================
+
+// GetManifesthubDB retrieves cached GitLab Manifesthub depot keys if less than 24 hours old.
+func GetManifesthubDB() ([]byte, bool) {
+	if DisableCache {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "manifesthub", "depotkeys.json")
+	return readTTLFile(path, 24*time.Hour)
+}
+
+// SaveManifesthubDB saves GitLab Manifesthub depot keys to disk for 24 hours.
+func SaveManifesthubDB(data []byte) error {
+	if DisableCache || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	path := filepath.Join(dir, "manifesthub", "depotkeys.json")
+	return writeTTLFile(path, data)
+}
+
+// ==========================================
+// 7. GitHub Release Cache (1 Hour TTL)
 // ==========================================
 
 // GetGitHubRelease retrieves cached GitHub release metadata if less than 1 hour old.

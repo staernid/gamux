@@ -383,3 +383,22 @@ func TestDeriveSemanticPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestCaseInsensitiveResolve_PreservesMatchedParents(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create RealCaseDir on disk
+	realParent := filepath.Join(tmpDir, "MixedCaseFolder", "SubFolder")
+	if err := os.MkdirAll(realParent, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Query with lowercase parent and nonexistent leaf
+	queryPath := filepath.Join(tmpDir, "mixedcasefolder", "subfolder", "NonExistentGame", "Saves")
+	resolved := caseInsensitiveResolve(queryPath)
+
+	expected := filepath.Join(realParent, "NonExistentGame", "Saves")
+	if resolved != expected {
+		t.Errorf("expected %q, got %q", expected, resolved)
+	}
+}
+

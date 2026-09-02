@@ -46,6 +46,34 @@ func TestUnpackExecutable_NonExistent(t *testing.T) {
 	}
 }
 
+func TestUnpackGameDirectory_EmptyDir(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.DefaultConfig()
+	cfg.SteamlessDir = t.TempDir()
+
+	emptyDir := t.TempDir()
+	count, err := UnpackGameDirectory(ctx, cfg, emptyDir, false)
+	if err != nil {
+		t.Fatalf("Expected no error on empty directory, got: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected 0 unpacked files, got %d", count)
+	}
+}
+
+func TestUnpackGameDirectory_NonExistent(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.DefaultConfig()
+
+	count, err := UnpackGameDirectory(ctx, cfg, "/non/existent/dir", false)
+	if err != nil {
+		t.Fatalf("Expected no error for non-existent directory, got %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected 0 unpacked files, got %d", count)
+	}
+}
+
 func TestUnpackExecutable_DryRun(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.DefaultConfig()
@@ -64,3 +92,4 @@ func TestUnpackExecutable_DryRun(t *testing.T) {
 		t.Errorf("Expected unpacked to be false in dryRun mode")
 	}
 }
+

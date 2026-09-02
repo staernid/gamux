@@ -7,32 +7,34 @@
   export let className = '';
 
   const badgeColors = {
-    cyan: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+    neutral: 'bg-neutral-800 text-neutral-300 border-neutral-700',
     emerald: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    purple: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-    slate: 'bg-slate-800 text-slate-300 border-slate-700'
+    rose: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+    cyan: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+    purple: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+    slate: 'bg-neutral-800 text-neutral-300 border-neutral-700'
   };
 
   $: effectiveTooltip = tooltip || description;
 </script>
 
-<div class="bg-[#0f0f16] border border-[#1e1e2c] rounded-xl overflow-hidden shadow-sm {className}">
+<div class="bg-[#121214] border border-[#27272a] rounded-xl overflow-hidden shadow-sm {className}">
   {#if title || $$slots.icon || $$slots.action || description}
-    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#13131c] border-b border-[#1c1c28]">
+    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#18181b] border-b border-[#27272a]">
       <div class="flex items-center space-x-2 min-w-0">
         {#if $$slots.icon}
-          <div class="text-slate-400 flex-shrink-0 flex items-center justify-center">
+          <div class="text-neutral-400 flex-shrink-0 flex items-center justify-center">
             <slot name="icon" />
           </div>
         {/if}
         {#if title}
-          <h3 class="text-xs font-bold text-slate-200 tracking-wide uppercase truncate">
+          <h3 class="text-xs font-bold text-neutral-200 tracking-wide uppercase truncate">
             {title}
           </h3>
         {/if}
         {#if badge}
-          <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border {badgeColors[badgeColor] || badgeColors.cyan}">
+          <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold border {badgeColors[badgeColor] || badgeColors.neutral}">
             {badge}
           </span>
         {/if}

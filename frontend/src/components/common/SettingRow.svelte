@@ -9,11 +9,13 @@
   export let className = '';
 
   const badgeColors = {
-    cyan: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+    neutral: 'bg-neutral-800 text-neutral-300 border-neutral-700',
     emerald: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    purple: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-    slate: 'bg-slate-800 text-slate-300 border-slate-700'
+    rose: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+    cyan: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+    purple: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+    slate: 'bg-neutral-800 text-neutral-300 border-neutral-700'
   };
 
   $: effectiveDescription = description || tooltip;
@@ -21,27 +23,27 @@
 
 <div class="{inline ? 'flex flex-col sm:flex-row sm:items-center justify-between gap-3' : 'space-y-1.5'} p-2 rounded-lg transition-colors {className}">
   {#if label || effectiveDescription}
-    <div class="space-y-0.5 min-w-0 {inline ? 'flex-1 sm:max-w-md' : 'w-full'}">
+    <div class="space-y-1 min-w-0 {inline ? 'flex-1 sm:max-w-md' : 'w-full'}">
       <div class="flex items-center space-x-1.5 flex-wrap">
         {#if label}
           {#if forId}
-            <label for={forId} class="block text-xs font-bold text-slate-200 cursor-pointer truncate">
+            <label for={forId} class="block text-xs font-bold text-neutral-200 cursor-pointer">
               {label}
             </label>
           {:else}
-            <span class="block text-xs font-bold text-slate-200 truncate">
+            <span class="block text-xs font-bold text-neutral-200">
               {label}
             </span>
           {/if}
         {/if}
         {#if badge}
-          <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border {badgeColors[badgeColor] || badgeColors.cyan}">
+          <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold border {badgeColors[badgeColor] || badgeColors.neutral}">
             {badge}
           </span>
         {/if}
       </div>
       {#if effectiveDescription}
-        <p class="text-[11px] text-slate-400 leading-snug">
+        <p class="text-xs text-neutral-400 leading-relaxed">
           {effectiveDescription}
         </p>
       {/if}

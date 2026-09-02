@@ -157,14 +157,23 @@ func tokenizeVDF(r io.Reader) ([]string, error) {
 	scanner := bufio.NewScanner(r)
 	var tokens []string
 
+	inQuote := false
+	var curToken strings.Builder
+
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
+		line := scanner.Text()
+		if !inQuote {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "//") {
+				continue
+			}
+		} else {
+			// In quote: prepend newline for subsequent lines of multiline string
+			if curToken.Len() > 0 {
+				curToken.WriteRune('\n')
+			}
 		}
 
-		inQuote := false
-		var curToken strings.Builder
 		runes := []rune(line)
 
 		for i := 0; i < len(runes); i++ {
@@ -173,6 +182,23 @@ func tokenizeVDF(r io.Reader) ([]string, error) {
 			// If not inside quotes and we encounter //, the rest of the line is a comment
 			if !inQuote && ch == '/' && i+1 < len(runes) && runes[i+1] == '/' {
 				break
+			}
+
+			if inQuote && ch == '\\' && i+1 < len(runes) {
+				next := runes[i+1]
+				if next == '"' || next == '\\' {
+					curToken.WriteRune(next)
+					i++
+					continue
+				} else if next == 'n' {
+					curToken.WriteRune('\n')
+					i++
+					continue
+				} else if next == 't' {
+					curToken.WriteRune('\t')
+					i++
+					continue
+				}
 			}
 
 			if ch == '"' {
@@ -211,11 +237,14 @@ func tokenizeVDF(r io.Reader) ([]string, error) {
 			curToken.WriteRune(ch)
 		}
 
-		if inQuote {
+		if !inQuote && curToken.Len() > 0 {
 			tokens = append(tokens, curToken.String())
-		} else if curToken.Len() > 0 {
-			tokens = append(tokens, curToken.String())
+			curToken.Reset()
 		}
+	}
+
+	if inQuote && curToken.Len() > 0 {
+		tokens = append(tokens, curToken.String())
 	}
 
 	if err := scanner.Err(); err != nil {

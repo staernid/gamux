@@ -95,7 +95,7 @@ func TestApp_GetAndSaveConfig(t *testing.T) {
 	}
 }
 
-func TestApp_SaveConfig_MergeOnSave(t *testing.T) {
+func TestApp_SaveConfig_UpdatesStateAndDisk(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgDir := filepath.Join(tmpDir, "gamux")
 	if err := os.MkdirAll(cfgDir, 0755); err != nil {
@@ -119,22 +119,25 @@ func TestApp_SaveConfig_MergeOnSave(t *testing.T) {
 		t.Errorf("expected initial loaded HubcapAPIKey 'LIVE_HUBCAP_KEY_123', got %q", app.Config.HubcapAPIKey)
 	}
 
-	// Suppose a partial UI payload is submitted without HubcapAPIKey
-	partialDraft := &config.Config{
-		OperatingMode: "standalone",
-		MangoHud:      true,
-	}
+	// Update configuration: change operating mode and clear library paths
+	updatedCfg := *app.Config
+	updatedCfg.OperatingMode = "standalone"
+	updatedCfg.MangoHud = true
+	updatedCfg.LibraryPaths = nil
 
-	if err := app.SaveConfig(partialDraft); err != nil {
+	if err := app.SaveConfig(&updatedCfg); err != nil {
 		t.Fatalf("app.SaveConfig failed: %v", err)
 	}
 
-	// Verify app.Config retained HubcapAPIKey and updated OperatingMode
+	// Verify app.Config retained HubcapAPIKey, updated OperatingMode, and cleared LibraryPaths
 	if app.Config.HubcapAPIKey != "LIVE_HUBCAP_KEY_123" {
 		t.Errorf("expected app.Config to retain HubcapAPIKey, got %q", app.Config.HubcapAPIKey)
 	}
 	if app.Config.OperatingMode != "standalone" {
 		t.Errorf("expected app.Config OperatingMode 'standalone', got %q", app.Config.OperatingMode)
+	}
+	if len(app.Config.LibraryPaths) != 0 {
+		t.Errorf("expected app.Config LibraryPaths to be cleared, got %+v", app.Config.LibraryPaths)
 	}
 
 	// Verify disk contents
@@ -145,8 +148,11 @@ func TestApp_SaveConfig_MergeOnSave(t *testing.T) {
 	if loaded.HubcapAPIKey != "LIVE_HUBCAP_KEY_123" {
 		t.Errorf("expected disk HubcapAPIKey 'LIVE_HUBCAP_KEY_123', got %q", loaded.HubcapAPIKey)
 	}
-	if len(loaded.LibraryPaths) != 1 || loaded.LibraryPaths[0] != "/My/Games" {
-		t.Errorf("expected disk LibraryPaths preserved, got %+v", loaded.LibraryPaths)
+	if len(loaded.LibraryPaths) != 0 {
+		t.Errorf("expected disk LibraryPaths cleared, got %+v", loaded.LibraryPaths)
+	}
+	if loaded.OperatingMode != "standalone" {
+		t.Errorf("expected disk OperatingMode 'standalone', got %q", loaded.OperatingMode)
 	}
 }
 

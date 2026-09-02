@@ -200,7 +200,7 @@
     if (m && m.length >= 3) {
       return { r: Number(m[0]), g: Number(m[1]), b: Number(m[2]) };
     }
-    return { r: 26, g: 159, b: 255 };
+    return { r: 160, g: 160, b: 165 };
   }
 
   // Reactive Ambient Glow derived directly from active game palette
@@ -210,7 +210,7 @@
       const c = parseRgb(pal[0]);
       return `${c.r}, ${c.g}, ${c.b}`;
     }
-    return '26, 159, 255';
+    return '160, 160, 165';
   })();
 
   let stickStopTimeout = null;
@@ -465,25 +465,23 @@
         lastSoundIndex = idx;
         lastEmittedDir = dir;
       } else {
-        const mid = Math.floor(count / 2);
-        currentPos = mid;
-        targetPos = mid;
-        lastSyncIndex = mid;
-        lastSoundIndex = mid;
-        if (list[mid]) {
-          lastEmittedDir = list[mid].gameDir;
-          selectedGame.set(list[mid]);
+        currentPos = 0;
+        targetPos = 0;
+        lastSyncIndex = 0;
+        lastSoundIndex = 0;
+        if (list[0]) {
+          lastEmittedDir = list[0].gameDir;
+          selectedGame.set(list[0]);
         }
       }
     } else if (count > 0) {
-      const mid = Math.floor(count / 2);
-      currentPos = mid;
-      targetPos = mid;
-      lastSyncIndex = mid;
-      lastSoundIndex = mid;
-      if (list[mid]) {
-        lastEmittedDir = list[mid].gameDir;
-        selectedGame.set(list[mid]);
+      currentPos = 0;
+      targetPos = 0;
+      lastSyncIndex = 0;
+      lastSoundIndex = 0;
+      if (list[0]) {
+        lastEmittedDir = list[0].gameDir;
+        selectedGame.set(list[0]);
       }
     }
     wakeLoop();
@@ -581,13 +579,13 @@
     <!-- Active Game Floating Title Badge Below Card -->
     {#if activeGame}
       <div class="mt-2 sm:mt-4 flex items-center justify-center z-40 transition-all duration-200 ease-out">
-        <div class="px-5 py-1.5 rounded-full bg-slate-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center gap-2 max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
+        <div class="px-5 py-1.5 rounded-full bg-neutral-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center gap-2 max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
           {#if $runningGames.has(activeGame.gameDir)}
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
           {/if}
           <span class="truncate">{activeGame.name}</span>
           {#if activeGame.playtimeSeconds > 0}
-            <span class="text-[11px] font-mono text-slate-400 font-normal flex-shrink-0">· {formatPlaytime(activeGame.playtimeSeconds)}</span>
+            <span class="text-2xs font-mono text-neutral-400 font-normal flex-shrink-0">· {formatPlaytime(activeGame.playtimeSeconds)}</span>
           {/if}
         </div>
       </div>

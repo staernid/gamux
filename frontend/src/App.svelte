@@ -54,6 +54,37 @@
 
   const views = ['library', 'tasks', 'settings'];
 
+  function navigateWithGuard(targetView, onProceed = null) {
+    const curr = get(activeView) || 'library';
+    const isDirty = get(configStore.isDirty);
+    if (curr === 'settings' && isDirty && targetView !== 'settings') {
+      modalStore.open('confirm', {
+        title: 'Unsaved Changes',
+        message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
+        confirmLabel: 'Discard Changes',
+        cancelLabel: 'Keep Editing',
+        danger: true,
+        onConfirm: () => {
+          configStore.setDirty(false);
+          if (typeof onProceed === 'function') {
+            onProceed();
+          } else {
+            playNav();
+            activeView.set(targetView);
+          }
+        }
+      });
+      return;
+    }
+
+    if (typeof onProceed === 'function') {
+      onProceed();
+    } else {
+      playNav();
+      activeView.set(targetView);
+    }
+  }
+
   function cycleView(dir) {
     const curr = get(activeView) || 'library';
     const currentBase = curr === 'game-hub' ? 'library' : curr;
@@ -61,8 +92,7 @@
     let next = idx + dir;
     if (next < 0) next = views.length - 1;
     if (next >= views.length) next = 0;
-    playNav();
-    activeView.set(views[next]);
+    navigateWithGuard(views[next]);
   }
 
   function openSelectedGameHub(targetGame = null) {
@@ -182,7 +212,7 @@
           $pathPopover = false;
         } else if ($activeView !== 'library') {
           playBack();
-          $activeView = 'library';
+          navigateWithGuard('library');
         }
       } else if (!isInput && (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R')))) {
         e.preventDefault();
@@ -196,11 +226,11 @@
         } else if (e.key === 'e' || e.key === 'E') {
           cycleView(1);
         } else if (e.key === '1') {
-          $activeView = 'library';
+          navigateWithGuard('library');
         } else if (e.key === '2') {
-          $activeView = 'tasks';
+          navigateWithGuard('tasks');
         } else if (e.key === '3') {
-          $activeView = 'settings';
+          navigateWithGuard('settings');
         } else if ((e.key === 'y' || e.key === 'Y') && $activeView === 'library') {
           playTick();
           cycleSortOrder();
@@ -282,6 +312,11 @@
           if (actions.actionFiles) {
             openCurrentDirectory();
           }
+        } else if (currView === 'settings') {
+          if (actions.actionBack) {
+            playBack();
+            navigateWithGuard('library');
+          }
         }
 
         // Cycle Views (LB / RB)
@@ -302,7 +337,7 @@
   });
 </script>
 
-<div class="bg-[#09090c] text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
+<div class="bg-[#09090b] text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
   <!-- Minimal Floating Navigation Pill at Top -->
   <TopBar />
 
@@ -315,35 +350,35 @@
       <!-- Bottom HUD: Left Command Glossary & Right Game Details -->
       <div class="w-full px-8 pb-6 flex items-end justify-between z-20 flex-shrink-0">
         <!-- Bottom Left: Command Glossary (Clickable & Controller-Mapped) -->
-        <div class="flex flex-col space-y-1.5 text-xs text-slate-500 font-mono select-none">
+        <div class="flex flex-col space-y-1.5 text-xs text-neutral-400 font-mono select-none">
           <!-- Library Shelf Mode Glossary -->
           <div class="flex items-center space-x-3">
             <!-- Details / Hub -->
             <button
               type="button"
               on:click={() => openSelectedGameHub()}
-              class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
+              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Open Game Hub (A or Enter)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
                 A / ↵
               </span>
-              <span class="group-hover:text-slate-300">Game Hub</span>
+              <span class="group-hover:text-neutral-200">Game Hub</span>
             </button>
 
-            <span class="text-slate-700">·</span>
+            <span class="text-neutral-700">·</span>
 
             <!-- Sort Cycling via (Y) -->
             <button
               type="button"
               on:click={() => cycleSortOrder()}
-              class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
+              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Cycle library sort order (Y)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
                 Y
               </span>
-              <span class="group-hover:text-slate-300">Sort: {getSortLabel($sortBy)}</span>
+              <span class="group-hover:text-neutral-200">Sort: {getSortLabel($sortBy)}</span>
             </button>
           </div>
 
@@ -352,52 +387,52 @@
             <button
               type="button"
               on:click={openSearchGrid}
-              class="flex items-center space-x-1.5 hover:text-slate-200 transition-colors group cursor-pointer"
+              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Open library search grid (/)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#181824] border border-[#27273a] text-slate-400 group-hover:text-white text-[10px] font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
                 /
               </span>
-              <span class="group-hover:text-slate-300">Search</span>
+              <span class="group-hover:text-neutral-200">Search</span>
             </button>
           </div>
         </div>
 
         <!-- Bottom Right: Game Details & Telemetry -->
         {#if $selectedGame}
-          <div class="flex flex-col items-end space-y-0.5 text-[11px] text-slate-500 font-mono text-right max-w-sm truncate">
+          <div class="flex flex-col items-end space-y-0.5 text-2xs text-neutral-400 font-mono text-right max-w-sm truncate">
             <div>
-              <span class="text-slate-600">Source:</span>
-              <span class="text-slate-300 font-semibold">{gameSource}</span>
+              <span class="text-neutral-500">Source:</span>
+              <span class="text-neutral-200 font-semibold">{gameSource}</span>
               {#if metaInfo.provider && metaInfo.provider !== 'None'}
-                <span class="text-slate-600">·</span>
-                <span class="text-slate-600">Meta:</span>
-                <span class="text-sky-400 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
+                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-500">Meta:</span>
+                <span class="text-neutral-300 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
               {/if}
             </div>
             <div>
-              <span class="text-slate-600">Platform:</span>
-              <span class="text-slate-400 font-semibold">{$selectedGame.platform || 'Linux'}</span>
-              <span class="text-slate-600">·</span>
-              <span class="text-slate-400">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
-              <span class="text-slate-600">·</span>
-              <span class="text-slate-400 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
+              <span class="text-neutral-500">Platform:</span>
+              <span class="text-neutral-300 font-semibold">{$selectedGame.platform || 'Linux'}</span>
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-300">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-300 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
               {#if $selectedGame.playtimeSeconds > 0}
-                <span class="text-slate-600">·</span>
-                <span class="text-sky-300 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
+                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-200 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
               {/if}
               {#if $selectedGame.lastPlayed > 0}
-                <span class="text-slate-600">·</span>
-                <span class="text-slate-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
+                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
               {/if}
               {#if $selectedGame.installedAt > 0}
-                <span class="text-slate-600">·</span>
-                <span class="text-slate-500">Installed {formatInstallDate($selectedGame.installedAt)}</span>
+                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-400">Installed {formatInstallDate($selectedGame.installedAt)}</span>
               {/if}
             </div>
-            <div class="truncate max-w-full text-slate-600" title={$selectedGame.gameDir}>
-              <span class="text-slate-600">Path:</span>
-              <span class="text-slate-500">{$selectedGame.gameDir}</span>
+            <div class="truncate max-w-full text-neutral-600" title={$selectedGame.gameDir}>
+              <span class="text-neutral-600">Path:</span>
+              <span class="text-neutral-500">{$selectedGame.gameDir}</span>
             </div>
           </div>
         {/if}

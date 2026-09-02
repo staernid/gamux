@@ -60,6 +60,17 @@ func (p *SteamDepotDBProvider) Resolve(ctx context.Context, appID uint32) (*Pars
 	return FetchSteamDepotDBKeys(ctx, appID)
 }
 
+// ManifesthubProvider resolves fallback keys from the GitLab steamautocracks/manifesthub repository.
+type ManifesthubProvider struct{}
+
+func (p *ManifesthubProvider) Name() string {
+	return "GitLab Manifesthub"
+}
+
+func (p *ManifesthubProvider) Resolve(ctx context.Context, appID uint32) (*ParsedLua, error) {
+	return FetchManifesthubKeys(ctx, appID)
+}
+
 // HubcapProvider resolves depot keys and binary manifests from the Hubcap Manifest API (with local disk cache).
 type HubcapProvider struct {
 	APIKey string
@@ -87,6 +98,7 @@ func NewDefaultProviderChain(luaPath string, hubcapAPIKey string) *ProviderChain
 	providers = append(providers,
 		&RevoBDProvider{},
 		&SteamDepotDBProvider{},
+		&ManifesthubProvider{},
 	)
 	if hubcapAPIKey != "" {
 		providers = append(providers, &HubcapProvider{APIKey: hubcapAPIKey})
@@ -96,6 +108,10 @@ func NewDefaultProviderChain(luaPath string, hubcapAPIKey string) *ProviderChain
 
 // Resolve executes the provider chain in order, merging manifests and depot keys.
 func (c *ProviderChain) Resolve(ctx context.Context, appID uint32) (*ParsedLua, error) {
+	if appID == 0 {
+		return nil, fmt.Errorf("invalid appID 0")
+	}
+
 	var trace []string
 	var bestResult *ParsedLua
 	var errs []string

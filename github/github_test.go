@@ -2,6 +2,7 @@ package github
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
 
@@ -271,6 +273,44 @@ func TestUpdateUMUAssets_TarZipapp(t *testing.T) {
 	downloaded := filepath.Join(tmpDir, "umu-run")
 	if data, err := os.ReadFile(downloaded); err != nil || !strings.Contains(string(data), "umu standalone zipapp") {
 		t.Errorf("expected extracted umu-run from zipapp.tar, got err: %v, data: %s", err, string(data))
+	}
+}
+
+func TestExtractZipArchive_ZipSlipProtection(t *testing.T) {
+	tmpDir := t.TempDir()
+	zipFile := filepath.Join(tmpDir, "test.zip")
+	destDir := filepath.Join(tmpDir, "extracted")
+	_ = os.MkdirAll(destDir, 0755)
+
+	// Create a zip with safe file and malicious ZipSlip paths
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+
+	safeWriter, _ := zw.Create("safe/file.txt")
+	_, _ = safeWriter.Write([]byte("safe content"))
+
+	maliciousWriter1, _ := zw.Create("../evil.txt")
+	_, _ = maliciousWriter1.Write([]byte("evil content"))
+
+	maliciousWriter2, _ := zw.Create("../../etc/passwd")
+	_, _ = maliciousWriter2.Write([]byte("root:x:0:0"))
+
+	_ = zw.Close()
+	_ = os.WriteFile(zipFile, buf.Bytes(), 0644)
+
+	err := extractZipArchive(zipFile, destDir)
+	if err != nil {
+		t.Fatalf("extractZipArchive failed: %v", err)
+	}
+
+	// Safe file should exist
+	if !util.FileExists(filepath.Join(destDir, "safe", "file.txt")) {
+		t.Errorf("expected safe/file.txt to be extracted")
+	}
+
+	// Malicious files outside destDir must NOT exist
+	if util.FileExists(filepath.Join(tmpDir, "evil.txt")) {
+		t.Errorf("ZipSlip vulnerability detected: evil.txt was extracted outside destDir")
 	}
 }
 

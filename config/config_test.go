@@ -114,80 +114,63 @@ func TestHydrateAPIKeys_EnvironmentAndFiles(t *testing.T) {
 	}
 }
 
-func TestSaveConfig_MergeOnSave_PreservesExistingKeys(t *testing.T) {
+func TestSaveConfig_OverwritesAndClearsFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "config.json")
 
-	// Pre-populate disk config with API keys and custom fields
+	// Pre-populate disk config with keys
 	initialJSON := `{
 		"hubcap_api_key": "SECRET_HUBCAP_KEY",
-		"steam_web_api_key": "SECRET_STEAM_KEY",
-		"custom_user_option": "custom_value",
-		"library_paths": ["/Games/Library1"],
+		"library_paths": ["/Games/Library1", "/Games/Library2"],
 		"operating_mode": "loader",
-		"mangohud": false
+		"mangohud": true
 	}`
 	if err := os.WriteFile(configFile, []byte(initialJSON), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Incoming partial update (e.g. from UI or partial struct with omitted API keys)
-	partialUpdate := &Config{
+	// Incoming update with cleared library_paths and modified operating_mode
+	update := &Config{
 		OperatingMode: "standalone",
-		MangoHud:      true,
+		MangoHud:      false,
 		Language:      "german",
+		LibraryPaths:  nil, // Cleared
 	}
 
-	if err := SaveConfig(partialUpdate, configFile); err != nil {
+	if err := SaveConfig(update, configFile); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
 
-	// Verify that the file on disk preserved existing keys and unmapped fields
+	// Verify that the file on disk reflects cleared and updated fields
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		t.Fatalf("Failed to read merged config: %v", err)
+		t.Fatalf("Failed to read saved config: %v", err)
 	}
 
 	var rawMap map[string]any
 	if err := json.Unmarshal(data, &rawMap); err != nil {
-		t.Fatalf("Failed to unmarshal merged JSON: %v", err)
+		t.Fatalf("Failed to unmarshal JSON: %v", err)
 	}
 
-	if rawMap["hubcap_api_key"] != "SECRET_HUBCAP_KEY" {
-		t.Errorf("expected hubcap_api_key to be preserved, got %v", rawMap["hubcap_api_key"])
-	}
-	if rawMap["steam_web_api_key"] != "SECRET_STEAM_KEY" {
-		t.Errorf("expected steam_web_api_key to be preserved, got %v", rawMap["steam_web_api_key"])
-	}
-	if rawMap["custom_user_option"] != "custom_value" {
-		t.Errorf("expected custom_user_option to be preserved, got %v", rawMap["custom_user_option"])
+	if _, exists := rawMap["library_paths"]; exists {
+		t.Errorf("expected library_paths to be omitted/cleared, got %v", rawMap["library_paths"])
 	}
 	if rawMap["operating_mode"] != "standalone" {
 		t.Errorf("expected operating_mode to be updated to 'standalone', got %v", rawMap["operating_mode"])
 	}
-	if rawMap["mangohud"] != true {
-		t.Errorf("expected mangohud to be updated to true, got %v", rawMap["mangohud"])
-	}
 	if rawMap["language"] != "german" {
-		t.Errorf("expected language to be updated to 'german', got %v", rawMap["language"])
+		t.Errorf("expected language to be 'german', got %v", rawMap["language"])
 	}
 
-	// Also verify LoadConfig produces correct merged Config struct
 	loaded, err := LoadConfig(configFile)
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	if loaded.HubcapAPIKey != "SECRET_HUBCAP_KEY" {
-		t.Errorf("expected loaded HubcapAPIKey 'SECRET_HUBCAP_KEY', got %q", loaded.HubcapAPIKey)
-	}
-	if loaded.SteamWebAPIKey != "SECRET_STEAM_KEY" {
-		t.Errorf("expected loaded SteamWebAPIKey 'SECRET_STEAM_KEY', got %q", loaded.SteamWebAPIKey)
+	if len(loaded.LibraryPaths) != 0 {
+		t.Errorf("expected empty LibraryPaths, got %v", loaded.LibraryPaths)
 	}
 	if loaded.OperatingMode != "standalone" {
 		t.Errorf("expected loaded OperatingMode 'standalone', got %q", loaded.OperatingMode)
-	}
-	if !loaded.MangoHud {
-		t.Errorf("expected loaded MangoHud to be true")
 	}
 }
 

@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/util"
 )
 
@@ -125,33 +127,67 @@ func detectBinaryPlatform(exePath string) string {
 	return ""
 }
 
-// findCandidateExecutable searches gameDir for the most likely primary executable.
-func findCandidateExecutable(gameDir string) string {
+// findCandidateExecutable searches gameDir for the most likely primary executable using heuristic scoring and file permission validation.
+func findCandidateExecutable(gameDir string, gameName ...string) string {
 	if !util.FileExists(gameDir) {
 		return ""
 	}
+	title := ""
+	if len(gameName) > 0 {
+		title = gameName[0]
+	}
+
 	var candidates []string
 	_ = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return nil
 		}
 		nameLower := strings.ToLower(d.Name())
-		if strings.HasSuffix(nameLower, ".exe") || (d.Type().IsRegular() && !strings.Contains(d.Name(), ".")) {
-			if strings.Contains(nameLower, "steamclient_loader") ||
-				strings.Contains(nameLower, "coldclientloader") ||
-				strings.Contains(nameLower, "unitycrashhandler") ||
-				strings.Contains(nameLower, "crashreport") ||
-				strings.Contains(nameLower, "unins000") ||
-				strings.Contains(nameLower, "setup") ||
-				strings.Contains(nameLower, "dxsetup") {
-				return nil
+		if d.IsDir() {
+			if path != gameDir && (nameLower == "drive_c" || nameLower == "dosdevices" || nameLower == "pfx" || nameLower == ".git" || nameLower == ".gamux" || nameLower == ".gamux_backup" || nameLower == "node_modules" || detector.IsRunnerPrefixDir(path)) {
+				return filepath.SkipDir
 			}
-			candidates = append(candidates, path)
+			return nil
+		}
+
+		if strings.Contains(nameLower, "unitycrashhandler") ||
+			strings.Contains(nameLower, "unins") ||
+			strings.Contains(nameLower, "setup") ||
+			strings.Contains(nameLower, "redist") ||
+			strings.Contains(nameLower, "dxsetup") ||
+			strings.Contains(nameLower, "vcredist") ||
+			strings.Contains(nameLower, "crashdumper") ||
+			strings.Contains(nameLower, "bssndrpt") ||
+			strings.Contains(nameLower, "bugreport") ||
+			strings.Contains(nameLower, "errorreport") ||
+			strings.Contains(nameLower, "steamclient_loader") ||
+			strings.Contains(nameLower, "coldclientloader") ||
+			strings.Contains(nameLower, "steamless") ||
+			strings.HasSuffix(nameLower, ".console.exe") {
+			return nil
+		}
+
+		if strings.HasSuffix(nameLower, ".exe") || strings.HasSuffix(nameLower, ".sh") || strings.HasSuffix(nameLower, ".x86_64") || !strings.Contains(d.Name(), ".") {
+			fileInfo, err := d.Info()
+			if err == nil && (strings.HasSuffix(nameLower, ".exe") || fileInfo.Mode()&0111 != 0) {
+				candidates = append(candidates, path)
+			}
 		}
 		return nil
 	})
-	if len(candidates) > 0 {
-		return candidates[0]
+
+	if len(candidates) == 0 {
+		return ""
 	}
-	return ""
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		scoreI := detector.ScoreExecutable(candidates[i], gameDir, title)
+		scoreJ := detector.ScoreExecutable(candidates[j], gameDir, title)
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
+		}
+		return candidates[i] < candidates[j]
+	})
+
+	return candidates[0]
 }

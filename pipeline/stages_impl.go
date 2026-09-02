@@ -341,7 +341,12 @@ func (s *SteamlessStage) Execute(ctx context.Context, pctx *Context) error {
 		return nil
 	}
 
-	unpacked, err := steamless.UnpackExecutable(ctx, pctx.Config, pctx.Game.GameDir, pctx.Options.DryRun)
+	targetPath := pctx.Game.EffectiveExePath()
+	if targetPath == "" || !util.FileExists(targetPath) {
+		targetPath = pctx.Game.GameDir
+	}
+
+	unpacked, err := steamless.UnpackExecutable(ctx, pctx.Config, targetPath, pctx.Options.DryRun)
 	if err != nil {
 		slog.Warn("Steamless unpacking warning", "error", err)
 		pctx.Results.Errors = append(pctx.Results.Errors, fmt.Sprintf("steamless: %v", err))

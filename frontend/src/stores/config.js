@@ -5,12 +5,17 @@ import { notificationStore } from './notifications.js';
 function createConfigStore() {
   const config = writable(null);
   const uiScale = writable(parseInt(localStorage.getItem('gamux_ui_scale') || '18', 10));
+  const isDirty = writable(false);
 
   function setScale(size) {
     const sz = Math.min(32, Math.max(12, parseInt(size, 10) || 18));
     document.documentElement.style.fontSize = `${sz}px`;
     localStorage.setItem('gamux_ui_scale', String(sz));
     uiScale.set(sz);
+  }
+
+  function setDirty(dirty) {
+    isDirty.set(Boolean(dirty));
   }
 
   async function load() {
@@ -27,6 +32,7 @@ function createConfigStore() {
     try {
       await AppAPI.saveConfig(newCfg);
       config.set(newCfg);
+      isDirty.set(false);
       notificationStore.success('Settings Saved', 'Configuration written to ~/.config/gamux/config.json');
       return true;
     } catch (err) {
@@ -38,10 +44,12 @@ function createConfigStore() {
   return {
     subscribe: config.subscribe,
     uiScale: { subscribe: uiScale.subscribe, set: setScale },
+    isDirty: { subscribe: isDirty.subscribe, set: setDirty },
     load,
     reload: load,
     save,
-    setScale
+    setScale,
+    setDirty
   };
 }
 

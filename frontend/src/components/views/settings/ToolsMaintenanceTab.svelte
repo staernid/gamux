@@ -1,6 +1,10 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
+  import { activeView } from '../../../stores/library.js';
+  import { modalStore } from '../../../stores/modal.js';
+  import { configStore } from '../../../stores/config.js';
+  import { tasksStore } from '../../../stores/tasks.js';
   import SettingSection from '../../common/SettingSection.svelte';
 
   export let toolStatuses = [];
@@ -11,6 +15,68 @@
   export let unpatchedGamesCount = 0;
 
   const dispatch = createEventDispatcher();
+  const isSettingsDirty = configStore.isDirty;
+  const { items: taskList } = tasksStore;
+
+  function checkIsInstalled(tool) {
+    if (!tool) return false;
+    if (typeof tool.is_installed === 'boolean') return tool.is_installed;
+    const tag = (tool.installed_tag || tool.installed_version || '').trim();
+    return Boolean(tag && !['(not installed)', 'Not Installed', 'Unknown', 'none'].includes(tag));
+  }
+
+  function findActiveBatchTask(kind, items) {
+    if (!Array.isArray(items)) return null;
+    return items.find((t) => {
+      if (t.status !== 'running' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'downloading') {
+        return false;
+      }
+      const title = (t.title || '').toLowerCase();
+      const type = (t.type || '').toLowerCase();
+      const batchKind = (t.metadata?.batch_kind || '').toLowerCase();
+
+      if (kind === 'achievements') {
+        return batchKind === 'achievements' || title.includes('achievement');
+      }
+      if (kind === 'artwork') {
+        return batchKind === 'artwork' || title.includes('artwork');
+      }
+      if (kind === 'apply') {
+        return batchKind === 'apply' || (type === 'apply' && title.includes('batch')) || title.includes('apply setup') || title.includes('apply drm');
+      }
+      if (kind === 'normalize') {
+        return batchKind === 'normalize' || (type === 'normalize' && title.includes('batch')) || title.includes('normalize');
+      }
+      if (kind === 'verify') {
+        return batchKind === 'verify' || (type === 'verify' && title.includes('batch')) || title.includes('verify');
+      }
+      return false;
+    }) || null;
+  }
+
+  $: achievementsTask = findActiveBatchTask('achievements', $taskList);
+  $: artworkTask = findActiveBatchTask('artwork', $taskList);
+  $: applyTask = findActiveBatchTask('apply', $taskList);
+  $: normalizeTask = findActiveBatchTask('normalize', $taskList);
+  $: verifyTask = findActiveBatchTask('verify', $taskList);
+
+  function handleViewTasks() {
+    if ($isSettingsDirty) {
+      modalStore.open('confirm', {
+        title: 'Unsaved Changes',
+        message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
+        confirmLabel: 'Discard Changes',
+        cancelLabel: 'Keep Editing',
+        danger: true,
+        onConfirm: () => {
+          configStore.setDirty(false);
+          $activeView = 'tasks';
+        }
+      });
+      return;
+    }
+    $activeView = 'tasks';
+  }
 
   function checkAllTools() {
     dispatch('checkAll');
@@ -71,32 +137,46 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
       {#each toolStatuses as tool}
-        <div class="bg-[#0e0e14] border border-[#1e1e2c] p-3 rounded-xl flex flex-col justify-between gap-2.5">
+        {@const isInstalled = checkIsInstalled(tool)}
+        {@const isUpdating = Boolean(updatingTools[tool.key || tool.tool_name])}
+        <div class="bg-[#101013] border border-[#27272a] p-3 rounded-xl flex flex-col justify-between gap-2.5">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center justify-between gap-1.5">
               <span class="font-semibold text-xs text-white truncate">{tool.name || tool.display_name || tool.key}</span>
-              {#if tool.has_update}
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
+              {#if !isInstalled}
+                <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
+                  Missing
+                </span>
+              {:else if tool.has_update}
+                <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
                   Update
                 </span>
               {/if}
             </div>
 
-            <div class="text-[11px] font-mono text-slate-400 truncate">
-              <span>{tool.installed_tag || tool.installed_version || 'Installed'}</span>
-              {#if tool.latest_tag || tool.latest_version}
-                <span class="text-slate-600">·</span>
-                <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
+            <div class="text-2xs font-mono text-neutral-400 truncate">
+              {#if !isInstalled}
+                <span class="text-amber-400/90 font-medium">Not Installed</span>
+                {#if tool.latest_tag || tool.latest_version}
+                  <span class="text-neutral-600">·</span>
+                  <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
+                {/if}
+              {:else}
+                <span>{tool.installed_tag || tool.installed_version || 'Installed'}</span>
+                {#if tool.latest_tag || tool.latest_version}
+                  <span class="text-neutral-600">·</span>
+                  <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
+                {/if}
               {/if}
             </div>
           </div>
 
-          <div class="flex items-center space-x-1.5 pt-1 border-t border-[#181824]">
+          <div class="flex items-center space-x-1.5 pt-1 border-t border-[#27272a]">
             {#if tool.release_url}
               <button
                 type="button"
                 on:click={() => AppAPI.openURL(tool.release_url)}
-                class="text-slate-400 hover:text-cyan-300 text-xs px-2 py-1 rounded-lg border border-[#262638] bg-[#14141e] transition-colors cursor-pointer"
+                class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-[#27272a] bg-[#141417] transition-colors cursor-pointer"
                 title="Open GitHub Release"
               >
                 ↗
@@ -105,17 +185,17 @@
             <button
               type="button"
               on:click={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
-              disabled={updatingTools[tool.key || tool.tool_name]}
-              class="flex-1 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50"
+              disabled={isUpdating}
+              class="flex-1 py-1 rounded-lg font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white' : 'bg-white hover:bg-neutral-200 text-black'}"
             >
-              {#if updatingTools[tool.key || tool.tool_name]}
-                <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              {#if isUpdating}
+                <svg class="animate-spin w-3 h-3 {isInstalled && !tool.has_update ? 'text-white' : 'text-black'}" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
-                <span>Updating...</span>
+                <span>{isInstalled ? (tool.has_update ? 'Updating...' : 'Reinstalling...') : 'Installing...'}</span>
               {:else}
-                <span>{tool.has_update ? 'Update' : 'Reinstall'}</span>
+                <span>{isInstalled ? (tool.has_update ? 'Update' : 'Reinstall') : 'Install'}</span>
               {/if}
             </button>
           </div>
@@ -129,124 +209,317 @@
     title="Batch Maintenance"
     tooltip="Automated multi-game library operations executed in the background."
   >
+    <svelte:fragment slot="action">
+      <button
+        type="button"
+        on:click={handleViewTasks}
+        class="px-2 py-0.5 rounded-lg bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-2xs text-neutral-300 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
+        title="View active background tasks"
+      >
+        <span>View Tasks</span>
+        <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+        </svg>
+      </button>
+    </svelte:fragment>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
       <!-- 1. Batch Achievements -->
-      <div class="bg-[#0e0e14] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
-          <span class="font-bold text-slate-100 text-xs flex items-center space-x-1.5">
-            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
             </svg>
             <span>Achievements</span>
           </span>
-          <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">
+          <p class="text-xs text-neutral-400 leading-relaxed">
             Download missing achievement schemas and icons across library.
           </p>
+          {#if achievementsTask}
+            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+              <div class="flex items-center justify-between text-2xs">
+                <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
+                  <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span class="truncate">{achievementsTask.stage || achievementsTask.details || 'Processing...'}</span>
+                </span>
+                <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(achievementsTask.percent || 0)}%</span>
+              </div>
+              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+                <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, achievementsTask.percent || 0))}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-3xs">
+                <span class="truncate text-neutral-500">{achievementsTask.details || ''}</span>
+                <button
+                  type="button"
+                  on:click={handleViewTasks}
+                  class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+                >
+                  <span>View in Tasks</span>
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
         <button
           type="button"
           on:click={runBatchAchievements}
-          disabled={isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-sky-300 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-sky-900/40 hover:border-sky-700/60 transition-all cursor-pointer"
+          disabled={Boolean(achievementsTask) || isSubmittingBatch || gamesCount === 0}
+          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
-          Download Missing
+          {#if achievementsTask}
+            <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Running ({Math.round(achievementsTask.percent || 0)}%)...</span>
+          {:else}
+            <span>Download Missing</span>
+          {/if}
         </button>
       </div>
 
       <!-- 2. Batch Artwork -->
-      <div class="bg-[#0e0e14] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
-          <span class="font-bold text-slate-100 text-xs flex items-center space-x-1.5">
-            <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <span>Artwork</span>
           </span>
-          <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">
+          <p class="text-xs text-neutral-400 leading-relaxed">
             Resolve and cache missing posters, hero banners, and logos.
           </p>
+          {#if artworkTask}
+            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+              <div class="flex items-center justify-between text-2xs">
+                <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
+                  <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span class="truncate">{artworkTask.stage || artworkTask.details || 'Processing...'}</span>
+                </span>
+                <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(artworkTask.percent || 0)}%</span>
+              </div>
+              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+                <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, artworkTask.percent || 0))}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-3xs">
+                <span class="truncate text-neutral-500">{artworkTask.details || ''}</span>
+                <button
+                  type="button"
+                  on:click={handleViewTasks}
+                  class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+                >
+                  <span>View in Tasks</span>
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
         <button
           type="button"
           on:click={runBatchArtwork}
-          disabled={isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-purple-300 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-purple-900/40 hover:border-purple-700/60 transition-all cursor-pointer"
+          disabled={Boolean(artworkTask) || isSubmittingBatch || gamesCount === 0}
+          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
-          Refresh Artwork
+          {#if artworkTask}
+            <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Running ({Math.round(artworkTask.percent || 0)}%)...</span>
+          {:else}
+            <span>Refresh Artwork</span>
+          {/if}
         </button>
       </div>
 
       <!-- 3. Batch Apply DRM & Emulator -->
-      <div class="bg-[#0e0e14] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <div class="flex items-center justify-between gap-1.5">
-            <span class="font-bold text-slate-100 text-xs flex items-center space-x-1.5 truncate">
-              <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5 truncate">
+              <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
               <span class="truncate">Apply Setup</span>
             </span>
-            <span class="text-[9px] font-mono bg-[#161622] text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded">
+            <span class="text-3xs font-mono bg-neutral-800 text-neutral-300 border border-neutral-700 px-1.5 py-0.5 rounded">
               {unpatchedGamesCount}
             </span>
           </div>
-          <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">
+          <p class="text-xs text-neutral-400 leading-relaxed">
             Apply Goldberg emulator and unpacker to unpatched games.
           </p>
+          {#if applyTask}
+            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+              <div class="flex items-center justify-between text-2xs">
+                <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
+                  <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span class="truncate">{applyTask.stage || applyTask.details || 'Processing...'}</span>
+                </span>
+                <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(applyTask.percent || 0)}%</span>
+              </div>
+              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+                <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, applyTask.percent || 0))}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-3xs">
+                <span class="truncate text-neutral-500">{applyTask.details || ''}</span>
+                <button
+                  type="button"
+                  on:click={handleViewTasks}
+                  class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+                >
+                  <span>View in Tasks</span>
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
         <button
           type="button"
           on:click={runBatchApply}
-          disabled={isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-amber-300 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-amber-900/40 hover:border-amber-700/60 transition-all cursor-pointer"
+          disabled={Boolean(applyTask) || isSubmittingBatch || gamesCount === 0}
+          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
-          Apply All
+          {#if applyTask}
+            <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Running ({Math.round(applyTask.percent || 0)}%)...</span>
+          {:else}
+            <span>Apply All</span>
+          {/if}
         </button>
       </div>
 
       <!-- 4. Batch Normalize -->
-      <div class="bg-[#0e0e14] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
-          <span class="font-bold text-slate-100 text-xs flex items-center space-x-1.5">
-            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span>Normalize Folders</span>
           </span>
-          <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">
+          <p class="text-xs text-neutral-400 leading-relaxed">
             Standardize directory names to match official Steam titles.
           </p>
+          {#if normalizeTask}
+            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+              <div class="flex items-center justify-between text-2xs">
+                <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
+                  <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span class="truncate">{normalizeTask.stage || normalizeTask.details || 'Processing...'}</span>
+                </span>
+                <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(normalizeTask.percent || 0)}%</span>
+              </div>
+              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+                <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, normalizeTask.percent || 0))}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-3xs">
+                <span class="truncate text-neutral-500">{normalizeTask.details || ''}</span>
+                <button
+                  type="button"
+                  on:click={handleViewTasks}
+                  class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+                >
+                  <span>View in Tasks</span>
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
         <button
           type="button"
           on:click={runBatchNormalize}
-          disabled={isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-emerald-300 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-emerald-900/40 hover:border-emerald-700/60 transition-all cursor-pointer"
+          disabled={Boolean(normalizeTask) || isSubmittingBatch || gamesCount === 0}
+          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
-          Normalize
+          {#if normalizeTask}
+            <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Running ({Math.round(normalizeTask.percent || 0)}%)...</span>
+          {:else}
+            <span>Normalize</span>
+          {/if}
         </button>
       </div>
 
       <!-- 5. Batch Verify Manifests -->
-      <div class="bg-[#0e0e14] border border-[#1e1e2c] hover:border-[#2a2a3c] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
+      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
         <div class="space-y-1">
-          <span class="font-bold text-slate-100 text-xs flex items-center space-x-1.5">
-            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
             <span>Verify Manifests</span>
           </span>
-          <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">
+          <p class="text-xs text-neutral-400 leading-relaxed">
             Verify SHA-1 file integrity against official depot manifests.
           </p>
+          {#if verifyTask}
+            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+              <div class="flex items-center justify-between text-2xs">
+                <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
+                  <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span class="truncate">{verifyTask.stage || verifyTask.details || 'Processing...'}</span>
+                </span>
+                <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(verifyTask.percent || 0)}%</span>
+              </div>
+              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+                <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, verifyTask.percent || 0))}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-3xs">
+                <span class="truncate text-neutral-500">{verifyTask.details || ''}</span>
+                <button
+                  type="button"
+                  on:click={handleViewTasks}
+                  class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+                >
+                  <span>View in Tasks</span>
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
         <button
           type="button"
           on:click={runBatchVerify}
-          disabled={isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#181824] hover:bg-[#222232] disabled:opacity-40 text-cyan-300 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-cyan-900/40 hover:border-cyan-700/60 transition-all cursor-pointer"
+          disabled={Boolean(verifyTask) || isSubmittingBatch || gamesCount === 0}
+          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
-          Verify All Manifests
+          {#if verifyTask}
+            <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Running ({Math.round(verifyTask.percent || 0)}%)...</span>
+          {:else}
+            <span>Verify All Manifests</span>
+          {/if}
         </button>
       </div>
     </div>

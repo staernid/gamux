@@ -23,10 +23,15 @@ type ProcessEvent struct {
 	PID       int    `json:"pid"`
 }
 
+type trackedProcess struct {
+	cmd  *exec.Cmd
+	pgid int
+}
+
 // Manager tracks and supervises running game processes.
 type Manager struct {
 	mu        sync.Mutex
-	processes map[string]*exec.Cmd
+	processes map[string]*trackedProcess
 	bus       *events.Bus
 	listeners []func(ProcessEvent)
 }
@@ -38,7 +43,7 @@ func NewManager(bus ...*events.Bus) *Manager {
 		b = bus[0]
 	}
 	return &Manager{
-		processes: make(map[string]*exec.Cmd),
+		processes: make(map[string]*trackedProcess),
 		bus:       b,
 	}
 }
@@ -66,8 +71,13 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 
 	gameDir := opts.GameDir
 	if gameDir != "" && cmd != nil && cmd.Process != nil {
+		pgid := 0
+		if p, err := syscall.Getpgid(cmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
+			pgid = p
+		}
+
 		m.mu.Lock()
-		m.processes[gameDir] = cmd
+		m.processes[gameDir] = &trackedProcess{cmd: cmd, pgid: pgid}
 		b := m.bus
 		m.mu.Unlock()
 
@@ -83,9 +93,9 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 			b.Publish(events.NewGameLaunched(gameDir, opts.Name, opts.AppID, cmd.Process.Pid))
 		}
 
-		go func(gDir string, pCmd *exec.Cmd, lFile *os.File, eb *events.Bus, name, appID string, started time.Time) {
-			pgid := 0
-			if pCmd != nil && pCmd.Process != nil {
+		go func(gDir string, pCmd *exec.Cmd, resolvedPgid int, lFile *os.File, eb *events.Bus, name, appID string, started time.Time) {
+			pgid := resolvedPgid
+			if pgid <= 1 && pCmd != nil && pCmd.Process != nil {
 				if p, err := syscall.Getpgid(pCmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
 					pgid = p
 				}
@@ -132,6 +142,8 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 			// If the root process exited but child processes in the process group remain active,
 			// continue supervising the process group until all child processes exit.
 			if pgid > 1 {
+				superviseTicker := time.NewTicker(1 * time.Second)
+				defer superviseTicker.Stop()
 				for {
 					if err := syscall.Kill(-pgid, 0); err != nil {
 						break
@@ -139,7 +151,7 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 					select {
 					case <-ticker.C:
 						flushDelta()
-					case <-time.After(1 * time.Second):
+					case <-superviseTicker.C:
 					}
 				}
 			}
@@ -183,7 +195,7 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 				}
 				eb.Publish(ev)
 			}
-		}(gameDir, cmd, logFile, b, opts.Name, opts.AppID, startTime)
+		}(gameDir, cmd, pgid, logFile, b, opts.Name, opts.AppID, startTime)
 	}
 
 	return cmd, nil
@@ -288,18 +300,25 @@ func (m *Manager) Stop(gameDir string) error {
 	}
 
 	m.mu.Lock()
-	cmd, ok := m.processes[gameDir]
+	proc, ok := m.processes[gameDir]
 	m.mu.Unlock()
 
-	if !ok || cmd == nil || cmd.Process == nil {
+	if !ok || proc == nil {
 		return nil
 	}
 
-	slog.Info("Terminating running game process", "dir", gameDir, "pid", cmd.Process.Pid)
+	cmd := proc.cmd
+	pgid := proc.pgid
+	if pgid <= 1 && cmd != nil && cmd.Process != nil {
+		if p, err := syscall.Getpgid(cmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
+			pgid = p
+		}
+	}
+
+	slog.Info("Terminating running game process", "dir", gameDir, "pgid", pgid)
 
 	// Send SIGTERM to process group, fallback to SIGKILL after graceful grace period
-	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err == nil && pgid > 1 {
+	if pgid > 1 {
 		_ = syscall.Kill(-pgid, syscall.SIGTERM)
 		deadline := time.Now().Add(2500 * time.Millisecond)
 		for time.Now().Before(deadline) {
@@ -310,7 +329,7 @@ func (m *Manager) Stop(gameDir string) error {
 		}
 		// Force kill if still running after grace period
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	} else if cmd.Process != nil {
+	} else if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		deadline := time.Now().Add(2500 * time.Millisecond)
 		for time.Now().Before(deadline) {
@@ -332,8 +351,8 @@ func (m *Manager) IsRunning(gameDir string) bool {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	cmd, ok := m.processes[gameDir]
-	return ok && cmd != nil && cmd.Process != nil
+	proc, ok := m.processes[gameDir]
+	return ok && proc != nil
 }
 
 // RunningGames returns a slice of game directories that are currently running.

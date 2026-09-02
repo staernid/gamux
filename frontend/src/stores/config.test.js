@@ -48,4 +48,15 @@ describe('configStore', () => {
     configStore.setScale(5);
     expect(get(configStore.uiScale)).toBe(12);
   });
+
+  it('manages isDirty state and clears on successful save', async () => {
+    expect(get(configStore.isDirty)).toBe(false);
+
+    configStore.setDirty(true);
+    expect(get(configStore.isDirty)).toBe(true);
+
+    vi.spyOn(AppAPI, 'saveConfig').mockResolvedValue(true);
+    await configStore.save({ default_runner: 'umu' });
+    expect(get(configStore.isDirty)).toBe(false);
+  });
 });

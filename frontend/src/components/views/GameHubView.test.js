@@ -259,7 +259,7 @@ describe('GameHubView Component', () => {
     expect(screen.getByText('Online Store Title')).toBeInTheDocument();
   });
 
-  it('triggers download transfer when clicking Download on uninstalled game', async () => {
+  it('triggers download transfer and pre-creates stub when clicking Download on uninstalled virtual game', async () => {
     const virtualGame = normalizeGame({
       name: 'Hades II',
       app_id: '1145350',
@@ -274,6 +274,17 @@ describe('GameHubView Component', () => {
     });
     selectedGame.set(virtualGame);
 
+    const stubSpy = vi.spyOn(AppAPI, 'createGameStub').mockResolvedValue({
+      name: 'Hades II',
+      app_id: '1145350',
+      game_dir: '/home/user/Games/Hades II',
+      store: 'Steam',
+      file_count: 0,
+      disk_size_bytes: 0,
+      is_installed: false,
+      is_stub: true,
+      is_ready: false,
+    });
     const startSpy = vi.spyOn(tasksStore, 'start').mockResolvedValue('dl_123');
 
     render(GameHubView);
@@ -281,9 +292,11 @@ describe('GameHubView Component', () => {
     const downloadBtn = screen.getByText('Download');
     await fireEvent.click(downloadBtn);
 
+    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam');
     expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({
       app_id: 1145350,
-      game_name: 'Hades II'
+      game_name: 'Hades II',
+      target_dir: '/home/user/Games/Hades II'
     }));
   });
 

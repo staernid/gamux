@@ -47,41 +47,6 @@ describe('DownloadsView Component', () => {
     expect(screen.getByText(/ETA: 38s/i)).toBeInTheDocument();
   });
 
-  it('allows toggling add panel, searching game, and initiating download', async () => {
-    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([]);
-    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
-      { id: '1091500', name: 'Cyberpunk 2077', store: 'steam' }
-    ]);
-    const startTransferSpy = vi.spyOn(AppAPI, 'startDownloadTransfer').mockResolvedValue('dl_cyberpunk');
-
-    render(DownloadsView);
-
-    const newBtn = screen.getByText('New Download');
-    await fireEvent.click(newBtn);
-
-    expect(screen.getByText(/Download Title from Store Provider/i)).toBeInTheDocument();
-
-    const searchInput = screen.getByLabelText(/Search Game Title or Steam AppID/i);
-    await fireEvent.input(searchInput, { target: { value: 'Cyberpunk' } });
-
-    const searchBtn = screen.getByText('Search');
-    await fireEvent.click(searchBtn);
-
-    const candidate = await screen.findByText('Cyberpunk 2077');
-    expect(candidate).toBeInTheDocument();
-    await fireEvent.click(candidate);
-
-    const startBtn = screen.getByText('Start Download');
-    await fireEvent.click(startBtn);
-
-    expect(startTransferSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        app_id: 1091500,
-        game_name: 'Cyberpunk 2077',
-      })
-    );
-  });
-
   it('handles pause and cancel button clicks on active downloads', async () => {
     const pauseSpy = vi.spyOn(AppAPI, 'pauseTask').mockResolvedValue(true);
     const cancelSpy = vi.spyOn(AppAPI, 'cancelTask').mockResolvedValue(true);
@@ -217,44 +182,6 @@ describe('DownloadsView Component', () => {
 
     expect(screen.getAllByText('Half-Life').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
-  });
-
-  it('filters non-Steam search candidates and supports macOS platform target', async () => {
-    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([]);
-    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
-      { id: '1091500', name: 'Cyberpunk 2077', store: 'steam' },
-      { id: 'gog_123', name: 'GOG Only Game', store: 'gog' },
-      { id: 'rawg_456', name: 'RAWG Database Game', store: 'rawg' },
-    ]);
-    const startTransferSpy = vi.spyOn(AppAPI, 'startDownloadTransfer').mockResolvedValue('dl_cyberpunk');
-
-    render(DownloadsView);
-
-    await fireEvent.click(screen.getByText('New Download'));
-
-    const searchInput = screen.getByLabelText(/Search Game Title or Steam AppID/i);
-    await fireEvent.input(searchInput, { target: { value: 'Cyberpunk' } });
-    await fireEvent.click(screen.getByText('Search'));
-
-    expect(await screen.findByText('Cyberpunk 2077')).toBeInTheDocument();
-    expect(screen.queryByText('GOG Only Game')).not.toBeInTheDocument();
-    expect(screen.queryByText('RAWG Database Game')).not.toBeInTheDocument();
-
-    await fireEvent.click(screen.getByText('Cyberpunk 2077'));
-
-    const platformSelect = screen.getByLabelText(/Platform Target/i);
-    expect(platformSelect).toHaveTextContent(/macOS Native/i);
-    await fireEvent.change(platformSelect, { target: { value: 'macos' } });
-
-    await fireEvent.click(screen.getByText('Start Download'));
-
-    expect(startTransferSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        app_id: 1091500,
-        platform: 'macos',
-        auto_apply: true,
-      })
-    );
   });
 });
 

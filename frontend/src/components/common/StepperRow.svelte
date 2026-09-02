@@ -5,19 +5,37 @@
   export let description = '';
   export let tooltip = '';
   export let options = []; // Array of { value, label } or simple strings
+  export let min = undefined;
+  export let max = undefined;
+  export let stepSize = 1;
   export let value = null;
   export let disabled = false;
 
   const dispatch = createEventDispatcher();
 
-  $: normalizedOptions = options.map(opt => {
+  $: resolvedOptions = (() => {
+    if (Array.isArray(options) && options.length > 0) {
+      return options;
+    }
+    if (min !== undefined && max !== undefined && Number(min) <= Number(max)) {
+      const generated = [];
+      const s = Number(stepSize) || 1;
+      for (let v = Number(min); v <= Number(max); v += s) {
+        generated.push({ value: v, label: String(v) });
+      }
+      return generated;
+    }
+    return [];
+  })();
+
+  $: normalizedOptions = resolvedOptions.map(opt => {
     if (typeof opt === 'object' && opt !== null) {
       return { value: opt.value, label: opt.label ?? String(opt.value) };
     }
     return { value: opt, label: String(opt) };
   });
 
-  $: currentIndex = normalizedOptions.findIndex(o => o.value === value);
+  $: currentIndex = normalizedOptions.findIndex(o => o.value === value || Number(o.value) === Number(value));
   $: currentLabel = currentIndex >= 0 ? normalizedOptions[currentIndex].label : String(value ?? '');
   $: effectiveTooltip = tooltip || description;
 
@@ -45,17 +63,17 @@
 </script>
 
 <div
-  class="flex items-center justify-between gap-3 p-2.5 sm:p-3 bg-[#0d0d12] hover:bg-[#13131a] focus-within:bg-[#161622] border border-[#222230] focus-within:border-sky-500/70 rounded-xl transition-all select-none group"
+  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 bg-[#101013] hover:bg-[#18181b] focus-within:bg-[#18181b] border border-[#27272a] focus-within:border-neutral-500 rounded-xl transition-all select-none group"
   role="group"
   aria-label={label}
 >
   <!-- Label & Description -->
   <div class="space-y-0.5 flex-1 min-w-[120px]">
     <div class="flex items-center space-x-1.5 flex-wrap">
-      <span class="block font-bold text-slate-200 text-xs group-focus-within:text-white transition-colors truncate">{label}</span>
+      <span class="block font-bold text-neutral-200 text-xs group-focus-within:text-white transition-colors">{label}</span>
       {#if effectiveTooltip}
         <span
-          class="text-slate-500 hover:text-slate-300 transition-colors cursor-help p-0.5 flex-shrink-0"
+          class="text-neutral-400 hover:text-white transition-colors cursor-help p-0.5 flex-shrink-0"
           title={effectiveTooltip}
           aria-label={effectiveTooltip}
         >
@@ -66,13 +84,13 @@
       {/if}
     </div>
     {#if description && !tooltip}
-      <p class="text-[11px] text-slate-400 leading-tight truncate">{description}</p>
+      <p class="text-xs text-neutral-400 leading-relaxed">{description}</p>
     {/if}
   </div>
 
   <!-- Unified Stepper Control Capsule (Single Focus Stop for Controller & Keyboard) -->
   <div
-    class="flex items-center space-x-1 bg-[#14141e] border border-[#2c2c3e] focus:border-sky-400 focus:ring-2 focus:ring-sky-500/30 rounded-lg p-0.5 flex-shrink-0 outline-none cursor-pointer transition-all hover:border-[#3c3c52]"
+    class="flex items-center space-x-1 bg-[#141417] border border-[#27272a] focus:border-white focus:ring-1 focus:ring-white/20 rounded-lg p-0.5 flex-shrink-0 outline-none transition-all hover:border-neutral-500"
     tabindex="0"
     role="slider"
     aria-label={`${label}: ${currentLabel}`}
@@ -82,7 +100,6 @@
     aria-valuemax={normalizedOptions.length - 1}
     aria-disabled={disabled}
     on:keydown={handleKeydown}
-    on:click={() => step(1)}
   >
     <!-- Left Arrow Button (Mouse target only, tabindex -1) -->
     <button
@@ -90,7 +107,7 @@
       tabindex="-1"
       on:click|stopPropagation={() => step(-1)}
       {disabled}
-      class="p-1 rounded text-slate-400 hover:text-white hover:bg-[#20202e] disabled:opacity-30 transition-colors outline-none"
+      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Previous Option (Left)"
       aria-label="Previous Option"
     >
@@ -100,7 +117,7 @@
     </button>
 
     <!-- Value Display -->
-    <span class="px-2 py-0.5 text-xs font-mono font-bold text-sky-300 min-w-[32px] text-center truncate select-none">
+    <span class="px-2 py-0.5 text-xs font-mono font-bold text-sky-300 min-w-[32px] text-center truncate select-none cursor-default">
       {currentLabel}
     </span>
 
@@ -110,7 +127,7 @@
       tabindex="-1"
       on:click|stopPropagation={() => step(1)}
       {disabled}
-      class="p-1 rounded text-slate-400 hover:text-white hover:bg-[#20202e] disabled:opacity-30 transition-colors outline-none"
+      class="p-1 rounded text-slate-400 hover:text-white hover:bg-[#20202e] disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Next Option (Right)"
       aria-label="Next Option"
     >

@@ -30,19 +30,19 @@
   }
 </script>
 
-<div class="bg-gradient-to-r from-[#12121e] via-[#101018] to-[#12121e] border border-cyan-500/40 rounded-2xl p-4 shadow-xl space-y-2.5 animate-fade-in">
+<div class="bg-[#121214] border border-[#27272a] rounded-2xl p-4 shadow-xl space-y-2.5 animate-fade-in">
   <div class="flex items-center justify-between gap-3">
     <div class="flex items-center space-x-2.5 min-w-0">
-      <span class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center space-x-1.5 flex-shrink-0">
-        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+      <span class="px-2 py-0.5 rounded-lg text-3xs font-black uppercase tracking-wider bg-neutral-800 text-neutral-200 border border-neutral-700 flex items-center space-x-1.5 flex-shrink-0">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
         <span>{getTaskBadgeLabel(task)}</span>
       </span>
       <h4 class="font-bold text-white text-xs truncate">
         {task.stage || task.title || 'Task executing'}
       </h4>
       {#if task.details}
-        <span class="text-slate-500 text-xs hidden sm:inline">·</span>
-        <span class="text-slate-400 text-xs font-mono truncate hidden sm:inline max-w-sm">
+        <span class="text-neutral-500 text-xs hidden sm:inline">·</span>
+        <span class="text-neutral-400 text-xs font-mono truncate hidden sm:inline max-w-sm">
           {task.details}
         </span>
       {/if}
@@ -53,16 +53,16 @@
       <button
         type="button"
         on:click={openTasksView}
-        class="px-2.5 py-1 rounded-xl bg-[#1c1c28] hover:bg-[#252538] text-slate-300 hover:text-white text-[11px] font-bold border border-[#2e2e42] transition flex items-center space-x-1 cursor-pointer"
+        class="px-2.5 py-1 rounded-xl bg-[#18181b] hover:bg-[#222225] text-neutral-300 hover:text-white text-2xs font-bold border border-[#27272a] transition flex items-center space-x-1 cursor-pointer"
         title="Open full Tasks view (2)"
       >
         <span>View Tasks</span>
-        <span class="text-slate-500 font-mono text-[9px] px-1 py-0.2 rounded bg-black/40">2</span>
+        <span class="text-neutral-500 font-mono text-3xs px-1 py-0.5 rounded bg-black/40">2</span>
       </button>
       <button
         type="button"
         on:click={handleCancel}
-        class="px-2.5 py-1 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-[11px] font-bold border border-rose-900/40 hover:border-rose-700/60 transition flex items-center space-x-1 cursor-pointer active:scale-95"
+        class="px-2.5 py-1 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 text-rose-300 hover:text-white text-2xs font-bold border border-rose-900/40 transition flex items-center space-x-1 cursor-pointer active:scale-95"
         title="Cancel active task"
       >
         Cancel
@@ -72,15 +72,15 @@
 
   <!-- Progress Bar -->
   <div class="space-y-1">
-    <div class="w-full bg-[#0a0a0f] border border-[#1e1e2c] h-2 rounded-full overflow-hidden">
+    <div class="w-full bg-[#141417] border border-[#27272a] h-2 rounded-full overflow-hidden">
       <div
-        class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all duration-300 relative"
+        class="bg-white h-full rounded-full transition-all duration-300 relative"
         style="width: {task.percent || 0}%"
       >
-        <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+        <div class="absolute inset-0 bg-neutral-200/30 animate-pulse"></div>
       </div>
     </div>
-    <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+    <div class="flex items-center justify-between text-3xs font-mono text-neutral-400">
       <span>
         {#if task.totalBytes && task.totalBytes > 0}
           {formatBytes(task.currentBytes || 0)} / {formatBytes(task.totalBytes)} ({task.percent?.toFixed(0) || 0}%)
@@ -92,7 +92,7 @@
       </span>
       <div class="flex items-center space-x-3">
         {#if task.speedBps > 0}
-          <span class="text-cyan-400 font-bold">{formatBytes(task.speedBps)}/s</span>
+          <span class="text-neutral-200 font-bold">{formatBytes(task.speedBps)}/s</span>
         {/if}
         {#if task.etaSeconds > 0}
           <span>ETA: {formatETA(task.etaSeconds)}</span>

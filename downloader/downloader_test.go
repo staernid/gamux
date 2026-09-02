@@ -19,7 +19,18 @@ import (
 
 func TestMain(m *testing.M) {
 	restore := testutil.SilenceLogging()
+	oldClient := DefaultHTTPClient
+	DefaultHTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("not found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
 	code := m.Run()
+	DefaultHTTPClient = oldClient
 	restore()
 	os.Exit(code)
 }
@@ -40,6 +51,15 @@ func TestDownloadOrUpdateGame_DryRun(t *testing.T) {
 		AppID:       12345,
 		DryRun:      true,
 		WorkerLimit: 2,
+		HTTPClient: &http.Client{
+			Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(`{"response":{"servers":[]}}`)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		},
 	}
 
 	res, err := DownloadOrUpdateGame(context.Background(), m, opts)

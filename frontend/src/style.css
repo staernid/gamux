@@ -5,11 +5,11 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --bg-base: #09090c;
-    --bg-surface: #111116;
-    --bg-card: #16161f;
-    --bg-card-hover: #1e1e2b;
-    --border-subtle: #242432;
+    --bg-base: #09090b;
+    --bg-surface: #121214;
+    --bg-card: #18181b;
+    --bg-card-hover: #222225;
+    --border-subtle: #27272a;
     --border-active: #ffffff;
   }
 
@@ -22,7 +22,7 @@
     margin: 0;
     padding: 0;
     background-color: var(--bg-base);
-    color: #f4f4f6;
+    color: #f4f4f5;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
     font-size: 1rem;
     line-height: 1.5;
@@ -43,12 +43,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a38;
+  background: #27272a;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444456;
+  background: #3f3f46;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -62,8 +62,8 @@
 @layer components {
   /* Cartridge Tile Styling */
   .cartridge {
-    background-color: #14141c;
-    border: 1.5px solid #232330;
+    background-color: #121214;
+    border: 1.5px solid #27272a;
     border-radius: 0.85rem;
     transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1),
                 border-color 0.14s ease,
@@ -72,14 +72,14 @@
   }
 
   .cartridge:hover {
-    background-color: #1b1b26;
-    border-color: #52526a;
+    background-color: #18181b;
+    border-color: #3f3f46;
     transform: translateY(-2px);
     box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.8);
   }
 
   .cartridge.active {
-    background-color: #1e1e2c;
+    background-color: #222225;
     border-color: #ffffff;
     transform: translateY(-4px);
     box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.9), 0 0 0 1px #ffffff;
@@ -99,26 +99,24 @@
 
   .pip-ready {
     background-color: #22c55e;
-    box-shadow: 0 0 8px #22c55e;
   }
 
   .pip-clean {
-    background-color: #64748b;
+    background-color: #52525b;
   }
 
   .pip-update {
     background-color: #f59e0b;
-    box-shadow: 0 0 8px #f59e0b;
   }
 
   .panel-surface {
-    background-color: #111116;
-    border: 1px solid #22222e;
+    background-color: #121214;
+    border: 1px solid #27272a;
   }
 
   .panel-elevated {
-    background-color: #161620;
-    border: 1px solid #2a2a3a;
+    background-color: #18181b;
+    border: 1px solid #27272a;
   }
 }
 

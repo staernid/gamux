@@ -38,6 +38,10 @@ function createNotificationStore() {
     duration = 4500,
     transient = false,
     icon = '',
+    actionLabel = '',
+    actionView = '',
+    actionTaskId = '',
+    onAction = null,
   }) {
     const notif = {
       id: generateId('notif'),
@@ -50,6 +54,10 @@ function createNotificationStore() {
       duration,
       transient,
       icon,
+      actionLabel,
+      actionView,
+      actionTaskId,
+      onAction,
       timestamp: Date.now(),
       read: false,
     };

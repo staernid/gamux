@@ -51,9 +51,9 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  class="flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all select-none
-    {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-[#13131c]'}
-    {isOverridden ? 'bg-[#121622]/60 border border-sky-500/30' : 'bg-[#0d0d14] border border-[#1e1e2c]'}"
+  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all select-none
+    {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-[#18181b]'}
+    {isOverridden ? 'bg-[#18181b] border border-neutral-600' : 'bg-[#101013] border border-[#27272a]'}"
   role="switch"
   tabindex="0"
   aria-checked={effectiveValue}
@@ -62,23 +62,23 @@
   on:keydown={handleKeyDown}
 >
   <!-- Left Side: Label & Description with Override Dot -->
-  <div class="flex items-center space-x-2.5 min-w-0 flex-1">
-    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 {isOverridden ? 'bg-sky-400' : 'bg-transparent'}" aria-hidden="true"></div>
+  <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
+    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
 
     <div class="space-y-0.5 min-w-0 flex-1">
       <div class="flex items-center space-x-2 flex-wrap">
-        <span class="text-xs font-semibold {isOverridden ? 'text-white font-bold' : 'text-slate-200'}">
+        <span class="text-xs font-semibold {isOverridden ? 'text-white font-bold' : 'text-neutral-200'}">
           {label}
         </span>
         {#if isOverridden}
-          <span class="text-[10px] font-mono text-sky-400 font-medium">
+          <span class="text-3xs font-mono text-neutral-300 font-medium">
             (Override)
           </span>
         {/if}
       </div>
 
       {#if effectiveDescription}
-        <p class="text-[11px] text-slate-400 leading-snug truncate">
+        <p class="text-xs text-neutral-400 leading-relaxed">
           {effectiveDescription}
         </p>
       {/if}
@@ -91,7 +91,7 @@
       <button
         type="button"
         on:click={revertToInherit}
-        class="p-1.5 rounded-lg bg-[#181824] hover:bg-[#242438] border border-[#2c2c3e] text-slate-400 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
+        class="p-1.5 rounded-lg bg-[#202024] hover:bg-[#27272a] border border-[#3f3f46] text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
         title={`Reset to default (${inheritedValue ? 'On' : 'Off'})`}
         aria-label="Reset to global default"
       >
@@ -105,14 +105,16 @@
     <div
       class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out border
         {isInherited
-          ? (effectiveValue ? 'bg-sky-500/30 border-sky-500/50' : 'bg-slate-800/60 border-slate-700/60')
-          : (effectiveValue ? 'bg-sky-500 border-sky-400 shadow-sm shadow-sky-500/30' : 'bg-slate-700 border-slate-600')}"
+          ? (effectiveValue ? 'bg-neutral-700 border-neutral-600' : 'bg-neutral-900/80 border-neutral-800')
+          : (effectiveValue ? 'bg-white border-white' : 'bg-neutral-900 border-neutral-700')}"
       aria-hidden="true"
     >
       <span
         class="pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full transition duration-200 ease-in-out mt-[2px] ml-[2px]
           {effectiveValue ? 'translate-x-4' : 'translate-x-0'}
-          {isInherited ? 'bg-slate-300' : 'bg-white shadow-sm'}"
+          {isInherited
+            ? (effectiveValue ? 'bg-neutral-300' : 'bg-neutral-500')
+            : (effectiveValue ? 'bg-neutral-950 shadow-sm' : 'bg-neutral-400')}"
       ></span>
     </div>
   </div>

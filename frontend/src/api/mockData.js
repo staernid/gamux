@@ -316,26 +316,37 @@ export const MOCK_TOOLS_STATUS = [
     name: 'Goldberg Emulator (GBE)',
     key: 'gbe',
     installed_version: 'v0.2.6',
+    installed_tag: 'v0.2.6',
     latest_version: 'v0.2.7',
+    latest_tag: 'v0.2.7',
     has_update: true,
+    is_installed: true,
     description: 'Steam DRM removal and offline multiplayer emulator'
   },
   {
     tool_name: 'steamless',
+    name: 'Steamless DRM Unpacker',
     display_name: 'Steamless DRM Unpacker',
+    key: 'steamless',
     installed_version: 'v0.1.2',
+    installed_tag: 'v0.1.2',
     latest_version: 'v0.1.2',
-    is_up_to_date: true,
+    latest_tag: 'v0.1.2',
+    has_update: false,
+    is_installed: true,
     release_date: '2026-06-15',
     release_notes: '• Native ELF header parsing optimization.\n• Support for newer SteamStub packaging wrappers.',
   },
   {
-    name: 'DepotDownloader',
-    key: 'depotdownloader',
-    installed_version: 'v2.5.0',
-    latest_version: 'v2.5.0',
-    has_update: false,
-    description: 'Steam depot manifest and content chunk downloader'
+    name: 'UMU Proton Launcher',
+    key: 'umu',
+    installed_version: '',
+    installed_tag: '',
+    latest_version: 'v1.1.4',
+    latest_tag: 'v1.1.4',
+    has_update: true,
+    is_installed: false,
+    description: 'Unified Linux Wine and Proton runtime launcher'
   }
 ];
 

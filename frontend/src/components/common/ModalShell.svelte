@@ -38,7 +38,7 @@
   aria-modal="true"
   tabindex="-1"
   on:keydown={handleKeydown}
-  class="fixed inset-0 z-50 bg-[#09090c]/95 backdrop-blur-2xl flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
+  class="fixed inset-0 z-50 bg-[#09090b]/95 backdrop-blur-2xl flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
 >
   {#if !customHeader && (title || $$slots.header || $$slots.headerActions)}
     <!-- Standard Modal Header Bar -->
@@ -49,7 +49,7 @@
         {:else}
           <div class="flex items-center space-x-2.5">
             {#if badge}
-              <span class="text-xs font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 uppercase tracking-wider">
+              <span class="text-3xs font-mono font-bold px-2 py-0.5 rounded bg-neutral-800 text-neutral-200 border border-neutral-700 uppercase tracking-wider">
                 {badge}
               </span>
             {/if}
@@ -60,7 +60,7 @@
             {/if}
           </div>
           {#if subtitle}
-            <p class="text-xs text-slate-400 mt-1">{subtitle}</p>
+            <p class="text-xs text-neutral-400 mt-1">{subtitle}</p>
           {/if}
         {/if}
       </div>
@@ -73,10 +73,10 @@
           <button
             type="button"
             on:click={handleClose}
-            class="px-4 py-1.5 rounded-xl bg-[#1a1a24] hover:bg-[#252535] border border-[#2b2b3c] text-slate-300 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
+            class="px-4 py-1.5 rounded-xl bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
           >
             {#if closeKeyHint}
-              <span class="px-1.5 py-0.5 rounded bg-[#161622] border border-[#262638] text-slate-400 font-bold text-[10px]">
+              <span class="px-1.5 py-0.5 rounded bg-[#121214] border border-[#27272a] text-neutral-400 font-bold text-3xs">
                 {closeKeyHint}
               </span>
             {/if}

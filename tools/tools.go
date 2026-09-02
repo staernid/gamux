@@ -21,6 +21,7 @@ type ToolStatus struct {
 	ReleaseURL    string `json:"release_url"`
 	PublishedAt   string `json:"published_at"`
 	HasUpdate     bool   `json:"has_update"`
+	IsInstalled   bool   `json:"is_installed"`
 }
 
 // Tool defines the unified lifecycle interface for an external helper tool.

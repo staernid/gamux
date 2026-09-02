@@ -171,9 +171,30 @@
         });
         return;
       }
-      const cleanName = game.name.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || game.name;
+
+      let dest = game.gameDir;
       const lib = $libraryPath || '/home/staernid/Games';
-      const dest = game.gameDir || `${lib}/${cleanName}`;
+
+      // If it's a virtual store title or lacks a directory, register the stub in the library first
+      if (!dest || game.isVirtual) {
+        try {
+          const stub = await AppAPI.createGameStub(lib, String(appID), game.name, game.store || 'Steam');
+          if (stub) {
+            const normalized = updateGameInStore(stub);
+            if (normalized) {
+              selectedGame.set(normalized);
+              dest = normalized.gameDir;
+            } else if (stub.game_dir || stub.gameDir) {
+              dest = stub.game_dir || stub.gameDir;
+            }
+          }
+        } catch (err) {
+          console.warn('Could not initialize library stub prior to download:', err);
+          const cleanName = game.name.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || game.name;
+          dest = `${lib}/${cleanName}`;
+        }
+      }
+
       try {
         await tasksStore.start({
           app_id: appID,
@@ -434,14 +455,14 @@
       {/if}
 
       <!-- 6 Primary Navigation Tabs -->
-      <div class="flex items-center space-x-2 border-b border-[#20202c] pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
+      <div class="flex items-center space-x-2 border-b border-[#27272a] pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'overview'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'overview' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'overview' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>Overview</span>
@@ -451,9 +472,9 @@
         <button
           type="button"
           on:click={() => { activeTab = 'community'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'community' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'community' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
           </svg>
           <span>Community</span>
@@ -463,9 +484,9 @@
         <button
           type="button"
           on:click={() => { activeTab = 'general'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
           <span>General</span>
@@ -475,9 +496,9 @@
         <button
           type="button"
           on:click={() => { activeTab = 'environment'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'environment' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'environment' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
           <span>Environment</span>
@@ -487,9 +508,9 @@
         <button
           type="button"
           on:click={() => { activeTab = 'saves'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'saves' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'saves' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
           </svg>
           <span>Saves</span>
@@ -499,9 +520,9 @@
         <button
           type="button"
           on:click={() => { activeTab = 'files'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-[#1e1e2c] text-white shadow-md border border-[#303046]' : 'text-slate-400 hover:text-slate-200'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
         >
-          <svg class="w-4 h-4 opacity-80 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
           <span>Files & Diagnostics</span>
@@ -519,20 +540,20 @@
           <HubCommunityTab {game} />
         {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
           <!-- Uninstalled State Placeholder for Technical Tabs -->
-          <div class="bg-[#0c0c12]/80 border border-[#1e1e2c] rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
-            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto">
+          <div class="bg-[#101013] border border-[#27272a] rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
+            <div class="w-12 h-12 rounded-2xl bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center justify-center mx-auto">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
             <div class="space-y-1">
               <h3 class="font-bold text-white text-base">Game Files Not Installed</h3>
-              <p class="text-xs text-slate-400">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
+              <p class="text-xs text-neutral-400">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
             </div>
             <button
               type="button"
               on:click={handlePrimaryAction}
-              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/20 cursor-pointer"
+              class="px-5 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-black text-xs shadow-lg cursor-pointer"
             >
               Download Game Now
             </button>

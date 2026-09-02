@@ -70,6 +70,7 @@ type ToolInfo struct {
 	ReleaseURL    string `json:"release_url"`
 	PublishedAt   string `json:"published_at"`
 	HasUpdate     bool   `json:"has_update"`
+	IsInstalled   bool   `json:"is_installed"`
 }
 
 func fetchGithubReleaseWithCache(ctx context.Context, key, apiURL string) (*Release, error) {
@@ -122,9 +123,11 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		return nil, err
 	}
 
-	installedTag := "(not installed)"
+	installedTag := ""
 	hasUpdate := true
+	isInstalled := false
 	if _, err := os.Stat(timestampFile); err == nil {
+		isInstalled = true
 		if timestamp, err := os.ReadFile(timestampFile); err == nil {
 			tsStr := strings.TrimSpace(string(timestamp))
 			if tsStr != "" {
@@ -141,6 +144,9 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 				}
 			}
 		}
+	} else if _, err := os.Stat(filepath.Join(gbeHome, "steam_api.dll")); err == nil {
+		isInstalled = true
+		installedTag = "Installed (Local)"
 	}
 
 	pubDate := ""
@@ -161,6 +167,7 @@ func FetchGBERelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		ReleaseURL:    release.HTMLURL,
 		PublishedAt:   pubDate,
 		HasUpdate:     hasUpdate,
+		IsInstalled:   isInstalled,
 	}, nil
 }
 
@@ -177,9 +184,11 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 		return nil, err
 	}
 
-	installedTag := "(not installed)"
+	installedTag := ""
 	hasUpdate := true
+	isInstalled := false
 	if _, err := os.Stat(timestampFile); err == nil {
+		isInstalled = true
 		if timestamp, err := os.ReadFile(timestampFile); err == nil {
 			tsStr := strings.TrimSpace(string(timestamp))
 			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
@@ -193,6 +202,7 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 			}
 		}
 	} else if fi, err := os.Stat(filepath.Join(steamlessHome, "steamless")); err == nil && fi.Size() > 0 {
+		isInstalled = true
 		installedTag = "Installed (Local)"
 	}
 
@@ -214,6 +224,7 @@ func FetchSteamlessRelease(ctx context.Context, cfg *config.Config) (*ToolInfo, 
 		ReleaseURL:    release.HTMLURL,
 		PublishedAt:   pubDate,
 		HasUpdate:     hasUpdate,
+		IsInstalled:   isInstalled,
 	}, nil
 }
 
@@ -228,9 +239,11 @@ func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		return nil, err
 	}
 
-	installedTag := "(not installed)"
+	installedTag := ""
 	hasUpdate := true
+	isInstalled := false
 	if _, err := os.Stat(timestampFile); err == nil {
+		isInstalled = true
 		if timestamp, err := os.ReadFile(timestampFile); err == nil {
 			tsStr := strings.TrimSpace(string(timestamp))
 			if tsStr == release.UpdatedAt.Format(time.RFC3339) || tsStr == release.TagName {
@@ -244,6 +257,7 @@ func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 			}
 		}
 	} else if fi, err := os.Stat(filepath.Join(umuHome, "umu-run")); err == nil && fi.Size() > 0 {
+		isInstalled = true
 		installedTag = "Installed"
 		hasUpdate = false
 	}
@@ -266,6 +280,7 @@ func FetchUMURelease(ctx context.Context, cfg *config.Config) (*ToolInfo, error)
 		ReleaseURL:    release.HTMLURL,
 		PublishedAt:   pubDate,
 		HasUpdate:     hasUpdate,
+		IsInstalled:   isInstalled,
 	}, nil
 }
 
@@ -676,11 +691,15 @@ func extractTarArchive(r io.Reader, destDir string) error {
 		}
 
 		cleanName := filepath.Clean(header.Name)
-		if strings.HasPrefix(cleanName, "..") {
+		if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
 			continue
 		}
 
 		targetPath := filepath.Join(destDir, cleanName)
+		rel, err := filepath.Rel(destDir, targetPath)
+		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+			continue
+		}
 		if header.FileInfo().IsDir() {
 			if err := os.MkdirAll(targetPath, header.FileInfo().Mode()); err != nil {
 				return err
@@ -739,8 +758,20 @@ func extractZipArchive(zipPath, destDir string) error {
 	}
 	defer r.Close()
 
+	destDirClean := filepath.Clean(destDir)
+
 	for _, f := range r.File {
-		targetPath := filepath.Join(destDir, f.Name)
+		cleanName := filepath.Clean(f.Name)
+		if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
+			continue
+		}
+
+		targetPath := filepath.Join(destDirClean, cleanName)
+		rel, err := filepath.Rel(destDirClean, targetPath)
+		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+			continue
+		}
+
 		if f.FileInfo().IsDir() {
 			_ = os.MkdirAll(targetPath, f.Mode())
 			continue

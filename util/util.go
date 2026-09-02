@@ -278,6 +278,8 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 		return err
 	}
 
+	destDirClean := filepath.Clean(destDir)
+
 	switch format {
 	case "tar.bz2":
 		bzip2Reader := bzip2.NewReader(resp.Body)
@@ -290,13 +292,29 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 			if err != nil {
 				return err
 			}
-			targetPath := filepath.Join(destDir, header.Name)
+
+			cleanName := filepath.Clean(header.Name)
+			if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
+				continue
+			}
+
+			targetPath := filepath.Join(destDirClean, cleanName)
+			rel, err := filepath.Rel(destDirClean, targetPath)
+			if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+				continue
+			}
+
 			if header.FileInfo().IsDir() {
 				if err := os.MkdirAll(targetPath, header.FileInfo().Mode()); err != nil {
 					return err
 				}
 				continue
 			}
+
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return err
+			}
+
 			file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, header.FileInfo().Mode())
 			if err != nil {
 				return err
@@ -309,13 +327,13 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 		}
 
 		// After extraction, check if there's a single top-level directory and move its contents up
-		entries, err := os.ReadDir(destDir)
+		entries, err := os.ReadDir(destDirClean)
 		if err != nil {
 			return fmt.Errorf("failed to read destination directory after tar.bz2 extraction: %w", err)
 		}
 
 		if len(entries) == 1 && entries[0].IsDir() {
-			nestedDirPath := filepath.Join(destDir, entries[0].Name())
+			nestedDirPath := filepath.Join(destDirClean, entries[0].Name())
 			slog.Info("Found single nested directory, moving contents up", "nestedDir", nestedDirPath)
 
 			nestedEntries, err := os.ReadDir(nestedDirPath)
@@ -325,7 +343,7 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 
 			for _, entry := range nestedEntries {
 				oldPath := filepath.Join(nestedDirPath, entry.Name())
-				newPath := filepath.Join(destDir, entry.Name())
+				newPath := filepath.Join(destDirClean, entry.Name())
 				if err := os.Rename(oldPath, newPath); err != nil {
 					return fmt.Errorf("failed to move '%s' to '%s': %w", oldPath, newPath, err)
 				}
@@ -336,26 +354,37 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 		}
 
 	case "7z":
-		tempFile := filepath.Join(os.TempDir(), "temp.7z")
-		outFile, err := os.Create(tempFile)
+		tempFile, err := os.CreateTemp("", "gamux-extract-*.7z")
 		if err != nil {
-			return err
+			return fmt.Errorf("create temp 7z file: %w", err)
 		}
-		if _, err := io.Copy(outFile, resp.Body); err != nil {
-			outFile.Close()
-			return err
-		}
-		outFile.Close()
-		defer os.Remove(tempFile)
+		tempFilePath := tempFile.Name()
+		defer os.Remove(tempFilePath)
 
-		r, err := sevenzip.OpenReader(tempFile)
+		if _, err := io.Copy(tempFile, resp.Body); err != nil {
+			tempFile.Close()
+			return err
+		}
+		tempFile.Close()
+
+		r, err := sevenzip.OpenReader(tempFilePath)
 		if err != nil {
 			return fmt.Errorf("failed to open 7z archive: %w", err)
 		}
 		defer r.Close()
 
 		for _, f := range r.File {
-			targetPath := filepath.Join(destDir, f.Name)
+			cleanName := filepath.Clean(f.Name)
+			if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
+				continue
+			}
+
+			targetPath := filepath.Join(destDirClean, cleanName)
+			rel, err := filepath.Rel(destDirClean, targetPath)
+			if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+				continue
+			}
+
 			if f.FileInfo().IsDir() {
 				if err := os.MkdirAll(targetPath, f.Mode()); err != nil {
 					return err
@@ -388,14 +417,14 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 		}
 
 		// Move contents of 'release' subdirectory up
-		releasePath := filepath.Join(destDir, "release")
+		releasePath := filepath.Join(destDirClean, "release")
 		if _, err := os.Stat(releasePath); err == nil {
 			entries, err := os.ReadDir(releasePath)
 			if err != nil {
 				return err
 			}
 			for _, entry := range entries {
-				if err := os.Rename(filepath.Join(releasePath, entry.Name()), filepath.Join(destDir, entry.Name())); err != nil {
+				if err := os.Rename(filepath.Join(releasePath, entry.Name()), filepath.Join(destDirClean, entry.Name())); err != nil {
 					return err
 				}
 			}

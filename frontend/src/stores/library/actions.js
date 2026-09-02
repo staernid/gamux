@@ -32,7 +32,7 @@ export async function scanLibrary(pathOverride = '') {
       if (current && normalized.some(g => isSamePath(g.gameDir, current.gameDir))) {
         return normalized.find(g => isSamePath(g.gameDir, current.gameDir));
       }
-      return normalized.length > 0 ? normalized[Math.floor(normalized.length / 2)] : null;
+      return normalized.length > 0 ? normalized[0] : null;
     });
   } catch (err) {
     notificationStore.error('Scan Failed', err);

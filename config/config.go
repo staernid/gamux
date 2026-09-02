@@ -31,13 +31,11 @@ type Config struct {
 	// Operational Settings
 	OperatingMode      string            `json:"operating_mode,omitempty"`
 	DefaultRunner      string            `json:"default_runner,omitempty"`
-	ProtonPath         string            `json:"proton_path,omitempty"`
 	Steamless          bool              `json:"steamless"`
 	Achievements       bool              `json:"achievements"`
 	Normalize          bool              `json:"normalize"`
 	WinePrefix         string            `json:"wine_prefix,omitempty"`
 	MangoHud           bool              `json:"mangohud,omitempty"`
-	DXVKHud            string            `json:"dxvk_hud,omitempty"`
 	TransferSpeedLimit int64             `json:"transfer_speed_limit,omitempty"`
 	GlobalEnv          map[string]string `json:"global_env,omitempty"`
 
@@ -191,39 +189,19 @@ func hydrateAPIKeys(cfg *Config) {
 	cfg.RAWGAPIKey = loadKey(cfg.RAWGAPIKey, "RAWG_API_KEY", "rawg_key.txt")
 }
 
-// SaveConfig writes a Config struct cleanly and atomically to a JSON file on disk,
-// merging updates with any existing configuration on disk to prevent accidental field deletion.
+// SaveConfig writes a Config struct cleanly and atomically to a JSON file on disk.
 func SaveConfig(cfg *Config, path string) error {
 	if cfg == nil {
 		return nil
 	}
 	path = GetConfigPath(path)
 
-	diskMap := make(map[string]any)
-	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-		_ = json.Unmarshal(data, &diskMap)
-	}
-
-	incomingBytes, err := json.Marshal(cfg)
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal incoming config: %w", err)
+		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	var incomingMap map[string]any
-	if err := json.Unmarshal(incomingBytes, &incomingMap); err != nil {
-		return fmt.Errorf("unmarshal incoming config map: %w", err)
-	}
-
-	for k, v := range incomingMap {
-		diskMap[k] = v
-	}
-
-	mergedData, err := json.MarshalIndent(diskMap, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal merged config: %w", err)
-	}
-
-	return util.WriteFileAtomic(path, mergedData, 0644)
+	return util.WriteFileAtomic(path, data, 0644)
 }
 
 // UpdateConfig loads the existing configuration from disk (or uses DefaultConfig if non-existent),

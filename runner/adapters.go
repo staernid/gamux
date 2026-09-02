@@ -91,9 +91,6 @@ func (r *ProtonRunner) Available(ctx context.Context, cfg *config.Config) bool {
 	if _, err := exec.LookPath("proton"); err == nil {
 		return true
 	}
-	if cfg != nil && cfg.ProtonPath != "" {
-		return util.FileExists(filepath.Join(cfg.ProtonPath, "proton"))
-	}
 	return false
 }
 
@@ -105,15 +102,10 @@ func (r *ProtonRunner) BuildArgs(ctx context.Context, cfg *config.Config, target
 			if util.FileExists(customProton) {
 				protonBin = customProton
 			}
-		} else if cfg != nil && cfg.ProtonPath != "" {
-			customProton := filepath.Join(cfg.ProtonPath, "proton")
-			if util.FileExists(customProton) {
-				protonBin = customProton
-			}
 		}
 	}
 	if protonBin == "" {
-		return "", nil, fmt.Errorf("proton binary not found in PATH or configured proton path")
+		return "", nil, fmt.Errorf("proton binary not found in PATH or launch options")
 	}
 	return protonBin, append([]string{"run", targetExe}, exeArgs...), nil
 }

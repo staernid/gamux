@@ -84,7 +84,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	// Guard against scanning runner prefix roots or system folders as games
 	hasProfile := util.FileExists(filepath.Join(absPath, ".gamux", "launch_profile.json")) ||
 		util.FileExists(filepath.Join(absPath, "steam_settings", "launch_profile.json"))
-	if isRunnerPrefixDir(absPath) && !hasProfile {
+	if IsRunnerPrefixDir(absPath) && !hasProfile {
 		return nil, fmt.Errorf("path %s is a runner/wine prefix directory, not a game", absPath)
 	}
 
@@ -398,9 +398,12 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 
 	// 8. Executable detection & scoring
 	sort.SliceStable(state.candidateExes, func(i, j int) bool {
-		scoreI := scoreExecutable(state.candidateExes[i], info.GameDir, info.Name)
-		scoreJ := scoreExecutable(state.candidateExes[j], info.GameDir, info.Name)
-		return scoreI > scoreJ
+		scoreI := ScoreExecutable(state.candidateExes[i], info.GameDir, info.Name)
+		scoreJ := ScoreExecutable(state.candidateExes[j], info.GameDir, info.Name)
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
+		}
+		return state.candidateExes[i] < state.candidateExes[j]
 	})
 
 	seenExes := make(map[string]bool)
@@ -440,6 +443,23 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		info.LaunchProfile = profile
 		if profile.SourceOverride != "" {
 			info.Source = profile.SourceOverride
+		} else if profile.Store != "" && (info.Source == "" || info.Source == domain.SourceStandalone) {
+			switch strings.ToLower(profile.Store) {
+			case "steam":
+				info.Source = domain.SourceSteam
+				info.Store = domain.StoreSteam
+			case "gog":
+				info.Source = domain.SourceGOG
+				info.Store = domain.StoreGOG
+			case "epic":
+				info.Source = domain.SourceEpic
+				info.Store = domain.StoreEpic
+			case "itch":
+				info.Source = domain.SourceItch
+				info.Store = domain.StoreItch
+			default:
+				info.Store = profile.Store
+			}
 		}
 		if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(info.Source)) {
 			info.Store = profile.Store
@@ -455,10 +475,18 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 				info.ExternalIDs.RAWGID = profile.MetadataID
 			}
 		}
-		if launchProfileExists && profile.StoreAppID != "" {
-			info.AppID = profile.StoreAppID
-			info.NumericAppID, _ = util.ParseAppID(profile.StoreAppID)
-			info.ExternalIDs.SteamAppID = info.NumericAppID
+		if launchProfileExists {
+			appID := strings.TrimSpace(profile.StoreAppID)
+			if appID == "" {
+				appID = strings.TrimSpace(profile.AppID)
+			}
+			if appID != "" {
+				info.AppID = appID
+				info.NumericAppID, _ = util.ParseAppID(appID)
+				if info.NumericAppID > 0 {
+					info.ExternalIDs.SteamAppID = info.NumericAppID
+				}
+			}
 		}
 		if profile.GOGID != "" {
 			info.ExternalIDs.GOGID = profile.GOGID
@@ -524,7 +552,8 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	return info, nil
 }
 
-func scoreExecutable(exePath string, gameDir string, gameName string) int {
+// ScoreExecutable calculates a heuristic score evaluating how likely exePath is the primary game binary.
+func ScoreExecutable(exePath string, gameDir string, gameName string) int {
 	base := filepath.Base(exePath)
 	lowerBase := strings.ToLower(base)
 	baseNoExt := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
@@ -576,7 +605,8 @@ func scoreExecutable(exePath string, gameDir string, gameName string) int {
 	return score
 }
 
-func isRunnerPrefixDir(path string) bool {
+// IsRunnerPrefixDir returns true if a directory structure matches Wine/Proton/UMU prefix conventions.
+func IsRunnerPrefixDir(path string) bool {
 	baseLower := strings.ToLower(filepath.Base(path))
 	if baseLower == "umu" || baseLower == "umu-default" || baseLower == "wine" || baseLower == "proton" || baseLower == "pfx" || baseLower == "prefix" || baseLower == "prefixes" {
 		return true

@@ -98,19 +98,19 @@
     {/if}
     <!-- Ambient Radial Color Glow (Top Left) -->
     <div
-      class="absolute -top-20 -left-20 w-[600px] h-[350px] rounded-full opacity-25 filter blur-3xl pointer-events-none"
-      style="background-color: {pColors.glow || 'rgba(26,159,255,0.4)'};"
+      class="absolute -top-20 -left-20 w-[600px] h-[350px] rounded-full opacity-20 filter blur-3xl pointer-events-none"
+      style="background-color: {pColors.glow || 'rgba(255,255,255,0.05)'};"
     ></div>
     <!-- Ambient Secondary Glow (Bottom Right) -->
     <div
-      class="absolute -bottom-10 right-10 w-[450px] h-[250px] rounded-full opacity-15 filter blur-3xl pointer-events-none"
-      style="background-color: {pColors.border || '#1a9fff'};"
+      class="absolute -bottom-10 right-10 w-[450px] h-[250px] rounded-full opacity-10 filter blur-3xl pointer-events-none"
+      style="background-color: {pColors.border || 'rgba(255,255,255,0.03)'};"
     ></div>
   </div>
 
   <!-- Ambient Vignette & Gradient Overlays -->
-  <div class="absolute inset-0 bg-gradient-to-t from-[#09090c] via-[#09090c]/50 to-transparent"></div>
-  <div class="absolute inset-0 bg-gradient-to-r from-[#09090c]/80 via-transparent to-[#09090c]/60"></div>
+  <div class="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/50 to-transparent"></div>
+  <div class="absolute inset-0 bg-gradient-to-r from-[#09090b]/80 via-transparent to-[#09090b]/60"></div>
   <div class="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent pointer-events-none"></div>
 
   <!-- Top Nav Breadcrumb -->
@@ -118,12 +118,12 @@
     <button
       type="button"
       on:click={handleReturnToShelf}
-      class="flex items-center space-x-2 bg-[#12121a]/80 hover:bg-[#1e1e2c] border border-[#27273a] text-slate-300 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-lg backdrop-blur-md group cursor-pointer"
+      class="flex items-center space-x-2 bg-[#121214]/90 hover:bg-[#18181b] border border-[#27272a] text-neutral-300 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-lg backdrop-blur-md group cursor-pointer"
       title="Back to Shelf (Esc / B)"
     >
-      <span class="text-slate-400 group-hover:text-cyan-400 transition-colors">←</span>
+      <span class="text-neutral-400 group-hover:text-white transition-colors">←</span>
       <span>Shelf</span>
-      <span class="text-[10px] text-slate-500 font-mono px-1 py-0.2 rounded bg-black/40 border border-[#2c2c3e]">B / Esc</span>
+      <span class="text-3xs text-neutral-400 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-[#27272a]">B / Esc</span>
     </button>
   </div>
 
@@ -195,25 +195,25 @@
             </h1>
           {/if}
 
-          <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-400 font-mono">
+          <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-neutral-400 font-mono">
             {#if isInstalled && game.diskSizeBytes > 0}
               <span>{formatBytes(game.diskSizeBytes)}</span>
-              <span class="text-slate-600">·</span>
+              <span class="text-neutral-600">·</span>
             {:else if isStub}
-              <span class="text-purple-400 font-bold">In Library (Uninstalled)</span>
-              <span class="text-slate-600">·</span>
+              <span class="text-neutral-300 font-bold">In Library (Uninstalled)</span>
+              <span class="text-neutral-600">·</span>
             {:else if isVirtual}
-              <span class="text-cyan-400 font-bold">Online Store Title</span>
-              <span class="text-slate-600">·</span>
+              <span class="text-neutral-300 font-bold">Online Store Title</span>
+              <span class="text-neutral-600">·</span>
             {/if}
             <span class="truncate max-w-sm">{game.runner || globalCfg?.default_runner || 'UMU'}</span>
             {#if isInstalled && !game.isReady}
-              <span class="text-slate-600">·</span>
+              <span class="text-neutral-600">·</span>
               <span class="text-amber-400">Setup Required</span>
             {/if}
             {#if game.playtimeSeconds > 0}
-              <span class="text-slate-600">·</span>
-              <span class="text-sky-300 font-bold flex items-center gap-1.5">
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-200 font-bold flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -221,16 +221,16 @@
               </span>
             {/if}
             {#if game.lastPlayed > 0}
-              <span class="text-slate-600">·</span>
-              <span class="text-slate-400">Played {formatLastPlayed(game.lastPlayed)}</span>
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-400">Played {formatLastPlayed(game.lastPlayed)}</span>
             {/if}
             {#if game.installedAt > 0}
-              <span class="text-slate-600">·</span>
-              <span class="text-slate-400">Installed {formatInstallDate(game.installedAt)}</span>
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-400">Installed {formatInstallDate(game.installedAt)}</span>
             {/if}
             {#if game.appId && game.appId !== '0'}
-              <span class="text-slate-600">·</span>
-              <span class="text-slate-500">#{game.appId}</span>
+              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">#{game.appId}</span>
             {/if}
           </div>
         </div>
@@ -242,10 +242,10 @@
           <button
             type="button"
             on:click={() => dispatch('addToLibrary')}
-            class="px-4 py-3 rounded-2xl font-bold text-xs bg-[#181826] hover:bg-[#242436] border border-[#2e2e46] text-slate-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
+            class="px-4 py-3 rounded-2xl font-bold text-xs bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
             title="Add skeleton metadata stub to your library without downloading files"
           >
-            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
             <span>Add to Library</span>
@@ -256,10 +256,10 @@
           type="button"
           on:click={handlePrimaryAction}
           disabled={isTaskActive}
-          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-[#1e1e2c] border border-cyan-500/50 text-cyan-300 shadow-cyan-950/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : !isInstalled ? 'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 shadow-cyan-500/30' : isReady ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/30'}"
+          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-[#18181b] border border-neutral-700 text-neutral-300 shadow-neutral-900/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : 'bg-white hover:bg-neutral-200 text-neutral-950 shadow-xl'}"
         >
           {#if isTaskActive}
-            <svg class="animate-spin w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
             </svg>
@@ -288,11 +288,11 @@
           <button
             type="button"
             on:click={handleOpenDirectory}
-            class="p-3 rounded-2xl bg-[#14141e]/90 hover:bg-[#1f1f2e] border border-[#2b2b3e] text-slate-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
+            class="p-3 rounded-2xl bg-[#121214]/90 hover:bg-[#18181b] border border-[#27272a] text-neutral-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
             title="Open Directory in File Manager (Y)"
           >
-            <svg class="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            <svg class="w-5 h-5 text-neutral-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
         {/if}
@@ -300,4 +300,3 @@
     </div>
   {/if}
 </div>
-

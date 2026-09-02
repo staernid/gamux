@@ -137,6 +137,7 @@ type BatchLibraryOperation struct {
 	TaskType    tasks.TaskType
 	ScanLabel   string // e.g. "Scanning games for missing achievement data..."
 	DoneLabel   string // e.g. "Processed %d games (%d updated)" — must contain two %d verbs
+	Metadata    map[string]string
 	Action      BatchLibraryAction
 }
 
@@ -145,6 +146,7 @@ func (op *BatchLibraryOperation) TaskSpec() tasks.TaskSpec {
 		Type:         op.TaskType,
 		Title:        op.BatchTitle,
 		Capabilities: tasks.CapCancellable,
+		Metadata:     op.Metadata,
 	}
 }
 

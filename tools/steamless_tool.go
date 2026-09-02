@@ -50,6 +50,7 @@ func (s *SteamlessTool) Status(ctx context.Context) (*ToolStatus, error) {
 		ReleaseURL:    info.ReleaseURL,
 		PublishedAt:   info.PublishedAt,
 		HasUpdate:     info.HasUpdate,
+		IsInstalled:   info.IsInstalled,
 	}, nil
 }
 

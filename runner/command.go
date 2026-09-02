@@ -75,7 +75,7 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 
 	// 2. Candidate Discovery Fallback: if ExePath is still empty, scan GameDir
 	if res.ExePath == "" && res.GameDir != "" {
-		if cand := findCandidateExecutable(res.GameDir); cand != "" {
+		if cand := findCandidateExecutable(res.GameDir, res.Name); cand != "" {
 			res.ExePath = cand
 		}
 	}
@@ -118,15 +118,9 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 	if res.MangoHud == nil && cfg.MangoHud {
 		res.MangoHud = util.Ptr(cfg.MangoHud)
 	}
-	if res.DXVKHud == "" && cfg.DXVKHud != "" {
-		res.DXVKHud = cfg.DXVKHud
-	}
 
 	if res.WorkingDir == "" && res.GameDir != "" {
 		res.WorkingDir = res.GameDir
-	}
-	if res.ProtonPath == "" && cfg.ProtonPath != "" {
-		res.ProtonPath = cfg.ProtonPath
 	}
 
 	// Merge Environment Variables (Global < Custom Profile)

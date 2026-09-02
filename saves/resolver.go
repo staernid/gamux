@@ -366,7 +366,7 @@ func caseInsensitiveResolve(targetPath string) string {
 		curr = "."
 	}
 
-	for _, part := range parts {
+	for i, part := range parts {
 		if part == "" || part == "/" {
 			continue
 		}
@@ -383,7 +383,13 @@ func caseInsensitiveResolve(targetPath string) string {
 
 		entries, err := os.ReadDir(curr)
 		if err != nil {
-			return targetPath
+			// Intermediate dir does not exist; append remaining parts preserving case corrections made so far
+			for j := i; j < len(parts); j++ {
+				if parts[j] != "" && parts[j] != "/" {
+					curr = filepath.Join(curr, parts[j])
+				}
+			}
+			return curr
 		}
 
 		matched := false

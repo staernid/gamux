@@ -467,5 +467,41 @@ func TestDetect_UnrelatedDirectoryNameRejectsSteamSearch(t *testing.T) {
 	}
 }
 
+func TestDetect_LaunchProfileStub(t *testing.T) {
+	tmpDir := t.TempDir()
+	stubDir := filepath.Join(tmpDir, "Cult of the Lamb")
+	if err := os.MkdirAll(filepath.Join(stubDir, ".gamux"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
+	profileJSON := `{
+		"game_dir": "` + stubDir + `",
+		"app_id": "1313140",
+		"name": "Cult of the Lamb",
+		"store": "steam",
+		"metadata_provider": "steam",
+		"metadata_id": "1313140"
+	}`
+	if err := os.WriteFile(filepath.Join(stubDir, ".gamux", "launch_profile.json"), []byte(profileJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := Detect(context.Background(), stubDir)
+	if err != nil {
+		t.Fatalf("Detect failed on stub: %v", err)
+	}
+
+	if info.AppID != "1313140" {
+		t.Errorf("expected AppID '1313140', got %q", info.AppID)
+	}
+	if info.NumericAppID != 1313140 {
+		t.Errorf("expected NumericAppID 1313140, got %d", info.NumericAppID)
+	}
+	if info.Store != "Steam" {
+		t.Errorf("expected Store 'Steam', got %q", info.Store)
+	}
+	if info.Source != "Steam" {
+		t.Errorf("expected Source 'Steam', got %q", info.Source)
+	}
+}
 

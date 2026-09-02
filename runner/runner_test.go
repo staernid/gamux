@@ -22,7 +22,6 @@ func TestResolveEffectiveOptions(t *testing.T) {
 		DefaultRunner: RunnerUMU,
 		WinePrefix:    "~/.wine",
 		MangoHud:      true,
-		DXVKHud:       "fps",
 	}
 
 	opts := LaunchOptions{
@@ -41,9 +40,6 @@ func TestResolveEffectiveOptions(t *testing.T) {
 	}
 	if resolved.MangoHud == nil || !*resolved.MangoHud {
 		t.Errorf("expected MangoHud to be true")
-	}
-	if resolved.DXVKHud != "fps" {
-		t.Errorf("expected DXVKHud 'fps', got %s", resolved.DXVKHud)
 	}
 	if resolved.WorkingDir != "/tmp/game" {
 		t.Errorf("expected WorkingDir '/tmp/game', got %s", resolved.WorkingDir)
@@ -1398,6 +1394,88 @@ func TestManager_Stop_GracefulExit(t *testing.T) {
 		t.Errorf("expected game to be stopped in manager")
 	}
 }
+
+func TestFindCandidateExecutable_ScoringAndFiltering(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "HadesGame")
+	_ = os.MkdirAll(filepath.Join(gameDir, "bin", "x64"), 0755)
+
+	// Create non-executable text files
+	_ = os.WriteFile(filepath.Join(gameDir, "README"), []byte("readme content"), 0644)
+	_ = os.WriteFile(filepath.Join(gameDir, "LICENSE"), []byte("license content"), 0644)
+
+	// Create crash handlers / installers (should be ignored)
+	_ = os.WriteFile(filepath.Join(gameDir, "UnityCrashHandler64.exe"), []byte("crash handler"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "unins000.exe"), []byte("uninstaller"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "dxsetup.exe"), []byte("setup"), 0755)
+
+	// Create a secondary utility and the main game binary
+	_ = os.WriteFile(filepath.Join(gameDir, "CrashDumper.exe"), []byte("crash dumper"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "ConfigTool.exe"), []byte("config tool"), 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "bin", "x64", "Hades.exe"), []byte("main game"), 0755)
+
+	cand := findCandidateExecutable(gameDir, "Hades")
+	expected := filepath.Join(gameDir, "bin", "x64", "Hades.exe")
+	if cand != expected {
+		t.Errorf("expected %s as top candidate, got %s", expected, cand)
+	}
+}
+
+func TestFindCandidateExecutable_LinuxPermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "MyLinuxGame")
+	_ = os.MkdirAll(gameDir, 0755)
+
+	// Create non-executable file
+	_ = os.WriteFile(filepath.Join(gameDir, "INSTALL"), []byte("install guide"), 0644)
+	// Create executable script
+	_ = os.WriteFile(filepath.Join(gameDir, "start.sh"), []byte("#!/bin/sh\n"), 0755)
+
+	cand := findCandidateExecutable(gameDir, "MyLinuxGame")
+	expected := filepath.Join(gameDir, "start.sh")
+	if cand != expected {
+		t.Errorf("expected %s, got %s", expected, cand)
+	}
+}
+
+func TestManager_StopProcessGroupWithReapedParent(t *testing.T) {
+	tmpDir := t.TempDir()
+	wrapperScript := filepath.Join(tmpDir, "wrapper.sh")
+	// Wrapper script starts a background sleep in the same process group and immediately exits
+	_ = os.WriteFile(wrapperScript, []byte("#!/bin/sh\nsleep 30 &\nexit 0\n"), 0755)
+
+	mgr := NewManager()
+	cfg := config.DefaultConfig()
+	opts := LaunchOptions{
+		GameDir:  tmpDir,
+		ExePath:  wrapperScript,
+		Platform: "linux",
+		Runner:   RunnerLinux,
+	}
+
+	cmd, err := mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("mgr.Start failed: %v", err)
+	}
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd")
+	}
+
+	// Give the wrapper script a moment to exit and leave orphan child in pgid
+	time.Sleep(100 * time.Millisecond)
+
+	// Now call Stop on the gameDir
+	if err := mgr.Stop(tmpDir); err != nil {
+		t.Fatalf("mgr.Stop failed: %v", err)
+	}
+
+	// Verify manager is no longer tracking after stop
+	time.Sleep(100 * time.Millisecond)
+	if mgr.IsRunning(tmpDir) {
+		t.Errorf("expected game to be stopped in manager")
+	}
+}
+
 
 
 

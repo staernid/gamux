@@ -1,20 +1,35 @@
 package manifest
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
-
 
 	"github.com/staernid/gamux/util/testutil"
 )
 
 func TestMain(m *testing.M) {
 	restore := testutil.SilenceLogging()
+	oldClient := DefaultHTTPClient
+	DefaultHTTPClient = &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("not found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	HTTPClient = DefaultHTTPClient
 	code := m.Run()
+	DefaultHTTPClient = oldClient
+	HTTPClient = oldClient
 	restore()
 	os.Exit(code)
 }

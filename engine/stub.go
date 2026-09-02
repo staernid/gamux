@@ -47,13 +47,14 @@ func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name,
 	profile := &domain.LaunchProfile{
 		GameDir:          gameDir,
 		AppID:            strings.TrimSpace(appID),
+		StoreAppID:       strings.TrimSpace(appID),
 		Name:             cleanName,
 		Store:            storeLower,
 		MetadataProvider: storeLower,
 		MetadataID:       strings.TrimSpace(appID),
 	}
 
-	if err := compat.SaveProfile(profile); err != nil {
+	if err := compat.SaveProfileDirect(profile); err != nil {
 		return nil, fmt.Errorf("save stub profile: %w", err)
 	}
 

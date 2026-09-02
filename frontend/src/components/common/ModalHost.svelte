@@ -4,6 +4,7 @@
 
   import SearchGridModal from '../stage/SearchGridModal.svelte';
   import MetadataArtworkModal from '../stage/MetadataArtworkModal.svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
 
   async function handleUpdated(e) {
     const gameDir = $modalStore?.props?.game?.gameDir || $selectedGame?.gameDir;
@@ -45,6 +46,11 @@
       initialTab="metadata"
       {...$modalStore.props}
       on:updated={handleUpdated}
+      on:close={handleClose}
+    />
+  {:else if $modalStore.type === 'confirm'}
+    <ConfirmModal
+      {...$modalStore.props}
       on:close={handleClose}
     />
   {/if}

@@ -249,6 +249,7 @@ func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error
 			TaskType:    tasks.TypeCustom,
 			ScanLabel:   "Scanning games for missing achievement data...",
 			DoneLabel:   "Processed %d games (downloaded data for %d)",
+			Metadata:    map[string]string{"batch_kind": "achievements"},
 			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
 				if game.AppID == "" || game.AppID == "0" || strings.EqualFold(game.AppID, "custom") {
 					return false, nil
@@ -277,9 +278,40 @@ func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error
 			TaskType:    tasks.TypeCustom,
 			ScanLabel:   "Scanning games for missing poster, hero, and banner artwork...",
 			DoneLabel:   "Artwork refresh completed for %d games (%d updated)",
+			Metadata:    map[string]string{"batch_kind": "artwork"},
 			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
 				art, _ := eng.ResolveArtwork(ctx, game)
 				return art != nil, nil
+			},
+		}, nil
+
+	case "apply", "setup":
+		return &BatchLibraryOperation{
+			Engine:      eng,
+			LibraryDirs: dirs,
+			BatchTitle:  "Batch Apply DRM & Emulator Setup",
+			TaskType:    tasks.TypeApply,
+			ScanLabel:   "Scanning games for unpatched titles...",
+			DoneLabel:   "Setup completed for %d games (%d patched)",
+			Metadata:    map[string]string{"batch_kind": "apply"},
+			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
+				if game.IsPatched {
+					return false, nil
+				}
+				opts := ProcessOptions{
+					Path:          game.GameDir,
+					OperatingMode: domain.ModeLoader,
+					AutoYes:       true,
+					Reporter:      ctrl,
+				}
+				if eng.Config != nil && !eng.Config.Steamless {
+					opts.NoSteamless = true
+				}
+				res, err := eng.ProcessGame(ctx, opts)
+				if err != nil {
+					return false, err
+				}
+				return res != nil && res.Patched, nil
 			},
 		}, nil
 
@@ -291,6 +323,7 @@ func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error
 			TaskType:    tasks.TypeNormalize,
 			ScanLabel:   "Scanning game directories for standard naming...",
 			DoneLabel:   "Normalization finished for %d games (%d directories renamed)",
+			Metadata:    map[string]string{"batch_kind": "normalize"},
 			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
 				opts := ProcessOptions{
 					Path:          game.GameDir,
@@ -316,6 +349,7 @@ func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error
 			TaskType:    tasks.TypeVerify,
 			ScanLabel:   "Scanning games for depot manifests...",
 			DoneLabel:   "Integrity check finished for %d games (%d verified)",
+			Metadata:    map[string]string{"batch_kind": "verify"},
 			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
 				rep, err := eng.VerifyIntegrity(ctx, game.GameDir)
 				if err != nil {
