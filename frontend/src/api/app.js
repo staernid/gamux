@@ -37,6 +37,29 @@ const DEFAULT_MOCKS = {
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
   isGameRunning: () => false,
+  getMultiseatCapabilities: () => ({
+    has_bwrap: true,
+    has_pasta: true,
+    has_gamescope: true,
+    has_cage: true,
+    has_sunshine: true,
+    has_pipewire: true
+  }),
+  getConnectedGamepads: () => ([
+    { dev_node: '/dev/input/event2', name: 'Xbox Wireless Controller', id: 'event2', is_gamepad: true },
+    { dev_node: '/dev/input/event3', name: 'DualSense Wireless Controller', id: 'event3', is_gamepad: true }
+  ]),
+  getConnectedKeyboards: () => ([
+    { dev_node: '/dev/input/event4', name: 'Keychron K2 Mechanical Keyboard', id: 'event4', is_keyboard: true }
+  ]),
+  getConnectedMice: () => ([
+    { dev_node: '/dev/input/event1', name: 'Logitech USB Optical Mouse', id: 'event1', is_mouse: true }
+  ]),
+  launchMultiseatSession: () => Promise.resolve(),
+  stopMultiseatSession: () => Promise.resolve(),
+  stopMultiseatSeat: () => Promise.resolve(),
+  getMultiseatSessionStatus: () => ({ is_running: false }),
+  isMultiseatSessionRunning: () => false,
   submitBatchLibraryOp: (kind) => Promise.resolve(`task_batch_${kind}_1`),
   getGameLog: (path) => Promise.resolve(`=== Gamux Launch Log ===\nTime: Tue, 25 Aug 2026 20:30:00 CEST\nGame: Mock Game Title\nPlatform: win64\nMode: standalone\nRunner: umu\nExecutable: /mock/game.exe\nWorkingDir: /mock\nCommand: umu-run /mock/game.exe\n========================\n\n[umu-run] Initializing Proton prefix...\n[Proton] Game process started successfully (PID: 12345)\n[DXVK] Found Vulkan 1.3 driver\n[Audio] PulseAudio sink connected\n`),
   getGameAchievements: (path) => Promise.resolve([

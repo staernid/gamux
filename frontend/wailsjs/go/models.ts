@@ -1,5 +1,63 @@
 export namespace config {
 	
+	export class MultiseatConfig {
+	    player2_account_name?: string;
+	    player2_account_steamid?: string;
+	    player2_language?: string;
+	    player2_ip_country?: string;
+	    player2_wine_prefix?: string;
+	    default_seat1_mode?: string;
+	    default_seat2_mode?: string;
+	    default_layout?: string;
+	    broadcast_relay_enabled: boolean;
+	    seat1_gamepad?: string;
+	    seat2_gamepad?: string;
+	    seat1_keyboard?: string;
+	    seat2_keyboard?: string;
+	    seat1_mouse?: string;
+	    seat2_mouse?: string;
+	    seat2_force_grab_cursor?: boolean;
+	    seat2_grab_keyboard?: boolean;
+	    seat2_compositor?: string;
+	    seat2_nest_cage?: boolean;
+	    seat2_show_cursor?: boolean;
+	    seat1_display_index?: number;
+	    seat2_display_index?: number;
+	    sunshine_port_p1?: number;
+	    sunshine_port_p2?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiseatConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.player2_account_name = source["player2_account_name"];
+	        this.player2_account_steamid = source["player2_account_steamid"];
+	        this.player2_language = source["player2_language"];
+	        this.player2_ip_country = source["player2_ip_country"];
+	        this.player2_wine_prefix = source["player2_wine_prefix"];
+	        this.default_seat1_mode = source["default_seat1_mode"];
+	        this.default_seat2_mode = source["default_seat2_mode"];
+	        this.default_layout = source["default_layout"];
+	        this.broadcast_relay_enabled = source["broadcast_relay_enabled"];
+	        this.seat1_gamepad = source["seat1_gamepad"];
+	        this.seat2_gamepad = source["seat2_gamepad"];
+	        this.seat1_keyboard = source["seat1_keyboard"];
+	        this.seat2_keyboard = source["seat2_keyboard"];
+	        this.seat1_mouse = source["seat1_mouse"];
+	        this.seat2_mouse = source["seat2_mouse"];
+	        this.seat2_force_grab_cursor = source["seat2_force_grab_cursor"];
+	        this.seat2_grab_keyboard = source["seat2_grab_keyboard"];
+	        this.seat2_compositor = source["seat2_compositor"];
+	        this.seat2_nest_cage = source["seat2_nest_cage"];
+	        this.seat2_show_cursor = source["seat2_show_cursor"];
+	        this.seat1_display_index = source["seat1_display_index"];
+	        this.seat2_display_index = source["seat2_display_index"];
+	        this.sunshine_port_p1 = source["sunshine_port_p1"];
+	        this.sunshine_port_p2 = source["sunshine_port_p2"];
+	    }
+	}
 	export class Config {
 	    library_paths?: string[];
 	    gbe_dir?: string;
@@ -20,6 +78,10 @@ export namespace config {
 	    normalize: boolean;
 	    wine_prefix?: string;
 	    mangohud?: boolean;
+	    gamescope?: boolean;
+	    gamescope_width?: number;
+	    gamescope_height?: number;
+	    gamescope_fps?: number;
 	    transfer_speed_limit?: number;
 	    global_env?: Record<string, string>;
 	    language?: string;
@@ -29,6 +91,7 @@ export namespace config {
 	    backup_retention_count?: number;
 	    backup_dir?: string;
 	    save_manifest_url?: string;
+	    multiseat?: MultiseatConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -55,6 +118,10 @@ export namespace config {
 	        this.normalize = source["normalize"];
 	        this.wine_prefix = source["wine_prefix"];
 	        this.mangohud = source["mangohud"];
+	        this.gamescope = source["gamescope"];
+	        this.gamescope_width = source["gamescope_width"];
+	        this.gamescope_height = source["gamescope_height"];
+	        this.gamescope_fps = source["gamescope_fps"];
 	        this.transfer_speed_limit = source["transfer_speed_limit"];
 	        this.global_env = source["global_env"];
 	        this.language = source["language"];
@@ -64,7 +131,26 @@ export namespace config {
 	        this.backup_retention_count = source["backup_retention_count"];
 	        this.backup_dir = source["backup_dir"];
 	        this.save_manifest_url = source["save_manifest_url"];
+	        this.multiseat = this.convertValues(source["multiseat"], MultiseatConfig);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -214,6 +300,10 @@ export namespace domain {
 	    proton_path?: string;
 	    language?: string;
 	    mangohud?: boolean;
+	    gamescope?: boolean;
+	    gamescope_width?: number;
+	    gamescope_height?: number;
+	    gamescope_fps?: number;
 	    disable_overlay?: boolean;
 	    offline_mode?: boolean;
 	    dll_overrides?: string;
@@ -254,6 +344,10 @@ export namespace domain {
 	        this.proton_path = source["proton_path"];
 	        this.language = source["language"];
 	        this.mangohud = source["mangohud"];
+	        this.gamescope = source["gamescope"];
+	        this.gamescope_width = source["gamescope_width"];
+	        this.gamescope_height = source["gamescope_height"];
+	        this.gamescope_fps = source["gamescope_fps"];
 	        this.disable_overlay = source["disable_overlay"];
 	        this.offline_mode = source["offline_mode"];
 	        this.dll_overrides = source["dll_overrides"];
@@ -664,6 +758,280 @@ export namespace manifest {
 	        this.untracked_files = source["untracked_files"];
 	        this.redist_modified = source["redist_modified"];
 	        this.redist_missing = source["redist_missing"];
+	    }
+	}
+
+}
+
+export namespace multiseat {
+	
+	export class InputDevice {
+	    dev_node: string;
+	    sys_path: string;
+	    name: string;
+	    id: string;
+	    is_gamepad: boolean;
+	    is_keyboard: boolean;
+	    is_mouse: boolean;
+	    bus: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new InputDevice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dev_node = source["dev_node"];
+	        this.sys_path = source["sys_path"];
+	        this.name = source["name"];
+	        this.id = source["id"];
+	        this.is_gamepad = source["is_gamepad"];
+	        this.is_keyboard = source["is_keyboard"];
+	        this.is_mouse = source["is_mouse"];
+	        this.bus = source["bus"];
+	    }
+	}
+	export class PlayerProfile {
+	    account_name: string;
+	    account_steamid: string;
+	    language: string;
+	    ip_country: string;
+	    custom_env?: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlayerProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.account_name = source["account_name"];
+	        this.account_steamid = source["account_steamid"];
+	        this.language = source["language"];
+	        this.ip_country = source["ip_country"];
+	        this.custom_env = source["custom_env"];
+	    }
+	}
+	export class SeatConfig {
+	    seat_id: string;
+	    player: PlayerProfile;
+	    mode: string;
+	    display_index: number;
+	    target_width?: number;
+	    target_height?: number;
+	    target_fps?: number;
+	    window_width?: number;
+	    window_height?: number;
+	    window_x?: number;
+	    window_y?: number;
+	    gamepad_node?: string;
+	    keyboard_node?: string;
+	    mouse_node?: string;
+	    force_grab_cursor?: boolean;
+	    grab_keyboard?: boolean;
+	    exclusive_grab?: boolean;
+	    cursor_path?: string;
+	    compositor?: string;
+	    nest_cage?: boolean;
+	    show_cursor?: boolean;
+	    audio_sink?: string;
+	    physical_sink?: string;
+	    wine_prefix?: string;
+	    home_dir?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SeatConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seat_id = source["seat_id"];
+	        this.player = this.convertValues(source["player"], PlayerProfile);
+	        this.mode = source["mode"];
+	        this.display_index = source["display_index"];
+	        this.target_width = source["target_width"];
+	        this.target_height = source["target_height"];
+	        this.target_fps = source["target_fps"];
+	        this.window_width = source["window_width"];
+	        this.window_height = source["window_height"];
+	        this.window_x = source["window_x"];
+	        this.window_y = source["window_y"];
+	        this.gamepad_node = source["gamepad_node"];
+	        this.keyboard_node = source["keyboard_node"];
+	        this.mouse_node = source["mouse_node"];
+	        this.force_grab_cursor = source["force_grab_cursor"];
+	        this.grab_keyboard = source["grab_keyboard"];
+	        this.exclusive_grab = source["exclusive_grab"];
+	        this.cursor_path = source["cursor_path"];
+	        this.compositor = source["compositor"];
+	        this.nest_cage = source["nest_cage"];
+	        this.show_cursor = source["show_cursor"];
+	        this.audio_sink = source["audio_sink"];
+	        this.physical_sink = source["physical_sink"];
+	        this.wine_prefix = source["wine_prefix"];
+	        this.home_dir = source["home_dir"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MultiseatSessionConfig {
+	    game_dir: string;
+	    name: string;
+	    app_id?: string;
+	    exe_path: string;
+	    exe_args?: string;
+	    runner?: string;
+	    layout: string;
+	    seat1: SeatConfig;
+	    seat2: SeatConfig;
+	    enable_broadcast_relay: boolean;
+	    sunshine_port_p1?: number;
+	    sunshine_port_p2?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiseatSessionConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.game_dir = source["game_dir"];
+	        this.name = source["name"];
+	        this.app_id = source["app_id"];
+	        this.exe_path = source["exe_path"];
+	        this.exe_args = source["exe_args"];
+	        this.runner = source["runner"];
+	        this.layout = source["layout"];
+	        this.seat1 = this.convertValues(source["seat1"], SeatConfig);
+	        this.seat2 = this.convertValues(source["seat2"], SeatConfig);
+	        this.enable_broadcast_relay = source["enable_broadcast_relay"];
+	        this.sunshine_port_p1 = source["sunshine_port_p1"];
+	        this.sunshine_port_p2 = source["sunshine_port_p2"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SeatStatus {
+	    pid: number;
+	    mode: string;
+	    is_running: boolean;
+	    audio_sink?: string;
+	    stream_url?: string;
+	    web_ui_url?: string;
+	    gamepad_node?: string;
+	    keyboard_node?: string;
+	    mouse_node?: string;
+	    process_group?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SeatStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pid = source["pid"];
+	        this.mode = source["mode"];
+	        this.is_running = source["is_running"];
+	        this.audio_sink = source["audio_sink"];
+	        this.stream_url = source["stream_url"];
+	        this.web_ui_url = source["web_ui_url"];
+	        this.gamepad_node = source["gamepad_node"];
+	        this.keyboard_node = source["keyboard_node"];
+	        this.mouse_node = source["mouse_node"];
+	        this.process_group = source["process_group"];
+	    }
+	}
+	export class MultiseatSessionStatus {
+	    game_dir: string;
+	    is_running: boolean;
+	    seat1: SeatStatus;
+	    seat2: SeatStatus;
+	    start_time: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiseatSessionStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.game_dir = source["game_dir"];
+	        this.is_running = source["is_running"];
+	        this.seat1 = this.convertValues(source["seat1"], SeatStatus);
+	        this.seat2 = this.convertValues(source["seat2"], SeatStatus);
+	        this.start_time = source["start_time"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
+	export class SystemCapabilities {
+	    has_bwrap: boolean;
+	    has_pasta: boolean;
+	    has_gamescope: boolean;
+	    has_cage: boolean;
+	    has_sunshine: boolean;
+	    has_pipewire: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemCapabilities(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.has_bwrap = source["has_bwrap"];
+	        this.has_pasta = source["has_pasta"];
+	        this.has_gamescope = source["has_gamescope"];
+	        this.has_cage = source["has_cage"];
+	        this.has_sunshine = source["has_sunshine"];
+	        this.has_pipewire = source["has_pipewire"];
 	    }
 	}
 

@@ -4,6 +4,7 @@ import {domain} from '../models';
 import {http} from '../models';
 import {saves} from '../models';
 import {config} from '../models';
+import {multiseat} from '../models';
 import {util} from '../models';
 import {gbe} from '../models';
 import {gui} from '../models';
@@ -37,6 +38,12 @@ export function GetAvailableRunners():Promise<Array<string>>;
 
 export function GetConfig():Promise<config.Config>;
 
+export function GetConnectedGamepads():Promise<Array<multiseat.InputDevice>>;
+
+export function GetConnectedKeyboards():Promise<Array<multiseat.InputDevice>>;
+
+export function GetConnectedMice():Promise<Array<multiseat.InputDevice>>;
+
 export function GetDiskSpace(arg1:string):Promise<util.DiskSpaceInfo>;
 
 export function GetGSEUserConfig():Promise<gbe.GSEUserConfig>;
@@ -55,6 +62,10 @@ export function GetGameSaveLocations(arg1:string):Promise<saves.SaveLocationsRes
 
 export function GetLaunchProfile(arg1:string):Promise<domain.LaunchProfile>;
 
+export function GetMultiseatCapabilities():Promise<multiseat.SystemCapabilities>;
+
+export function GetMultiseatSessionStatus(arg1:string):Promise<multiseat.MultiseatSessionStatus>;
+
 export function GetPatchNote(arg1:string,arg2:number):Promise<domain.NewsItem>;
 
 export function GetTask(arg1:string):Promise<tasks.Task|boolean>;
@@ -69,7 +80,11 @@ export function InspectLibraries(arg1:Array<string>):Promise<Array<domain.Game>>
 
 export function IsGameRunning(arg1:string):Promise<boolean>;
 
+export function IsMultiseatSessionRunning(arg1:string):Promise<boolean>;
+
 export function LaunchGame(arg1:domain.LaunchProfile):Promise<void>;
+
+export function LaunchMultiseatSession(arg1:multiseat.MultiseatSessionConfig):Promise<void>;
 
 export function LinkGameMetadata(arg1:string,arg2:string,arg3:string):Promise<domain.Game>;
 
@@ -120,6 +135,10 @@ export function StartDownloadTransfer(arg1:engine.DownloadGameOptions):Promise<s
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function StopGame(arg1:string):Promise<void>;
+
+export function StopMultiseatSeat(arg1:string,arg2:string):Promise<void>;
+
+export function StopMultiseatSession(arg1:string):Promise<void>;
 
 export function SubmitApply(arg1:pipeline.Options):Promise<string>;
 

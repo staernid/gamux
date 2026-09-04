@@ -42,6 +42,45 @@ func TestEnsurePrefix(t *testing.T) {
 	}
 }
 
+func TestEnsureSeatPrefix(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	cfg := config.DefaultConfig()
+	game := domain.NewGame("Half-Life", filepath.Join(tmpDir, "Half-Life"), "70", "win64")
+
+	// 1. Seat 1 (Player 1) default prefix -> ~/Games/umu/70
+	p1Prefix, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p1", "")
+	if err != nil {
+		t.Fatalf("EnsureSeatPrefix(p1) failed: %v", err)
+	}
+	expectedP1 := filepath.Join(tmpDir, "Games", "umu", "70")
+	if p1Prefix != expectedP1 {
+		t.Errorf("expected p1 prefix %s, got %s", expectedP1, p1Prefix)
+	}
+
+	// 2. Seat 2 (Player 2) default prefix -> ~/Games/umu-p2/70
+	p2Prefix, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", "")
+	if err != nil {
+		t.Fatalf("EnsureSeatPrefix(p2) failed: %v", err)
+	}
+	expectedP2 := filepath.Join(tmpDir, "Games", "umu-p2", "70")
+	if p2Prefix != expectedP2 {
+		t.Errorf("expected p2 prefix %s, got %s", expectedP2, p2Prefix)
+	}
+
+	// 3. Seat 2 with custom configured Player2WinePrefix
+	customP2 := filepath.Join(tmpDir, "custom-p2-prefix")
+	cfg.Multiseat.Player2WinePrefix = customP2
+	p2Custom, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", "")
+	if err != nil {
+		t.Fatalf("EnsureSeatPrefix(p2 custom) failed: %v", err)
+	}
+	if p2Custom != customP2 {
+		t.Errorf("expected p2 custom prefix %s, got %s", customP2, p2Custom)
+	}
+}
+
 func TestProfilePersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "MyGame")

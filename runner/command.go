@@ -54,6 +54,18 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 			if res.MangoHud == nil && profile.MangoHud != nil {
 				res.MangoHud = profile.MangoHud
 			}
+			if res.Gamescope == nil && profile.Gamescope != nil {
+				res.Gamescope = profile.Gamescope
+			}
+			if res.GamescopeWidth <= 0 && profile.GamescopeWidth > 0 {
+				res.GamescopeWidth = profile.GamescopeWidth
+			}
+			if res.GamescopeHeight <= 0 && profile.GamescopeHeight > 0 {
+				res.GamescopeHeight = profile.GamescopeHeight
+			}
+			if res.GamescopeFPS <= 0 && profile.GamescopeFPS > 0 {
+				res.GamescopeFPS = profile.GamescopeFPS
+			}
 			if res.DisableOverlay == nil && profile.DisableOverlay != nil {
 				res.DisableOverlay = profile.DisableOverlay
 			}
@@ -120,6 +132,19 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 
 	if res.MangoHud == nil && cfg.MangoHud {
 		res.MangoHud = util.Ptr(cfg.MangoHud)
+	}
+
+	if res.Gamescope == nil && cfg.Gamescope {
+		res.Gamescope = util.Ptr(cfg.Gamescope)
+	}
+	if res.GamescopeWidth <= 0 && cfg.GamescopeWidth > 0 {
+		res.GamescopeWidth = cfg.GamescopeWidth
+	}
+	if res.GamescopeHeight <= 0 && cfg.GamescopeHeight > 0 {
+		res.GamescopeHeight = cfg.GamescopeHeight
+	}
+	if res.GamescopeFPS <= 0 && cfg.GamescopeFPS > 0 {
+		res.GamescopeFPS = cfg.GamescopeFPS
 	}
 
 	if res.DisableOverlay == nil && cfg.DisableOverlay {
@@ -262,7 +287,11 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		}
 		if resolved.Runner == RunnerUMU || resolved.Runner == RunnerAuto || resolved.Runner == "" {
 			if resolved.ProtonPath == "" {
-				gameEnv["PROTONPATH"] = "GE-Proton"
+				if latestProton := FindLatestInstalledProton(); latestProton != "" {
+					gameEnv["PROTONPATH"] = latestProton
+				} else {
+					gameEnv["PROTONPATH"] = "GE-Proton"
+				}
 			}
 			gameEnv["PROTON_VERB"] = "waitforexitandrun"
 		}
@@ -334,6 +363,30 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		}
 		if len(wrappers) > 0 {
 			finalArgs = append(wrappers, finalArgs...)
+		}
+	}
+
+	// Apply gamescope wrapper if explicitly enabled (default is off)
+	if resolved.Gamescope != nil && *resolved.Gamescope {
+		if gamescopeBin, err := exec.LookPath("gamescope"); err == nil {
+			gw := resolved.GamescopeWidth
+			gh := resolved.GamescopeHeight
+			gfps := resolved.GamescopeFPS
+			if gw <= 0 || gh <= 0 {
+				disp := util.DetectPrimaryDisplay()
+				gw = disp.Width
+				gh = disp.Height
+				if gfps <= 0 {
+					gfps = disp.RefreshRate
+				}
+			}
+			var gsArgs []string
+			gsArgs = append(gsArgs, gamescopeBin, "-w", fmt.Sprintf("%d", gw), "-h", fmt.Sprintf("%d", gh), "-W", fmt.Sprintf("%d", gw), "-H", fmt.Sprintf("%d", gh))
+			if gfps > 0 {
+				gsArgs = append(gsArgs, "-r", fmt.Sprintf("%d", gfps))
+			}
+			gsArgs = append(gsArgs, "-f", "--")
+			finalArgs = append(gsArgs, finalArgs...)
 		}
 	}
 

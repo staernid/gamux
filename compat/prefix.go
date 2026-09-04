@@ -13,26 +13,45 @@ import (
 	"github.com/staernid/gamux/util"
 )
 
-// DefaultPrefixesDir returns the base directory where isolated per-game Wine prefixes are stored.
+// DefaultPrefixesDir returns the base directory where isolated per-game Wine prefixes are stored for Player 1.
 func DefaultPrefixesDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "Games/umu"
-	}
-	return filepath.Join(home, "Games", "umu")
+	return DefaultPrefixesDirForSeat("p1")
 }
 
-// DefaultCentralUserDataDir returns the shared central directory for Syncthing user data.
+// DefaultPrefixesDirForSeat returns the base directory where isolated per-game Wine prefixes are stored
+// for a specific seat ("p1", "p2", etc.). Default ("p1" or empty) is ~/Games/umu; "p2" is ~/Games/umu-p2.
+func DefaultPrefixesDirForSeat(seatID string) string {
+	home, err := os.UserHomeDir()
+	baseName := "umu"
+	if seatID == "p2" {
+		baseName = "umu-p2"
+	}
+	if err != nil {
+		return filepath.Join("Games", baseName)
+	}
+	return filepath.Join(home, "Games", baseName)
+}
+
+// DefaultCentralUserDataDir returns the shared central directory for Syncthing user data for Player 1.
 func DefaultCentralUserDataDir(cfg *config.Config) string {
-	if cfg != nil && cfg.SteamUserdata != "" && strings.Contains(cfg.SteamUserdata, "drive_c") {
+	return DefaultCentralUserDataDirForSeat(cfg, "p1")
+}
+
+// DefaultCentralUserDataDirForSeat returns the shared central directory for user data for a seat.
+func DefaultCentralUserDataDirForSeat(cfg *config.Config, seatID string) string {
+	if seatID != "p2" && cfg != nil && cfg.SteamUserdata != "" && strings.Contains(cfg.SteamUserdata, "drive_c") {
 		return util.ExpandPath(cfg.SteamUserdata)
 	}
 
 	home, err := os.UserHomeDir()
-	if err != nil {
-		return "Games/umu/umu-default/drive_c/users/steamuser"
+	baseName := "umu"
+	if seatID == "p2" {
+		baseName = "umu-p2"
 	}
-	return filepath.Join(home, "Games", "umu", "umu-default", "drive_c", "users", "steamuser")
+	if err != nil {
+		return filepath.Join("Games", baseName, "umu-default", "drive_c", "users", "steamuser")
+	}
+	return filepath.Join(home, "Games", baseName, "umu-default", "drive_c", "users", "steamuser")
 }
 
 // ResolvePrefixIdentifier generates a deterministic, filesystem-safe identifier for a game's prefix.
@@ -61,9 +80,15 @@ func ResolvePrefixIdentifier(game *domain.Game) string {
 	return "default"
 }
 
-// EnsurePrefix resolves the effective prefix for a game, creating an isolated per-game Wine prefix
+// EnsurePrefix resolves the effective prefix for Player 1, creating an isolated per-game Wine prefix
 // and symlinking its user profile (drive_c/users/steamuser) to the central Syncthing user data directory.
 func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, customPrefix string) (string, error) {
+	return EnsureSeatPrefix(ctx, cfg, game, "p1", customPrefix)
+}
+
+// EnsureSeatPrefix resolves the effective prefix for a player seat ("p1" or "p2"), creating an isolated
+// per-game Wine prefix and symlinking its user profile (drive_c/users/steamuser) to the central user data directory.
+func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game, seatID string, customPrefix string) (string, error) {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
@@ -71,18 +96,27 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 	// 1. If explicit custom prefix is supplied, respect it directly
 	if customPrefix != "" {
 		expanded := util.ExpandPath(customPrefix)
-		return util.CanonicalPath(expanded), nil
+		p := util.CanonicalPath(expanded)
+		_ = os.MkdirAll(filepath.Join(p, "drive_c", "users"), 0755)
+		return p, nil
 	}
 
-	// 2. If global config has an explicit custom wine prefix configured (and not default), use it
-	if cfg.WinePrefix != "" {
+	// 2. If seat-specific configured prefix exists, use it
+	if seatID == "p2" && cfg.Multiseat.Player2WinePrefix != "" {
+		expanded := util.ExpandPath(cfg.Multiseat.Player2WinePrefix)
+		p := util.CanonicalPath(expanded)
+		_ = os.MkdirAll(filepath.Join(p, "drive_c", "users"), 0755)
+		return p, nil
+	} else if seatID != "p2" && cfg.WinePrefix != "" {
 		expanded := util.ExpandPath(cfg.WinePrefix)
-		return util.CanonicalPath(expanded), nil
+		p := util.CanonicalPath(expanded)
+		_ = os.MkdirAll(filepath.Join(p, "drive_c", "users"), 0755)
+		return p, nil
 	}
 
-	// 3. Construct isolated per-game prefix path
+	// 3. Construct isolated per-game prefix path for this seat
 	prefixID := ResolvePrefixIdentifier(game)
-	prefixBase := DefaultPrefixesDir()
+	prefixBase := DefaultPrefixesDirForSeat(seatID)
 	prefixDir := filepath.Join(prefixBase, prefixID)
 
 	usersDir := filepath.Join(prefixDir, "drive_c", "users")
@@ -90,8 +124,8 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 		return "", fmt.Errorf("create prefix users directory %s: %w", usersDir, err)
 	}
 
-	// 4. Ensure central user data directory exists (e.g. ~/Games/umu/umu-default/drive_c/users/steamuser)
-	centralUserDir := DefaultCentralUserDataDir(cfg)
+	// 4. Ensure central user data directory exists (e.g. ~/Games/umu/umu-default/drive_c/users/steamuser or ~/Games/umu-p2/...)
+	centralUserDir := DefaultCentralUserDataDirForSeat(cfg, seatID)
 	if err := os.MkdirAll(centralUserDir, 0755); err != nil {
 		slog.Warn("Failed to create central user data directory", "path", centralUserDir, "error", err)
 	}
@@ -104,7 +138,7 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 			if symErr := os.Symlink(centralUserDir, steamuserSymlink); symErr != nil {
 				slog.Warn("Failed to symlink prefix user profile to central directory", "target", steamuserSymlink, "dest", centralUserDir, "error", symErr)
 			} else {
-				slog.Debug("Linked prefix user profile to central Syncthing directory", "prefix", prefixDir, "central", centralUserDir)
+				slog.Debug("Linked prefix user profile to central user directory", "prefix", prefixDir, "central", centralUserDir)
 			}
 		}
 	} else if fi.Mode()&os.ModeSymlink == 0 {
@@ -119,17 +153,24 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 	return util.CanonicalPath(prefixDir), nil
 }
 
-// ResolveGamePrefix returns the effective Wine/Proton prefix path for a game without mutating the filesystem.
+// ResolveGamePrefix returns the effective Wine/Proton prefix path for Player 1 without mutating the filesystem.
 func ResolveGamePrefix(cfg *config.Config, game *domain.Game, customPrefix string) string {
+	return ResolveSeatGamePrefix(cfg, game, "p1", customPrefix)
+}
+
+// ResolveSeatGamePrefix returns the effective Wine/Proton prefix path for a seat without mutating the filesystem.
+func ResolveSeatGamePrefix(cfg *config.Config, game *domain.Game, seatID string, customPrefix string) string {
 	if customPrefix != "" {
 		return util.CanonicalPath(util.ExpandPath(customPrefix))
 	}
-	if cfg != nil && cfg.WinePrefix != "" {
+	if seatID == "p2" && cfg != nil && cfg.Multiseat.Player2WinePrefix != "" {
+		return util.CanonicalPath(util.ExpandPath(cfg.Multiseat.Player2WinePrefix))
+	} else if seatID != "p2" && cfg != nil && cfg.WinePrefix != "" {
 		return util.CanonicalPath(util.ExpandPath(cfg.WinePrefix))
 	}
 
 	prefixID := ResolvePrefixIdentifier(game)
-	prefixBase := DefaultPrefixesDir()
+	prefixBase := DefaultPrefixesDirForSeat(seatID)
 	gamePrefix := filepath.Join(prefixBase, prefixID)
 
 	if util.FileExists(gamePrefix) {

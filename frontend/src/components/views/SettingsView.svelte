@@ -6,13 +6,14 @@
   import { AppAPI } from '../../api/app.js';
   import GeneralTab from './settings/GeneralTab.svelte';
   import PersonaTab from './settings/PersonaTab.svelte';
+  import CoopTab from './settings/CoopTab.svelte';
   import LibraryStorageTab from './settings/LibraryStorageTab.svelte';
   import CompatibilityTab from './settings/CompatibilityTab.svelte';
   import CredentialsTab from './settings/CredentialsTab.svelte';
   import ToolsMaintenanceTab from './settings/ToolsMaintenanceTab.svelte';
   import LogsTab from './settings/LogsTab.svelte';
 
-  let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'persona' | 'credentials' | 'tools' | 'logs'
+  let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'persona' | 'coop' | 'credentials' | 'tools' | 'logs'
   let cfgDraft = {
     library_paths: [],
     default_runner: 'umu',
@@ -66,7 +67,7 @@
     configStore.setDirty(false);
   });
 
-  const tabOrder = ['general', 'storage', 'compatibility', 'persona', 'credentials', 'tools', 'logs'];
+  const tabOrder = ['general', 'storage', 'compatibility', 'persona', 'coop', 'credentials', 'tools', 'logs'];
 
   function handleTabKeyDown(e, currentIndex) {
     if (e.key === 'ArrowRight') {
@@ -153,6 +154,7 @@
         else if (['storage', 'library', 'paths'].includes(tabParam)) activeTab = 'storage';
         else if (['compatibility', 'compat', 'runner'].includes(tabParam)) activeTab = 'compatibility';
         else if (['steam', 'persona', 'player', 'user', 'emu', 'drm'].includes(tabParam)) activeTab = 'persona';
+        else if (['coop', 'co-op', 'multiseat', 'split'].includes(tabParam)) activeTab = 'coop';
         else if (['credentials', 'media', 'api', 'apis', 'key', 'keys'].includes(tabParam)) activeTab = 'credentials';
         else if (['maintenance', 'tools', 'components'].includes(tabParam)) activeTab = 'tools';
         else if (['logs', 'log', 'activity'].includes(tabParam)) activeTab = 'logs';
@@ -501,13 +503,28 @@
       <span>Steam</span>
     </button>
 
-    <!-- 4. Credentials Tab (API Keys) -->
+    <!-- 4. Co-Op Tab -->
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'coop'}
+      on:click={() => { activeTab = 'coop'; }}
+      on:keydown={(e) => handleTabKeyDown(e, 4)}
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'coop' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+    >
+      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <span>Co-Op</span>
+    </button>
+
+    <!-- 5. Credentials Tab (API Keys) -->
     <button
       type="button"
       role="tab"
       aria-selected={activeTab === 'credentials'}
       on:click={() => { activeTab = 'credentials'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 4)}
+      on:keydown={(e) => handleTabKeyDown(e, 5)}
       class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'credentials' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,13 +533,13 @@
       <span>Credentials</span>
     </button>
 
-    <!-- 5. Maintenance Tab -->
+    <!-- 6. Maintenance Tab -->
     <button
       type="button"
       role="tab"
       aria-selected={activeTab === 'tools'}
       on:click={() => { activeTab = 'tools'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 5)}
+      on:keydown={(e) => handleTabKeyDown(e, 6)}
       class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'tools' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -531,13 +548,13 @@
       <span>Maintenance</span>
     </button>
 
-    <!-- 6. Logs Tab -->
+    <!-- 7. Logs Tab -->
     <button
       type="button"
       role="tab"
       aria-selected={activeTab === 'logs'}
       on:click={() => { activeTab = 'logs'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 6)}
+      on:keydown={(e) => handleTabKeyDown(e, 7)}
       class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -564,6 +581,13 @@
       />
     {:else if activeTab === 'persona'}
       <PersonaTab
+        bind:userCfgDraft
+        {languagesList}
+        {countriesList}
+      />
+    {:else if activeTab === 'coop'}
+      <CoopTab
+        bind:cfgDraft
         bind:userCfgDraft
         {languagesList}
         {countriesList}

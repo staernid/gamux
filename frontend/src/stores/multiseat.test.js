@@ -1,0 +1,122 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { multiseatStore, resolveGamepadAssignments } from './multiseat.js';
+import { AppAPI } from '../api/app.js';
+
+describe('multiseatStore', () => {
+  beforeEach(() => {
+    multiseatStore.toggleCoop(false);
+  });
+
+  it('initializes with expected default staging settings', () => {
+    const state = get(multiseatStore);
+    expect(state.isCoopEnabled).toBe(false);
+    expect(state.staging.seat1.mode).toBe('local');
+    expect(state.staging.seat2.mode).toBe('local');
+    expect(state.staging.layout).toBe('dual_monitor');
+  });
+
+  it('toggles co-op mode on and off', () => {
+    multiseatStore.toggleCoop(true);
+    expect(get(multiseatStore).isCoopEnabled).toBe(true);
+
+    multiseatStore.toggleCoop(false);
+    expect(get(multiseatStore).isCoopEnabled).toBe(false);
+  });
+
+  it('switches seat output modes independently', () => {
+    multiseatStore.setSeatMode('seat1', 'stream');
+    expect(get(multiseatStore).staging.seat1.mode).toBe('stream');
+    expect(get(multiseatStore).staging.seat2.mode).toBe('local');
+
+    multiseatStore.setSeatMode('seat2', 'stream');
+    expect(get(multiseatStore).staging.seat2.mode).toBe('stream');
+  });
+
+  it('assigns gamepads, keyboards, and mice to individual seats', async () => {
+    multiseatStore.assignGamepad('seat1', '/dev/input/event10');
+    expect(get(multiseatStore).staging.seat1.gamepad_node).toBe('/dev/input/event10');
+
+    multiseatStore.assignGamepad('seat2', '/dev/input/event11');
+    expect(get(multiseatStore).staging.seat2.gamepad_node).toBe('/dev/input/event11');
+
+    multiseatStore.assignKeyboard('seat2', '/dev/input/event4');
+    expect(get(multiseatStore).staging.seat2.keyboard_node).toBe('/dev/input/event4');
+
+    multiseatStore.assignMouse('seat2', '/dev/input/event1');
+    expect(get(multiseatStore).staging.seat2.mouse_node).toBe('/dev/input/event1');
+
+    await multiseatStore.refreshKeyboards();
+    expect(get(multiseatStore).keyboards.length).toBeGreaterThan(0);
+
+    await multiseatStore.refreshMice();
+    expect(get(multiseatStore).mice.length).toBeGreaterThan(0);
+  });
+
+  it('updates display layout configuration', () => {
+    multiseatStore.setLayout('side_by_side');
+    expect(get(multiseatStore).staging.layout).toBe('side_by_side');
+
+    multiseatStore.setLayout('top_bottom');
+    expect(get(multiseatStore).staging.layout).toBe('top_bottom');
+  });
+
+  it('launches a multi-seat session and updates active session state', async () => {
+    const launchSpy = vi.spyOn(AppAPI, 'launchMultiseatSession').mockResolvedValue();
+
+    const mockGame = {
+      gameDir: '/mock/games/Halo',
+      name: 'Halo',
+      appId: '976730',
+      exePath: '/mock/games/Halo/halo.exe',
+      runner: 'umu',
+    };
+
+    await multiseatStore.launchSession(mockGame, { account_name: 'Hero117' });
+
+    expect(launchSpy).toHaveBeenCalled();
+    const state = get(multiseatStore);
+    expect(state.activeSessions[mockGame.gameDir]?.is_running).toBe(true);
+
+    // Stop session
+    const stopSpy = vi.spyOn(AppAPI, 'stopMultiseatSession').mockResolvedValue();
+    await multiseatStore.stopSession(mockGame.gameDir);
+    expect(stopSpy).toHaveBeenCalledWith(mockGame.gameDir);
+    expect(get(multiseatStore).activeSessions[mockGame.gameDir]).toBeUndefined();
+  });
+
+  describe('resolveGamepadAssignments', () => {
+    const mockPads = [
+      { name: 'Black Shark Green Ghost', dev_node: '/dev/input/event29', bus: 'usb' },
+      { name: 'Xbox Wireless Controller', dev_node: '/dev/input/event30', bus: 'bluetooth' }
+    ];
+
+    it('assigns single gamepad to Player 2 and keeps Player 1 on keyboard/mouse under Auto', () => {
+      const singlePad = [mockPads[0]];
+      const res = multiseatStore.resolveGamepadAssignments
+        ? multiseatStore.resolveGamepadAssignments(singlePad, 'auto', 'auto')
+        : resolveGamepadAssignments(singlePad, 'auto', 'auto');
+
+      expect(res.p1Dev).toBe('none');
+      expect(res.p2Dev).toBe('/dev/input/event29');
+    });
+
+    it('assigns first pad to P1 and second pad to P2 when two pads are connected under Auto', () => {
+      const res = resolveGamepadAssignments(mockPads, 'auto', 'auto');
+      expect(res.p1Dev).toBe('/dev/input/event29');
+      expect(res.p2Dev).toBe('/dev/input/event30');
+    });
+
+    it('respects explicit none and manual dev node assignments', () => {
+      const res = resolveGamepadAssignments(mockPads, 'none', '/dev/input/event29');
+      expect(res.p1Dev).toBe('none');
+      expect(res.p2Dev).toBe('/dev/input/event29');
+    });
+
+    it('handles zero connected gamepads gracefully', () => {
+      const res = resolveGamepadAssignments([], 'auto', 'auto');
+      expect(res.p1Dev).toBe('none');
+      expect(res.p2Dev).toBe('none');
+    });
+  });
+});

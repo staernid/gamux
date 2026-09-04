@@ -29,6 +29,7 @@
   import { modalStore } from './stores/modal.js';
   import { notificationStore } from './stores/notifications.js';
   import { configStore } from './stores/config.js';
+  import { multiseatStore } from './stores/multiseat.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
   import { formatBytes } from './utils/format.js';
   import {
@@ -174,6 +175,9 @@
       onGameStatus: (data) => {
         if (data?.gameDir) {
           setGameRunning(data.gameDir, !!data.isRunning, data.playtimeSeconds, data.lastPlayed);
+          if (!data.isRunning) {
+            multiseatStore.setSessionInactive(data.gameDir);
+          }
         }
       }
     });

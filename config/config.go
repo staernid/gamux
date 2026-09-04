@@ -38,6 +38,10 @@ type Config struct {
 	Normalize          bool              `json:"normalize"`
 	WinePrefix         string            `json:"wine_prefix,omitempty"`
 	MangoHud           bool              `json:"mangohud,omitempty"`
+	Gamescope          bool              `json:"gamescope,omitempty"`
+	GamescopeWidth     int               `json:"gamescope_width,omitempty"`
+	GamescopeHeight    int               `json:"gamescope_height,omitempty"`
+	GamescopeFPS       int               `json:"gamescope_fps,omitempty"`
 	TransferSpeedLimit int64             `json:"transfer_speed_limit,omitempty"`
 	GlobalEnv          map[string]string `json:"global_env,omitempty"`
 
@@ -51,6 +55,37 @@ type Config struct {
 	BackupRetentionCount int    `json:"backup_retention_count,omitempty"`
 	BackupDir            string `json:"backup_dir,omitempty"`
 	SaveManifestURL      string `json:"save_manifest_url,omitempty"`
+
+	// Multi-Seat & Split-Screen Settings
+	Multiseat MultiseatConfig `json:"multiseat,omitempty"`
+}
+
+// MultiseatConfig holds preferences and profile info for 2-player local and streaming sessions.
+type MultiseatConfig struct {
+	Player2AccountName    string `json:"player2_account_name,omitempty"`
+	Player2AccountSteamID string `json:"player2_account_steamid,omitempty"`
+	Player2Language       string `json:"player2_language,omitempty"`
+	Player2IPCountry      string `json:"player2_ip_country,omitempty"`
+	Player2WinePrefix     string `json:"player2_wine_prefix,omitempty"`
+	DefaultSeat1Mode      string `json:"default_seat1_mode,omitempty"` // "local" | "stream"
+	DefaultSeat2Mode      string `json:"default_seat2_mode,omitempty"` // "local" | "stream"
+	DefaultLayout         string `json:"default_layout,omitempty"`     // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
+	BroadcastRelayEnabled bool   `json:"broadcast_relay_enabled"`
+	Seat1Gamepad          string `json:"seat1_gamepad,omitempty"`
+	Seat2Gamepad          string `json:"seat2_gamepad,omitempty"`
+	Seat1Keyboard         string `json:"seat1_keyboard,omitempty"`
+	Seat2Keyboard         string `json:"seat2_keyboard,omitempty"`
+	Seat1Mouse            string `json:"seat1_mouse,omitempty"`
+	Seat2Mouse            string `json:"seat2_mouse,omitempty"`
+	Seat2ForceGrabCursor  bool   `json:"seat2_force_grab_cursor,omitempty"`
+	Seat2GrabKeyboard     bool   `json:"seat2_grab_keyboard,omitempty"`
+	Seat2Compositor       string `json:"seat2_compositor,omitempty"`
+	Seat2NestCage         bool   `json:"seat2_nest_cage,omitempty"`
+	Seat2ShowCursor       bool   `json:"seat2_show_cursor,omitempty"`
+	Seat1DisplayIndex     int    `json:"seat1_display_index,omitempty"`
+	Seat2DisplayIndex     int    `json:"seat2_display_index,omitempty"`
+	SunshinePortP1        int    `json:"sunshine_port_p1,omitempty"`
+	SunshinePortP2        int    `json:"sunshine_port_p2,omitempty"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -114,6 +149,27 @@ func DefaultConfig() *Config {
 		Normalize:            true,
 		WinePrefix:           "",
 		MangoHud:             false,
+		Multiseat: MultiseatConfig{
+			Player2AccountName:    "PlayerTwo",
+			Player2AccountSteamID: "76561198998877665",
+			Player2Language:       "english",
+			Player2IPCountry:      "US",
+			Player2WinePrefix:     "",
+			DefaultSeat1Mode:      "local",
+			DefaultSeat2Mode:      "local",
+			DefaultLayout:         "dual_monitor",
+			BroadcastRelayEnabled: true,
+			Seat1Gamepad:          "auto",
+			Seat2Gamepad:          "auto",
+			Seat1Keyboard:         "auto",
+			Seat2Keyboard:         "auto",
+			Seat1Mouse:            "auto",
+			Seat2Mouse:            "auto",
+			Seat1DisplayIndex:     0,
+			Seat2DisplayIndex:     1,
+			SunshinePortP1:        47989,
+			SunshinePortP2:        48010,
+		},
 	}
 }
 
@@ -153,6 +209,13 @@ func LoadConfig(customPath string) (*Config, error) {
 
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+
+	// Migrate legacy layout names directly (AGENTS.md rule 6)
+	if cfg.Multiseat.DefaultLayout == "horizontal_split" {
+		cfg.Multiseat.DefaultLayout = "side_by_side"
+	} else if cfg.Multiseat.DefaultLayout == "vertical_split" {
+		cfg.Multiseat.DefaultLayout = "top_bottom"
 	}
 
 	hydrateAPIKeys(cfg)

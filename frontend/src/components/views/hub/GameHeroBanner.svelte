@@ -12,6 +12,7 @@
     formatInstallDate
   } from '../../../utils/game.js';
   import PosterArt from '../../common/PosterArt.svelte';
+  import { multiseatStore } from '../../../stores/multiseat.js';
 
   export let game = null;
   export let isGameRunning = false;
@@ -28,6 +29,10 @@
     logoFailed = false;
     heroFailed = false;
   }
+
+  $: isCoop = $multiseatStore.isCoopEnabled;
+  $: multiseatSession = game?.gameDir ? $multiseatStore.activeSessions[game.gameDir] : null;
+  $: isMultiseatActive = Boolean(multiseatSession?.is_running);
 
   $: pColors = game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' };
   $: platformLabel = game ? getPlatformType(game) : 'Windows';
@@ -48,11 +53,11 @@
             : 'Downloading...')
         : 'Task in Progress...')
     : isGameRunning
-    ? 'Stop Game'
+    ? (isMultiseatActive ? 'Stop Session' : 'Stop Game')
     : !isInstalled
     ? 'Download'
     : isReady
-    ? 'Play Now'
+    ? (isCoop ? 'Launch 2-Player Session' : 'Play Now')
     : 'Setup & Play';
 
   function handleReturnToShelf() {
@@ -237,7 +242,27 @@
       </div>
 
       <!-- Right: Primary CTA & Actions -->
-      <div class="flex items-center space-x-3 flex-shrink-0">
+      <div class="flex flex-col items-start sm:items-end space-y-2.5 flex-shrink-0">
+        {#if isMultiseatActive && multiseatSession}
+          <div class="px-3 py-1.5 bg-neutral-900/90 border border-neutral-700 rounded-xl flex items-center space-x-3 text-2xs font-mono shadow-lg">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-white font-bold">2-Player Active</span>
+            <span class="text-neutral-400">P1: {multiseatSession.seat1?.mode || 'local'}</span>
+            <span class="text-neutral-400">P2: {multiseatSession.seat2?.mode || 'local'}</span>
+            {#if multiseatSession.seat2?.is_running}
+              <button
+                type="button"
+                on:click={() => dispatch('stopSeat', 'p2')}
+                class="px-2 py-0.5 rounded bg-surface-card hover:bg-surface-cardHover border border-surface-border text-rose-300 hover:text-white font-bold transition cursor-pointer"
+                title="Stop Player 2 seat only"
+              >
+                Drop P2
+              </button>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="flex items-center space-x-3">
         {#if isVirtual}
           <button
             type="button"
@@ -249,6 +274,24 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
             <span>Add to Library</span>
+          </button>
+        {/if}
+
+        {#if isInstalled && isReady}
+          <button
+            type="button"
+            on:click={() => multiseatStore.toggleCoop()}
+            disabled={isGameRunning}
+            class="px-3.5 py-3 rounded-2xl font-bold text-xs transition-all flex items-center space-x-2 shadow-xl cursor-pointer disabled:cursor-not-allowed {isCoop ? 'bg-surface-cardHover border border-surface-borderHighlight text-white' : 'bg-surface-header/90 hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white'}"
+            title={isCoop ? 'Co-op mode enabled (Click to switch to single player)' : 'Enable 2-Player Co-op mode'}
+          >
+            <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span>Co-op</span>
+            <span class="text-3xs font-mono font-bold px-1.5 py-0.5 rounded border {isCoop ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-surface-input text-neutral-400 border-surface-border'}">
+              {isCoop ? '2P' : 'Off'}
+            </span>
           </button>
         {/if}
 
@@ -296,6 +339,7 @@
             </svg>
           </button>
         {/if}
+        </div>
       </div>
     </div>
   {/if}

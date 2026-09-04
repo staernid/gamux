@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,6 +113,48 @@ func TestBuildCommand_StandaloneLinux(t *testing.T) {
 	}
 	if !hasGameID {
 		t.Errorf("expected GAMEID=12345 in env")
+	}
+}
+
+func TestBuildCommand_Gamescope(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Gamescope = true
+	cfg.GamescopeWidth = 3440
+	cfg.GamescopeHeight = 1440
+	cfg.GamescopeFPS = 100
+
+	tmpDir := t.TempDir()
+	binPath := filepath.Join(tmpDir, "game.bin")
+	_ = os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.bin",
+		Platform:      "linux",
+		OperatingMode: ModeStandalone,
+		Runner:        RunnerLinux,
+	}
+
+	spec, err := BuildLaunchSpec(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("unexpected error building spec: %v", err)
+	}
+
+	// If gamescope binary exists on the system, spec.Args should wrap with gamescope
+	if _, err := exec.LookPath("gamescope"); err == nil {
+		if len(spec.Args) < 9 || spec.Args[0] != "/usr/bin/gamescope" && !strings.HasSuffix(spec.Args[0], "gamescope") {
+			t.Fatalf("expected gamescope wrapper in args, got: %v", spec.Args)
+		}
+		cmdStr := strings.Join(spec.Args, " ")
+		if !strings.Contains(cmdStr, "-w 3440 -h 1440 -W 3440 -H 1440") {
+			t.Errorf("expected 1:1 resolution in args, got: %s", cmdStr)
+		}
+		if !strings.Contains(cmdStr, "-r 100") {
+			t.Errorf("expected refresh rate in args, got: %s", cmdStr)
+		}
+		if !strings.Contains(cmdStr, "-f --") {
+			t.Errorf("expected fullscreen and separator in args, got: %s", cmdStr)
+		}
 	}
 }
 
@@ -1464,6 +1507,15 @@ func TestManager_StopProcessGroupWithReapedParent(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if mgr.IsRunning(tmpDir) {
 		t.Errorf("expected game to be stopped in manager")
+	}
+}
+
+func TestFindLatestInstalledProton(t *testing.T) {
+	latest := FindLatestInstalledProton()
+	if latest != "" {
+		if !util.FileExists(latest) {
+			t.Errorf("FindLatestInstalledProton returned non-existent path: %s", latest)
+		}
 	}
 }
 

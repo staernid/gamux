@@ -245,6 +245,10 @@ type LaunchProfile struct {
 	ProtonPath        string            `json:"proton_path,omitempty"`
 	Language          string            `json:"language,omitempty"`
 	MangoHud          *bool             `json:"mangohud,omitempty"`
+	Gamescope         *bool             `json:"gamescope,omitempty"`
+	GamescopeWidth    int               `json:"gamescope_width,omitempty"`
+	GamescopeHeight   int               `json:"gamescope_height,omitempty"`
+	GamescopeFPS      int               `json:"gamescope_fps,omitempty"`
 	DisableOverlay    *bool             `json:"disable_overlay,omitempty"`
 	OfflineMode       *bool             `json:"offline_mode,omitempty"`
 	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"

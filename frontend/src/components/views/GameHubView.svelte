@@ -14,6 +14,7 @@
   import { modalStore } from '../../stores/modal.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
+  import { multiseatStore } from '../../stores/multiseat.js';
   import { AppAPI } from '../../api/app.js';
   import { isSamePath, countOverrides, normalizeGame } from '../../utils/game.js';
   import DrawerSavesTab from '../stage/drawer/DrawerSavesTab.svelte';
@@ -32,6 +33,7 @@
   let communityNewsIndex = 0;
 
   let globalCfg = {};
+  let userCfg = null;
   let isSaving = false;
   let saveSuccess = false;
   let saveSuccessTimer = null;
@@ -86,6 +88,11 @@
   onMount(async () => {
     try {
       globalCfg = await AppAPI.getConfig();
+    } catch {
+      // Ignored
+    }
+    try {
+      userCfg = await AppAPI.getGSEUserConfig();
     } catch {
       // Ignored
     }
@@ -151,7 +158,11 @@
 
     if (isGameRunning) {
       try {
-        await AppAPI.stopGame(game.gameDir);
+        if ($multiseatStore.activeSessions[game.gameDir]?.is_running) {
+          await multiseatStore.stopSession(game.gameDir);
+        } else {
+          await AppAPI.stopGame(game.gameDir);
+        }
         setGameRunning(game.gameDir, false);
       } catch (err) {
         notificationStore.items.add({
@@ -224,14 +235,18 @@
     }
 
     try {
-      await AppAPI.launchGame({
-        name: game.name,
-        game_dir: game.gameDir,
-        app_id: game.appId,
-        runner: game.runner || globalCfg?.default_runner || 'umu',
-        exe_path: game.exePath || $drawerDraft?.exePath || '',
-        exe_args: game.exeArgs || $drawerDraft?.exeArgs || '',
-      });
+      if ($multiseatStore.isCoopEnabled) {
+        await multiseatStore.launchSession(game, userCfg || {});
+      } else {
+        await AppAPI.launchGame({
+          name: game.name,
+          game_dir: game.gameDir,
+          app_id: game.appId,
+          runner: game.runner || globalCfg?.default_runner || 'umu',
+          exe_path: game.exePath || $drawerDraft?.exePath || '',
+          exe_args: game.exeArgs || $drawerDraft?.exeArgs || '',
+        });
+      }
       setGameRunning(game.gameDir, true);
     } catch (err) {
       notificationStore.items.add({
@@ -239,6 +254,13 @@
         title: 'Launch Failed',
         message: err?.message || String(err)
       });
+    }
+  }
+
+  async function handleStopSeat(e) {
+    const seatId = e.detail;
+    if (game?.gameDir) {
+      await multiseatStore.stopSeat(game.gameDir, seatId);
     }
   }
 
@@ -455,6 +477,7 @@
       on:primaryAction={handlePrimaryAction}
       on:addToLibrary={handleAddToLibrary}
       on:openDirectory={openDirectory}
+      on:stopSeat={handleStopSeat}
     />
 
     <!-- Main Content & 7-Tab Section -->

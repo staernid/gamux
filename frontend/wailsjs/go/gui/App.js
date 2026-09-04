@@ -46,6 +46,18 @@ export function GetConfig() {
   return window['go']['gui']['App']['GetConfig']();
 }
 
+export function GetConnectedGamepads() {
+  return window['go']['gui']['App']['GetConnectedGamepads']();
+}
+
+export function GetConnectedKeyboards() {
+  return window['go']['gui']['App']['GetConnectedKeyboards']();
+}
+
+export function GetConnectedMice() {
+  return window['go']['gui']['App']['GetConnectedMice']();
+}
+
 export function GetDiskSpace(arg1) {
   return window['go']['gui']['App']['GetDiskSpace'](arg1);
 }
@@ -82,6 +94,14 @@ export function GetLaunchProfile(arg1) {
   return window['go']['gui']['App']['GetLaunchProfile'](arg1);
 }
 
+export function GetMultiseatCapabilities() {
+  return window['go']['gui']['App']['GetMultiseatCapabilities']();
+}
+
+export function GetMultiseatSessionStatus(arg1) {
+  return window['go']['gui']['App']['GetMultiseatSessionStatus'](arg1);
+}
+
 export function GetPatchNote(arg1, arg2) {
   return window['go']['gui']['App']['GetPatchNote'](arg1, arg2);
 }
@@ -110,8 +130,16 @@ export function IsGameRunning(arg1) {
   return window['go']['gui']['App']['IsGameRunning'](arg1);
 }
 
+export function IsMultiseatSessionRunning(arg1) {
+  return window['go']['gui']['App']['IsMultiseatSessionRunning'](arg1);
+}
+
 export function LaunchGame(arg1) {
   return window['go']['gui']['App']['LaunchGame'](arg1);
+}
+
+export function LaunchMultiseatSession(arg1) {
+  return window['go']['gui']['App']['LaunchMultiseatSession'](arg1);
 }
 
 export function LinkGameMetadata(arg1, arg2, arg3) {
@@ -212,6 +240,14 @@ export function Startup(arg1) {
 
 export function StopGame(arg1) {
   return window['go']['gui']['App']['StopGame'](arg1);
+}
+
+export function StopMultiseatSeat(arg1, arg2) {
+  return window['go']['gui']['App']['StopMultiseatSeat'](arg1, arg2);
+}
+
+export function StopMultiseatSession(arg1) {
+  return window['go']['gui']['App']['StopMultiseatSession'](arg1);
 }
 
 export function SubmitApply(arg1) {
