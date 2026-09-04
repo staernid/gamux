@@ -175,5 +175,6 @@ describe('CoopTab Component', () => {
     expect(screen.getByText('Force Grab Cursor')).toBeInTheDocument();
     expect(screen.getByText('Grab Keyboard (-g)')).toBeInTheDocument();
     expect(screen.getByText('Software Cursor')).toBeInTheDocument();
+    expect(screen.getByText(/Cage Wayland compositor/i)).toBeInTheDocument();
   });
 });

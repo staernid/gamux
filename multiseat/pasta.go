@@ -37,6 +37,15 @@ func copyFilePreserveExec(src, dst string) error {
 	return os.WriteFile(dst, data, 0755)
 }
 
+// cpuHasAVX2 returns true if the host CPU supports the AVX2 instruction set.
+func cpuHasAVX2() bool {
+	data, err := os.ReadFile("/proc/cpuinfo")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), "avx2")
+}
+
 // ResolvePastaBinary finds the pasta executable. On SELinux-enforcing systems, it stages
 // an unconfined copy in ~/.local/share/gamux/bin to avoid the pasta_t domain transition,
 // which prevents AVC denials on GPU render nodes and user log files.
@@ -72,7 +81,13 @@ func ResolvePastaBinary() (string, error) {
 	sysAvx2 := filepath.Join(pastaDir, "pasta.avx2")
 	if util.FileExists(sysAvx2) {
 		stagedAvx2 := filepath.Join(stageDir, "pasta.avx2")
-		_ = copyFilePreserveExec(sysAvx2, stagedAvx2)
+		if err := copyFilePreserveExec(sysAvx2, stagedAvx2); err == nil {
+			if cpuHasAVX2() {
+				// Directly return unconfined pasta.avx2 on AVX2 systems so it runs in unconfined_t
+				// without invoking /usr/bin/pasta.avx2 or transitioning to pasta_t domain.
+				return stagedAvx2, nil
+			}
+		}
 	}
 
 	return stagedPasta, nil

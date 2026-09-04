@@ -605,8 +605,8 @@
   <SettingSection title="Dual Keyboards & Mice (Experimental)">
     <div class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-surface-border/50">
-        <p class="text-xs text-neutral-400">
-          Enables 2-player local co-op for games that lack controller support by assigning distinct physical keyboards and mice to Player 1 and Player 2.
+        <p class="text-xs text-neutral-400 leading-relaxed">
+          Enables 2-player local co-op for games lacking controller support. Player 2's devices are grabbed exclusively via evdev (<code class="font-mono text-neutral-300">EVIOCGRAB</code>) and injected into Seat 2's dedicated Cage Wayland compositor (<code class="font-mono text-neutral-300">zwlr_virtual_pointer_v1</code> and <code class="font-mono text-neutral-300">zwp_virtual_keyboard_v1</code>). Cage backend is auto-selected when dedicated KBM is configured.
         </p>
         <button
           type="button"
@@ -721,15 +721,16 @@
           <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
             <div class="space-y-0.5 max-w-[170px]">
               <div class="text-2xs font-bold text-neutral-200">Compositor Backend</div>
-              <div class="text-3xs text-neutral-400">Gamescope or Cage nesting</div>
+              <div class="text-3xs text-neutral-400 leading-relaxed">Cage auto-selected for dual KBM virtual input</div>
             </div>
             <select
               bind:value={cfgDraft.multiseat.seat2_compositor}
               on:change={() => { cfgDraft = { ...cfgDraft }; }}
               class="bg-surface-base border border-surface-border rounded-lg px-2 py-1 text-2xs text-white outline-none focus:border-neutral-400 cursor-pointer"
             >
-              <option value="auto">Gamescope (Default)</option>
-              <option value="cage">Cage</option>
+              <option value="auto">Auto (Cage for KBM, Gamescope for Gamepad)</option>
+              <option value="cage">Cage (Wayland Virtual Input)</option>
+              <option value="gamescope">Gamescope (Dedicated)</option>
               <option value="cage_gamescope">Nested (Cage + Gamescope)</option>
             </select>
           </div>

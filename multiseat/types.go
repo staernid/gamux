@@ -116,3 +116,10 @@ type SystemCapabilities struct {
 	HasSunshine  bool `json:"has_sunshine"`
 	HasPipewire  bool `json:"has_pipewire"`
 }
+
+// isExplicitDeviceNode reports whether a device node string points to a real device node path,
+// rather than an empty value, "none", or "auto".
+func isExplicitDeviceNode(node string) bool {
+	return node != "" && node != "none" && node != "auto"
+}
+

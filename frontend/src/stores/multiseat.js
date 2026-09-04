@@ -83,7 +83,7 @@ function createMultiseatStore() {
         force_grab_cursor: false,
         grab_keyboard: false,
         exclusive_grab: false,
-        compositor: 'auto',
+        compositor: '',
         nest_cage: false,
         show_cursor: true,
         physical_sink: '',
@@ -302,7 +302,13 @@ function createMultiseatStore() {
       const seat2ForceGrab = state.staging?.seat2?.force_grab_cursor ?? mCfg.seat2_force_grab_cursor ?? false;
       const seat2GrabKbd = state.staging?.seat2?.grab_keyboard ?? mCfg.seat2_grab_keyboard ?? false;
       const seat2ExclGrab = state.staging?.seat2?.exclusive_grab ?? false;
-      const seat2Compositor = state.staging?.seat2?.compositor || mCfg.seat2_compositor || 'auto';
+      const isExplicitDeviceNode = (node) => Boolean(node && node !== 'none' && node !== 'auto');
+      const p2HasDedicatedKBM = isExplicitDeviceNode(seat2Kbd) || isExplicitDeviceNode(seat2Mouse);
+
+      let seat2Compositor = state.staging?.seat2?.compositor || mCfg.seat2_compositor || 'auto';
+      if ((seat2Compositor === 'auto' || !seat2Compositor) && p2HasDedicatedKBM) {
+        seat2Compositor = 'cage';
+      }
       const seat2NestCage = state.staging?.seat2?.nest_cage ?? mCfg.seat2_nest_cage ?? false;
       const seat2ShowCursor = state.staging?.seat2?.show_cursor ?? mCfg.seat2_show_cursor ?? true;
 

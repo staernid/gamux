@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,53 @@ import (
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/util"
 )
+
+// snapshotWaylandSockets captures all existing Wayland socket filenames in XDG_RUNTIME_DIR.
+func snapshotWaylandSockets() map[string]bool {
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	sockets := make(map[string]bool)
+	entries, err := os.ReadDir(runtimeDir)
+	if err == nil {
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "wayland-") && !strings.HasSuffix(e.Name(), ".lock") {
+				sockets[e.Name()] = true
+			}
+		}
+	}
+	return sockets
+}
+
+// waitForNewWaylandSocket polls XDG_RUNTIME_DIR for a newly created, connectable Wayland socket.
+func waitForNewWaylandSocket(existing map[string]bool, timeout time.Duration) (string, error) {
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		entries, err := os.ReadDir(runtimeDir)
+		if err == nil {
+			for _, e := range entries {
+				name := e.Name()
+				if strings.HasPrefix(name, "wayland-") && !strings.HasSuffix(name, ".lock") && !strings.Contains(name, "gamux") {
+					if !existing[name] {
+						sockPath := filepath.Join(runtimeDir, name)
+						conn, err := net.DialTimeout("unix", sockPath, 100*time.Millisecond)
+						if err == nil {
+							_ = conn.Close()
+							return sockPath, nil
+						}
+					}
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return "", fmt.Errorf("timeout waiting for new Wayland socket in %s", runtimeDir)
+}
 
 // CheckCapabilities probes the host system for multi-seat support dependencies.
 func CheckCapabilities() SystemCapabilities {
@@ -49,6 +97,7 @@ type runningSeat struct {
 	status       SeatStatus
 	logFile      *os.File
 	logPath      string
+	waylandLink  string
 }
 
 type runningSession struct {
@@ -145,15 +194,23 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 		}
 	}
 
-	// 3. Hardware Input Grabbers (for seats with dedicated keyboard/mouse devices and explicit exclusive grab)
+	// 3. Hardware Input Grabbers (for seats with dedicated keyboard/mouse devices)
 	var p1Grabber, p2Grabber *InputGrabber
-	if sessionCfg.Seat1.ExclusiveGrab && (sessionCfg.Seat1.KeyboardNode != "" || sessionCfg.Seat1.MouseNode != "") {
+	if sessionCfg.Seat1.ExclusiveGrab && (isExplicitDeviceNode(sessionCfg.Seat1.KeyboardNode) || isExplicitDeviceNode(sessionCfg.Seat1.MouseNode)) {
 		p1Grabber = NewInputGrabber(sessionCfg.Seat1.KeyboardNode, sessionCfg.Seat1.MouseNode)
 		if err := p1Grabber.Grab(); err != nil {
 			slog.Warn("Failed to grab P1 input devices", "error", err)
 		}
 	}
-	if sessionCfg.Seat2.ExclusiveGrab && (sessionCfg.Seat2.KeyboardNode != "" || sessionCfg.Seat2.MouseNode != "") {
+	p2HasKBM := isExplicitDeviceNode(sessionCfg.Seat2.KeyboardNode) || isExplicitDeviceNode(sessionCfg.Seat2.MouseNode)
+	p2UsesCage := (sessionCfg.Seat2.Compositor == "cage" || sessionCfg.Seat2.Compositor == "cage_gamescope" || sessionCfg.Seat2.NestCage ||
+		((sessionCfg.Seat2.Compositor == "" || sessionCfg.Seat2.Compositor == "auto") && p2HasKBM) ||
+		(sessionCfg.Seat2.Mode == SeatModeStream && !caps.HasGamescope)) && caps.HasCage
+	if sessionCfg.Seat2.Compositor == "gamescope" {
+		p2UsesCage = false
+	}
+
+	if (sessionCfg.Seat2.ExclusiveGrab || (p2HasKBM && p2UsesCage)) && p2HasKBM {
 		p2Grabber = NewInputGrabber(sessionCfg.Seat2.KeyboardNode, sessionCfg.Seat2.MouseNode)
 		if err := p2Grabber.Grab(); err != nil {
 			slog.Warn("Failed to grab P2 input devices", "error", err)
@@ -245,6 +302,11 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 	}
 
 	// 7. Launch Player 2 Process
+	var initialSockets map[string]bool
+	if p2UsesCage {
+		initialSockets = snapshotWaylandSockets()
+	}
+
 	p2Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := p2Cmd.Start(); err != nil {
 		_ = syscall.Kill(-p1Cmd.Process.Pid, syscall.SIGTERM)
@@ -256,6 +318,36 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 			p2Grabber.Release()
 		}
 		return fmt.Errorf("start seat 2 process: %w", err)
+	}
+
+	var p2WaylandLink string
+	if p2UsesCage {
+		sockPath, err := waitForNewWaylandSocket(initialSockets, 4*time.Second)
+		if err != nil {
+			slog.Warn("Failed to detect Cage Wayland socket for Seat 2", "error", err)
+		} else {
+			runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+			if runtimeDir == "" {
+				runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+			}
+			linkPath := filepath.Join(runtimeDir, "wayland-gamux-p2")
+			_ = os.Remove(linkPath)
+			if err := os.Symlink(sockPath, linkPath); err == nil {
+				p2WaylandLink = linkPath
+				slog.Info("Symlinked Seat 2 Wayland socket", "target", sockPath, "link", linkPath)
+			}
+
+			// If p2Grabber is active, initialize Wayland virtual input injection
+			if p2Grabber != nil {
+				wlClient := NewWaylandClient()
+				if err := wlClient.Connect(sockPath); err != nil {
+					slog.Warn("Failed to initialize Wayland virtual input for Seat 2", "socket", sockPath, "error", err)
+				} else {
+					p2Grabber.SetWaylandClient(wlClient)
+					slog.Info("Wayland virtual input injector connected for Seat 2", "socket", sockPath)
+				}
+			}
+		}
 	}
 
 	p1Pgid, _ := syscall.Getpgid(p1Cmd.Process.Pid)
@@ -283,12 +375,13 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 			},
 		},
 		seat2: runningSeat{
-			cmd:     p2Cmd,
-			pgid:    p2Pgid,
-			sink:    sinkP2,
-			grabber: p2Grabber,
-			logFile: p2Log,
-			logPath: p2LogPath,
+			cmd:         p2Cmd,
+			pgid:        p2Pgid,
+			sink:        sinkP2,
+			grabber:     p2Grabber,
+			logFile:     p2Log,
+			logPath:     p2LogPath,
+			waylandLink: p2WaylandLink,
 			status: SeatStatus{
 				PID:          p2Cmd.Process.Pid,
 				Mode:         sessionCfg.Seat2.Mode,
@@ -387,36 +480,18 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 			sinkName = sink.SinkName
 		}
 
-		var maskNodes []string
-		if seatID == "p1" {
-			if sessionCfg.Seat2.KeyboardNode != "" && sessionCfg.Seat2.KeyboardNode != "none" {
-				maskNodes = append(maskNodes, sessionCfg.Seat2.KeyboardNode)
-			}
-			if sessionCfg.Seat2.MouseNode != "" && sessionCfg.Seat2.MouseNode != "none" {
-				maskNodes = append(maskNodes, sessionCfg.Seat2.MouseNode)
-			}
-		} else if seatID == "p2" {
-			if sessionCfg.Seat1.KeyboardNode != "" && sessionCfg.Seat1.KeyboardNode != "none" {
-				maskNodes = append(maskNodes, sessionCfg.Seat1.KeyboardNode)
-			}
-			if sessionCfg.Seat1.MouseNode != "" && sessionCfg.Seat1.MouseNode != "none" {
-				maskNodes = append(maskNodes, sessionCfg.Seat1.MouseNode)
-			}
-		}
-
 		bwrapOpts := BwrapOptions{
-			SeatID:         seatID,
-			ProfileDir:     profileDir,
-			GameDir:        sessionCfg.GameDir,
-			WinePrefix:     pfxPath,
-			GamepadNode:    seatCfg.GamepadNode,
-			KeyboardNode:   seatCfg.KeyboardNode,
-			MouseNode:      seatCfg.MouseNode,
-			MaskInputNodes: maskNodes,
-			AudioSink:      sinkName,
-			CustomEnv:      spec.Env,
-			Command:        cmdArgs,
-			DieWithParent:  true,
+			SeatID:        seatID,
+			ProfileDir:    profileDir,
+			GameDir:       sessionCfg.GameDir,
+			WinePrefix:    pfxPath,
+			GamepadNode:   seatCfg.GamepadNode,
+			KeyboardNode:  seatCfg.KeyboardNode,
+			MouseNode:     seatCfg.MouseNode,
+			AudioSink:     sinkName,
+			CustomEnv:     spec.Env,
+			Command:       cmdArgs,
+			DieWithParent: true,
 		}
 
 		bwArgs, bErr := BuildBwrapArgs(bwrapOpts)
@@ -476,20 +551,16 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 		cmdArgs = append([]string{pastaBin}, pArgs...)
 	}
 
-	// 4. Wrap in Cage (if requested or streaming fallback) or Gamescope (for window composition on host)
-	waylandSocket := ""
-	if (seatCfg.Compositor == "cage" || (seatCfg.Mode == SeatModeStream && !caps.HasGamescope)) && caps.HasCage {
-		waylandSocket = fmt.Sprintf("wayland-gamux-%s", seatID)
-		cageArgs, cErr := BuildCageArgs(waylandSocket, cmdArgs)
-		if cErr != nil {
-			return nil, nil, "", fmt.Errorf("build cage args: %w", cErr)
-		}
-		cageBin, err := exec.LookPath("cage")
-		if err != nil {
-			cageBin = "cage"
-		}
-		cmdArgs = append([]string{cageBin}, cageArgs...)
-	} else if caps.HasGamescope {
+	// 4. Wrap in Cage (if requested, dedicated KBM, or streaming fallback) and/or Gamescope (for window composition on host)
+	p2HasKBM := seatID == "p2" && (isExplicitDeviceNode(seatCfg.KeyboardNode) || isExplicitDeviceNode(seatCfg.MouseNode))
+	useCage := (seatCfg.Compositor == "cage" || seatCfg.Compositor == "cage_gamescope" || seatCfg.NestCage ||
+		((seatCfg.Compositor == "" || seatCfg.Compositor == "auto") && p2HasKBM) ||
+		(seatCfg.Mode == SeatModeStream && !caps.HasGamescope)) && caps.HasCage
+	if seatCfg.Compositor == "gamescope" {
+		useCage = false
+	}
+
+	if caps.HasGamescope {
 		renderW := seatCfg.TargetWidth
 		renderH := seatCfg.TargetHeight
 		if renderW <= 0 || renderH <= 0 {
@@ -526,14 +597,18 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 			gsBin = "gamescope"
 		}
 		cmdArgs = append([]string{gsBin}, gsArgs...)
+	}
 
-		// If cage nesting is requested around gamescope, wrap in cage
-		if (seatCfg.NestCage || seatCfg.Compositor == "cage_gamescope") && caps.HasCage {
-			cageBin, err := exec.LookPath("cage")
-			if err == nil && cageBin != "" {
-				cmdArgs = append([]string{cageBin, "-s", "--"}, cmdArgs...)
-			}
+	if useCage && caps.HasCage {
+		cageBin, err := exec.LookPath("cage")
+		if err != nil {
+			cageBin = "cage"
 		}
+		cageArgs, cErr := BuildCageArgs("", cmdArgs)
+		if cErr != nil {
+			return nil, nil, "", fmt.Errorf("build cage args: %w", cErr)
+		}
+		cmdArgs = append([]string{cageBin}, cageArgs...)
 	}
 
 	finalCmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
@@ -562,7 +637,7 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	)
 
 	// If software cursor is requested (ShowCursor) or running under Cage/wlroots
-	if seatCfg.ShowCursor || seatCfg.NestCage || seatCfg.Compositor == "cage" || seatCfg.Compositor == "cage_gamescope" {
+	if seatCfg.ShowCursor || useCage {
 		finalCmd.Env = append(finalCmd.Env, "WLR_NO_HARDWARE_CURSORS=1")
 	}
 
@@ -718,6 +793,11 @@ func (s *Supervisor) StopSession(gameDir string) error {
 		_ = session.seat2.logFile.Close()
 	}
 
+	// 6. Cleanup Wayland symlink if created
+	if session.seat2.waylandLink != "" {
+		_ = os.Remove(session.seat2.waylandLink)
+	}
+
 	slog.Info("Multi-seat session cleanly terminated", "dir", gameDir)
 	return nil
 }
@@ -761,6 +841,10 @@ func (s *Supervisor) StopSeat(gameDir string, seatID string) error {
 		}
 		if session.seat2.sink != nil {
 			session.seat2.sink.Destroy(ctx)
+		}
+		if session.seat2.waylandLink != "" {
+			_ = os.Remove(session.seat2.waylandLink)
+			session.seat2.waylandLink = ""
 		}
 		session.seat2.status.IsRunning = false
 	} else {

@@ -85,6 +85,74 @@ describe('multiseatStore', () => {
     expect(get(multiseatStore).activeSessions[mockGame.gameDir]).toBeUndefined();
   });
 
+  it('defaults Seat 2 compositor to cage when dedicated KBM is configured with auto compositor', async () => {
+    const launchSpy = vi.spyOn(AppAPI, 'launchMultiseatSession').mockResolvedValue();
+
+    const mockGame = {
+      gameDir: '/mock/games/HaloKBM',
+      name: 'Halo KBM',
+      appId: '976730',
+      exePath: '/mock/games/Halo/halo.exe',
+      runner: 'umu',
+    };
+
+    multiseatStore.assignKeyboard('seat2', '/dev/input/event10');
+    multiseatStore.assignMouse('seat2', '/dev/input/event11');
+    multiseatStore.updateStaging({ seat2: { ...get(multiseatStore).staging.seat2, compositor: 'auto' } });
+
+    await multiseatStore.launchSession(mockGame, { account_name: 'Hero117' });
+
+    expect(launchSpy).toHaveBeenCalled();
+    const callArgs = launchSpy.mock.calls[launchSpy.mock.calls.length - 1][0];
+    expect(callArgs.seat2.compositor).toBe('cage');
+    expect(callArgs.seat2.keyboard_node).toBe('/dev/input/event10');
+    expect(callArgs.seat2.mouse_node).toBe('/dev/input/event11');
+  });
+
+  it('respects explicit gamescope compositor even when dedicated KBM is configured', async () => {
+    const launchSpy = vi.spyOn(AppAPI, 'launchMultiseatSession').mockResolvedValue();
+
+    const mockGame = {
+      gameDir: '/mock/games/HaloGamescope',
+      name: 'Halo Gamescope',
+      appId: '976730',
+      exePath: '/mock/games/Halo/halo.exe',
+      runner: 'umu',
+    };
+
+    multiseatStore.assignKeyboard('seat2', '/dev/input/event10');
+    multiseatStore.assignMouse('seat2', '/dev/input/event11');
+    multiseatStore.updateStaging({ seat2: { ...get(multiseatStore).staging.seat2, compositor: 'gamescope' } });
+
+    await multiseatStore.launchSession(mockGame, { account_name: 'Hero117' });
+
+    expect(launchSpy).toHaveBeenCalled();
+    const callArgs = launchSpy.mock.calls[launchSpy.mock.calls.length - 1][0];
+    expect(callArgs.seat2.compositor).toBe('gamescope');
+  });
+
+  it('does not default to cage when seat2 keyboard and mouse are none or auto', async () => {
+    const launchSpy = vi.spyOn(AppAPI, 'launchMultiseatSession').mockResolvedValue();
+
+    const mockGame = {
+      gameDir: '/mock/games/HaloNone',
+      name: 'Halo None',
+      appId: '976730',
+      exePath: '/mock/games/Halo/halo.exe',
+      runner: 'umu',
+    };
+
+    multiseatStore.assignKeyboard('seat2', 'none');
+    multiseatStore.assignMouse('seat2', 'none');
+    multiseatStore.updateStaging({ seat2: { ...get(multiseatStore).staging.seat2, compositor: 'auto' } });
+
+    await multiseatStore.launchSession(mockGame, { account_name: 'Hero117' });
+
+    expect(launchSpy).toHaveBeenCalled();
+    const callArgs = launchSpy.mock.calls[launchSpy.mock.calls.length - 1][0];
+    expect(callArgs.seat2.compositor).toBe('auto');
+  });
+
   describe('resolveGamepadAssignments', () => {
     const mockPads = [
       { name: 'Black Shark Green Ghost', dev_node: '/dev/input/event29', bus: 'usb' },

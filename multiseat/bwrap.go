@@ -159,7 +159,7 @@ func BuildBwrapArgs(opts BwrapOptions) ([]string, error) {
 	// cannot detect or poll unassigned gamepads.
 	allGamepadNodes := FindAllHostGamepadNodes()
 	assignedNodes := make(map[string]bool)
-	if opts.GamepadNode != "" && opts.GamepadNode != "none" {
+	if isExplicitDeviceNode(opts.GamepadNode) {
 		assignedNodes[opts.GamepadNode] = true
 		if util.FileExists(opts.GamepadNode) {
 			jsNodes, hidrawNodes, siblingEventNodes := FindGamepadCompanionNodes(opts.GamepadNode)
@@ -178,42 +178,6 @@ func BuildBwrapArgs(opts BwrapOptions) ([]string, error) {
 	for _, node := range allGamepadNodes {
 		if !assignedNodes[node] && util.FileExists(node) {
 			args = append(args, "--ro-bind", "/dev/null", node)
-		}
-	}
-
-	// Mask unassigned keyboard and mouse devices if KBM isolation is active
-	if (opts.KeyboardNode != "" && opts.KeyboardNode != "none") || (opts.MouseNode != "" && opts.MouseNode != "none") {
-		hostKeyboards, hostMice := FindAllHostKBMNodes()
-		assignedKBM := make(map[string]bool)
-
-		if opts.KeyboardNode != "" && opts.KeyboardNode != "none" {
-			assignedKBM[opts.KeyboardNode] = true
-			_, _, sib := FindGamepadCompanionNodes(opts.KeyboardNode)
-			for _, s := range sib {
-				assignedKBM[s] = true
-			}
-		}
-		if opts.MouseNode != "" && opts.MouseNode != "none" {
-			assignedKBM[opts.MouseNode] = true
-			_, _, sib := FindGamepadCompanionNodes(opts.MouseNode)
-			for _, s := range sib {
-				assignedKBM[s] = true
-			}
-		}
-
-		if opts.KeyboardNode != "" && opts.KeyboardNode != "none" {
-			for _, kNode := range hostKeyboards {
-				if !assignedKBM[kNode] && util.FileExists(kNode) {
-					args = append(args, "--ro-bind", "/dev/null", kNode)
-				}
-			}
-		}
-		if opts.MouseNode != "" && opts.MouseNode != "none" {
-			for _, mNode := range hostMice {
-				if !assignedKBM[mNode] && util.FileExists(mNode) {
-					args = append(args, "--ro-bind", "/dev/null", mNode)
-				}
-			}
 		}
 	}
 
