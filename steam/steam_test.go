@@ -3,6 +3,7 @@ package steam
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -25,8 +26,8 @@ func TestMain(m *testing.M) {
 
 
 func TestFetchAppName(t *testing.T) {
-	cache.DisableCache = true
-	defer func() { cache.DisableCache = false }()
+	cache.SetDisabled(true)
+	defer cache.SetDisabled(false)
 
 	t.Run("successful response", func(t *testing.T) {
 		mockClient := &http.Client{
@@ -383,3 +384,82 @@ func TestGetSupportedLanguageCodes(t *testing.T) {
 		t.Errorf("expected ['english'] for empty details, got %v", emptyCodes)
 	}
 }
+
+func TestFetchAppNewsItems_CacheUpgrade(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", tmpDir)
+	cache.SetDisabled(false)
+	defer cache.SetDisabled(true)
+
+	// First, simulate a cached 1-item news response on disk
+	singleItemJSON := []byte(`[{"title":"Update 1","url":"https://steam.com/1","author":"Dev","contents":"Bugfix","feedlabel":"News","date":1700000000}]`)
+	cache.SaveNewsItems("12345", singleItemJSON)
+
+	// Verify the cache has 1 item
+	cachedData, ok := cache.GetNewsItems("12345")
+	if !ok || len(cachedData) == 0 {
+		t.Fatalf("expected cache to have saved items")
+	}
+
+	// Now set up mock HTTP client returning 3 news items from Steam API
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "GetNewsForApp") {
+				jsonResp := `{
+					"appnews": {
+						"appid": 12345,
+						"newsitems": [
+							{"title": "Update 1", "url": "https://steam.com/1", "author": "Dev", "contents": "Bugfix 1", "feedlabel": "News", "date": 1700000000},
+							{"title": "Update 2", "url": "https://steam.com/2", "author": "Dev", "contents": "Bugfix 2", "feedlabel": "News", "date": 1700001000},
+							{"title": "Update 3", "url": "https://steam.com/3", "author": "Dev", "contents": "Bugfix 3", "feedlabel": "News", "date": 1700002000}
+						]
+					}
+				}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+
+	// Requesting count = 3 must NOT return only 1 item; it must fetch from API and return 3 items
+	items, err := FetchAppNewsItems(ctx, "12345", 3)
+	if err != nil {
+		t.Fatalf("FetchAppNewsItems failed: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 news items, got %d", len(items))
+	}
+
+	// Verify that the disk cache was upgraded and now contains 3 items
+	upgradedBytes, ok := cache.GetNewsItems("12345")
+	if !ok {
+		t.Fatalf("expected upgraded cache to exist")
+	}
+	var upgradedItems []NewsItem
+	if err := json.Unmarshal(upgradedBytes, &upgradedItems); err != nil {
+		t.Fatalf("unmarshal upgraded cache failed: %v", err)
+	}
+	if len(upgradedItems) < 3 {
+		t.Errorf("expected upgraded cache to have at least 3 items, got %d", len(upgradedItems))
+	}
+
+	// Verify that subsequent SaveNewsItems with 1 item does NOT downgrade the cache
+	cache.SaveNewsItems("12345", singleItemJSON)
+	protectedBytes, _ := cache.GetNewsItems("12345")
+	var protectedItems []NewsItem
+	_ = json.Unmarshal(protectedBytes, &protectedItems)
+	if len(protectedItems) < 3 {
+		t.Errorf("cache was downgraded! expected at least 3 items, got %d", len(protectedItems))
+	}
+}
+

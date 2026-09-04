@@ -48,7 +48,8 @@ export const MOCK_GAMES = [
     ],
     news_items: [
       { title: 'Patch 2.13 Available Now', contents: 'Adds support for AMD FidelityFX Super Resolution 3 and Intel XeSS 1.3.', date: 1726142400, feedlabel: 'Community Announcements' },
-      { title: 'Night City Wire Special', contents: 'Deep dive into Phantom Liberty enhancements and vehicle combat.', date: 1720000000, feedlabel: 'News' }
+      { title: 'Night City Wire Special', contents: 'Deep dive into Phantom Liberty enhancements and vehicle combat.', date: 1720000000, feedlabel: 'News' },
+      { title: 'Patch 2.12 Update Notes', contents: 'Fixes key binding issues and CPU utilization on hybrid architectures.', date: 1715000000, feedlabel: 'Patch Notes' }
     ]
   },
   {

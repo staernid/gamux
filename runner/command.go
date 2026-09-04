@@ -54,8 +54,11 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 			if res.MangoHud == nil && profile.MangoHud != nil {
 				res.MangoHud = profile.MangoHud
 			}
-			if res.DXVKHud == "" && profile.DXVKHud != "" {
-				res.DXVKHud = profile.DXVKHud
+			if res.DisableOverlay == nil && profile.DisableOverlay != nil {
+				res.DisableOverlay = profile.DisableOverlay
+			}
+			if res.OfflineMode == nil && profile.OfflineMode != nil {
+				res.OfflineMode = profile.OfflineMode
 			}
 			if res.DllOverrides == "" && profile.DllOverrides != "" {
 				res.DllOverrides = profile.DllOverrides
@@ -117,6 +120,14 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 
 	if res.MangoHud == nil && cfg.MangoHud {
 		res.MangoHud = util.Ptr(cfg.MangoHud)
+	}
+
+	if res.DisableOverlay == nil && cfg.DisableOverlay {
+		res.DisableOverlay = util.Ptr(cfg.DisableOverlay)
+	}
+
+	if res.OfflineMode == nil && cfg.OfflineMode {
+		res.OfflineMode = util.Ptr(cfg.OfflineMode)
 	}
 
 	if res.WorkingDir == "" && res.GameDir != "" {
@@ -213,9 +224,6 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 	// Gaming environment toggles
 	if resolved.MangoHud != nil && *resolved.MangoHud {
 		gameEnv["MANGOHUD"] = "1"
-	}
-	if resolved.DXVKHud != "" {
-		gameEnv["DXVK_HUD"] = resolved.DXVKHud
 	}
 
 	// Wine / Proton / Graphics performance & stability defaults for Windows games

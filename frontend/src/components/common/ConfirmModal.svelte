@@ -53,7 +53,7 @@
   aria-describedby="confirm-modal-desc"
   class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
 >
-  <div class="bg-[#121214] border {danger ? 'border-rose-500/40' : 'border-[#27272a]'} rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+  <div class="bg-surface-header border {danger ? 'border-rose-500/40' : 'border-surface-border'} rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
     <!-- Header with Icon -->
     <div class="flex items-start space-x-3.5">
       <div class="p-2.5 rounded-xl {danger ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'bg-neutral-800 text-neutral-200 border border-neutral-700'} flex-shrink-0">
@@ -79,11 +79,11 @@
     </div>
 
     <!-- Actions -->
-    <div class="flex items-center justify-end space-x-2.5 pt-2 border-t border-[#27272a]">
+    <div class="flex items-center justify-end space-x-2.5 pt-2 border-t border-surface-border">
       <button
         type="button"
         on:click={handleCancel}
-        class="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-xs font-bold text-neutral-200 hover:text-white transition-colors cursor-pointer"
+        class="px-4 py-2 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-xs font-bold text-neutral-200 hover:text-white transition-colors cursor-pointer"
       >
         {cancelLabel}
       </button>

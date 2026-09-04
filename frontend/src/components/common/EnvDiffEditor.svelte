@@ -53,14 +53,14 @@
     </div>
 
     {#if customKeys.length === 0}
-      <div class="p-3 bg-[#101013] border border-[#27272a] rounded-xl text-center">
+      <div class="p-3 bg-[#101013] border border-surface-border rounded-xl text-center">
         <p class="text-xs text-neutral-500 font-mono">No custom variables configured for this game.</p>
       </div>
     {:else}
       <div class="space-y-1.5">
         {#each customKeys as k}
           {@const isOverridingGlobal = Boolean(globalEnv && globalEnv[k] !== undefined)}
-          <div class="flex items-center justify-between gap-3 p-2.5 bg-[#101013] border border-[#27272a] rounded-xl">
+          <div class="flex items-center justify-between gap-3 p-2.5 bg-[#101013] border border-surface-border rounded-xl">
             <div class="flex items-center space-x-2 min-w-0 flex-1">
               <span class="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" title="Active variable"></span>
               <span class="font-mono text-xs font-bold text-white truncate">{k}</span>
@@ -98,19 +98,19 @@
           placeholder="VARIABLE_NAME"
           bind:value={newKey}
           on:keydown={handleKeydown}
-          class="flex-1 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono uppercase outline-none transition-colors"
+          class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono uppercase outline-none transition-colors"
         />
         <input
           type="text"
           placeholder="value"
           bind:value={newValue}
           on:keydown={handleKeydown}
-          class="flex-1 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono outline-none transition-colors"
+          class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono outline-none transition-colors"
         />
         <button
           type="button"
           on:click={addVariable}
-          class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-xl text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer flex items-center space-x-1"
+          class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-xl text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer flex items-center space-x-1"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -123,14 +123,14 @@
 
   <!-- Inherited Global Variables (Read-Only) -->
   {#if globalKeys.length > 0}
-    <div class="pt-3 border-t border-[#27272a] space-y-2">
+    <div class="pt-3 border-t border-surface-border space-y-2">
       <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider block">
         Inherited System Variables (Global)
       </span>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
         {#each globalKeys as gk}
           {@const isOverridden = Boolean(customEnv && customEnv[gk] !== undefined)}
-          <div class="flex items-center justify-between p-2 rounded-lg bg-[#101013] border border-[#27272a] {isOverridden ? 'opacity-40 line-through' : ''}">
+          <div class="flex items-center justify-between p-2 rounded-lg bg-[#101013] border border-surface-border {isOverridden ? 'opacity-40 line-through' : ''}">
             <div class="flex items-center space-x-1.5 min-w-0">
               <span class="font-mono text-2xs text-neutral-400 truncate">{gk}</span>
               <span class="text-neutral-600 text-2xs font-mono">=</span>

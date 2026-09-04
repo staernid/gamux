@@ -1,5 +1,14 @@
 <script>
   import { configStore } from '../../../stores/config.js';
+  import {
+    isSfxEnabled,
+    setSfxEnabled,
+    getSfxVolume,
+    setSfxVolume,
+    isMuteInBackground,
+    setMuteInBackground,
+    playSelect
+  } from '../../../utils/audio.js';
   import SettingSection from '../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
@@ -9,12 +18,22 @@
   const currentUiScale = configStore.uiScale;
   let customSpeedMB = '';
 
+  let sfxEnabled = isSfxEnabled();
+  let sfxVolume = getSfxVolume();
+  let sfxMuteInBackground = isMuteInBackground();
+
   const uiScaleOptions = [
     { value: 14, label: '14px — Compact' },
     { value: 16, label: '16px — Standard' },
     { value: 18, label: '18px — Balanced (Default)' },
     { value: 20, label: '20px — Handheld (Deck)' },
     { value: 24, label: '24px — Large (TV / Couch)' }
+  ];
+
+  const launchBehaviorOptions = [
+    { value: 'keep', label: 'Keep Window Open (Default)' },
+    { value: 'minimize', label: 'Minimize to Taskbar' },
+    { value: 'hide', label: 'Hide Window (Restore on Exit)' }
   ];
 
   const standardSpeedPresets = [0, 5242880, 10485760, 26214400, 52428800, 104857600];
@@ -60,6 +79,26 @@
   function handleScaleChange(size) {
     configStore.setScale(size);
   }
+
+  function handleSfxToggle(e) {
+    setSfxEnabled(e.detail);
+    sfxEnabled = isSfxEnabled();
+  }
+
+  function handleMuteBgToggle(e) {
+    setMuteInBackground(e.detail);
+    sfxMuteInBackground = isMuteInBackground();
+  }
+
+  function handleVolumeInput(e) {
+    const vol = parseFloat(e.target.value);
+    setSfxVolume(vol);
+    sfxVolume = getSfxVolume();
+  }
+
+  function handleTestSound() {
+    playSelect();
+  }
 </script>
 
 <div class="space-y-3">
@@ -72,6 +111,73 @@
         value={$currentUiScale}
         options={uiScaleOptions}
         on:change={(e) => handleScaleChange(e.detail)}
+      />
+    </div>
+  </SettingSection>
+
+  <!-- Audio & Sound Effects -->
+  <SettingSection title="Audio & Sound Effects">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      <SeamlessSwitch
+        label="UI Sound Effects"
+        description="Synthesized mechanical clicks and chimes for navigation and interactions"
+        value={sfxEnabled}
+        on:change={handleSfxToggle}
+      />
+
+      <SeamlessSwitch
+        label="Mute in Background"
+        description="Automatically silence UI audio when the Gamux window loses focus"
+        value={sfxMuteInBackground}
+        on:change={handleMuteBgToggle}
+      />
+    </div>
+
+    {#if sfxEnabled}
+      <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in mt-2.5">
+        <div class="space-y-0.5 min-w-0">
+          <span class="text-xs font-semibold text-neutral-200">Sound Effects Volume</span>
+          <p class="text-2xs text-neutral-400">Master output volume for synthetic interface sounds</p>
+        </div>
+        <div class="flex items-center space-x-2.5 flex-shrink-0">
+          <span class="text-xs font-mono text-neutral-300 w-10 text-right">{Math.round(sfxVolume * 100)}%</span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={sfxVolume}
+            on:input={handleVolumeInput}
+            class="w-24 sm:w-32 accent-white cursor-pointer"
+            aria-label="Sound Effects Volume"
+          />
+          <button
+            type="button"
+            on:click={handleTestSound}
+            class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            title="Play test audio chime"
+          >
+            Test
+          </button>
+        </div>
+      </div>
+    {/if}
+  </SettingSection>
+
+  <!-- Process Launch & Window Behavior -->
+  <SettingSection title="Process Launch & Window Behavior">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      <InheritSelect
+        label="Launch Window Behavior"
+        description="Gamux window visibility while an external game process is running"
+        bind:value={cfgDraft.launch_window_behavior}
+        options={launchBehaviorOptions}
+      />
+
+      <SeamlessSwitch
+        label="Close to System Tray"
+        description="Minimize Gamux to the background instead of quitting when closing the window"
+        bind:value={cfgDraft.close_to_tray}
       />
     </div>
   </SettingSection>
@@ -89,7 +195,7 @@
         />
 
         {#if selectedSpeedMode === -1}
-          <div class="p-2.5 bg-[#101013] border border-[#27272a] rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+          <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
             <span class="text-xs font-semibold text-neutral-300">Custom Limit (MB/s):</span>
             <div class="flex items-center space-x-1.5">
               <input
@@ -99,7 +205,7 @@
                 value={customSpeedMB}
                 on:input={handleCustomSpeedInput}
                 placeholder="15"
-                class="w-20 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono text-right outline-none"
+                class="w-20 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono text-right outline-none"
               />
               <span class="text-xs font-mono text-neutral-400">MB/s</span>
             </div>

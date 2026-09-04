@@ -87,6 +87,8 @@ export function QueryArtworkOptions(arg1:domain.ArtworkQuery):Promise<Array<doma
 
 export function QuickPlay(arg1:domain.LaunchProfile):Promise<void>;
 
+export function Quit():Promise<void>;
+
 export function RemoveTask(arg1:string):Promise<void>;
 
 export function ReorderTasks(arg1:Array<string>):Promise<void>;

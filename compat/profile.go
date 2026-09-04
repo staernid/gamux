@@ -120,6 +120,20 @@ func hydrateFallbacks(p *domain.LaunchProfile, gameDir string) {
 		}
 	}
 
+	// Read disable_overlay.txt
+	if p.DisableOverlay == nil {
+		if util.FileExists(filepath.Join(settingsDir, "disable_overlay.txt")) {
+			p.DisableOverlay = util.Ptr(true)
+		}
+	}
+
+	// Read offline.txt
+	if p.OfflineMode == nil {
+		if util.FileExists(filepath.Join(settingsDir, "offline.txt")) {
+			p.OfflineMode = util.Ptr(true)
+		}
+	}
+
 	// Read ColdClientLoader.ini Exe target if ExePath is still empty
 	if p.ExePath == "" {
 		iniPath := filepath.Join(gameDir, "ColdClientLoader.ini")
@@ -385,6 +399,30 @@ func SyncSettings(ctx context.Context, p *domain.LaunchProfile, cfg *config.Conf
 		_ = os.WriteFile(langFile, []byte(strings.ToLower(p.Language)+"\n"), 0644)
 	} else {
 		_ = os.Remove(langFile)
+	}
+
+	// 4. Sync DisableOverlay
+	overlayFile := filepath.Join(settingsDir, "disable_overlay.txt")
+	disableOverlay := cfg.DisableOverlay
+	if p.DisableOverlay != nil {
+		disableOverlay = *p.DisableOverlay
+	}
+	if disableOverlay {
+		_ = os.WriteFile(overlayFile, []byte("1\n"), 0644)
+	} else {
+		_ = os.Remove(overlayFile)
+	}
+
+	// 5. Sync OfflineMode
+	offlineFile := filepath.Join(settingsDir, "offline.txt")
+	offlineMode := cfg.OfflineMode
+	if p.OfflineMode != nil {
+		offlineMode = *p.OfflineMode
+	}
+	if offlineMode {
+		_ = os.WriteFile(offlineFile, []byte("1\n"), 0644)
+	} else {
+		_ = os.Remove(offlineFile)
 	}
 
 	return nil

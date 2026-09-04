@@ -67,7 +67,7 @@
   <div class="flex items-center justify-between border-b border-[#222232] pb-2">
     <div class="flex items-center space-x-2">
       <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">Match Online Store Metadata</span>
-      <span class="text-[10px] text-slate-400 font-mono">(Does not modify physical game files)</span>
+      <span class="text-3xs text-slate-400 font-mono">(Does not modify physical game files)</span>
     </div>
     <div class="flex items-center space-x-2">
       {#if hasMatch}
@@ -94,14 +94,14 @@
         class="px-3 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer {isAct ? 'bg-purple-600 text-white shadow border border-purple-400/40' : 'bg-[#0a0a0f] border border-[#222232] text-slate-400 hover:text-white'}"
       >
         <span>{prov.display_name}</span>
-        <span class="text-[9px] bg-black/30 px-1 rounded font-mono">{prov.badge}</span>
+        <span class="text-4xs bg-black/30 px-1 rounded font-mono">{prov.badge}</span>
       </button>
     {/each}
   </div>
 
   {#if metaTargetStore === 'none' || metaTargetStore === 'standalone'}
     <div class="p-3 bg-[#0a0a0f] border border-[#1e1e2c] rounded-lg text-xs text-slate-300 flex items-center justify-between">
-      <p class="text-[11px] text-slate-400">Unlinks external store metadata. Game will display local library title and fallback artwork.</p>
+      <p class="text-2xs text-slate-400">Unlinks external store metadata. Game will display local library title and fallback artwork.</p>
       <button
         type="button"
         on:click={() => handleApplyMetaLink('0')}
@@ -144,7 +144,7 @@
     <!-- Candidate Results List -->
     {#if metaSearchResults.length > 0}
       <div class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+        <span class="text-3xs font-bold uppercase tracking-wider text-slate-400 block">
           Found Candidates ({metaSearchResults.length})
         </span>
         <div class="grid grid-cols-1 gap-1.5">
@@ -156,7 +156,7 @@
                 {/if}
                 <div class="min-w-0">
                   <div class="text-xs font-bold text-white truncate">{cand.name}</div>
-                  <div class="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+                  <div class="flex items-center space-x-2 text-3xs font-mono text-slate-400">
                     <span class="text-purple-300">ID: {cand.id}</span>
                     {#if cand.release_date}
                       <span>• {cand.release_date}</span>
@@ -180,7 +180,7 @@
 
     <!-- Manual ID Fallback Row -->
     <div class="flex items-center gap-2 pt-2 border-t border-[#1e1e2c]">
-      <span class="text-[10px] font-bold text-slate-400 font-mono flex-shrink-0">
+      <span class="text-3xs font-bold text-slate-400 font-mono flex-shrink-0">
         {metaTargetStore === 'steam' ? 'Steam AppID:' : metaTargetStore === 'gog' ? 'GOG ID / Slug:' : 'RAWG ID / Slug:'}
       </span>
       <input

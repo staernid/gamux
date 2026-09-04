@@ -534,7 +534,10 @@ export function extractCoverColorPalette(url) {
         resolve([]);
       }
     };
-    img.onerror = () => resolve([]);
+    img.onerror = () => {
+      coverPaletteCache.set(url, []);
+      resolve([]);
+    };
     img.src = url;
   });
 }

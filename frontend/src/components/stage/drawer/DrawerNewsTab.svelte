@@ -11,7 +11,7 @@
 
 <div class="space-y-3">
   <div class="flex items-center justify-between">
-    <span class="text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+    <span class="text-slate-400 font-bold uppercase tracking-wider text-3xs">
       Steam Community Updates & News
     </span>
     <button
@@ -50,12 +50,12 @@
             <div class="flex items-center space-x-2">
               <strong class="text-slate-100 font-bold text-xs block truncate">{item.title}</strong>
               {#if item.feedlabel || item.feed_label}
-                <span class="text-[10px] font-mono text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-[#2a2a3a]">
+                <span class="text-3xs font-mono text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-[#2a2a3a]">
                   {item.feedlabel || item.feed_label}
                 </span>
               {/if}
             </div>
-            <span class="text-[10px] text-slate-500 font-mono">
+            <span class="text-3xs text-slate-500 font-mono">
               {item.author ? `${item.author} · ` : ''}{item.date ? new Date(item.date > 1e11 ? item.date : item.date * 1000).toLocaleDateString() : ''}
             </span>
           </button>

@@ -146,6 +146,10 @@ export function QuickPlay(arg1) {
   return window['go']['gui']['App']['QuickPlay'](arg1);
 }
 
+export function Quit() {
+  return window['go']['gui']['App']['Quit']();
+}
+
 export function RemoveTask(arg1) {
   return window['go']['gui']['App']['RemoveTask'](arg1);
 }

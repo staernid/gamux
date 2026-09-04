@@ -159,28 +159,28 @@
     <!-- Top Summary Metrics Banner -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
       <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Total Save Size</span>
+        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Total Save Size</span>
         <p class="font-mono text-sm font-bold text-emerald-400">
           {formatBytes(saveResult?.total_save_bytes || 0)}
         </p>
       </div>
 
       <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Discovered Paths</span>
+        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Discovered Paths</span>
         <p class="font-mono text-sm font-bold text-sky-400">
           {(saveResult?.locations || []).filter(l => l.exists).length} / {(saveResult?.locations || []).length}
         </p>
       </div>
 
       <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Steam Cloud Emulation</span>
+        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Steam Cloud Emulation</span>
         <p class="font-mono text-sm font-bold {saveResult?.has_cloud_saves ? 'text-purple-400' : 'text-slate-500'}">
           {saveResult?.has_cloud_saves ? 'Active (GSE)' : 'None'}
         </p>
       </div>
 
       <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Backup Snapshots</span>
+        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Backup Snapshots</span>
         <p class="font-mono text-sm font-bold text-slate-200">
           {backups.length}
         </p>
@@ -190,13 +190,13 @@
     <!-- Discovered Save & Config Locations Section -->
     <div class="space-y-2">
       <div class="flex items-center justify-between">
-        <span class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+        <span class="block text-slate-400 font-bold uppercase tracking-wider text-3xs">
           Discovered Save & Config Directories
         </span>
         <button
           type="button"
           on:click={handleUpdateManifest}
-          class="text-[10px] text-sky-400 hover:text-sky-300 font-bold transition-colors"
+          class="text-3xs text-sky-400 hover:text-sky-300 font-bold transition-colors"
           title="Force update Ludusavi database from GitHub"
         >
           Refresh Manifest
@@ -210,20 +210,20 @@
             <div class="p-3 bg-[#0d0d12] border border-[#20202c] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all">
               <div class="space-y-1 min-w-0 flex-1">
                 <div class="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <span class="px-2 py-0.5 rounded-md text-[9px] font-bold border font-mono {badge.class}">
+                  <span class="px-2 py-0.5 rounded-md text-4xs font-bold border font-mono {badge.class}">
                     {badge.label}
                   </span>
                   {#if loc.exists}
-                    <span class="text-[10px] text-slate-400 font-mono">
+                    <span class="text-3xs text-slate-400 font-mono">
                       {formatBytes(loc.size_bytes)} ({loc.file_count} {loc.file_count === 1 ? 'file' : 'files'})
                     </span>
                   {:else}
-                    <span class="text-[10px] text-slate-500 italic">
+                    <span class="text-3xs text-slate-500 italic">
                       Not created on disk yet
                     </span>
                   {/if}
                   {#if loc.source}
-                    <span class="text-[9px] text-slate-500 font-mono">
+                    <span class="text-4xs text-slate-500 font-mono">
                       · {loc.source}
                     </span>
                   {/if}
@@ -238,7 +238,7 @@
                 <button
                   type="button"
                   on:click={() => handleCopyPath(loc.path)}
-                  class="px-2.5 py-1.5 rounded-lg bg-[#1a1a24] hover:bg-[#252535] text-slate-300 hover:text-white border border-[#2b2b3c] text-[11px] font-bold transition-colors flex items-center space-x-1"
+                  class="px-2.5 py-1.5 rounded-lg bg-[#1a1a24] hover:bg-[#252535] text-slate-300 hover:text-white border border-[#2b2b3c] text-2xs font-bold transition-colors flex items-center space-x-1"
                   title="Copy directory path to clipboard"
                 >
                   {#if copiedPath === loc.path}
@@ -257,7 +257,7 @@
                   type="button"
                   on:click={() => handleOpenPath(loc.path)}
                   disabled={!loc.exists}
-                  class="px-3 py-1.5 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-sky-300 border border-sky-800/50 text-[11px] font-bold transition-colors flex items-center space-x-1"
+                  class="px-3 py-1.5 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-sky-300 border border-sky-800/50 text-2xs font-bold transition-colors flex items-center space-x-1"
                   title="Open folder in File Manager"
                 >
                   <span>Open</span>
@@ -277,10 +277,10 @@
     <div class="space-y-2 pt-2 border-t border-[#20202c]">
       <div class="flex items-center justify-between">
         <div>
-          <span class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+          <span class="block text-slate-300 font-bold uppercase tracking-wider text-3xs">
             Save Snapshots & Backups
           </span>
-          <span class="text-[10px] text-slate-500">
+          <span class="text-3xs text-slate-500">
             Portable cross-device .zip snapshots (PC ↔ Steam Deck).
           </span>
         </div>
@@ -288,7 +288,7 @@
         <button
           type="button"
           on:click={() => { showBackupInput = !showBackupInput; }}
-          class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-[11px] font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm"
+          class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-2xs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm"
         >
           <span>+ Create Backup</span>
         </button>
@@ -335,15 +335,15 @@
               <div class="space-y-0.5 min-w-0">
                 <div class="flex items-center space-x-2">
                   <span class="font-mono font-bold text-slate-200">{bk.id}</span>
-                  <span class="text-[10px] text-slate-400">({formatTimeAgo(bk.created_at)})</span>
-                  <span class="text-[9px] px-1.5 py-0.2 rounded border font-mono {bk.created_by === 'auto_exit' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-sky-500/10 text-sky-300 border-sky-500/30'}">
+                  <span class="text-3xs text-slate-400">({formatTimeAgo(bk.created_at)})</span>
+                  <span class="text-4xs px-1.5 py-0.2 rounded border font-mono {bk.created_by === 'auto_exit' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-sky-500/10 text-sky-300 border-sky-500/30'}">
                     {bk.created_by === 'auto_exit' ? 'Auto Exit' : 'Manual'}
                   </span>
                 </div>
                 {#if bk.note}
-                  <p class="text-[11px] text-emerald-300/90 italic truncate">{bk.note}</p>
+                  <p class="text-2xs text-emerald-300/90 italic truncate">{bk.note}</p>
                 {/if}
-                <div class="flex items-center space-x-2 text-[10px] text-slate-500 font-mono">
+                <div class="flex items-center space-x-2 text-3xs text-slate-500 font-mono">
                   <span>{formatBytes(bk.size_bytes)}</span>
                   <span>·</span>
                   <span>{bk.file_count} {bk.file_count === 1 ? 'file' : 'files'}</span>
@@ -355,7 +355,7 @@
                   type="button"
                   on:click={() => handleRestoreBackup(bk.id)}
                   disabled={isRestoring}
-                  class="px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 text-[11px] font-bold transition-colors"
+                  class="px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 text-2xs font-bold transition-colors"
                   title="Restore this save snapshot"
                 >
                   {isRestoring ? 'Restoring...' : 'Restore'}

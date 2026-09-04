@@ -574,40 +574,59 @@ func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem
 	}
 
 	// 1. Check disk cache first to prevent rate limiting and provide instant loading
+	var cachedItems []NewsItem
 	if cachedBytes, ok := cache.GetNewsItems(appID); ok {
-		var cachedItems []NewsItem
 		if err := json.Unmarshal(cachedBytes, &cachedItems); err == nil && len(cachedItems) > 0 {
 			if len(cachedItems) >= count {
 				return cachedItems[:count], nil
 			}
-			return cachedItems, nil
+			// Cache has fewer items than requested; proceed to fetch from Steam API
 		}
 	}
 
-	// 2. Fetch from Steam Web API
-	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d&maxlength=0", DefaultSteamWebAPI, appID, count)
+	// 2. Fetch from Steam Web API - always request at least 15 items to populate a rich cache for all views
+	fetchCount := count
+	if fetchCount < 15 {
+		fetchCount = 15
+	}
+	newsURL := fmt.Sprintf("%s/ISteamNews/GetNewsForApp/v2/?appid=%s&count=%d&maxlength=0", DefaultSteamWebAPI, appID, fetchCount)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, newsURL, nil)
 	if err != nil {
+		if len(cachedItems) > 0 {
+			return cachedItems, nil
+		}
 		return nil, fmt.Errorf("create news request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Steam Game Manager)")
 
 	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {
+		if len(cachedItems) > 0 {
+			return cachedItems, nil
+		}
 		return nil, fmt.Errorf("fetch app news: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if len(cachedItems) > 0 {
+			return cachedItems, nil
+		}
 		return nil, fmt.Errorf("app news HTTP %d", resp.StatusCode)
 	}
 
 	var res AppNewsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		if len(cachedItems) > 0 {
+			return cachedItems, nil
+		}
 		return nil, fmt.Errorf("decode news JSON: %w", err)
 	}
 
 	if len(res.AppNews.NewsItems) == 0 {
+		if len(cachedItems) > 0 {
+			return cachedItems, nil
+		}
 		return nil, fmt.Errorf("no news items found")
 	}
 
@@ -628,6 +647,9 @@ func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem
 		cache.SaveNewsItems(appID, itemsData)
 	}
 
+	if len(items) > count {
+		return items[:count], nil
+	}
 	return items, nil
 }
 

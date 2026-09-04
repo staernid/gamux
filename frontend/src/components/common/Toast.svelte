@@ -42,7 +42,7 @@
 {#if topCenterToasts.length > 0}
   <div class="fixed top-14 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none">
     {#each topCenterToasts as toast (toast.id)}
-      <div class="pointer-events-auto bg-[#121214]/95 border border-[#27272a] text-white shadow-2xl backdrop-blur-xl px-5 py-2 rounded-full flex items-center space-x-2.5 animate-fade-in">
+      <div class="pointer-events-auto bg-surface-header/95 border border-surface-border text-white shadow-2xl  px-5 py-2 rounded-full flex items-center space-x-2.5 animate-fade-in">
         {#if toast.icon === 'sort' || toast.type === 'osd'}
           <svg class="w-4 h-4 text-neutral-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
@@ -58,7 +58,7 @@
 {#if bottomCenterToasts.length > 0}
   <div class="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none">
     {#each bottomCenterToasts as toast (toast.id)}
-      <div class="pointer-events-auto bg-[#121214]/95 border border-[#27272a] text-white shadow-2xl backdrop-blur-xl px-5 py-2 rounded-full flex items-center space-x-2.5 animate-fade-in">
+      <div class="pointer-events-auto bg-surface-header/95 border border-surface-border text-white shadow-2xl  px-5 py-2 rounded-full flex items-center space-x-2.5 animate-fade-in">
         <span class="text-xs font-bold tracking-wide">{toast.message || toast.title}</span>
       </div>
     {/each}
@@ -73,8 +73,8 @@
       {@const isSuccess = toast.type === 'success'}
       {@const bgClass = isError ? 'bg-[#181214]/95 border-rose-800 text-rose-100 shadow-rose-950/50' :
                         isSuccess ? 'bg-[#121614]/95 border-emerald-800 text-emerald-100 shadow-emerald-950/50' :
-                        'bg-[#141417]/95 border-[#27272a] text-neutral-100 shadow-2xl'}
-      <div class="{bgClass} pointer-events-auto border rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl transition-all duration-300 flex items-start space-x-3 animate-fade-in">
+                        'bg-surface-input/95 border-surface-border text-neutral-100 shadow-2xl'}
+      <div class="{bgClass} pointer-events-auto border rounded-2xl p-3.5 shadow-2xl  transition-all duration-300 flex items-start space-x-3 animate-fade-in">
         {#if isError}
           <svg class="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

@@ -30,7 +30,7 @@
   }
 </script>
 
-<div class="bg-[#121214] border border-[#27272a] rounded-2xl p-4 shadow-xl space-y-2.5 animate-fade-in">
+<div class="bg-surface-header border border-surface-border rounded-2xl p-4 shadow-xl space-y-2.5 animate-fade-in">
   <div class="flex items-center justify-between gap-3">
     <div class="flex items-center space-x-2.5 min-w-0">
       <span class="px-2 py-0.5 rounded-lg text-3xs font-black uppercase tracking-wider bg-neutral-800 text-neutral-200 border border-neutral-700 flex items-center space-x-1.5 flex-shrink-0">
@@ -53,7 +53,7 @@
       <button
         type="button"
         on:click={openTasksView}
-        class="px-2.5 py-1 rounded-xl bg-[#18181b] hover:bg-[#222225] text-neutral-300 hover:text-white text-2xs font-bold border border-[#27272a] transition flex items-center space-x-1 cursor-pointer"
+        class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white text-2xs font-bold border border-surface-border transition flex items-center space-x-1 cursor-pointer"
         title="Open full Tasks view (2)"
       >
         <span>View Tasks</span>
@@ -72,7 +72,7 @@
 
   <!-- Progress Bar -->
   <div class="space-y-1">
-    <div class="w-full bg-[#141417] border border-[#27272a] h-2 rounded-full overflow-hidden">
+    <div class="w-full bg-surface-input border border-surface-border h-2 rounded-full overflow-hidden">
       <div
         class="bg-white h-full rounded-full transition-all duration-300 relative"
         style="width: {task.percent || 0}%"

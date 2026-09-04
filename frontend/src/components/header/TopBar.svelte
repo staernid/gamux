@@ -73,20 +73,20 @@
       class="flex items-center space-x-1 text-neutral-500 hover:text-neutral-200 transition-colors text-2xs font-mono group px-1 cursor-pointer"
       title="Previous View (Q / L1)"
     >
-      <span class="px-1.5 py-0.5 rounded bg-[#18181b]/90 backdrop-blur-md border border-[#27272a] text-neutral-400 group-hover:text-white text-3xs font-bold shadow-sm">
+      <span class="px-1.5 py-0.5 rounded bg-surface-card/90 border border-surface-border text-neutral-400 group-hover:text-white text-3xs font-bold shadow-sm">
         Q
       </span>
-      <span class="text-neutral-600">/</span>
+      <span class="text-neutral-500">/</span>
       <span class="text-neutral-400 font-semibold group-hover:text-neutral-200">L1</span>
     </button>
 
     <!-- Centered Floating Pill Navigation Dock -->
-    <nav class="flex items-center space-x-1 bg-[#121214]/90 backdrop-blur-xl border border-[#27272a] px-1.5 py-1 rounded-2xl shadow-2xl">
+    <nav class="flex items-center space-x-1 bg-[#121214]/90 border border-[#27272a] px-1.5 py-1 rounded-2xl shadow-2xl">
       <!-- Shelf / Game Hub (1) -->
       <button
         type="button"
         on:click={handleShelfOrHubClick}
-        class="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' || $activeView === 'game-hub' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+        class="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' || $activeView === 'game-hub' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title={$activeView === 'game-hub' ? 'Back to Shelf (B / Esc)' : 'Shelf (1)'}
       >
         {#if $activeView === 'game-hub'}
@@ -110,7 +110,7 @@
       <button
         type="button"
         on:click={() => navigateWithGuard('tasks')}
-        class="relative p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'tasks' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+        class="relative p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'tasks' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title="Tasks (2)"
       >
         <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,7 +127,7 @@
       <button
         type="button"
         on:click={() => navigateWithGuard('settings')}
-        class="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'settings' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+        class="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'settings' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title="Settings (3)"
       >
         <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,8 +145,8 @@
       title="Next View (E / R1)"
     >
       <span class="text-neutral-400 font-semibold group-hover:text-neutral-200">R1</span>
-      <span class="text-neutral-600">/</span>
-      <span class="px-1.5 py-0.5 rounded bg-[#18181b]/90 backdrop-blur-md border border-[#27272a] text-neutral-400 group-hover:text-white text-3xs font-bold shadow-sm">
+      <span class="text-neutral-500">/</span>
+      <span class="px-1.5 py-0.5 rounded bg-surface-card/90 border border-surface-border text-neutral-400 group-hover:text-white text-3xs font-bold shadow-sm">
         E
       </span>
     </button>
@@ -157,7 +157,7 @@
 {#if runningGameList.length > 0}
   <aside class="absolute top-4 right-6 z-40 select-none pointer-events-none flex flex-col items-end space-y-2">
     {#each runningGameList as rGame (rGame.gameDir)}
-      <div class="pointer-events-auto flex items-center space-x-2.5 bg-[#121214]/95 backdrop-blur-xl border border-[#27272a] hover:border-[#3f3f46] px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-all">
+      <div class="pointer-events-auto flex items-center space-x-2.5 bg-surface-header/95 border border-surface-border hover:border-surface-borderHighlight px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-colors">
         <button
           type="button"
           on:click={() => navigateWithGuard('game-hub', () => { $selectedGame = rGame; $activeView = 'game-hub'; })}

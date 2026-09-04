@@ -11,6 +11,8 @@ export namespace config {
 	    rawg_api_key?: string;
 	    artwork_dir?: string;
 	    enable_launch_notify: boolean;
+	    launch_window_behavior?: string;
+	    close_to_tray: boolean;
 	    operating_mode?: string;
 	    default_runner?: string;
 	    steamless: boolean;
@@ -44,6 +46,8 @@ export namespace config {
 	        this.rawg_api_key = source["rawg_api_key"];
 	        this.artwork_dir = source["artwork_dir"];
 	        this.enable_launch_notify = source["enable_launch_notify"];
+	        this.launch_window_behavior = source["launch_window_behavior"];
+	        this.close_to_tray = source["close_to_tray"];
 	        this.operating_mode = source["operating_mode"];
 	        this.default_runner = source["default_runner"];
 	        this.steamless = source["steamless"];
@@ -210,7 +214,8 @@ export namespace domain {
 	    proton_path?: string;
 	    language?: string;
 	    mangohud?: boolean;
-	    dxvk_hud?: string;
+	    disable_overlay?: boolean;
+	    offline_mode?: boolean;
 	    dll_overrides?: string;
 	    custom_env?: Record<string, string>;
 	    working_dir?: string;
@@ -249,7 +254,8 @@ export namespace domain {
 	        this.proton_path = source["proton_path"];
 	        this.language = source["language"];
 	        this.mangohud = source["mangohud"];
-	        this.dxvk_hud = source["dxvk_hud"];
+	        this.disable_overlay = source["disable_overlay"];
+	        this.offline_mode = source["offline_mode"];
 	        this.dll_overrides = source["dll_overrides"];
 	        this.custom_env = source["custom_env"];
 	        this.working_dir = source["working_dir"];

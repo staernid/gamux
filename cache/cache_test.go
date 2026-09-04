@@ -1,8 +1,11 @@
 package cache
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/staernid/gamux/domain"
 )
@@ -167,5 +170,127 @@ func TestCache_WarmLibraryCache(t *testing.T) {
 	InvalidateGameCache(gameDir)
 	if _, ok := GetCachedGame(gameDir, 1000, 2000); ok {
 		t.Errorf("expected cache miss after InvalidateGameCache")
+	}
+}
+
+func TestCache_NewsItems_InMemory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "gamux_news_mem_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	SetCacheDir(tmpDir)
+
+	items := []byte(`[{"title":"Patch 1.5"},{"title":"Patch 1.4"}]`)
+	SaveNewsItems("99999", items)
+
+	// Should hit in-memory cache
+	data, ok := GetNewsItems("99999")
+	if !ok {
+		t.Fatal("expected cache hit from in-memory news items cache")
+	}
+	if string(data) != string(items) {
+		t.Errorf("in-memory news items mismatch: got %s", string(data))
+	}
+
+	// Clear in-memory cache, should fall back to disk
+	newsItemsMu.Lock()
+	newsItemsMemoryCache = make(map[string][]byte)
+	newsItemsMu.Unlock()
+
+	data, ok = GetNewsItems("99999")
+	if !ok {
+		t.Fatal("expected cache hit from disk news items cache after memory clear")
+	}
+	if string(data) != string(items) {
+		t.Errorf("disk news items mismatch: got %s", string(data))
+	}
+}
+
+func TestCache_Prune(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "gamux_prune_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	SetCacheDir(tmpDir)
+
+	// Create a fresh (valid) GitHub release cache entry
+	freshPayload := []byte(`{"tag_name":"v2.0.0"}`)
+	if err := SaveGitHubRelease("fresh_release", freshPayload); err != nil {
+		t.Fatalf("failed to save fresh github release: %v", err)
+	}
+
+	// Create an expired GitHub release cache entry (timestamp 3 hours ago, TTL=1h, prune threshold=2h)
+	expiredWrapper := TTLWrapper{
+		Timestamp: time.Now().Add(-3 * time.Hour),
+		Payload:   json.RawMessage(`{"tag_name":"v0.1.0"}`),
+	}
+	expiredData, _ := json.Marshal(expiredWrapper)
+	expiredPath := filepath.Join(tmpDir, "github", "expired_release.json")
+	if err := os.WriteFile(expiredPath, expiredData, 0644); err != nil {
+		t.Fatalf("failed to write expired cache file: %v", err)
+	}
+
+	// Create an expired hubcap ZIP (mtime 61 days ago, TTL=30d, prune threshold=60d)
+	expiredZipPath := filepath.Join(tmpDir, "hubcap", "999999.zip")
+	if err := os.WriteFile(expiredZipPath, []byte("old-zip"), 0644); err != nil {
+		t.Fatalf("failed to write expired zip: %v", err)
+	}
+	oldTime := time.Now().Add(-61 * 24 * time.Hour)
+	_ = os.Chtimes(expiredZipPath, oldTime, oldTime)
+
+	// Create a fresh hubcap ZIP
+	freshZipPath := filepath.Join(tmpDir, "hubcap", "111111.zip")
+	if err := os.WriteFile(freshZipPath, []byte("new-zip"), 0644); err != nil {
+		t.Fatalf("failed to write fresh zip: %v", err)
+	}
+
+	removed := Prune()
+
+	if removed != 2 {
+		t.Errorf("expected 2 files pruned, got %d", removed)
+	}
+
+	// Verify fresh entries survived
+	if _, ok := GetGitHubRelease("fresh_release"); !ok {
+		t.Error("fresh github release should have survived pruning")
+	}
+	if _, err := os.Stat(freshZipPath); os.IsNotExist(err) {
+		t.Error("fresh hubcap zip should have survived pruning")
+	}
+
+	// Verify expired entries were removed
+	if _, err := os.Stat(expiredPath); !os.IsNotExist(err) {
+		t.Error("expired github release should have been pruned")
+	}
+	if _, err := os.Stat(expiredZipPath); !os.IsNotExist(err) {
+		t.Error("expired hubcap zip should have been pruned")
+	}
+}
+
+func TestCache_DisableCache_Atomic(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "gamux_disable_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	SetCacheDir(tmpDir)
+
+	SetDisabled(false)
+	if IsDisabled() {
+		t.Error("expected cache to be enabled")
+	}
+
+	SaveAppName("100", "Test Game")
+	if _, ok := GetAppName("100"); !ok {
+		t.Error("expected cache hit when enabled")
+	}
+
+	SetDisabled(true)
+	defer SetDisabled(false)
+
+	if _, ok := GetAppName("100"); ok {
+		t.Error("expected cache miss when disabled")
 	}
 }

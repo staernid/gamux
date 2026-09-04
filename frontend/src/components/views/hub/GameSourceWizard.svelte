@@ -88,7 +88,7 @@
   <div class="flex items-center justify-between border-b border-[#222232] pb-2">
     <div class="flex items-center space-x-2">
       <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">Configure Physical Installation Source & Store</span>
-      <span class="text-[10px] text-slate-400 font-mono">(Overrides detected source & AppID)</span>
+      <span class="text-3xs text-slate-400 font-mono">(Overrides detected source & AppID)</span>
     </div>
     <div class="flex items-center space-x-2">
       {#if hasCustomAppId}
@@ -113,7 +113,7 @@
         class="p-2.5 rounded-lg border text-left transition flex flex-col justify-between gap-1 cursor-pointer {isSel ? 'bg-cyan-950/40 border-cyan-400 text-white shadow-sm' : 'bg-[#0a0a0f] border-[#222232] text-slate-400 hover:text-slate-200 hover:border-slate-600'}"
       >
         <span class="font-bold text-xs">{opt.label}</span>
-        <span class="text-[10px] text-slate-500 font-mono">{opt.desc}</span>
+        <span class="text-3xs text-slate-500 font-mono">{opt.desc}</span>
       </button>
     {/each}
   </div>
@@ -122,11 +122,11 @@
     <!-- Store Matching & AppID Search -->
     <div class="pt-2 border-t border-[#1e1e2c] space-y-2.5">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+        <span class="text-3xs font-bold uppercase tracking-wider text-slate-400 font-mono">
           Match Store & AppID ({storeToSearch.toUpperCase()})
         </span>
         {#if $drawerDraft.appId || (game?.appId && game.appId !== '0')}
-          <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded">
+          <span class="text-3xs font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded">
             Current AppID: {$drawerDraft.appId || game?.appId}
           </span>
         {/if}
@@ -164,7 +164,7 @@
       <!-- Candidate Results List -->
       {#if searchResults.length > 0}
         <div class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+          <span class="text-3xs font-bold uppercase tracking-wider text-slate-400 block">
             Found Store Candidates ({searchResults.length})
           </span>
           <div class="grid grid-cols-1 gap-1.5">
@@ -176,7 +176,7 @@
                   {/if}
                   <div class="min-w-0">
                     <div class="text-xs font-bold text-white truncate">{cand.name}</div>
-                    <div class="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+                    <div class="flex items-center space-x-2 text-3xs font-mono text-slate-400">
                       <span class="text-cyan-300">AppID: {cand.id}</span>
                       {#if cand.release_date}
                         <span>• {cand.release_date}</span>
@@ -199,7 +199,7 @@
 
       <!-- Manual AppID Input Row -->
       <div class="flex items-center gap-2 pt-2 border-t border-[#1e1e2c]">
-        <span class="text-[10px] font-bold text-slate-400 font-mono flex-shrink-0">
+        <span class="text-3xs font-bold text-slate-400 font-mono flex-shrink-0">
           {storeToSearch === 'steam' ? 'Steam AppID:' : 'GOG ID / Slug:'}
         </span>
         <input
@@ -227,10 +227,10 @@
         <span class="text-cyan-300 font-mono font-bold ml-1">(AppID: {$drawerDraft.appId || game?.appId})</span>
       {/if}
       {#if !$drawerDraft.sourceOverride}
-        <span class="text-[10px] text-slate-500 font-normal ml-1">(Auto-detected)</span>
+        <span class="text-3xs text-slate-500 font-normal ml-1">(Auto-detected)</span>
       {/if}
     </div>
-    <p class="text-[11px] text-slate-400">
+    <p class="text-2xs text-slate-400">
       {$drawerDraft.sourceOverride === 'Steam' 
         ? 'Steam mode enables Goldberg emulator injection and Steamworks API mocking.' 
         : $drawerDraft.sourceOverride === 'GOG' 

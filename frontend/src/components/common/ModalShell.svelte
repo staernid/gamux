@@ -38,7 +38,7 @@
   aria-modal="true"
   tabindex="-1"
   on:keydown={handleKeydown}
-  class="fixed inset-0 z-50 bg-[#09090b]/95 backdrop-blur-2xl flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
+  class="fixed inset-0 z-50 bg-[#09090b]/95 backdrop-blur-sm flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
 >
   {#if !customHeader && (title || $$slots.header || $$slots.headerActions)}
     <!-- Standard Modal Header Bar -->
@@ -73,10 +73,10 @@
           <button
             type="button"
             on:click={handleClose}
-            class="px-4 py-1.5 rounded-xl bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
+            class="px-4 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
           >
             {#if closeKeyHint}
-              <span class="px-1.5 py-0.5 rounded bg-[#121214] border border-[#27272a] text-neutral-400 font-bold text-3xs">
+              <span class="px-1.5 py-0.5 rounded bg-surface-header border border-surface-border text-neutral-400 font-bold text-3xs">
                 {closeKeyHint}
               </span>
             {/if}

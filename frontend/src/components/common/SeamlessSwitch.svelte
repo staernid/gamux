@@ -52,8 +52,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all select-none
-    {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-[#18181b]'}
-    {isOverridden ? 'bg-[#18181b] border border-neutral-600' : 'bg-[#101013] border border-[#27272a]'}"
+    {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
+    {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
   role="switch"
   tabindex="0"
   aria-checked={effectiveValue}
@@ -91,7 +91,7 @@
       <button
         type="button"
         on:click={revertToInherit}
-        class="p-1.5 rounded-lg bg-[#202024] hover:bg-[#27272a] border border-[#3f3f46] text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
+        class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
         title={`Reset to default (${inheritedValue ? 'On' : 'Off'})`}
         aria-label="Reset to global default"
       >

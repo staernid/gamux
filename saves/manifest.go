@@ -29,7 +29,6 @@ type ManifestManager struct {
 	bySteamAppID       map[uint32]*ManifestGame
 	byNormalizedTitle  map[string]*ManifestGame
 	byGOGID            map[uint64]*ManifestGame
-	lastLoaded         time.Time
 }
 
 // NewManifestManager creates an initialized ManifestManager.
@@ -76,24 +75,25 @@ func NormalizeTitle(title string) string {
 
 // LoadOrFetch loads the manifest from local disk cache, or downloads it from GitHub if stale (>7 days) or missing.
 func (m *ManifestManager) LoadOrFetch(ctx context.Context, force bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	cachePath := m.getCachePath()
-	cacheExists := util.FileExists(cachePath)
 
+	// Fast path: try loading from fresh disk cache under read-write lock
+	m.mu.Lock()
+	cacheExists := util.FileExists(cachePath)
 	if cacheExists && !force {
 		info, err := os.Stat(cachePath)
 		if err == nil && time.Since(info.ModTime()) < 7*24*time.Hour {
-			if err := m.loadFromJSONFile(cachePath); err == nil {
+			if err := m.loadFromJSONFileLocked(cachePath); err == nil {
 				slog.Info("Loaded Ludusavi save manifest from disk cache", "games", len(m.byNormalizedTitle))
+				m.mu.Unlock()
 				return nil
 			}
 			slog.Warn("Failed parsing local save manifest JSON, falling back to download", "path", cachePath)
 		}
 	}
+	m.mu.Unlock()
 
-	// Download from manifest URL
+	// Slow path: download without holding the lock so readers are not blocked
 	url := m.getManifestURL()
 	slog.Info("Fetching updated Ludusavi save manifest", "url", url)
 
@@ -107,7 +107,9 @@ func (m *ManifestManager) LoadOrFetch(ctx context.Context, force bool) error {
 	if err != nil {
 		if cacheExists {
 			slog.Warn("Manifest network download failed, falling back to existing cache", "error", err)
-			return m.loadFromJSONFile(cachePath)
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			return m.loadFromJSONFileLocked(cachePath)
 		}
 		return fmt.Errorf("download manifest: %w", err)
 	}
@@ -116,7 +118,9 @@ func (m *ManifestManager) LoadOrFetch(ctx context.Context, force bool) error {
 	if resp.StatusCode != http.StatusOK {
 		if cacheExists {
 			slog.Warn("Manifest download returned non-200, falling back to cache", "status", resp.StatusCode)
-			return m.loadFromJSONFile(cachePath)
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			return m.loadFromJSONFileLocked(cachePath)
 		}
 		return fmt.Errorf("download manifest failed with HTTP %d", resp.StatusCode)
 	}
@@ -137,7 +141,8 @@ func (m *ManifestManager) LoadOrFetch(ctx context.Context, force bool) error {
 		}
 	}
 
-	m.indexMap(rawMap)
+	// Build new indices into local variables (no lock needed)
+	bySteam, byTitle, byGOG := buildIndices(rawMap)
 
 	// Persist to JSON disk cache for rapid subsequent startup (<50ms)
 	if err := os.MkdirAll(m.cacheDir, 0755); err == nil {
@@ -146,12 +151,18 @@ func (m *ManifestManager) LoadOrFetch(ctx context.Context, force bool) error {
 		}
 	}
 
-	m.lastLoaded = time.Now()
-	slog.Info("Successfully indexed Ludusavi save manifest", "games", len(m.byNormalizedTitle))
+	// Atomic swap under write lock
+	m.mu.Lock()
+	m.bySteamAppID = bySteam
+	m.byNormalizedTitle = byTitle
+	m.byGOGID = byGOG
+	m.mu.Unlock()
+
+	slog.Info("Successfully indexed Ludusavi save manifest", "games", len(byTitle))
 	return nil
 }
 
-func (m *ManifestManager) loadFromJSONFile(path string) error {
+func (m *ManifestManager) loadFromJSONFileLocked(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -160,12 +171,11 @@ func (m *ManifestManager) loadFromJSONFile(path string) error {
 	if err := json.Unmarshal(data, &rawMap); err != nil {
 		return err
 	}
-	m.indexMap(rawMap)
-	m.lastLoaded = time.Now()
+	m.bySteamAppID, m.byNormalizedTitle, m.byGOGID = buildIndices(rawMap)
 	return nil
 }
 
-func (m *ManifestManager) indexMap(rawMap map[string]ManifestGame) {
+func buildIndices(rawMap map[string]ManifestGame) (map[uint32]*ManifestGame, map[string]*ManifestGame, map[uint64]*ManifestGame) {
 	bySteam := make(map[uint32]*ManifestGame, len(rawMap))
 	byTitle := make(map[string]*ManifestGame, len(rawMap))
 	byGOG := make(map[uint64]*ManifestGame, len(rawMap))
@@ -184,9 +194,7 @@ func (m *ManifestManager) indexMap(rawMap map[string]ManifestGame) {
 		}
 	}
 
-	m.bySteamAppID = bySteam
-	m.byNormalizedTitle = byTitle
-	m.byGOGID = byGOG
+	return bySteam, byTitle, byGOG
 }
 
 // FindGame retrieves save configuration rules for a game by AppID, GOG ID, or Title (resolving aliases recursively).

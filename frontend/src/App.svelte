@@ -337,7 +337,7 @@
   });
 </script>
 
-<div class="bg-[#09090b] text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
+<div class="bg-surface-base text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
   <!-- Minimal Floating Navigation Pill at Top -->
   <TopBar />
 
@@ -360,7 +360,7 @@
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Open Game Hub (A or Enter)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
                 A / ↵
               </span>
               <span class="group-hover:text-neutral-200">Game Hub</span>
@@ -375,7 +375,7 @@
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Cycle library sort order (Y)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
                 Y
               </span>
               <span class="group-hover:text-neutral-200">Sort: {getSortLabel($sortBy)}</span>
@@ -390,7 +390,7 @@
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Open library search grid (/)"
             >
-              <span class="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-neutral-300 group-hover:text-white text-3xs font-bold">
+              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
                 /
               </span>
               <span class="group-hover:text-neutral-200">Search</span>
@@ -405,7 +405,7 @@
               <span class="text-neutral-500">Source:</span>
               <span class="text-neutral-200 font-semibold">{gameSource}</span>
               {#if metaInfo.provider && metaInfo.provider !== 'None'}
-                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-500">·</span>
                 <span class="text-neutral-500">Meta:</span>
                 <span class="text-neutral-300 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
               {/if}
@@ -413,25 +413,25 @@
             <div>
               <span class="text-neutral-500">Platform:</span>
               <span class="text-neutral-300 font-semibold">{$selectedGame.platform || 'Linux'}</span>
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-300">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-300 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
               {#if $selectedGame.playtimeSeconds > 0}
-                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-500">·</span>
                 <span class="text-neutral-200 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
               {/if}
               {#if $selectedGame.lastPlayed > 0}
-                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-500">·</span>
                 <span class="text-neutral-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
               {/if}
               {#if $selectedGame.installedAt > 0}
-                <span class="text-neutral-600">·</span>
+                <span class="text-neutral-500">·</span>
                 <span class="text-neutral-400">Installed {formatInstallDate($selectedGame.installedAt)}</span>
               {/if}
             </div>
-            <div class="truncate max-w-full text-neutral-600" title={$selectedGame.gameDir}>
-              <span class="text-neutral-600">Path:</span>
+            <div class="truncate max-w-full text-neutral-500" title={$selectedGame.gameDir}>
+              <span class="text-neutral-500">Path:</span>
               <span class="text-neutral-500">{$selectedGame.gameDir}</span>
             </div>
           </div>

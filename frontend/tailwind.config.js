@@ -22,6 +22,7 @@ export default {
           border: '#27272a',
           borderSubtle: '#1f1f23',
           borderHighlight: '#3f3f46',
+          input: '#141417',
           pill: '#222226',
         }
       }

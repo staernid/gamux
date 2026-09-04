@@ -106,7 +106,7 @@
     <div>
       <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
         Tasks
-        <span class="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-[#181824] text-slate-400 border border-[#272738]">
+        <span class="text-2xs font-mono font-medium px-2 py-0.5 rounded-full bg-[#181824] text-slate-400 border border-[#272738]">
           {$active.length} active
         </span>
       </h2>
@@ -139,14 +139,14 @@
     {@const usedPct = diskSpace.total_bytes ? Math.min(100, Math.max(0, (diskSpace.used_bytes / diskSpace.total_bytes) * 100)) : 0}
     <div class="px-3.5 py-2 rounded-xl bg-[#0e0e14] border border-[#1b1b26] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
       <div class="flex items-center space-x-2 text-slate-400 truncate max-w-sm sm:max-w-md">
-        <span class="text-slate-500 font-mono text-[10px] uppercase font-bold tracking-wider">Target Drive Capacity:</span>
-        <span class="font-mono text-[11px] text-slate-300 truncate font-medium">{diskSpace.path}</span>
+        <span class="text-slate-500 font-mono text-3xs uppercase font-bold tracking-wider">Target Drive Capacity:</span>
+        <span class="font-mono text-2xs text-slate-300 truncate font-medium">{diskSpace.path}</span>
       </div>
       <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
         <div class="w-28 bg-[#161620] h-1.5 rounded-full overflow-hidden">
           <div class="bg-cyan-500/80 h-full rounded-full transition-all duration-500" style="width: {usedPct}%"></div>
         </div>
-        <span class="font-mono text-[11px] text-slate-400 whitespace-nowrap">
+        <span class="font-mono text-2xs text-slate-400 whitespace-nowrap">
           <strong class="text-emerald-400 font-semibold">{formatBytes(diskSpace.free_bytes)} Free</strong>
           <span class="text-slate-600"> / {formatBytes(diskSpace.total_bytes)} Total</span>
         </span>
@@ -206,7 +206,7 @@
     {#if displayedActive.length === 0 && displayedQueued.length === 0 && displayedCompleted.length === 0}
       <div class="bg-[#101016] border border-[#1b1b26] rounded-2xl p-10 text-center text-slate-500 space-y-1 font-mono text-xs">
         <p class="font-bold text-slate-400 text-sm">No active tasks running.</p>
-        <p class="text-[11px] text-slate-600">Background downloads, file verifications, and setup operations will appear here.</p>
+        <p class="text-2xs text-slate-600">Background downloads, file verifications, and setup operations will appear here.</p>
       </div>
     {:else}
       {#if displayedActive.length > 0}

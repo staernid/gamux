@@ -19,9 +19,9 @@
   $: effectiveTooltip = tooltip || description;
 </script>
 
-<div class="bg-[#121214] border border-[#27272a] rounded-xl overflow-hidden shadow-sm {className}">
+<div class="bg-surface-header border border-surface-border rounded-xl overflow-hidden shadow-sm {className}">
   {#if title || $$slots.icon || $$slots.action || description}
-    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#18181b] border-b border-[#27272a]">
+    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface-card border-b border-surface-border">
       <div class="flex items-center space-x-2 min-w-0">
         {#if $$slots.icon}
           <div class="text-neutral-400 flex-shrink-0 flex items-center justify-center">

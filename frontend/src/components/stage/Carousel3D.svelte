@@ -517,10 +517,10 @@
     </div>
   {:else}
     <!-- 3D Curved Arc Carousel Stage -->
-    <div class="relative w-full h-[400px] sm:h-[450px] md:h-[490px] flex items-center justify-center">
+    <div class="relative w-full h-[400px] sm:h-[450px] md:h-[490px] flex items-center justify-center contain-paint">
       <!-- Ambient Dynamic Cover Radial Glow (GPU Composited with smooth CSS transition) -->
       <div
-        class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] sm:w-[950px] md:w-[1150px] lg:w-[1300px] h-[480px] sm:h-[600px] md:h-[680px] rounded-full pointer-events-none z-0 transition-all duration-700 ease-out will-change-transform"
+        class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] sm:w-[900px] md:w-[1050px] lg:w-[1150px] h-[480px] sm:h-[560px] md:h-[620px] rounded-full pointer-events-none z-0 transition-[background] duration-700 ease-out"
         style="background: radial-gradient(ellipse at center, rgba({glowRgb}, 0.48) 0%, rgba({glowRgb}, 0.18) 36%, rgba({glowRgb}, 0.03) 62%, transparent 75%);"
       ></div>
 
@@ -548,10 +548,7 @@
             <!-- Card Container (100% GPU-composited transform and opacity, strict 2:3 poster aspect ratio) -->
             <div
               class="relative h-[340px] sm:h-[395px] md:h-[450px] aspect-[2/3] rounded-[32px] overflow-hidden shadow-xl bg-[#161622] border border-white/10"
-              style="
-                opacity: {style.opacity};
-                -webkit-box-reflect: below 8px linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, transparent 40%);
-              "
+              style="opacity: {style.opacity};"
             >
               <!-- Poster Artwork (Stable per game, never unmounts while in view) -->
               <PosterArt
@@ -578,7 +575,7 @@
 
     <!-- Active Game Floating Title Badge Below Card -->
     {#if activeGame}
-      <div class="mt-2 sm:mt-4 flex items-center justify-center z-40 transition-all duration-200 ease-out">
+      <div class="mt-2 sm:mt-4 flex items-center justify-center z-40 transition-opacity duration-200 ease-out">
         <div class="px-5 py-1.5 rounded-full bg-neutral-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center gap-2 max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
           {#if $runningGames.has(activeGame.gameDir)}
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>

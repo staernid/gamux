@@ -219,7 +219,8 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 	}
 	if game.LaunchProfile != nil {
 		opts.MangoHud = game.LaunchProfile.MangoHud
-		opts.DXVKHud = game.LaunchProfile.DXVKHud
+		opts.DisableOverlay = game.LaunchProfile.DisableOverlay
+		opts.OfflineMode = game.LaunchProfile.OfflineMode
 		opts.CustomEnv = game.LaunchProfile.CustomEnv
 	}
 	if len(overrides) > 0 {
@@ -242,8 +243,11 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 		if ov.MangoHud != nil {
 			opts.MangoHud = ov.MangoHud
 		}
-		if ov.DXVKHud != "" {
-			opts.DXVKHud = ov.DXVKHud
+		if ov.DisableOverlay != nil {
+			opts.DisableOverlay = ov.DisableOverlay
+		}
+		if ov.OfflineMode != nil {
+			opts.OfflineMode = ov.OfflineMode
 		}
 		if ov.CustomEnv != nil {
 			if opts.CustomEnv == nil {
@@ -275,7 +279,8 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 	}
 	if game.LaunchProfile != nil {
 		opts.MangoHud = game.LaunchProfile.MangoHud
-		opts.DXVKHud = game.LaunchProfile.DXVKHud
+		opts.DisableOverlay = game.LaunchProfile.DisableOverlay
+		opts.OfflineMode = game.LaunchProfile.OfflineMode
 		opts.CustomEnv = game.LaunchProfile.CustomEnv
 	}
 	if len(overrides) > 0 {

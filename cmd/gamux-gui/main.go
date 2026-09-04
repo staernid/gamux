@@ -11,6 +11,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Version of the gamux-gui application (set at build time via -ldflags)
@@ -49,6 +50,13 @@ func main() {
 			if guard != nil {
 				guard.Release()
 			}
+		},
+		OnBeforeClose: func(ctx context.Context) bool {
+			if app != nil && app.Config != nil && app.Config.CloseToTray {
+				wailsRuntime.WindowHide(ctx)
+				return true
+			}
+			return false
 		},
 		Bind: []interface{}{
 			app,

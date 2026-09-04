@@ -74,7 +74,7 @@
             slot="action"
             type="button"
             on:click={generateRandomSteamID}
-            class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
             title="Generate a new randomized Steam ID"
           >
             <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@
         />
 
         {#if isCustomCountry || userCfgDraft.ip_country === 'CUSTOM'}
-          <div class="p-2.5 bg-[#101013] border border-[#27272a] rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+          <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
             <span class="text-xs font-semibold text-neutral-300">Custom ISO Country Code:</span>
             <div class="flex items-center space-x-1.5">
               <input
@@ -109,7 +109,7 @@
                 value={userCfgDraft.ip_country === 'CUSTOM' ? customCountryCode : userCfgDraft.ip_country}
                 on:input={handleCustomCountryInput}
                 placeholder="US"
-                class="w-16 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase text-center outline-none"
+                class="w-16 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase text-center outline-none"
               />
             </div>
           </div>

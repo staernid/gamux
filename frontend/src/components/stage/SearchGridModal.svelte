@@ -241,16 +241,16 @@
         <button
           type="button"
           on:click={() => { searchMode = 'library'; focusedIndex = 0; searchInputEl?.focus(); }}
-          class="px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-2 cursor-pointer {searchMode === 'library' ? 'bg-white text-neutral-950 shadow-md' : 'bg-[#18181b] border border-[#27272a] text-neutral-400 hover:text-white'}"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-2 cursor-pointer {searchMode === 'library' ? 'bg-white text-neutral-950 shadow-md' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
         >
           <span>📚 My Library</span>
-          <span class="px-1.5 py-0.5 rounded text-3xs font-mono {searchMode === 'library' ? 'bg-neutral-200 text-neutral-900' : 'bg-[#222225] text-neutral-400'}">{allGames.length}</span>
+          <span class="px-1.5 py-0.5 rounded text-3xs font-mono {searchMode === 'library' ? 'bg-neutral-200 text-neutral-900' : 'bg-surface-cardHover text-neutral-400'}">{allGames.length}</span>
         </button>
 
         <button
           type="button"
           on:click={() => { searchMode = 'store'; focusedIndex = 0; searchInputEl?.focus(); }}
-          class="px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-2 cursor-pointer {searchMode === 'store' ? 'bg-white text-neutral-950 shadow-md' : 'bg-[#18181b] border border-[#27272a] text-neutral-400 hover:text-white'}"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-2 cursor-pointer {searchMode === 'store' ? 'bg-white text-neutral-950 shadow-md' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
         >
           <span>🌐 Store Catalog</span>
           {#if isSearchingStore}
@@ -265,9 +265,9 @@
         <button
           type="button"
           on:click={() => dispatch('close')}
-          class="px-3 py-1.5 rounded-xl bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer"
+          class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer"
         >
-          <span class="px-1.5 py-0.5 rounded bg-[#141417] border border-[#27272a] text-neutral-400 font-bold text-3xs">Esc / B</span>
+          <span class="px-1.5 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400 font-bold text-3xs">Esc / B</span>
           <span class="text-neutral-400">Close</span>
         </button>
       </div>
@@ -284,7 +284,7 @@
           bind:value={query}
           type="text"
           placeholder={searchMode === 'library' ? 'Type to filter library titles...' : 'Search Steam, GOG, RAWG catalogs by title or AppID...'}
-          class="w-full bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-2xl pl-12 pr-10 py-3 text-base text-white outline-none font-mono transition-all shadow-xl placeholder:text-neutral-500"
+          class="w-full bg-surface-input border border-surface-border focus:border-neutral-400 rounded-2xl pl-12 pr-10 py-3 text-base text-white outline-none font-mono transition-all shadow-xl placeholder:text-neutral-500"
         />
         {#if query}
           <button
@@ -308,7 +308,7 @@
             <button
               type="button"
               on:click={() => { $sortBy = opt.id; }}
-              class="px-2.5 py-1 rounded-xl text-xs font-mono font-medium transition-all cursor-pointer {$sortBy === opt.id ? 'bg-[#222225] border border-[#3f3f46] text-white shadow-sm' : 'bg-[#141417] border border-[#27272a] text-neutral-400 hover:text-neutral-200'}"
+              class="px-2.5 py-1 rounded-xl text-xs font-mono font-medium transition-all cursor-pointer {$sortBy === opt.id ? 'bg-surface-cardHover border border-surface-borderHighlight text-white shadow-sm' : 'bg-surface-input border border-surface-border text-neutral-400 hover:text-neutral-200'}"
             >
               {opt.label}
             </button>

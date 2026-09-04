@@ -2,7 +2,19 @@
 let audioCtx = null;
 let sfxEnabled = typeof localStorage !== 'undefined' ? localStorage.getItem('gamux_sfx_enabled') !== 'false' : true;
 let sfxVolume = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('gamux_sfx_volume') || '0.35') : 0.35;
+let sfxMuteInBackground = typeof localStorage !== 'undefined' ? localStorage.getItem('gamux_sfx_mute_in_background') === 'true' : false;
+let isWindowFocused = typeof document !== 'undefined' ? !document.hidden : true;
 let lastTickTime = 0;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => { isWindowFocused = true; }, { passive: true });
+  window.addEventListener('blur', () => { isWindowFocused = false; }, { passive: true });
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    isWindowFocused = !document.hidden;
+  }, { passive: true });
+}
 
 function initAudioContext() {
   if (typeof window === 'undefined') return null;
@@ -53,8 +65,20 @@ export function setSfxVolume(vol) {
   }
 }
 
+export function isMuteInBackground() {
+  return sfxMuteInBackground;
+}
+
+export function setMuteInBackground(mute) {
+  sfxMuteInBackground = Boolean(mute);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('gamux_sfx_mute_in_background', String(sfxMuteInBackground));
+  }
+}
+
 function withAudioContext(fn) {
   if (!sfxEnabled || sfxVolume <= 0) return;
+  if (sfxMuteInBackground && !isWindowFocused) return;
   const ctx = getAudioContext();
   if (!ctx) return;
   if (ctx.state === 'suspended') {

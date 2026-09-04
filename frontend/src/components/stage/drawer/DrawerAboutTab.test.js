@@ -1,10 +1,13 @@
 import { render, screen } from '@testing-library/svelte';
-import { describe, it, expect, vi } from 'vitest';
-import DrawerAboutTab from './DrawerAboutTab.svelte';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import DrawerAboutTab, { clearDrawerMetadataCache } from './DrawerAboutTab.svelte';
 import { AppAPI } from '../../../api/app.js';
 import { normalizeGame } from '../../../utils/game.js';
 
 describe('DrawerAboutTab Component', () => {
+  beforeEach(() => {
+    clearDrawerMetadataCache();
+  });
   it('loads and renders metadata description for Steam game', async () => {
     const game = normalizeGame({
       name: 'Cyberpunk 2077',

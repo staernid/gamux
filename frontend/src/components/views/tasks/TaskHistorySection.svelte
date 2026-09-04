@@ -26,7 +26,7 @@
     <button
       type="button"
       on:click={handleClearAll}
-      class="text-[11px] font-bold text-slate-500 hover:text-slate-300 transition cursor-pointer"
+      class="text-2xs font-bold text-slate-500 hover:text-slate-300 transition cursor-pointer"
     >
       Clear All
     </button>
@@ -39,7 +39,7 @@
           <span class="w-2 h-2 rounded-full flex-shrink-0 {tr.status === 'completed' ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
           <div class="min-w-0">
             <span class="font-bold text-white text-xs truncate block">{tr.gameName || tr.title}</span>
-            <p class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">{tr.details || tr.status}</p>
+            <p class="text-3xs text-slate-500 font-mono mt-0.5 truncate">{tr.details || tr.status}</p>
           </div>
         </div>
 

@@ -90,7 +90,7 @@
 
   <!-- Custom Image URL Input Bar -->
   <div class="bg-[#12121c] border border-[#262638] rounded-xl p-2.5 flex items-center gap-3">
-    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 pl-1 flex-shrink-0">Custom URL:</span>
+    <span class="text-2xs font-bold uppercase tracking-wider text-slate-400 pl-1 flex-shrink-0">Custom URL:</span>
     <input
       type="url"
       bind:value={customArtUrl}
@@ -116,7 +116,7 @@
   {:else if artOptions.length === 0}
     <div class="h-64 flex flex-col items-center justify-center text-slate-500 text-xs font-mono space-y-2 text-center">
       <p>No {assetType} artwork candidates found for "{artQuery}".</p>
-      <p class="text-[11px] text-slate-600">Try searching with a simplified game title or enter a custom image URL above.</p>
+      <p class="text-2xs text-slate-600">Try searching with a simplified game title or enter a custom image URL above.</p>
     </div>
   {:else}
     <div class="grid {assetType === 'cover' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'} gap-4 pb-8">
@@ -131,11 +131,11 @@
               loading="lazy"
               on:error={() => handleImageError(opt.url, opt.thumb_url)}
             />
-            <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-white shadow-md backdrop-blur-md {opt.provider === 'steam' ? 'bg-blue-600/90' : opt.provider === 'gog' ? 'bg-purple-600/90' : opt.provider === 'rawg' ? 'bg-amber-600/90' : 'bg-emerald-600/90'}">
+            <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-4xs font-black uppercase tracking-wider text-white shadow-md backdrop-blur-md {opt.provider === 'steam' ? 'bg-blue-600/90' : opt.provider === 'gog' ? 'bg-purple-600/90' : opt.provider === 'rawg' ? 'bg-amber-600/90' : 'bg-emerald-600/90'}">
               {opt.provider === 'steam' ? 'Steam' : opt.provider === 'gog' ? 'GOG' : opt.provider === 'rawg' ? 'RAWG' : opt.provider === 'steamgriddb' ? 'SteamGridDB' : opt.provider}
             </div>
             {#if isActive}
-              <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-600 shadow-md flex items-center space-x-1">
+              <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-4xs font-black uppercase tracking-wider text-emerald-100 bg-emerald-600 shadow-md flex items-center space-x-1">
                 <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -143,14 +143,14 @@
               </div>
             {/if}
             {#if opt.width && opt.height}
-              <div class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[9px] font-mono text-slate-300 border border-white/10 font-bold">
+              <div class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm text-4xs font-mono text-slate-300 border border-white/10 font-bold">
                 {opt.width}×{opt.height}
               </div>
             {/if}
           </div>
 
           <div class="p-2.5 bg-[#0f0f16] border-t border-[#1e1e2c] flex items-center justify-between">
-            <span class="text-[10px] font-mono text-slate-400 capitalize">{opt.style || 'Custom'}</span>
+            <span class="text-3xs font-mono text-slate-400 capitalize">{opt.style || 'Custom'}</span>
             <button
               type="button"
               on:click={() => handleApply(opt.url)}

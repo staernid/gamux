@@ -78,10 +78,24 @@
           bind:value={cfgDraft.steamless}
         />
       </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-surface-border">
+        <SeamlessSwitch
+          label="Offline Mode"
+          description="Report disconnected offline status in Steamworks emulation"
+          bind:value={cfgDraft.offline_mode}
+        />
+
+        <SeamlessSwitch
+          label="Disable In-Game Overlay"
+          description="Disable Goldberg Steam overlay hooks (prevents crashes with graphics hooks)"
+          bind:value={cfgDraft.disable_overlay}
+        />
+      </div>
     </div>
 
     <!-- Advanced Compatibility Options -->
-    <div class="pt-3 mt-3 border-t border-[#27272a]">
+    <div class="pt-3 mt-3 border-t border-surface-border">
       <button
         type="button"
         on:click={() => { showAdvancedCompat = !showAdvancedCompat; }}
@@ -107,7 +121,7 @@
                 slot="action"
                 type="button"
                 on:click={handleBrowseWinePrefix}
-                class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+                class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
               >
                 Browse
               </button>
@@ -115,7 +129,7 @@
           </div>
 
           <!-- Global Environment Variables -->
-          <div class="pt-2 border-t border-[#27272a] space-y-2">
+          <div class="pt-2 border-t border-surface-border space-y-2">
             <span class="text-xs font-bold text-neutral-200 uppercase tracking-wider block">
               Global Environment Variables
             </span>
@@ -123,7 +137,7 @@
             {#if Object.keys(cfgDraft.global_env || {}).length > 0}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {#each Object.keys(cfgDraft.global_env) as ek}
-                  <div class="flex items-center justify-between p-2 bg-[#101013] border border-[#27272a] rounded-lg">
+                  <div class="flex items-center justify-between p-2 bg-[#101013] border border-surface-border rounded-lg">
                     <div class="flex items-center space-x-2 font-mono text-xs min-w-0 truncate">
                       <span class="text-white font-bold truncate">{ek}</span>
                       <span class="text-neutral-500">=</span>
@@ -150,19 +164,19 @@
                 placeholder="VAR_NAME"
                 bind:value={newEnvKey}
                 on:keydown={(e) => { if (e.key === 'Enter') addGlobalEnv(); }}
-                class="flex-1 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono uppercase outline-none transition-colors"
+                class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono uppercase outline-none transition-colors"
               />
               <input
                 type="text"
                 placeholder="value"
                 bind:value={newEnvVal}
                 on:keydown={(e) => { if (e.key === 'Enter') addGlobalEnv(); }}
-                class="flex-1 bg-[#141417] border border-[#27272a] focus:border-neutral-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono outline-none transition-colors"
+                class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono outline-none transition-colors"
               />
               <button
                 type="button"
                 on:click={addGlobalEnv}
-                class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer"
+                class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer"
               >
                 Add
               </button>

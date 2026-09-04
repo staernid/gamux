@@ -370,23 +370,27 @@ func ConfigureCustomSettings(steamSettingsDir string, cfg *config.Config, suppor
 	}
 
 	// 4. Disable Overlay
+	overlayFile := filepath.Join(steamSettingsDir, "disable_overlay.txt")
 	if cfg.DisableOverlay {
-		overlayFile := filepath.Join(steamSettingsDir, "disable_overlay.txt")
 		if dryRun {
 			slog.Info("[DRY RUN] Would write disable_overlay.txt")
 		} else {
 			_ = os.WriteFile(overlayFile, []byte("1\n"), 0644)
 		}
+	} else if !dryRun {
+		_ = os.Remove(overlayFile)
 	}
 
 	// 5. Offline Mode
+	offlineFile := filepath.Join(steamSettingsDir, "offline.txt")
 	if cfg.OfflineMode {
-		offlineFile := filepath.Join(steamSettingsDir, "offline.txt")
 		if dryRun {
 			slog.Info("[DRY RUN] Would write offline.txt")
 		} else {
 			_ = os.WriteFile(offlineFile, []byte("1\n"), 0644)
 		}
+	} else if !dryRun {
+		_ = os.Remove(offlineFile)
 	}
 
 	return nil

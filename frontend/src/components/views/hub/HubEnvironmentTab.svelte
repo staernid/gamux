@@ -50,9 +50,9 @@
 
 <div class="space-y-4">
   <!-- Action Toolbar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-[#121218] border border-[#222232] rounded-xl p-2.5 shadow-xl">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-surface-card border border-surface-border rounded-xl p-2.5 shadow-xl">
     <div class="flex items-center space-x-2 px-2">
-      <span class="text-xs font-bold text-slate-200">Runtime & Environment</span>
+      <span class="text-xs font-bold text-neutral-200">Runtime & Environment</span>
     </div>
 
     <!-- Status Badge & Save Actions -->
@@ -63,7 +63,7 @@
           <span>{overrideCount} Override{overrideCount === 1 ? '' : 's'}</span>
         </span>
       {:else}
-        <span class="px-2 py-0.5 rounded-lg text-xs font-mono text-slate-400 bg-[#0c0c10] border border-[#1e1e2c]">
+        <span class="px-2 py-0.5 rounded-lg text-xs font-mono text-neutral-400 bg-surface-header border border-surface-border">
           Inheriting Defaults
         </span>
       {/if}
@@ -80,7 +80,7 @@
       <button
         type="button"
         on:click={handleReset}
-        class="p-1.5 bg-[#181824] hover:bg-[#222232] border border-[#2c2c3e] text-slate-400 hover:text-white rounded-lg text-xs transition-colors cursor-pointer"
+        class="p-1.5 bg-surface-cardHover hover:bg-surface-elevated border border-surface-borderHighlight text-neutral-400 hover:text-white rounded-lg text-xs transition-colors cursor-pointer"
         title="Reset all settings to system defaults"
         aria-label="Reset all settings to system defaults"
       >
@@ -109,7 +109,7 @@
   </div>
 
   <!-- Sub-Tab Content -->
-  <div class="bg-[#121218] border border-[#222232] rounded-xl p-4 sm:p-5 shadow-xl space-y-4">
+  <div class="bg-surface-card border border-surface-border rounded-xl p-4 sm:p-5 shadow-xl space-y-4">
     <div class="space-y-3">
       <SettingSection title="Runner & Platform">
         <div class="space-y-2.5">
@@ -120,12 +120,12 @@
           />
 
           {#if isLinux}
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl bg-[#0d0d14] border border-[#1e1e2c] opacity-60">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl bg-surface-header border border-surface-border opacity-60">
               <div class="space-y-0.5">
-                <span class="text-xs font-semibold text-slate-200">Runner Layer</span>
-                <p class="text-[11px] text-slate-400">Native direct execution on host Linux system</p>
+                <span class="text-xs font-semibold text-neutral-200">Runner Layer</span>
+                <p class="text-2xs text-neutral-400">Native direct execution on host Linux system</p>
               </div>
-              <span class="text-xs font-mono text-slate-400 px-2.5 py-1 bg-[#14141e] border border-[#262638] rounded-lg">
+              <span class="text-xs font-mono text-neutral-400 px-2.5 py-1 bg-surface-input border border-surface-border rounded-lg">
                 Linux Native
               </span>
             </div>
@@ -185,6 +185,22 @@
               globalValue={globalCfg?.language || 'auto'}
               options={gameLanguageOptions}
             />
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-surface-border">
+              <SeamlessSwitch
+                label="Offline Mode"
+                description="Report disconnected offline status in Steamworks emulation"
+                bind:value={$drawerDraft.offlineMode}
+                inheritedValue={Boolean(globalCfg?.offline_mode)}
+              />
+
+              <SeamlessSwitch
+                label="Disable In-Game Overlay"
+                description="Disable Goldberg Steam overlay hooks and telemetry"
+                bind:value={$drawerDraft.disableOverlay}
+                inheritedValue={Boolean(globalCfg?.disable_overlay)}
+              />
+            </div>
           </div>
         </SettingSection>
       {/if}

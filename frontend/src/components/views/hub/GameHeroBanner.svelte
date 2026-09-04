@@ -76,7 +76,7 @@
       <img
         src={game.localCoverUrl || game.coverUrl}
         alt=""
-        class="absolute inset-0 w-full h-full object-cover opacity-25 filter blur-xl scale-125 pointer-events-none"
+        class="absolute inset-0 w-full h-full object-cover opacity-25 filter blur-lg scale-110 pointer-events-none"
       />
     {/if}
 
@@ -91,19 +91,19 @@
       <!-- Art-Poor Fallback: Dynamic Ambient Grid & Subtle Watermark -->
       <div class="absolute inset-0 bg-gradient-to-br from-[#0e0f18] via-[#09090e] to-[#040407]">
         <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 24px 24px;"></div>
-        <div class="absolute -right-10 -bottom-12 text-[160px] font-black text-white/[0.03] select-none pointer-events-none font-mono tracking-tighter">
+        <div class="absolute -right-10 -bottom-12 text-[10rem] font-black text-white/[0.03] select-none pointer-events-none font-mono tracking-tighter">
           {game?.name ? game.name.slice(0, 3).toUpperCase() : 'GMX'}
         </div>
       </div>
     {/if}
     <!-- Ambient Radial Color Glow (Top Left) -->
     <div
-      class="absolute -top-20 -left-20 w-[600px] h-[350px] rounded-full opacity-20 filter blur-3xl pointer-events-none"
+      class="absolute -top-20 -left-20 w-[600px] h-[350px] rounded-full opacity-20 filter blur-2xl pointer-events-none"
       style="background-color: {pColors.glow || 'rgba(255,255,255,0.05)'};"
     ></div>
     <!-- Ambient Secondary Glow (Bottom Right) -->
     <div
-      class="absolute -bottom-10 right-10 w-[450px] h-[250px] rounded-full opacity-10 filter blur-3xl pointer-events-none"
+      class="absolute -bottom-10 right-10 w-[450px] h-[250px] rounded-full opacity-10 filter blur-2xl pointer-events-none"
       style="background-color: {pColors.border || 'rgba(255,255,255,0.03)'};"
     ></div>
   </div>
@@ -118,12 +118,12 @@
     <button
       type="button"
       on:click={handleReturnToShelf}
-      class="flex items-center space-x-2 bg-[#121214]/90 hover:bg-[#18181b] border border-[#27272a] text-neutral-300 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-lg backdrop-blur-md group cursor-pointer"
+      class="flex items-center space-x-2 bg-surface-header/90 hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-lg backdrop-blur-md group cursor-pointer"
       title="Back to Shelf (Esc / B)"
     >
       <span class="text-neutral-400 group-hover:text-white transition-colors">←</span>
       <span>Shelf</span>
-      <span class="text-3xs text-neutral-400 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-[#27272a]">B / Esc</span>
+      <span class="text-3xs text-neutral-400 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-surface-border">B / Esc</span>
     </button>
   </div>
 
@@ -153,7 +153,7 @@
             <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span class="text-[10px] font-bold">Change Art</span>
+            <span class="text-3xs font-bold">Change Art</span>
           </div>
         </div>
 
@@ -162,18 +162,18 @@
           <!-- Store / Running Badge -->
           <div class="flex items-center space-x-2 flex-wrap gap-y-1">
             <span
-              class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-white shadow-md"
+              class="px-2.5 py-0.5 rounded-lg text-3xs font-black uppercase tracking-wider text-white shadow-md"
               style="background-color: {pColors.badgeBg};"
             >
               {platformLabel} Source
             </span>
             {#if metaInfo.provider && metaInfo.provider !== 'None'}
-              <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-[#141420] border border-[#2c2c42] text-sky-300 shadow-md">
+              <span class="px-2.5 py-0.5 rounded-lg text-3xs font-mono font-bold bg-surface-header/90 border border-surface-border text-neutral-300 shadow-md">
                 Meta: {metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}
               </span>
             {/if}
             {#if isGameRunning}
-              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono flex items-center space-x-1.5 animate-pulse">
+              <span class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono flex items-center space-x-1.5 animate-pulse">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 <span>RUNNING</span>
               </span>
@@ -198,21 +198,21 @@
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-neutral-400 font-mono">
             {#if isInstalled && game.diskSizeBytes > 0}
               <span>{formatBytes(game.diskSizeBytes)}</span>
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
             {:else if isStub}
               <span class="text-neutral-300 font-bold">In Library (Uninstalled)</span>
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
             {:else if isVirtual}
               <span class="text-neutral-300 font-bold">Online Store Title</span>
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
             {/if}
             <span class="truncate max-w-sm">{game.runner || globalCfg?.default_runner || 'UMU'}</span>
             {#if isInstalled && !game.isReady}
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-amber-400">Setup Required</span>
             {/if}
             {#if game.playtimeSeconds > 0}
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-200 font-bold flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -221,15 +221,15 @@
               </span>
             {/if}
             {#if game.lastPlayed > 0}
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-400">Played {formatLastPlayed(game.lastPlayed)}</span>
             {/if}
             {#if game.installedAt > 0}
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-400">Installed {formatInstallDate(game.installedAt)}</span>
             {/if}
             {#if game.appId && game.appId !== '0'}
-              <span class="text-neutral-600">·</span>
+              <span class="text-neutral-500">·</span>
               <span class="text-neutral-500">#{game.appId}</span>
             {/if}
           </div>
@@ -242,7 +242,7 @@
           <button
             type="button"
             on:click={() => dispatch('addToLibrary')}
-            class="px-4 py-3 rounded-2xl font-bold text-xs bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
+            class="px-4 py-3 rounded-2xl font-bold text-xs bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
             title="Add skeleton metadata stub to your library without downloading files"
           >
             <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,7 +256,7 @@
           type="button"
           on:click={handlePrimaryAction}
           disabled={isTaskActive}
-          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-[#18181b] border border-neutral-700 text-neutral-300 shadow-neutral-900/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : 'bg-white hover:bg-neutral-200 text-neutral-950 shadow-xl'}"
+          class="px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center space-x-2.5 shadow-2xl active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer disabled:cursor-not-allowed {isTaskActive ? 'bg-surface-card border border-neutral-700 text-neutral-300 shadow-neutral-900/40' : isGameRunning ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30' : 'bg-white hover:bg-neutral-200 text-neutral-950 shadow-xl'}"
         >
           {#if isTaskActive}
             <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -288,7 +288,7 @@
           <button
             type="button"
             on:click={handleOpenDirectory}
-            class="p-3 rounded-2xl bg-[#121214]/90 hover:bg-[#18181b] border border-[#27272a] text-neutral-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
+            class="p-3 rounded-2xl bg-surface-header/90 hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white transition shadow-xl flex items-center justify-center group cursor-pointer"
             title="Open Directory in File Manager (Y)"
           >
             <svg class="w-5 h-5 text-neutral-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

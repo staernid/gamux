@@ -25,7 +25,7 @@ generate-bindings:
 
 build-frontend: generate-bindings
 	@echo "Building frontend dist assets..."
-	@cd frontend && ([ -f package-lock.json ] && npm ci || npm install) && npm run check && npm run build
+	@cd frontend && ([ -d node_modules ] || ([ -f package-lock.json ] && npm ci --no-audit || npm install --no-audit)) && npm run check && npm run build
 
 build-gui: build-frontend
 	@mkdir -p bin

@@ -1,3 +1,14 @@
+<script context="module">
+  // In-memory module cache for metadata responses across component remounts
+  const metadataCache = {};
+
+  export function clearDrawerMetadataCache() {
+    for (const key of Object.keys(metadataCache)) {
+      delete metadataCache[key];
+    }
+  }
+</script>
+
 <script>
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
@@ -6,7 +17,6 @@
 
   export let game = null;
 
-  let metadataCache = {}; // In-memory map of `${provider}:${id}` -> metadata
   let metadata = null;
   let isLoading = false;
   let currentLookupKey = '';
@@ -139,7 +149,7 @@
             <div class="flex items-center space-x-1.5 ml-auto">
               <div class="flex flex-wrap items-center gap-1.5">
                 {#each genres.slice(0, 4) as g}
-                  <span class="px-2 py-0.5 rounded-md bg-[#161622] border border-[#242436] text-[11px] font-medium text-slate-300">
+                  <span class="px-2 py-0.5 rounded-md bg-[#161622] border border-[#242436] text-2xs font-medium text-slate-300">
                     {g}
                   </span>
                 {/each}

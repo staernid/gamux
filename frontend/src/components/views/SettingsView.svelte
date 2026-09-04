@@ -31,6 +31,10 @@
     backup_dir: '',
     wine_prefix: '',
     enable_launch_notify: true,
+    launch_window_behavior: 'keep',
+    close_to_tray: false,
+    disable_overlay: false,
+    offline_mode: false,
     achievements: true,
     transfer_speed_limit: 0,
     save_manifest_url: '',
@@ -383,7 +387,7 @@
 
 <div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-4 sm:px-8 pb-20 max-w-4xl mx-auto w-full space-y-4 text-xs sm:text-sm animate-fade-in custom-scrollbar">
   <!-- Minimalist Title & Save Bar -->
-  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-[#27272a]">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-surface-border">
     <div class="flex items-center space-x-2.5">
       <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
         System Settings
@@ -410,7 +414,7 @@
         type="button"
         on:click={handleDiscard}
         disabled={isSaving || !isDirty}
-        class="px-3.5 py-1.5 rounded-xl border font-bold text-xs transition cursor-pointer {isDirty ? 'bg-[#18181b] hover:bg-[#222225] border-[#27272a] text-neutral-300 hover:text-white' : 'bg-transparent border-[#27272a] text-neutral-600 opacity-40 cursor-not-allowed'}"
+        class="px-3.5 py-1.5 rounded-xl border font-bold text-xs transition cursor-pointer {isDirty ? 'bg-surface-card hover:bg-surface-cardHover border-surface-border text-neutral-300 hover:text-white' : 'bg-transparent border-surface-border text-neutral-600 opacity-40 cursor-not-allowed'}"
       >
         Discard
       </button>
@@ -419,7 +423,7 @@
         type="button"
         on:click={handleSave}
         disabled={isSaving || !isDirty}
-        class="font-black px-5 py-1.5 rounded-xl transition text-xs shadow flex items-center space-x-1.5 cursor-pointer {isDirty ? 'bg-white hover:bg-neutral-200 text-black shadow-md' : 'bg-[#18181b] text-neutral-500 border border-[#27272a] opacity-50 cursor-not-allowed'}"
+        class="font-black px-5 py-1.5 rounded-xl transition text-xs shadow flex items-center space-x-1.5 cursor-pointer {isDirty ? 'bg-white hover:bg-neutral-200 text-black shadow-md' : 'bg-surface-card text-neutral-500 border border-surface-border opacity-50 cursor-not-allowed'}"
       >
         {#if isSaving}
           <svg class="animate-spin w-3.5 h-3.5 text-black" fill="none" viewBox="0 0 24 24">
@@ -443,7 +447,7 @@
       aria-selected={activeTab === 'general'}
       on:click={() => { activeTab = 'general'; }}
       on:keydown={(e) => handleTabKeyDown(e, 0)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -458,7 +462,7 @@
       aria-selected={activeTab === 'storage' || activeTab === 'library'}
       on:click={() => { activeTab = 'storage'; }}
       on:keydown={(e) => handleTabKeyDown(e, 1)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'storage' || activeTab === 'library' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'storage' || activeTab === 'library' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -473,7 +477,7 @@
       aria-selected={activeTab === 'compatibility'}
       on:click={() => { activeTab = 'compatibility'; }}
       on:keydown={(e) => handleTabKeyDown(e, 2)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'compatibility' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'compatibility' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -489,7 +493,7 @@
       aria-selected={activeTab === 'persona'}
       on:click={() => { activeTab = 'persona'; }}
       on:keydown={(e) => handleTabKeyDown(e, 3)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'persona' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -504,7 +508,7 @@
       aria-selected={activeTab === 'credentials'}
       on:click={() => { activeTab = 'credentials'; }}
       on:keydown={(e) => handleTabKeyDown(e, 4)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'credentials' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'credentials' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -519,7 +523,7 @@
       aria-selected={activeTab === 'tools'}
       on:click={() => { activeTab = 'tools'; }}
       on:keydown={(e) => handleTabKeyDown(e, 5)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'tools' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'tools' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
@@ -534,7 +538,7 @@
       aria-selected={activeTab === 'logs'}
       on:click={() => { activeTab = 'logs'; }}
       on:keydown={(e) => handleTabKeyDown(e, 6)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'logs' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -593,7 +597,7 @@
 <!-- Floating / Sticky Save Bar when dirty -->
 {#if isDirty}
   <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in pointer-events-auto max-w-sm sm:max-w-md w-full px-4">
-    <div class="flex items-center justify-between gap-3 bg-[#12121a]/95 backdrop-blur-xl border border-sky-500/40 px-4 py-2.5 rounded-2xl shadow-2xl">
+    <div class="flex items-center justify-between gap-3 bg-[#12121a]/95 border border-sky-500/70 px-4 py-2.5 rounded-2xl shadow-2xl shadow-sky-950/30">
       <div class="flex items-center space-x-2 min-w-0">
         <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0"></span>
         <span class="text-xs font-bold text-white truncate">Unsaved Changes</span>
@@ -621,7 +625,7 @@
             <span>Saving...</span>
           {:else}
             <span>Save</span>
-            <span class="text-[10px] opacity-60 font-mono hidden sm:inline">(Ctrl+S)</span>
+            <span class="text-3xs opacity-60 font-mono hidden sm:inline">(Ctrl+S)</span>
           {/if}
         </button>
       </div>

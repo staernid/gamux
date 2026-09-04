@@ -37,7 +37,7 @@ The Unified Linux Wine Game Launcher (`umu-run` from Open-Wine-Components) used 
 _Avoid_: UMU wrapper, GE launcher
 
 **Launch Profile**:
-A structured configuration defining executable targets, launch arguments, Wine prefix location, runner selection, and performance/compatibility environment variables (`MANGOHUD`, `DXVK_HUD`, `custom_env`).
+A structured configuration defining executable targets, launch arguments, Wine prefix location, runner selection, and performance/compatibility environment variables (`MANGOHUD`, `custom_env`).
 _Avoid_: Run config, start script
 
 **Pipeline**:

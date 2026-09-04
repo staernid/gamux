@@ -142,7 +142,7 @@
   <div class="flex items-center justify-between p-3.5 bg-[#0d0d12] border border-[#222230] rounded-xl text-xs">
     <div class="space-y-0.5">
       <strong class="text-slate-200 block font-bold">DLC & Content Depots</strong>
-      <span class="text-slate-400 text-[11px]">
+      <span class="text-slate-400 text-2xs">
         {installedCount} of {depots.length} depots installed ({formatBytes(totalInstalledSize)})
       </span>
     </div>
@@ -150,7 +150,7 @@
       type="button"
       on:click={loadDepots}
       disabled={isLoading}
-      class="px-3 py-1.5 rounded-lg bg-[#181822] hover:bg-[#20202e] text-slate-300 border border-[#2e2e42] transition-colors font-bold text-[11px] flex items-center space-x-1.5"
+      class="px-3 py-1.5 rounded-lg bg-[#181822] hover:bg-[#20202e] text-slate-300 border border-[#2e2e42] transition-colors font-bold text-2xs flex items-center space-x-1.5"
     >
       <svg class="w-3 h-3 {isLoading ? 'animate-spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -172,7 +172,7 @@
       <div class="w-full bg-black/40 rounded-full h-1.5 overflow-hidden">
         <div class="bg-indigo-500 h-full transition-all duration-300" style="width: {activeTransfer.percent || 0}%"></div>
       </div>
-      <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+      <div class="flex items-center justify-between text-2xs text-slate-400 font-mono">
         <span>{formatBytes(activeTransfer.currentBytes || 0)} / {formatBytes(activeTransfer.totalBytes || 0)}</span>
         <span>{formatBytes(activeTransfer.speedBps || 0)}/s</span>
       </div>
@@ -186,7 +186,7 @@
   {:else if depots.length === 0}
     <div class="py-12 text-center text-slate-500 text-xs bg-[#0d0d12] border border-[#222230] rounded-xl space-y-1">
       <p class="font-bold text-slate-400">No Manifest Depots Discovered</p>
-      <p class="text-[11px] text-slate-500">Local <code class="font-mono text-slate-400">[Manifests]/</code> folder is empty or not yet synchronized.</p>
+      <p class="text-2xs text-slate-500">Local <code class="font-mono text-slate-400">[Manifests]/</code> folder is empty or not yet synchronized.</p>
     </div>
   {:else}
     <!-- Depots List -->
@@ -206,11 +206,11 @@
             <div class="space-y-1 min-w-0">
               <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                 <span class="font-bold text-slate-100 text-xs truncate">{depot.name || `Depot ${depot.depot_id}`}</span>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border {getCategoryBadgeClass(depot.category)}">
+                <span class="px-2 py-0.5 rounded-full text-3xs font-bold border {getCategoryBadgeClass(depot.category)}">
                   {getCategoryLabel(depot.category)}
                 </span>
               </div>
-              <p class="text-[11px] text-slate-400 font-mono">
+              <p class="text-2xs text-slate-400 font-mono">
                 {depot.file_count || 0} files • {formatBytes(depot.size || 0)}
               </p>
             </div>
@@ -223,7 +223,7 @@
                 type="button"
                 on:click={() => handleDownloadSoundtrack(depot)}
                 disabled={isActionRunning}
-                class="px-2.5 py-1.5 rounded-lg bg-pink-950/40 hover:bg-pink-900/60 text-pink-300 border border-pink-700/50 font-bold text-[11px] transition-colors flex items-center space-x-1"
+                class="px-2.5 py-1.5 rounded-lg bg-pink-950/40 hover:bg-pink-900/60 text-pink-300 border border-pink-700/50 font-bold text-2xs transition-colors flex items-center space-x-1"
               >
                 <span>🎵 Save to Music</span>
               </button>
@@ -232,7 +232,7 @@
                 type="button"
                 on:click={() => handleDownloadDepot(depot)}
                 disabled={isActionRunning}
-                class="px-2.5 py-1.5 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-700/50 font-bold text-[11px] transition-colors flex items-center space-x-1"
+                class="px-2.5 py-1.5 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-700/50 font-bold text-2xs transition-colors flex items-center space-x-1"
               >
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -241,7 +241,7 @@
               </button>
             {:else}
               <div class="flex items-center space-x-1.5">
-                <span class="text-emerald-400 font-bold text-[11px] px-2 py-1 bg-emerald-950/40 rounded-lg border border-emerald-800/40">
+                <span class="text-emerald-400 font-bold text-2xs px-2 py-1 bg-emerald-950/40 rounded-lg border border-emerald-800/40">
                   Installed
                 </span>
                 {#if depot.category !== 'common'}
@@ -250,7 +250,7 @@
                     on:click={() => handleUninstallDepot(depot)}
                     disabled={isActionRunning}
                     title="Remove depot files to free space"
-                    class="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-bold text-[10px] transition-colors"
+                    class="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-bold text-3xs transition-colors"
                   >
                     Uninstall
                   </button>

@@ -6,6 +6,7 @@ import { tasksStore } from '../../stores/tasks.js';
 import { drawerDraft } from '../../stores/drawerDraft.js';
 import { normalizeGame } from '../../utils/game.js';
 import { AppAPI } from '../../api/app.js';
+import { clearOverviewHubCache } from './hub/HubOverviewTab.svelte';
 import { get } from 'svelte/store';
 
 describe('GameHubView Component', () => {
@@ -25,43 +26,114 @@ describe('GameHubView Component', () => {
   };
 
   beforeEach(() => {
+    clearOverviewHubCache();
     tasksStore.reset();
     selectedGame.set(normalizeGame(mockGame));
     activeView.set('game-hub');
     vi.restoreAllMocks();
   });
 
-  it('renders hero banner with game title, platform, size, and 6 consolidated primary tabs', async () => {
+  it('renders hero banner with game title, platform, size, and 7 consolidated primary tabs', async () => {
     render(GameHubView);
 
     expect(screen.getByRole('heading', { name: 'Cyberpunk 2077', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText(/#1091500/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Play Now')).toBeInTheDocument();
 
-    // 6 primary tabs
+    // 7 primary tabs
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Community$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Resources$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^General$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Environment$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Saves$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Files & Diagnostics$/i })).toBeInTheDocument();
   });
 
-  it('renders overview tab with clean synopsis and external resources', async () => {
+  it('renders minimal overview tab with synopsis, achievements spotlight, and latest updates', async () => {
+    vi.spyOn(AppAPI, 'getGameAchievements').mockResolvedValue([
+      { id: 'ach_1', name: 'The Fool', description: 'Become a mercenary.', unlocked: true, unlock_time: 1720000000 }
+    ]);
+    vi.spyOn(AppAPI, 'fetchNews').mockResolvedValue([
+      { title: 'Patch 2.13 Available Now', contents: 'Adds support for AMD FidelityFX Super Resolution 3.', date: 1726142400, feedlabel: 'Patch Notes' }
+    ]);
+
     render(GameHubView);
 
     // Synopsis from metadata
     expect(await screen.findByText(/Cyberpunk 2077 is an open-world/i)).toBeInTheDocument();
 
-    // External resources in overview
-    expect(screen.getByText('Game Resources & Community Hub')).toBeInTheDocument();
-    expect(screen.getByText('PCGamingWiki')).toBeInTheDocument();
-    expect(screen.getByText('ProtonDB')).toBeInTheDocument();
-    expect(screen.getByText('SteamDB')).toBeInTheDocument();
+    // Achievements spotlight in overview
+    expect(await screen.findByText('The Fool')).toBeInTheDocument();
+
+    // Latest updates in overview
+    expect(await screen.findByText('Patch 2.13 Available Now')).toBeInTheDocument();
+
+    // External resources moved out of overview to Resources tab
+    expect(screen.queryByText('Game Resources & Community Hub')).not.toBeInTheDocument();
+    expect(screen.queryByText('PCGamingWiki')).not.toBeInTheDocument();
+  });
+
+  it('navigates to Community tab from Overview achievements and updates links', async () => {
+    vi.spyOn(AppAPI, 'getGameAchievements').mockResolvedValue([
+      { id: 'ach_1', name: 'The Fool', description: 'Become a mercenary.', unlocked: true, unlock_time: 1720000000 }
+    ]);
+    vi.spyOn(AppAPI, 'fetchNews').mockResolvedValue([
+      { title: 'Patch 2.13 Available Now', contents: 'Adds support for AMD FidelityFX Super Resolution 3.', date: 1726142400, feedlabel: 'Patch Notes' }
+    ]);
+
+    render(GameHubView);
+
+    const viewAllAchBtn = await screen.findByRole('button', { name: /View All \(1\)/i });
+    await fireEvent.click(viewAllAchBtn);
+
+    // Should switch to Community tab with Achievements active
+    expect(screen.getByRole('button', { name: /^Achievements$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /News & Updates/i })).toBeInTheDocument();
+  });
+
+  it('preserves all overview news articles when navigating to community and returning', async () => {
+    vi.spyOn(AppAPI, 'fetchNews').mockResolvedValue([
+      { title: 'Update 1', contents: 'First update notes', date: 1726142400, feedlabel: 'Patch Notes' },
+      { title: 'Update 2', contents: 'Second update notes', date: 1726141400, feedlabel: 'Announcement' },
+      { title: 'Update 3', contents: 'Third update notes', date: 1726140400, feedlabel: 'News' }
+    ]);
+
+    render(GameHubView);
+
+    // Verify all 3 news items render initially on Overview
+    expect(await screen.findByText('Update 1')).toBeInTheDocument();
+    expect(screen.getByText('Update 2')).toBeInTheDocument();
+    expect(screen.getByText('Update 3')).toBeInTheDocument();
+
+    // Click on the second news article card to navigate to Community
+    const update2Btn = screen.getByText('Update 2').closest('button');
+    expect(update2Btn).not.toBeNull();
+    await fireEvent.click(update2Btn);
+
+    // Verify we are now on Community tab with News active
+    expect(screen.getByRole('button', { name: /News & Updates/i })).toBeInTheDocument();
+
+    // Now return to the Overview tab
+    const overviewTabBtn = screen.getByRole('button', { name: /^Overview$/i });
+    await fireEvent.click(overviewTabBtn);
+
+    // Verify all 3 articles remain present on Overview and didn't shrink to 1
+    expect(await screen.findByText('Update 1')).toBeInTheDocument();
+    expect(screen.getByText('Update 2')).toBeInTheDocument();
+    expect(screen.getByText('Update 3')).toBeInTheDocument();
   });
 
   it('switches between primary tabs cleanly', async () => {
     render(GameHubView);
+
+    // Switch to Resources tab
+    const resourcesBtn = screen.getByRole('button', { name: /^Resources$/i });
+    await fireEvent.click(resourcesBtn);
+    expect(screen.getByText('Game Resources & Community Hub')).toBeInTheDocument();
+    expect(screen.getByText('PCGamingWiki')).toBeInTheDocument();
+    expect(screen.getByText('ProtonDB')).toBeInTheDocument();
+    expect(screen.getByText('SteamDB')).toBeInTheDocument();
 
     // Switch to General tab
     const generalBtn = screen.getByRole('button', { name: /^General$/i });
@@ -148,9 +220,15 @@ describe('GameHubView Component', () => {
     selectedGame.set(normalizeGame(standaloneGame));
     render(GameHubView);
 
-    // Overview tab exists and shows local info + Link Metadata CTA + external search resources
+    // Overview tab exists and shows local info + Link Metadata CTA
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
     expect(screen.getByText('Link Metadata')).toBeInTheDocument();
+    // Resources are in Resources tab, not Overview
+    expect(screen.queryByText('Game Resources & Community Hub')).not.toBeInTheDocument();
+
+    // Resources tab is accessible
+    const resBtn = screen.getByRole('button', { name: /^Resources$/i });
+    await fireEvent.click(resBtn);
     expect(screen.getByText('Game Resources & Community Hub')).toBeInTheDocument();
     expect(screen.getByText('PCGamingWiki')).toBeInTheDocument();
   });

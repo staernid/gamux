@@ -24,9 +24,12 @@
   import HubGeneralTab from './hub/HubGeneralTab.svelte';
   import HubEnvironmentTab from './hub/HubEnvironmentTab.svelte';
   import HubFilesTab from './hub/HubFilesTab.svelte';
+  import HubResourcesTab from './hub/HubResourcesTab.svelte';
 
-  // 6 Primary Consolidated Tabs: 'overview' | 'community' | 'general' | 'environment' | 'saves' | 'files'
+  // 7 Primary Consolidated Tabs: 'overview' | 'community' | 'resources' | 'general' | 'environment' | 'saves' | 'files'
   let activeTab = 'overview';
+  let communitySubTab = 'achievements';
+  let communityNewsIndex = 0;
 
   let globalCfg = {};
   let isSaving = false;
@@ -397,7 +400,14 @@
     }
   }
 
-  const primaryTabs = ['overview', 'community', 'general', 'environment', 'saves', 'files'];
+  const primaryTabs = ['overview', 'community', 'resources', 'general', 'environment', 'saves', 'files'];
+
+  function handleNavigateTab(e) {
+    const { tab, subTab, newsIndex } = e.detail || {};
+    if (tab) activeTab = tab;
+    if (subTab) communitySubTab = subTab;
+    if (newsIndex !== undefined) communityNewsIndex = newsIndex;
+  }
 
   function cycleTab(dir) {
     const idx = primaryTabs.indexOf(activeTab);
@@ -447,20 +457,20 @@
       on:openDirectory={openDirectory}
     />
 
-    <!-- Main Content & 6-Tab Section -->
+    <!-- Main Content & 7-Tab Section -->
     <div class="max-w-6xl w-full mx-auto px-6 py-4 flex-1 flex flex-col space-y-4">
       <!-- Live Task Progress HUD -->
       {#if activeGameTask}
         <GameTaskHud task={activeGameTask} />
       {/if}
 
-      <!-- 6 Primary Navigation Tabs -->
-      <div class="flex items-center space-x-2 border-b border-[#27272a] pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
+      <!-- 7 Primary Navigation Tabs -->
+      <div class="flex items-center space-x-2 border-b border-surface-border pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'overview'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'overview' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'overview' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -472,7 +482,7 @@
         <button
           type="button"
           on:click={() => { activeTab = 'community'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'community' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'community' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -480,11 +490,23 @@
           <span>Community</span>
         </button>
 
-        <!-- 3. General Tab -->
+        <!-- 3. Resources Tab -->
+        <button
+          type="button"
+          on:click={() => { activeTab = 'resources'; }}
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'resources' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+        >
+          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          <span>Resources</span>
+        </button>
+
+        <!-- 4. General Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'general'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -492,23 +514,23 @@
           <span>General</span>
         </button>
 
-        <!-- 4. Environment Tab -->
+        <!-- 5. Environment Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'environment'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'environment' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'environment' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span>Environment</span>
         </button>
 
-        <!-- 5. Saves Tab -->
+        <!-- 6. Saves Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'saves'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'saves' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'saves' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -516,11 +538,11 @@
           <span>Saves</span>
         </button>
 
-        <!-- 6. Files & Diagnostics Tab -->
+        <!-- 7. Files & Diagnostics Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'files'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-[#222225] text-white shadow-sm border border-[#3f3f46]' : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#141417]'}"
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -535,20 +557,26 @@
       <!-- Tab Content Area -->
       <div class="flex-1 pb-12">
         {#if activeTab === 'overview'}
-          <HubOverviewTab {game} />
+          <HubOverviewTab {game} on:navigateTab={handleNavigateTab} />
         {:else if activeTab === 'community'}
-          <HubCommunityTab {game} />
+          <HubCommunityTab
+            {game}
+            initialSubTab={communitySubTab}
+            initialNewsIndex={communityNewsIndex}
+          />
+        {:else if activeTab === 'resources'}
+          <HubResourcesTab {game} />
         {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
           <!-- Uninstalled State Placeholder for Technical Tabs -->
-          <div class="bg-[#101013] border border-[#27272a] rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
-            <div class="w-12 h-12 rounded-2xl bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center justify-center mx-auto">
+          <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
+            <div class="w-12 h-12 rounded-2xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
             <div class="space-y-1">
               <h3 class="font-bold text-white text-base">Game Files Not Installed</h3>
-              <p class="text-xs text-neutral-400">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
+              <p class="text-xs text-neutral-400 leading-relaxed">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
             </div>
             <button
               type="button"
@@ -583,7 +611,7 @@
             on:reset={handleResetSettings}
           />
         {:else if activeTab === 'saves'}
-          <div class="bg-[#121218] border border-[#222232] rounded-2xl p-6 shadow-xl">
+          <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">
             <DrawerSavesTab {game} />
           </div>
         {:else if activeTab === 'files'}

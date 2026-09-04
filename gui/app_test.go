@@ -307,7 +307,8 @@ func TestApp_LaunchProfileAndRunners(t *testing.T) {
 		OperatingMode: "standalone",
 		Runner:        "linux",
 		MangoHud:      &trueVal,
-		DXVKHud:       "fps",
+		DisableOverlay: &trueVal,
+		OfflineMode:    &trueVal,
 	}
 
 	if _, err := app.SaveLaunchProfile(tmpDir, opts); err != nil {
@@ -318,7 +319,7 @@ func TestApp_LaunchProfileAndRunners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLaunchProfile failed: %v", err)
 	}
-	if loaded == nil || loaded.MangoHud == nil || !*loaded.MangoHud || loaded.DXVKHud != "fps" {
+	if loaded == nil || loaded.MangoHud == nil || !*loaded.MangoHud || loaded.DisableOverlay == nil || !*loaded.DisableOverlay || loaded.OfflineMode == nil || !*loaded.OfflineMode {
 		t.Fatalf("loaded profile mismatch: %+v", loaded)
 	}
 }

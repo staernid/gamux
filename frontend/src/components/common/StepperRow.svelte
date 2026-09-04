@@ -63,7 +63,7 @@
 </script>
 
 <div
-  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 bg-[#101013] hover:bg-[#18181b] focus-within:bg-[#18181b] border border-[#27272a] focus-within:border-neutral-500 rounded-xl transition-all select-none group"
+  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 bg-[#101013] hover:bg-surface-card focus-within:bg-surface-card border border-surface-border focus-within:border-neutral-500 rounded-xl transition-all select-none group"
   role="group"
   aria-label={label}
 >
@@ -90,7 +90,7 @@
 
   <!-- Unified Stepper Control Capsule (Single Focus Stop for Controller & Keyboard) -->
   <div
-    class="flex items-center space-x-1 bg-[#141417] border border-[#27272a] focus:border-white focus:ring-1 focus:ring-white/20 rounded-lg p-0.5 flex-shrink-0 outline-none transition-all hover:border-neutral-500"
+    class="flex items-center space-x-1 bg-surface-input border border-surface-border focus:border-white focus:ring-1 focus:ring-white/20 rounded-lg p-0.5 flex-shrink-0 outline-none transition-all hover:border-neutral-500"
     tabindex="0"
     role="slider"
     aria-label={`${label}: ${currentLabel}`}

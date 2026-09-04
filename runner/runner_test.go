@@ -135,7 +135,6 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		Platform:      "win64",
 		OperatingMode: ModeStandalone,
 		Runner:        RunnerLinux, // Test exe resolution directly
-		DXVKHud:       "compiler",
 		WinePrefix:    filepath.Join(tmpDir, "pfx"),
 	}
 
@@ -159,11 +158,8 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		t.Errorf("expected command args or path to contain direct game exe %s, got path: %s, args: %v", gameExe, cmd.Path, cmd.Args)
 	}
 
-	var hasDXVK, hasLoaderDisable, hasLargeAddr, hasSDL, hasEsync, hasFsync, hasShaderCache, hasWineDebug bool
+	var hasLoaderDisable, hasLargeAddr, hasSDL, hasEsync, hasFsync, hasShaderCache, hasWineDebug bool
 	for _, env := range cmd.Env {
-		if env == "DXVK_HUD=compiler" {
-			hasDXVK = true
-		}
 		if env == "PROTON_DISABLE_LSTEAMCLIENT=1" {
 			hasLoaderDisable = true
 		}
@@ -187,9 +183,6 @@ func TestBuildCommand_LoaderModeDetection(t *testing.T) {
 		}
 	}
 
-	if !hasDXVK {
-		t.Errorf("expected DXVK_HUD=compiler in env")
-	}
 	if !hasLoaderDisable {
 		t.Errorf("expected PROTON_DISABLE_LSTEAMCLIENT=1 in env")
 	}
@@ -228,7 +221,8 @@ func TestLaunchProfile_RoundTrip(t *testing.T) {
 		Runner:        RunnerUMU,
 		WinePrefix:    "~/.wine-cs2",
 		MangoHud:      &trueVal,
-		DXVKHud:       "fps",
+		DisableOverlay: &trueVal,
+		OfflineMode:    &trueVal,
 		CustomEnv: map[string]string{
 			"CUSTOM_VAR": "1",
 		},
@@ -625,7 +619,8 @@ func TestResolveEffectiveOptions_CascadingProfile(t *testing.T) {
 		Runner:            RunnerWine,
 		WinePrefix:        "~/.wine-cascaded",
 		MangoHud:   &trueVal,
-		DXVKHud:    "fps",
+		DisableOverlay: &trueVal,
+		OfflineMode:    &trueVal,
 		CustomEnv: map[string]string{
 			"CASCADED_VAR": "profile_val",
 		},
@@ -1176,7 +1171,6 @@ func TestGenerateLaunchScript_Windows(t *testing.T) {
 		Runner:        RunnerUMU,
 		WinePrefix:    "prefix",
 		MangoHud:      &trueVal,
-		DXVKHud:       "fps",
 		CustomEnv: map[string]string{
 			"MY_CUSTOM_VAR": "custom_val",
 		},
@@ -1211,9 +1205,6 @@ func TestGenerateLaunchScript_Windows(t *testing.T) {
 	}
 	if !strings.Contains(content, `export MANGOHUD="1"`) {
 		t.Errorf("expected MANGOHUD in launch.sh")
-	}
-	if !strings.Contains(content, `export DXVK_HUD="fps"`) {
-		t.Errorf("expected DXVK_HUD in launch.sh")
 	}
 	if !strings.Contains(content, `export MY_CUSTOM_VAR="custom_val"`) {
 		t.Errorf("expected MY_CUSTOM_VAR in launch.sh")

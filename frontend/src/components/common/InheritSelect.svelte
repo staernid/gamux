@@ -43,8 +43,8 @@
 {#if stacked}
   <div
     class="flex flex-col justify-between gap-2.5 p-3 rounded-xl transition-all h-full
-      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-[#18181b]'}
-      {isOverridden ? 'bg-[#18181b] border border-neutral-600' : 'bg-[#101013] border border-[#27272a]'}"
+      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
+      {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
   >
     <!-- Top: Header with Label and Override Indicator -->
     <div class="space-y-1 min-w-0">
@@ -78,10 +78,10 @@
           value={selectedValue}
           {disabled}
           on:change={handleChange}
-          class="w-full bg-[#141417] border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
+          class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
-              : 'border-[#27272a] text-neutral-200 focus:border-neutral-500'}"
+              : 'border-surface-border text-neutral-200 focus:border-neutral-500'}"
         >
           {#each options as opt}
             <option value={opt.value}>{opt.label}</option>
@@ -99,7 +99,7 @@
         <button
           type="button"
           on:click={revertToInherit}
-          class="p-1.5 rounded-lg bg-[#202024] hover:bg-[#27272a] border border-[#3f3f46] text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >
@@ -113,8 +113,8 @@
 {:else}
   <div
     class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all
-      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-[#18181b]'}
-      {isOverridden ? 'bg-[#18181b] border border-neutral-600' : 'bg-[#101013] border border-[#27272a]'}"
+      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
+      {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
   >
     <!-- Left Side: Label & Description with Override Dot -->
     <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
@@ -148,10 +148,10 @@
           value={selectedValue}
           {disabled}
           on:change={handleChange}
-          class="w-full bg-[#141417] border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
+          class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
-              : 'border-[#27272a] text-neutral-200 focus:border-neutral-500'}"
+              : 'border-surface-border text-neutral-200 focus:border-neutral-500'}"
         >
           {#each options as opt}
             <option value={opt.value}>{opt.label}</option>
@@ -169,7 +169,7 @@
         <button
           type="button"
           on:click={revertToInherit}
-          class="p-1.5 rounded-lg bg-[#202024] hover:bg-[#27272a] border border-[#3f3f46] text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >

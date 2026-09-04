@@ -103,7 +103,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-cyan-300 transition-colors">PCGamingWiki</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Wiki / Fixes</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Wiki / Fixes</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Essential configuration fixes, save game file paths, FOV calculators, and technical issues.
@@ -138,7 +138,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">ProtonDB</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">Linux Gaming</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">Linux Gaming</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Community Linux compatibility reports, Proton GE recommendations, and launch parameter tweaks.
@@ -173,7 +173,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-amber-300 transition-colors">SteamDB</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">Depots & Builds</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">Depots & Builds</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Depot manifests, update histories, launch configurations, and technical database listings.
@@ -208,7 +208,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-emerald-300 transition-colors">WineHQ AppDB</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Wine Staging</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Wine Staging</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Legacy Windows compatibility reports, DLL overrides, and standalone Wine execution tests.
@@ -256,7 +256,7 @@
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="font-bold text-white text-sm group-hover:text-sky-300 transition-colors">Steam Store</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-500/10 text-sky-300 border border-sky-500/20">Official Store</span>
+              <span class="px-2 py-0.5 rounded text-3xs font-mono bg-sky-500/10 text-sky-300 border border-sky-500/20">Official Store</span>
             </div>
             <p class="text-slate-400 text-xs line-clamp-2">
               Official store page, DLC packages, system specs, trailers, and developer updates.
@@ -280,7 +280,7 @@
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">GOG Store</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">DRM-Free Store</span>
+              <span class="px-2 py-0.5 rounded text-3xs font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">DRM-Free Store</span>
             </div>
             <p class="text-slate-400 text-xs line-clamp-2">
               GOG.com catalog page, soundtrack downloads, and bonus goodies.
@@ -307,7 +307,7 @@
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="font-bold text-white text-sm group-hover:text-blue-300 transition-colors">Steam Guides</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">Community</span>
+              <span class="px-2 py-0.5 rounded text-3xs font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">Community</span>
             </div>
             <p class="text-slate-400 text-xs line-clamp-2">
               Community walkthroughs, achievement guides, secret locations, and optimization tips.
@@ -334,7 +334,7 @@
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">Discussions</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Forums</span>
+              <span class="px-2 py-0.5 rounded text-3xs font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Forums</span>
             </div>
             <p class="text-slate-400 text-xs line-clamp-2">
               Official community board for gameplay questions, technical issues, and player feedback.
@@ -372,7 +372,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-pink-300 transition-colors">SteamGridDB</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-pink-500/10 text-pink-300 border border-pink-500/20">Artwork</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-pink-500/10 text-pink-300 border border-pink-500/20">Artwork</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Community custom poster covers, wide banners, hero backdrops, and transparent logos.
@@ -397,7 +397,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-teal-300 transition-colors">HowLongToBeat</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20">Playtime</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20">Playtime</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Crowdsourced playthrough completion times for main story, extras, and 100% completion.
@@ -422,7 +422,7 @@
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm group-hover:text-orange-300 transition-colors">Nexus Mods</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-orange-500/10 text-orange-300 border border-orange-500/20">Modifications</span>
+            <span class="px-2 py-0.5 rounded text-3xs font-mono bg-orange-500/10 text-orange-300 border border-orange-500/20">Modifications</span>
           </div>
           <p class="text-slate-400 text-xs line-clamp-2">
             Community game modifications, custom texture packs, shaders, UI tweaks, and loaders.

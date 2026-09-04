@@ -28,12 +28,12 @@
     {#each tasks as tr (tr.id)}
       <div class="p-3.5 flex items-center justify-between hover:bg-[#151520] transition">
         <div class="flex items-center space-x-3 min-w-0">
-          <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-[#1c1c28] text-slate-400 uppercase font-mono border border-[#262638]">
+          <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-[#1c1c28] text-slate-400 uppercase font-mono border border-[#262638]">
             {tr.status}
           </span>
           <div class="min-w-0">
             <span class="font-bold text-white text-xs truncate block">{tr.gameName || tr.title}</span>
-            <p class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">{tr.details || tr.stage || 'Waiting'}</p>
+            <p class="text-3xs text-slate-500 font-mono mt-0.5 truncate">{tr.details || tr.stage || 'Waiting'}</p>
           </div>
         </div>
 

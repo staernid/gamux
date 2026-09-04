@@ -22,9 +22,9 @@ import (
 
 func TestMain(m *testing.M) {
 	restore := testutil.SilenceLogging()
-	cache.DisableCache = true
+	cache.SetDisabled(true)
 	code := m.Run()
-	cache.DisableCache = false
+	cache.SetDisabled(false)
 	restore()
 	os.Exit(code)
 }

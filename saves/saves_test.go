@@ -44,7 +44,7 @@ func TestManifestIndexingAndLookup(t *testing.T) {
 		},
 	}
 
-	mgr.indexMap(mockRaw)
+	mgr.bySteamAppID, mgr.byNormalizedTitle, mgr.byGOGID = buildIndices(mockRaw)
 
 	// AppID lookup
 	g1, found := mgr.FindGame(892970, "", 0)
@@ -86,7 +86,7 @@ func TestPlaceholderExpansionAndResolution(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(fakeSaveDir, "player.fch"), []byte("save data content"), 0644)
 
 	mgr := NewManifestManager(tmpDir, "", nil)
-	mgr.indexMap(map[string]ManifestGame{
+	mgr.bySteamAppID, mgr.byNormalizedTitle, mgr.byGOGID = buildIndices(map[string]ManifestGame{
 		"Valheim": {
 			Steam: struct {
 				ID uint32 `json:"id,omitempty"`
@@ -155,7 +155,7 @@ func TestBackupCreationAndRestoration(t *testing.T) {
 	_ = os.WriteFile(saveFilePath, []byte(originalContent), 0644)
 
 	mgr := NewManifestManager(tmpDir, "", nil)
-	mgr.indexMap(map[string]ManifestGame{
+	mgr.bySteamAppID, mgr.byNormalizedTitle, mgr.byGOGID = buildIndices(map[string]ManifestGame{
 		"Valheim": {
 			Steam: struct {
 				ID uint32 `json:"id,omitempty"`
@@ -284,7 +284,7 @@ func TestService_EndToEndLifecycle(t *testing.T) {
 	})
 
 	// Inject manifest rule for 777777
-	svc.manifestMgr.indexMap(map[string]ManifestGame{
+	svc.manifestMgr.bySteamAppID, svc.manifestMgr.byNormalizedTitle, svc.manifestMgr.byGOGID = buildIndices(map[string]ManifestGame{
 		"TestRPG": {
 			Steam: struct {
 				ID uint32 `json:"id,omitempty"`

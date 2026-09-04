@@ -41,7 +41,7 @@
         class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {isActive ? 'bg-sky-600 text-white shadow-md border border-sky-400/40' : 'bg-[#14141e] border border-[#262638] text-slate-400 hover:text-white'}"
       >
         <span>{prov.display_name}</span>
-        <span class="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-mono">{prov.badge}</span>
+        <span class="text-3xs bg-black/30 px-1.5 py-0.5 rounded font-mono">{prov.badge}</span>
       </button>
     {/each}
   </div>
@@ -97,7 +97,7 @@
 
       <!-- Manual ID Input & Apply Button -->
       <div class="flex items-center gap-3 pt-2 border-t border-[#1e1e2c]">
-        <span class="text-[11px] font-bold text-slate-400 flex-shrink-0">
+        <span class="text-2xs font-bold text-slate-400 flex-shrink-0">
           {targetStore === 'steam' ? 'Steam AppID:' : targetStore === 'gog' ? 'GOG ID / Slug:' : 'RAWG Game ID / Slug:'}
         </span>
         <input
@@ -125,7 +125,7 @@
       </div>
     {:else if metaCandidates.length > 0}
       <div class="space-y-2 pb-6">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-1">
+        <span class="text-3xs font-bold uppercase tracking-wider text-slate-400 block px-1">
           Matching {targetStore} Titles ({metaCandidates.length})
         </span>
         <div class="grid grid-cols-1 gap-2">
@@ -138,7 +138,7 @@
                 {/if}
                 <div class="min-w-0">
                   <h4 class="text-xs font-bold text-white truncate" title={cand.name}>{cand.name}</h4>
-                  <div class="flex items-center space-x-2 text-[10px] font-mono text-slate-400 mt-0.5">
+                  <div class="flex items-center space-x-2 text-3xs font-mono text-slate-400 mt-0.5">
                     <span>ID: <strong class="text-slate-200">{cand.id}</strong></span>
                     {#if cand.release_date}
                       <span>• Released: {cand.release_date}</span>

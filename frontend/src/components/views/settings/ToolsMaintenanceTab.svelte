@@ -139,7 +139,7 @@
       {#each toolStatuses as tool}
         {@const isInstalled = checkIsInstalled(tool)}
         {@const isUpdating = Boolean(updatingTools[tool.key || tool.tool_name])}
-        <div class="bg-[#101013] border border-[#27272a] p-3 rounded-xl flex flex-col justify-between gap-2.5">
+        <div class="bg-[#101013] border border-surface-border p-3 rounded-xl flex flex-col justify-between gap-2.5">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center justify-between gap-1.5">
               <span class="font-semibold text-xs text-white truncate">{tool.name || tool.display_name || tool.key}</span>
@@ -158,25 +158,25 @@
               {#if !isInstalled}
                 <span class="text-amber-400/90 font-medium">Not Installed</span>
                 {#if tool.latest_tag || tool.latest_version}
-                  <span class="text-neutral-600">·</span>
+                  <span class="text-neutral-500">·</span>
                   <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
                 {/if}
               {:else}
                 <span>{tool.installed_tag || tool.installed_version || 'Installed'}</span>
                 {#if tool.latest_tag || tool.latest_version}
-                  <span class="text-neutral-600">·</span>
+                  <span class="text-neutral-500">·</span>
                   <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
                 {/if}
               {/if}
             </div>
           </div>
 
-          <div class="flex items-center space-x-1.5 pt-1 border-t border-[#27272a]">
+          <div class="flex items-center space-x-1.5 pt-1 border-t border-surface-border">
             {#if tool.release_url}
               <button
                 type="button"
                 on:click={() => AppAPI.openURL(tool.release_url)}
-                class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-[#27272a] bg-[#141417] transition-colors cursor-pointer"
+                class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-surface-border bg-surface-input transition-colors cursor-pointer"
                 title="Open GitHub Release"
               >
                 ↗
@@ -186,7 +186,7 @@
               type="button"
               on:click={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
               disabled={isUpdating}
-              class="flex-1 py-1 rounded-lg font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white' : 'bg-white hover:bg-neutral-200 text-black'}"
+              class="flex-1 py-1 rounded-lg font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white' : 'bg-white hover:bg-neutral-200 text-black'}"
             >
               {#if isUpdating}
                 <svg class="animate-spin w-3 h-3 {isInstalled && !tool.has_update ? 'text-white' : 'text-black'}" fill="none" viewBox="0 0 24 24">
@@ -213,7 +213,7 @@
       <button
         type="button"
         on:click={handleViewTasks}
-        class="px-2 py-0.5 rounded-lg bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-2xs text-neutral-300 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
+        class="px-2 py-0.5 rounded-lg bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs text-neutral-300 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
         title="View active background tasks"
       >
         <span>View Tasks</span>
@@ -224,7 +224,7 @@
     </svelte:fragment>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
       <!-- 1. Batch Achievements -->
-      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +236,7 @@
             Download missing achievement schemas and icons across library.
           </p>
           {#if achievementsTask}
-            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+            <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
               <div class="flex items-center justify-between text-2xs">
                 <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
                   <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -247,7 +247,7 @@
                 </span>
                 <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(achievementsTask.percent || 0)}%</span>
               </div>
-              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+              <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
                 <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, achievementsTask.percent || 0))}%"></div>
               </div>
               <div class="flex items-center justify-between text-3xs">
@@ -268,7 +268,7 @@
           type="button"
           on:click={runBatchAchievements}
           disabled={Boolean(achievementsTask) || isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+          class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
           {#if achievementsTask}
             <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
@@ -283,7 +283,7 @@
       </div>
 
       <!-- 2. Batch Artwork -->
-      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,7 +295,7 @@
             Resolve and cache missing posters, hero banners, and logos.
           </p>
           {#if artworkTask}
-            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+            <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
               <div class="flex items-center justify-between text-2xs">
                 <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
                   <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -306,7 +306,7 @@
                 </span>
                 <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(artworkTask.percent || 0)}%</span>
               </div>
-              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+              <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
                 <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, artworkTask.percent || 0))}%"></div>
               </div>
               <div class="flex items-center justify-between text-3xs">
@@ -327,7 +327,7 @@
           type="button"
           on:click={runBatchArtwork}
           disabled={Boolean(artworkTask) || isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+          class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
           {#if artworkTask}
             <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
@@ -342,7 +342,7 @@
       </div>
 
       <!-- 3. Batch Apply DRM & Emulator -->
-      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <div class="flex items-center justify-between gap-1.5">
             <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5 truncate">
@@ -359,7 +359,7 @@
             Apply Goldberg emulator and unpacker to unpatched games.
           </p>
           {#if applyTask}
-            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+            <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
               <div class="flex items-center justify-between text-2xs">
                 <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
                   <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -370,7 +370,7 @@
                 </span>
                 <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(applyTask.percent || 0)}%</span>
               </div>
-              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+              <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
                 <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, applyTask.percent || 0))}%"></div>
               </div>
               <div class="flex items-center justify-between text-3xs">
@@ -391,7 +391,7 @@
           type="button"
           on:click={runBatchApply}
           disabled={Boolean(applyTask) || isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+          class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
           {#if applyTask}
             <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
@@ -406,7 +406,7 @@
       </div>
 
       <!-- 4. Batch Normalize -->
-      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -418,7 +418,7 @@
             Standardize directory names to match official Steam titles.
           </p>
           {#if normalizeTask}
-            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+            <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
               <div class="flex items-center justify-between text-2xs">
                 <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
                   <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -429,7 +429,7 @@
                 </span>
                 <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(normalizeTask.percent || 0)}%</span>
               </div>
-              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+              <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
                 <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, normalizeTask.percent || 0))}%"></div>
               </div>
               <div class="flex items-center justify-between text-3xs">
@@ -450,7 +450,7 @@
           type="button"
           on:click={runBatchNormalize}
           disabled={Boolean(normalizeTask) || isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+          class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
           {#if normalizeTask}
             <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
@@ -465,7 +465,7 @@
       </div>
 
       <!-- 5. Batch Verify Manifests -->
-      <div class="bg-[#101013] border border-[#27272a] hover:border-[#3f3f46] p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
+      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -477,7 +477,7 @@
             Verify SHA-1 file integrity against official depot manifests.
           </p>
           {#if verifyTask}
-            <div class="mt-2 pt-2 border-t border-[#27272a] space-y-1.5 animate-fade-in">
+            <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
               <div class="flex items-center justify-between text-2xs">
                 <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
                   <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -488,7 +488,7 @@
                 </span>
                 <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(verifyTask.percent || 0)}%</span>
               </div>
-              <div class="w-full bg-[#141417] rounded-full h-1.5 overflow-hidden border border-[#27272a]">
+              <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
                 <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, verifyTask.percent || 0))}%"></div>
               </div>
               <div class="flex items-center justify-between text-3xs">
@@ -509,7 +509,7 @@
           type="button"
           on:click={runBatchVerify}
           disabled={Boolean(verifyTask) || isSubmittingBatch || gamesCount === 0}
-          class="w-full bg-[#18181b] hover:bg-[#222225] disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-[#27272a] transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+          class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
           {#if verifyTask}
             <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">

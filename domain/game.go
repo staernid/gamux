@@ -245,7 +245,8 @@ type LaunchProfile struct {
 	ProtonPath        string            `json:"proton_path,omitempty"`
 	Language          string            `json:"language,omitempty"`
 	MangoHud          *bool             `json:"mangohud,omitempty"`
-	DXVKHud           string            `json:"dxvk_hud,omitempty"`
+	DisableOverlay    *bool             `json:"disable_overlay,omitempty"`
+	OfflineMode       *bool             `json:"offline_mode,omitempty"`
 	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
 	CustomEnv         map[string]string `json:"custom_env,omitempty"`
 	WorkingDir        string            `json:"working_dir,omitempty"`

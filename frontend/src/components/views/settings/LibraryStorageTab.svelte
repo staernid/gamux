@@ -82,7 +82,7 @@
       <button
         type="button"
         on:click={handleAddLibraryPath}
-        class="px-2.5 py-1 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
+        class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
       >
         <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -92,13 +92,13 @@
     </svelte:fragment>
 
     {#if (cfgDraft.library_paths || []).length === 0}
-      <div class="p-3 bg-[#101013] border border-[#27272a] rounded-xl text-center">
+      <div class="p-3 bg-[#101013] border border-surface-border rounded-xl text-center">
         <p class="text-xs text-neutral-400">No library directories configured. Add a directory to start scanning.</p>
       </div>
     {:else}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
         {#each cfgDraft.library_paths as p}
-          <div class="flex items-center justify-between p-2.5 bg-[#101013] border {pendingRemovePath === p ? 'border-rose-500/50 bg-rose-950/10' : 'border-[#27272a]'} rounded-lg transition-colors">
+          <div class="flex items-center justify-between p-2.5 bg-[#101013] border {pendingRemovePath === p ? 'border-rose-500/50 bg-rose-950/10' : 'border-surface-border'} rounded-lg transition-colors">
             <div class="flex items-center space-x-2 min-w-0 flex-1">
               <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -121,7 +121,7 @@
                 <button
                   type="button"
                   on:click={cancelRemoveLibraryPath}
-                  class="px-2 py-0.5 rounded bg-[#18181b] hover:bg-[#222225] text-neutral-300 text-2xs font-bold transition-colors cursor-pointer border border-[#27272a]"
+                  class="px-2 py-0.5 rounded bg-surface-card hover:bg-surface-cardHover text-neutral-300 text-2xs font-bold transition-colors cursor-pointer border border-surface-border"
                   title="Cancel removal"
                 >
                   Cancel
@@ -176,7 +176,7 @@
     </div>
 
     <!-- Advanced Storage Accordion -->
-    <div class="pt-3 mt-3 border-t border-[#27272a]">
+    <div class="pt-3 mt-3 border-t border-surface-border">
       <button
         type="button"
         on:click={() => { showAdvancedStorage = !showAdvancedStorage; }}
@@ -201,7 +201,7 @@
               slot="action"
               type="button"
               on:click={handleBrowseArtworkDir}
-              class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
             >
               Browse
             </button>
@@ -218,7 +218,7 @@
               slot="action"
               type="button"
               on:click={handleBrowseBackupDir}
-              class="px-3 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
             >
               Browse
             </button>

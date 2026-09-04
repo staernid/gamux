@@ -25,8 +25,10 @@ type Config struct {
 	RAWGAPIKey        string `json:"rawg_api_key,omitempty"`
 	ArtworkDir        string `json:"artwork_dir,omitempty"`
 
-	// Notifications
-	EnableLaunchNotify bool `json:"enable_launch_notify"`
+	// Notifications & Process Lifecycle
+	EnableLaunchNotify   bool   `json:"enable_launch_notify"`
+	LaunchWindowBehavior string `json:"launch_window_behavior,omitempty"` // "keep" | "minimize" | "hide"
+	CloseToTray          bool   `json:"close_to_tray"`
 
 	// Operational Settings
 	OperatingMode      string            `json:"operating_mode,omitempty"`
@@ -103,6 +105,8 @@ func DefaultConfig() *Config {
 		HubcapAPIKey:         "",
 		SteamGridDBAPIKey:    "",
 		EnableLaunchNotify:   true,
+		LaunchWindowBehavior: "keep",
+		CloseToTray:          false,
 		OperatingMode:        "loader",
 		DefaultRunner:        "umu",
 		Steamless:            true,

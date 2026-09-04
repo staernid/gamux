@@ -111,6 +111,7 @@ func (a *App) Startup(ctx context.Context) {
 					"isRunning": true,
 					"pid":       parseMetaInt(ev.Metadata, "pid"),
 				})
+				a.handleGameLaunchWindow(true)
 			}
 			if ev.Type == events.EventGameExited {
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
@@ -121,6 +122,7 @@ func (a *App) Startup(ctx context.Context) {
 					"playtimeSeconds": parseMetaInt64(ev.Metadata, "playtime_seconds"),
 					"lastPlayed":      parseMetaInt64(ev.Metadata, "last_played"),
 				})
+				a.handleGameLaunchWindow(false)
 			}
 			if ev.Type == events.EventTaskProgress && ev.Metadata != nil && ev.Metadata["step"] != "" {
 				safeEmit(a.ctx, "gamux:step-progress", map[string]any{
@@ -154,6 +156,45 @@ func (a *App) Startup(ctx context.Context) {
 	slog.Info("Gamux GUI backend initialized")
 }
 
+func (a *App) handleGameLaunchWindow(launched bool) {
+	if a.ctx == nil || a.Config == nil {
+		return
+	}
+	behavior := strings.ToLower(strings.TrimSpace(a.Config.LaunchWindowBehavior))
+	if behavior == "" || behavior == "keep" {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Debug("Ignoring panic during window state change", "behavior", behavior, "launched", launched, "recover", r)
+		}
+	}()
+
+	if launched {
+		switch behavior {
+		case "minimize":
+			wailsRuntime.WindowMinimise(a.ctx)
+		case "hide":
+			wailsRuntime.WindowHide(a.ctx)
+		}
+	} else {
+		switch behavior {
+		case "minimize":
+			wailsRuntime.WindowUnminimise(a.ctx)
+		case "hide":
+			wailsRuntime.WindowShow(a.ctx)
+			wailsRuntime.WindowUnminimise(a.ctx)
+		}
+	}
+}
+
+// Quit unconditionally terminates the GUI application.
+func (a *App) Quit() {
+	if a.ctx != nil {
+		wailsRuntime.Quit(a.ctx)
+	}
+}
+
 // getContext returns the current context (useful for fallback and testing).
 func (a *App) getContext() context.Context {
 	if a.ctx != nil {
@@ -181,7 +222,9 @@ func (a *App) AssetHandler() http.Handler {
 			}
 			filePath := filepath.Join(artDir, rel)
 			if util.FileExists(filePath) {
-				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				// The ?t=<mtime> query string handles cache busting, so we can
+				// cache aggressively and avoid redundant revalidation requests.
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				http.ServeFile(w, r, filePath)
 				return
 			}
@@ -189,6 +232,10 @@ func (a *App) AssetHandler() http.Handler {
 			rel := strings.TrimPrefix(r.URL.Path, "/local-img/")
 			filePath := "/" + rel
 			filePath = filepath.Clean(filePath)
+			if strings.Contains(filePath, "..") {
+				http.Error(w, "invalid path", http.StatusBadRequest)
+				return
+			}
 			if util.FileExists(filePath) {
 				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 				http.ServeFile(w, r, filePath)

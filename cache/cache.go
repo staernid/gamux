@@ -7,15 +7,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/staernid/gamux/domain"
 )
 
 var (
-	// DisableCache globally disables disk and memory caching (useful for testing or forced refresh).
-	DisableCache bool
+	disableCache atomic.Bool
 	baseCacheDir string
 	dirMutex     sync.RWMutex
 
@@ -31,7 +32,21 @@ var (
 	// In-memory thread-safe cache for inspected game records (Warm Library Cache)
 	gamesMu          sync.RWMutex
 	gamesMemoryCache = make(map[string]CachedGameRecord)
+
+	// In-memory thread-safe cache for Steam news items
+	newsItemsMu          sync.RWMutex
+	newsItemsMemoryCache = make(map[string][]byte)
 )
+
+// IsDisabled reports whether caching is globally disabled (useful for testing or forced refresh).
+func IsDisabled() bool {
+	return disableCache.Load()
+}
+
+// SetDisabled globally enables or disables all disk and memory caching.
+func SetDisabled(v bool) {
+	disableCache.Store(v)
+}
 
 var cacheSubdirs = []string{
 	"hubcap",
@@ -44,6 +59,20 @@ var cacheSubdirs = []string{
 	"sgdb",
 	"store_meta",
 	"games",
+}
+
+// subdirTTLs maps each cache subdirectory to its canonical TTL.
+// Used by Prune to determine which entries are expired.
+var subdirTTLs = map[string]time.Duration{
+	"appdetails":  7 * 24 * time.Hour,
+	"news":        24 * time.Hour,
+	"github":      1 * time.Hour,
+	"steamdepotdb": 24 * time.Hour,
+	"manifesthub": 24 * time.Hour,
+	"sgdb":        7 * 24 * time.Hour,
+	"store_meta":  24 * time.Hour,
+	"hubcap":      30 * 24 * time.Hour,
+	"revobd":      30 * 24 * time.Hour,
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -69,10 +98,14 @@ func SetCacheDir(dir string) {
 	gamesMu.Lock()
 	gamesMemoryCache = make(map[string]CachedGameRecord)
 	gamesMu.Unlock()
+
+	newsItemsMu.Lock()
+	newsItemsMemoryCache = make(map[string][]byte)
+	newsItemsMu.Unlock()
 }
 
 func getCacheDir() string {
-	if DisableCache {
+	if disableCache.Load() {
 		return ""
 	}
 	dirMutex.RLock()
@@ -107,7 +140,7 @@ type TTLWrapper struct {
 }
 
 func readTTLFile(path string, ttl time.Duration) ([]byte, bool) {
-	if DisableCache {
+	if disableCache.Load() {
 		return nil, false
 	}
 	data, err := os.ReadFile(path)
@@ -124,7 +157,7 @@ func readTTLFile(path string, ttl time.Duration) ([]byte, bool) {
 }
 
 func writeTTLFile(path string, payload []byte) error {
-	if DisableCache || len(payload) == 0 {
+	if disableCache.Load() || len(payload) == 0 {
 		return nil
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0755)
@@ -173,7 +206,7 @@ func loadAppNamesLocked() {
 
 // GetAppName looks up a cached Steam AppID title (in-memory fast lookup with disk fallback).
 func GetAppName(appID string) (string, bool) {
-	if DisableCache || appID == "" {
+	if disableCache.Load() || appID == "" {
 		return "", false
 	}
 	nameMu.RLock()
@@ -196,7 +229,7 @@ func GetAppName(appID string) (string, bool) {
 
 // SaveAppName saves a Steam AppID title to in-memory and local disk cache.
 func SaveAppName(appID, name string) {
-	if DisableCache || appID == "" || name == "" {
+	if disableCache.Load() || appID == "" || name == "" {
 		return
 	}
 	nameMu.Lock()
@@ -225,7 +258,7 @@ func SaveAppName(appID, name string) {
 
 // GetAppDetails retrieves cached Steam store AppDetails JSON if less than 7 days old.
 func GetAppDetails(appID string) ([]byte, bool) {
-	if DisableCache || appID == "" {
+	if disableCache.Load() || appID == "" {
 		return nil, false
 	}
 
@@ -254,7 +287,7 @@ func GetAppDetails(appID string) ([]byte, bool) {
 
 // SaveAppDetails writes Steam store AppDetails JSON to in-memory and disk cache for 7 days.
 func SaveAppDetails(appID string, data []byte) error {
-	if DisableCache || appID == "" || len(data) == 0 {
+	if disableCache.Load() || appID == "" || len(data) == 0 {
 		return nil
 	}
 	detailsMu.Lock()
@@ -273,14 +306,9 @@ func SaveAppDetails(appID string, data []byte) error {
 // 3. Steam News / Patch Notes Cache (12h/24h)
 // ==========================================
 
-type CachedNews struct {
-	Timestamp time.Time `json:"timestamp"`
-	News      string    `json:"news"`
-}
-
 // GetNews retrieves cached Steam patch notes if less than 24 hours old.
 func GetNews(appID string) (string, bool) {
-	if DisableCache || appID == "" {
+	if disableCache.Load() || appID == "" {
 		return "", false
 	}
 	dir := getCacheDir()
@@ -288,22 +316,15 @@ func GetNews(appID string) (string, bool) {
 		return "", false
 	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
-	}
-	var item CachedNews
-	if err := json.Unmarshal(data, &item); err == nil {
-		if time.Since(item.Timestamp) < 24*time.Hour {
-			return item.News, true
-		}
+	if data, ok := readTTLFile(path, 24*time.Hour); ok {
+		return string(data), true
 	}
 	return "", false
 }
 
 // SaveNews caches Steam patch notes to disk for 24 hours.
 func SaveNews(appID, news string) {
-	if DisableCache || appID == "" || news == "" {
+	if disableCache.Load() || appID == "" || news == "" {
 		return
 	}
 	dir := getCacheDir()
@@ -311,69 +332,75 @@ func SaveNews(appID, news string) {
 		return
 	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
-	item := CachedNews{
-		Timestamp: time.Now(),
-		News:      news,
-	}
-	if bytes, err := json.MarshalIndent(item, "", "  "); err == nil {
-		_ = os.WriteFile(path, bytes, 0644)
-	}
-}
-
-type CachedNewsItems struct {
-	Timestamp time.Time       `json:"timestamp"`
-	Items     json.RawMessage `json:"items"`
+	_ = writeTTLFile(path, []byte(news))
 }
 
 // GetNewsItems retrieves cached Steam patch notes list if less than 12 hours old.
 func GetNewsItems(appID string) ([]byte, bool) {
-	if DisableCache || appID == "" {
+	if disableCache.Load() || appID == "" {
 		return nil, false
 	}
+
+	// 1. Fast in-memory cache check
+	newsItemsMu.RLock()
+	if cached, ok := newsItemsMemoryCache[appID]; ok && len(cached) > 0 {
+		newsItemsMu.RUnlock()
+		return cached, true
+	}
+	newsItemsMu.RUnlock()
+
+	// 2. Disk cache check
 	dir := getCacheDir()
 	if dir == "" {
 		return nil, false
 	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, false
-	}
-	var cached CachedNewsItems
-	if err := json.Unmarshal(data, &cached); err == nil {
-		if time.Since(cached.Timestamp) < 12*time.Hour && len(cached.Items) > 0 {
-			return cached.Items, true
-		}
+	if data, ok := readTTLFile(path, 12*time.Hour); ok {
+		newsItemsMu.Lock()
+		newsItemsMemoryCache[appID] = data
+		newsItemsMu.Unlock()
+		return data, true
 	}
 	return nil, false
 }
 
-// SaveNewsItems caches Steam patch notes list to disk for 12 hours.
+// SaveNewsItems caches Steam patch notes list to in-memory and disk cache for 12 hours.
 func SaveNewsItems(appID string, itemsJSON []byte) {
-	if DisableCache || appID == "" || len(itemsJSON) == 0 {
+	if disableCache.Load() || appID == "" || len(itemsJSON) == 0 {
 		return
 	}
+
+	// Never downgrade cache: if existing cache has more items and is valid, keep it
+	if existingBytes, ok := GetNewsItems(appID); ok {
+		var existingItems []json.RawMessage
+		var newItems []json.RawMessage
+		if json.Unmarshal(existingBytes, &existingItems) == nil && json.Unmarshal(itemsJSON, &newItems) == nil {
+			if len(existingItems) > len(newItems) {
+				return
+			}
+		}
+	}
+
+	// Update in-memory cache
+	newsItemsMu.Lock()
+	newsItemsMemoryCache[appID] = itemsJSON
+	newsItemsMu.Unlock()
+
 	dir := getCacheDir()
 	if dir == "" {
 		return
 	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
-	cached := CachedNewsItems{
-		Timestamp: time.Now(),
-		Items:     itemsJSON,
-	}
-	if data, err := json.MarshalIndent(cached, "", "  "); err == nil {
-		_ = os.WriteFile(path, data, 0644)
-	}
+	_ = writeTTLFile(path, itemsJSON)
 }
 
 // ==========================================
-// 4. Hubcap & RevoBD Manifest ZIP Cache
+// 4. Hubcap & RevoBD Manifest ZIP Cache (30 Days)
 // ==========================================
 
-// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available on disk.
+// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available and less than 30 days old.
 func GetHubcapZIP(appID uint32) ([]byte, bool) {
-	if DisableCache {
+	if disableCache.Load() {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -381,6 +408,14 @@ func GetHubcapZIP(appID uint32) ([]byte, bool) {
 		return nil, false
 	}
 	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
+	info, err := os.Stat(zipPath)
+	if err != nil || info.Size() == 0 {
+		return nil, false
+	}
+	if time.Since(info.ModTime()) >= 30*24*time.Hour {
+		slog.Debug("Hubcap ZIP cache expired (>30 days), will re-fetch", "appID", appID)
+		return nil, false
+	}
 	data, err := os.ReadFile(zipPath)
 	if err == nil && len(data) > 0 {
 		slog.Info("Using cached Hubcap ZIP archive from disk (0 API requests consumed)", "appID", appID)
@@ -391,7 +426,7 @@ func GetHubcapZIP(appID uint32) ([]byte, bool) {
 
 // SaveHubcapZIP writes Hubcap ZIP archive bytes to local disk cache.
 func SaveHubcapZIP(appID uint32, data []byte) error {
-	if DisableCache || len(data) == 0 {
+	if disableCache.Load() || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -403,9 +438,9 @@ func SaveHubcapZIP(appID uint32, data []byte) error {
 	return os.WriteFile(zipPath, data, 0644)
 }
 
-// GetRevoBDZIP retrieves cached RevoBD ZIP archive bytes if available on disk.
+// GetRevoBDZIP retrieves cached RevoBD ZIP archive bytes if available and less than 30 days old.
 func GetRevoBDZIP(appID uint32) ([]byte, bool) {
-	if DisableCache {
+	if disableCache.Load() {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -413,6 +448,14 @@ func GetRevoBDZIP(appID uint32) ([]byte, bool) {
 		return nil, false
 	}
 	zipPath := filepath.Join(dir, "revobd", fmt.Sprintf("%d.zip", appID))
+	info, err := os.Stat(zipPath)
+	if err != nil || info.Size() == 0 {
+		return nil, false
+	}
+	if time.Since(info.ModTime()) >= 30*24*time.Hour {
+		slog.Debug("RevoBD ZIP cache expired (>30 days), will re-fetch", "appID", appID)
+		return nil, false
+	}
 	data, err := os.ReadFile(zipPath)
 	if err == nil && len(data) > 0 {
 		slog.Info("Using cached RevoBD ZIP archive from disk (0 API requests consumed)", "appID", appID)
@@ -423,7 +466,7 @@ func GetRevoBDZIP(appID uint32) ([]byte, bool) {
 
 // SaveRevoBDZIP writes RevoBD ZIP archive bytes to local disk cache.
 func SaveRevoBDZIP(appID uint32, data []byte) error {
-	if DisableCache || len(data) == 0 {
+	if disableCache.Load() || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -441,7 +484,7 @@ func SaveRevoBDZIP(appID uint32, data []byte) error {
 
 // GetSteamDepotDB retrieves cached SteamDepotDB fallback keys if less than 24 hours old.
 func GetSteamDepotDB() ([]byte, bool) {
-	if DisableCache {
+	if disableCache.Load() {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -454,7 +497,7 @@ func GetSteamDepotDB() ([]byte, bool) {
 
 // SaveSteamDepotDB saves SteamDepotDB fallback keys to disk for 24 hours.
 func SaveSteamDepotDB(data []byte) error {
-	if DisableCache || len(data) == 0 {
+	if disableCache.Load() || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -471,7 +514,7 @@ func SaveSteamDepotDB(data []byte) error {
 
 // GetManifesthubDB retrieves cached GitLab Manifesthub depot keys if less than 24 hours old.
 func GetManifesthubDB() ([]byte, bool) {
-	if DisableCache {
+	if disableCache.Load() {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -484,7 +527,7 @@ func GetManifesthubDB() ([]byte, bool) {
 
 // SaveManifesthubDB saves GitLab Manifesthub depot keys to disk for 24 hours.
 func SaveManifesthubDB(data []byte) error {
-	if DisableCache || len(data) == 0 {
+	if disableCache.Load() || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -501,7 +544,7 @@ func SaveManifesthubDB(data []byte) error {
 
 // GetGitHubRelease retrieves cached GitHub release metadata if less than 1 hour old.
 func GetGitHubRelease(key string) ([]byte, bool) {
-	if DisableCache || key == "" {
+	if disableCache.Load() || key == "" {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -514,7 +557,7 @@ func GetGitHubRelease(key string) ([]byte, bool) {
 
 // SaveGitHubRelease caches GitHub release metadata to disk for 1 hour.
 func SaveGitHubRelease(key string, data []byte) error {
-	if DisableCache || key == "" || len(data) == 0 {
+	if disableCache.Load() || key == "" || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -526,12 +569,12 @@ func SaveGitHubRelease(key string, data []byte) error {
 }
 
 // ==========================================
-// 7. SteamGridDB Artwork Metadata Cache (7 Days TTL)
+// 8. SteamGridDB Artwork Metadata Cache (7 Days TTL)
 // ==========================================
 
 // GetSGDBArtwork retrieves cached SteamGridDB artwork metadata if less than 7 days old.
 func GetSGDBArtwork(lookupKey string) ([]byte, bool) {
-	if DisableCache || lookupKey == "" {
+	if disableCache.Load() || lookupKey == "" {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -544,7 +587,7 @@ func GetSGDBArtwork(lookupKey string) ([]byte, bool) {
 
 // SaveSGDBArtwork caches SteamGridDB artwork metadata to disk for 7 days.
 func SaveSGDBArtwork(lookupKey string, data []byte) error {
-	if DisableCache || lookupKey == "" || len(data) == 0 {
+	if disableCache.Load() || lookupKey == "" || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -556,12 +599,12 @@ func SaveSGDBArtwork(lookupKey string, data []byte) error {
 }
 
 // ==========================================
-// 8. Multi-Store Metadata Cache (24 Hours TTL)
+// 9. Multi-Store Metadata Cache (24 Hours TTL)
 // ==========================================
 
 // GetStoreMetadata retrieves cached catalog metadata (e.g. GOG, RAWG) if less than 24 hours old.
 func GetStoreMetadata(storeName, gameID string) ([]byte, bool) {
-	if DisableCache || storeName == "" || gameID == "" {
+	if disableCache.Load() || storeName == "" || gameID == "" {
 		return nil, false
 	}
 	dir := getCacheDir()
@@ -575,7 +618,7 @@ func GetStoreMetadata(storeName, gameID string) ([]byte, bool) {
 
 // SaveStoreMetadata caches catalog metadata to disk for 24 hours.
 func SaveStoreMetadata(storeName, gameID string, data []byte) error {
-	if DisableCache || storeName == "" || gameID == "" || len(data) == 0 {
+	if disableCache.Load() || storeName == "" || gameID == "" || len(data) == 0 {
 		return nil
 	}
 	dir := getCacheDir()
@@ -588,7 +631,7 @@ func SaveStoreMetadata(storeName, gameID string, data []byte) error {
 }
 
 // ==========================================
-// 9. Warm Library Cache
+// 10. Warm Library Cache
 // ==========================================
 
 // CachedGameRecord stores an inspected domain.Game entity validated against directory and profile timestamps.
@@ -605,7 +648,7 @@ func getGameCacheKey(gameDir string) string {
 
 // GetCachedGame retrieves a cached domain.Game record if dirMtime and profileMtime match.
 func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.Game, bool) {
-	if DisableCache || gameDir == "" {
+	if disableCache.Load() || gameDir == "" {
 		return nil, false
 	}
 
@@ -644,7 +687,7 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 
 // SaveCachedGame persists an inspected domain.Game record with timestamps to in-memory and disk cache.
 func SaveCachedGame(gameDir string, dirMtime int64, profileMtime int64, game *domain.Game) error {
-	if DisableCache || gameDir == "" || game == nil {
+	if disableCache.Load() || gameDir == "" || game == nil {
 		return nil
 	}
 
@@ -686,3 +729,78 @@ func InvalidateGameCache(gameDir string) {
 	}
 }
 
+// ==========================================
+// 11. Disk Cache Pruning
+// ==========================================
+
+// Prune removes expired cache files from all TTL-based subdirectories.
+// For JSON caches using TTLWrapper, entries older than 2× their TTL are removed.
+// For ZIP caches (hubcap, revobd), files older than 2× 30 days are removed.
+// The "games" subdirectory is skipped since it uses mtime-based invalidation.
+func Prune() (removed int) {
+	dir := getCacheDir()
+	if dir == "" {
+		return 0
+	}
+
+	for subdir, ttl := range subdirTTLs {
+		maxAge := 2 * ttl
+		subdirPath := filepath.Join(dir, subdir)
+
+		entries, err := os.ReadDir(subdirPath)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			filePath := filepath.Join(subdirPath, entry.Name())
+
+			if isExpiredCacheFile(filePath, subdir, maxAge) {
+				if err := os.Remove(filePath); err == nil {
+					removed++
+					slog.Debug("Pruned expired cache file", "path", filePath, "subdir", subdir)
+				}
+			}
+		}
+	}
+
+	if removed > 0 {
+		slog.Info("Cache pruning completed", "removed", removed)
+	}
+	return removed
+}
+
+// isExpiredCacheFile checks whether a cache file has exceeded maxAge.
+// For ZIP files (hubcap, revobd), uses file mtime.
+// For JSON TTLWrapper files, reads the embedded timestamp.
+func isExpiredCacheFile(path, subdir string, maxAge time.Duration) bool {
+	// ZIP archives use file mtime
+	if subdir == "hubcap" || subdir == "revobd" {
+		info, err := os.Stat(path)
+		if err != nil {
+			return false
+		}
+		return time.Since(info.ModTime()) >= maxAge
+	}
+
+	// TTLWrapper JSON files: read the embedded timestamp
+	if !strings.HasSuffix(path, ".json") {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var wrapper TTLWrapper
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		// Can't parse → treat as stale
+		return true
+	}
+	if wrapper.Timestamp.IsZero() {
+		return true
+	}
+	return time.Since(wrapper.Timestamp) >= maxAge
+}

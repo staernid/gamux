@@ -147,7 +147,6 @@ var launchCommand = &cli.Command{
 		&cli.StringFlag{Name: "prefix", Usage: "Custom Wine prefix path"},
 		&cli.StringFlag{Name: "proton-path", Usage: "Custom Proton compatibility tool path"},
 		&cli.BoolFlag{Name: "mangohud", Usage: "Enable MangoHud performance overlay (MANGOHUD=1)"},
-		&cli.StringFlag{Name: "dxvk-hud", Usage: "Set DXVK HUD overlay elements (e.g. fps,compiler)"},
 		&cli.BoolFlag{Name: "setup", Usage: "Auto-apply GBE setup before launching if game is unconfigured"},
 		&cli.BoolFlag{Name: "no-notify", Usage: "Disable pre-launch update notification check"},
 	},
@@ -217,9 +216,6 @@ var launchCommand = &cli.Command{
 		if c.IsSet("mangohud") {
 			b := c.Bool("mangohud")
 			launchOpts.MangoHud = &b
-		}
-		if c.IsSet("dxvk-hud") {
-			launchOpts.DXVKHud = c.String("dxvk-hud")
 		}
 
 		effectiveOpts := runner.ResolveEffectiveOptions(activeConfig, launchOpts)

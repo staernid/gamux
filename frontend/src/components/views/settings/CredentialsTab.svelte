@@ -34,7 +34,7 @@
           slot="action"
           type="button"
           on:click={() => openExternal('https://steamcommunity.com/dev/apikey')}
-          class="px-2.5 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
+          class="px-2.5 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
           title="Open Steam Community API key generation page"
         >
           <span>Get Key</span>
@@ -57,7 +57,7 @@
           slot="action"
           type="button"
           on:click={() => openExternal('https://github.com/mikeroyal/Steam-Guide')}
-          class="px-2.5 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
+          class="px-2.5 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
           title="Open Hubcap manifest documentation and access guide"
         >
           <span>Docs</span>
@@ -80,7 +80,7 @@
           slot="action"
           type="button"
           on:click={() => openExternal('https://www.steamgriddb.com/profile/preferences/api')}
-          class="px-2.5 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
+          class="px-2.5 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
           title="Open SteamGridDB API key preferences page"
         >
           <span>Get Key</span>
@@ -103,7 +103,7 @@
           slot="action"
           type="button"
           on:click={() => openExternal('https://rawg.io/apidocs')}
-          class="px-2.5 py-1.5 bg-[#18181b] hover:bg-[#222225] border border-[#27272a] text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
+          class="px-2.5 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1 cursor-pointer flex-shrink-0"
           title="Open RAWG API documentation and key signup"
         >
           <span>Get Key</span>

@@ -68,7 +68,7 @@
   {:else if error}
     <div class="p-4 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300 text-xs">
       <p class="font-bold">Failed to load achievements</p>
-      <p class="mt-1 text-slate-400 font-mono text-[11px]">{error}</p>
+      <p class="mt-1 text-slate-400 font-mono text-2xs">{error}</p>
     </div>
   {:else if achievements.length === 0}
     <div class="text-center py-12 text-slate-400">
@@ -93,21 +93,21 @@
           on:click={() => { filterMode = 'all'; }}
           class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'all' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
         >
-          All <span class="font-mono text-[11px] opacity-75">({totalCount})</span>
+          All <span class="font-mono text-2xs opacity-75">({totalCount})</span>
         </button>
         <button
           type="button"
           on:click={() => { filterMode = 'unlocked'; }}
           class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'unlocked' ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/50 shadow-sm font-bold' : 'text-slate-400 hover:text-emerald-300'}"
         >
-          Unlocked <span class="font-mono text-[11px] opacity-75">({unlockedCount})</span>
+          Unlocked <span class="font-mono text-2xs opacity-75">({unlockedCount})</span>
         </button>
         <button
           type="button"
           on:click={() => { filterMode = 'locked'; }}
           class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'locked' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
         >
-          Locked <span class="font-mono text-[11px] opacity-75">({lockedCount})</span>
+          Locked <span class="font-mono text-2xs opacity-75">({lockedCount})</span>
         </button>
       </div>
     </div>
@@ -143,10 +143,10 @@
             <div class="flex items-center justify-between gap-2">
               <h5 class="text-xs font-bold truncate {ach.unlocked ? 'text-emerald-300' : 'text-slate-200'}">{ach.name || ach.id}</h5>
               {#if ach.unlocked && ach.unlock_time > 0}
-                <span class="text-[10px] font-mono text-emerald-400/80 flex-shrink-0">{formatLastPlayed(ach.unlock_time)}</span>
+                <span class="text-3xs font-mono text-emerald-400/80 flex-shrink-0">{formatLastPlayed(ach.unlock_time)}</span>
               {/if}
             </div>
-            <p class="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{ach.description || (ach.hidden ? 'Hidden achievement' : 'No description available')}</p>
+            <p class="text-2xs text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{ach.description || (ach.hidden ? 'Hidden achievement' : 'No description available')}</p>
           </div>
         </div>
       {/each}

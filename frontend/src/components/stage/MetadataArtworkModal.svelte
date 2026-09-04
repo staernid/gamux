@@ -364,12 +364,12 @@
   </svelte:fragment>
 
   <!-- Primary Tab Selector (Store Link vs Artwork Gallery) -->
-  <div class="max-w-5xl w-full mx-auto mb-4 flex items-center justify-between border-b border-[#27272a] pb-3 flex-shrink-0 gap-4">
+  <div class="max-w-5xl w-full mx-auto mb-4 flex items-center justify-between border-b border-surface-border pb-3 flex-shrink-0 gap-4">
     <div class="flex items-center space-x-2">
       <button
         type="button"
         on:click={() => { activeTab = 'metadata'; }}
-        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'metadata' ? 'bg-white text-neutral-950 shadow-md' : 'bg-[#18181b] border border-[#27272a] text-neutral-400 hover:text-white'}"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'metadata' ? 'bg-white text-neutral-950 shadow-md' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -380,7 +380,7 @@
       <button
         type="button"
         on:click={() => { activeTab = 'artwork'; }}
-        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'artwork' ? 'bg-white text-neutral-950 shadow-md' : 'bg-[#18181b] border border-[#27272a] text-neutral-400 hover:text-white'}"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'artwork' ? 'bg-white text-neutral-950 shadow-md' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -390,7 +390,7 @@
     </div>
 
     <!-- Active Source Indicator -->
-    <div class="hidden sm:flex items-center space-x-2 text-2xs font-mono text-neutral-400 bg-[#141417] border border-[#27272a] px-3 py-1.5 rounded-xl">
+    <div class="hidden sm:flex items-center space-x-2 text-2xs font-mono text-neutral-400 bg-surface-input border border-surface-border px-3 py-1.5 rounded-xl">
       <span class="text-neutral-500">Source:</span>
       <span class="text-neutral-200 font-bold uppercase">{game?.source || game?.store || 'Steam'}</span>
       {#if appId && appId !== '0'}
