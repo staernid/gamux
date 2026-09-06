@@ -1,13 +1,19 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
+	"github.com/staernid/gamux/util/testutil"
 )
 
 type mockProvider struct {
@@ -154,8 +160,20 @@ func TestSteamProvider_QueryArtworkCandidates_AppID(t *testing.T) {
 }
 
 func TestSteamProvider_QueryArtworkCandidates_TitleSearch(t *testing.T) {
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			jsonResp := `{"total": 1, "items": [{"id": 70, "name": "Half-Life"}]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+
 	sp := NewSteamProvider()
-	opts, err := sp.QueryArtworkCandidates(context.Background(), ArtworkQuery{
+	opts, err := sp.QueryArtworkCandidates(ctx, ArtworkQuery{
 		Title:     "Half-Life",
 		AssetType: "cover",
 	})
@@ -165,8 +183,8 @@ func TestSteamProvider_QueryArtworkCandidates_TitleSearch(t *testing.T) {
 	if len(opts) == 0 {
 		t.Fatalf("expected resolved cover options for Half-Life")
 	}
-	if opts[0].URL == "https://cdn.akamai.steamstatic.com/steam/apps/Half-Life/library_600x900_2x.jpg" {
-		t.Fatalf("expected resolved numeric AppID in URL, but got raw title string")
+	if !strings.Contains(opts[0].URL, "/apps/70/") {
+		t.Errorf("expected numeric AppID 70 in URL, got %s", opts[0].URL)
 	}
 }
 

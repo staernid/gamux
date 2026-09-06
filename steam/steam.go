@@ -11,12 +11,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/ini"
 	"github.com/staernid/gamux/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -514,16 +516,26 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	if dryRun {
 		slog.Info("[DRY RUN] Would write DLC configuration", "path", configsAppIniPath, "count", len(dlcNames))
 	} else {
-		file, err := os.Create(configsAppIniPath)
+		f, err := ini.LoadFile(configsAppIniPath)
 		if err != nil {
-			return fmt.Errorf("failed to create configs.app.ini: %w", err)
+			f = ini.NewFile()
 		}
-		defer file.Close()
 
-		fmt.Fprintln(file, "[app::dlcs]")
-		fmt.Fprintln(file, "unlock_all=0")
-		for id, name := range dlcNames {
-			fmt.Fprintf(file, "%s=%s\n", id, name)
+		sec := f.Section("app::dlcs")
+		sec.Set("unlock_all", "0")
+
+		// Sort IDs for deterministic output
+		ids := make([]string, 0, len(dlcNames))
+		for id := range dlcNames {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			sec.Set(id, dlcNames[id])
+		}
+
+		if err := f.SaveFile(configsAppIniPath); err != nil {
+			return fmt.Errorf("failed to save configs.app.ini: %w", err)
 		}
 
 		slog.Info("Wrote DLC configuration", "path", configsAppIniPath, "count", len(dlcNames))

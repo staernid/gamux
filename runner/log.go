@@ -25,9 +25,9 @@ func ResolveLogPath(gameDir, gameName, appID string) string {
 	}
 
 	if gameDir != "" {
-		settingsDir := filepath.Join(gameDir, "steam_settings")
-		_ = os.MkdirAll(settingsDir, 0755)
-		return filepath.Join(settingsDir, "last_run.log")
+		gamuxDir := filepath.Join(gameDir, ".gamux")
+		_ = os.MkdirAll(gamuxDir, 0755)
+		return filepath.Join(gamuxDir, "last_run.log")
 	}
 
 	home, _ := os.UserHomeDir()
@@ -67,6 +67,12 @@ func createLogFile(logPath string, resolved LaunchOptions, cmd *exec.Cmd) (*os.F
 // GetLog reads the last or current execution log for a game.
 func GetLog(gameDir, gameName, appID string) (string, error) {
 	logPath := ResolveLogPath(gameDir, gameName, appID)
+	if !util.FileExists(logPath) && gameDir != "" {
+		legacyPath := filepath.Join(gameDir, "steam_settings", "last_run.log")
+		if util.FileExists(legacyPath) {
+			logPath = legacyPath
+		}
+	}
 	if !util.FileExists(logPath) {
 		slug := util.Slugify(gameName)
 		if slug == "" && appID != "" {

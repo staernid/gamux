@@ -15,6 +15,49 @@ type VirtualSink struct {
 	LoopbackID  string `json:"loopback_id"`  // optional loopback module ID
 }
 
+// UnloadSinkByName finds and unloads any loaded PulseAudio/PipeWire module matching the sinkName.
+func UnloadSinkByName(ctx context.Context, sinkName string) {
+	if sinkName == "" {
+		return
+	}
+	cmd := exec.CommandContext(ctx, "pactl", "list", "modules", "short")
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	targetArg := fmt.Sprintf("sink_name=%s", sinkName)
+	monitorArg := fmt.Sprintf("source=%s.monitor", sinkName)
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		modID := fields[0]
+		if strings.Contains(line, targetArg) || strings.Contains(line, monitorArg) {
+			_ = exec.CommandContext(ctx, "pactl", "unload-module", modID).Run()
+		}
+	}
+}
+
+// CleanupGamuxSinks unloads any orphaned Gamux virtual sinks and loopback modules from PipeWire.
+func CleanupGamuxSinks(ctx context.Context) {
+	cmd := exec.CommandContext(ctx, "pactl", "list", "modules", "short")
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		modID := fields[0]
+		if strings.Contains(line, "sink_name=gamux-") || strings.Contains(line, "source=gamux-") {
+			_ = exec.CommandContext(ctx, "pactl", "unload-module", modID).Run()
+		}
+	}
+}
+
 // CreateVirtualSink creates a dedicated null sink using pactl.
 func CreateVirtualSink(ctx context.Context, sinkName, description string) (*VirtualSink, error) {
 	if sinkName == "" {
@@ -23,6 +66,9 @@ func CreateVirtualSink(ctx context.Context, sinkName, description string) (*Virt
 	if description == "" {
 		description = fmt.Sprintf("Gamux Audio Sink (%s)", sinkName)
 	}
+
+	// Always ensure any stale sink with the same name is removed first
+	UnloadSinkByName(ctx, sinkName)
 
 	cmd := exec.CommandContext(ctx, "pactl", "load-module", "module-null-sink",
 		fmt.Sprintf("sink_name=%s", sinkName),
@@ -77,6 +123,10 @@ func (vs *VirtualSink) Destroy(ctx context.Context) {
 	if vs.ModuleID != "" {
 		_ = exec.CommandContext(ctx, "pactl", "unload-module", vs.ModuleID).Run()
 		vs.ModuleID = ""
+	}
+
+	if vs.SinkName != "" {
+		UnloadSinkByName(ctx, vs.SinkName)
 	}
 }
 

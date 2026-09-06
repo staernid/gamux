@@ -11,8 +11,8 @@ import {gui} from '../models';
 import {tasks} from '../models';
 import {tools} from '../models';
 import {store} from '../models';
-import {engine} from '../models';
 import {context} from '../models';
+import {engine} from '../models';
 import {pipeline} from '../models';
 import {manifest} from '../models';
 
@@ -67,6 +67,8 @@ export function GetMultiseatCapabilities():Promise<multiseat.SystemCapabilities>
 export function GetMultiseatSessionStatus(arg1:string):Promise<multiseat.MultiseatSessionStatus>;
 
 export function GetPatchNote(arg1:string,arg2:number):Promise<domain.NewsItem>;
+
+export function GetRunningGames():Promise<Array<string>>;
 
 export function GetTask(arg1:string):Promise<tasks.Task|boolean>;
 
@@ -129,6 +131,8 @@ export function SelectDirectory(arg1:string,arg2:string):Promise<string>;
 export function SelectFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function SetTransferSpeedLimit(arg1:number):Promise<void>;
+
+export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function StartDownloadTransfer(arg1:engine.DownloadGameOptions):Promise<string>;
 

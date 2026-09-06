@@ -4,6 +4,7 @@
   import InheritSelect from '../../common/InheritSelect.svelte';
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import GhostInput from '../../common/GhostInput.svelte';
+  import { OPERATING_MODE_OPTIONS } from '../../../constants/options.js';
 
   export let cfgDraft;
   export let runnersList = [];
@@ -41,11 +42,7 @@
     cfgDraft = { ...cfgDraft };
   }
 
-  const operatingModesList = [
-    { value: 'loader', label: 'Loader Mode (Clean / Non-Invasive - Recommended)' },
-    { value: 'portable', label: 'Portable Mode (Injected DLL Replacement)' },
-    { value: 'none', label: 'DRM-Free / None' }
-  ];
+  const operatingModesList = OPERATING_MODE_OPTIONS;
 
   let selectedResPreset = 'auto';
   let isCustomRes = false;

@@ -274,6 +274,141 @@ type LaunchProfile struct {
 	LastPlayed       int64  `json:"last_played,omitempty"`
 }
 
+// MergeFrom copies non-zero fields from other into p if they are not already set in p.
+// Environment variables in CustomEnv are merged without overwriting existing keys.
+func (p *LaunchProfile) MergeFrom(other *LaunchProfile) {
+	if p == nil || other == nil {
+		return
+	}
+	if p.GameDir == "" {
+		p.GameDir = other.GameDir
+	}
+	if p.Name == "" {
+		p.Name = other.Name
+	}
+	if p.AppID == "" {
+		p.AppID = other.AppID
+	}
+	if p.Platform == "" {
+		p.Platform = other.Platform
+	}
+	if p.ExePath == "" {
+		p.ExePath = other.ExePath
+	}
+	if p.ExeArgs == "" {
+		p.ExeArgs = other.ExeArgs
+	}
+	if p.OperatingMode == "" {
+		p.OperatingMode = other.OperatingMode
+	}
+	if p.Runner == "" {
+		p.Runner = other.Runner
+	}
+	if p.WinePrefix == "" {
+		p.WinePrefix = other.WinePrefix
+	}
+	if p.ProtonPath == "" {
+		p.ProtonPath = other.ProtonPath
+	}
+	if p.Language == "" {
+		p.Language = other.Language
+	}
+	if p.MangoHud == nil && other.MangoHud != nil {
+		p.MangoHud = other.MangoHud
+	}
+	if p.Gamescope == nil && other.Gamescope != nil {
+		p.Gamescope = other.Gamescope
+	}
+	if p.GamescopeWidth <= 0 && other.GamescopeWidth > 0 {
+		p.GamescopeWidth = other.GamescopeWidth
+	}
+	if p.GamescopeHeight <= 0 && other.GamescopeHeight > 0 {
+		p.GamescopeHeight = other.GamescopeHeight
+	}
+	if p.GamescopeFPS <= 0 && other.GamescopeFPS > 0 {
+		p.GamescopeFPS = other.GamescopeFPS
+	}
+	if p.DisableOverlay == nil && other.DisableOverlay != nil {
+		p.DisableOverlay = other.DisableOverlay
+	}
+	if p.OfflineMode == nil && other.OfflineMode != nil {
+		p.OfflineMode = other.OfflineMode
+	}
+	if p.DllOverrides == "" {
+		p.DllOverrides = other.DllOverrides
+	}
+	if p.WorkingDir == "" {
+		p.WorkingDir = other.WorkingDir
+	}
+	if p.SourceOverride == "" {
+		p.SourceOverride = other.SourceOverride
+	}
+	if len(other.CustomEnv) > 0 {
+		if p.CustomEnv == nil {
+			p.CustomEnv = make(map[string]string)
+		}
+		for k, v := range other.CustomEnv {
+			if _, exists := p.CustomEnv[k]; !exists {
+				p.CustomEnv[k] = v
+			}
+		}
+	}
+	p.MergeMetadataAndStatsFrom(other)
+}
+
+// MergeMetadataAndStatsFrom preserves on-disk statistics and metadata/artwork bindings from other
+// into p if they are not already set in p. It does not overwrite execution or runner configuration.
+func (p *LaunchProfile) MergeMetadataAndStatsFrom(other *LaunchProfile) {
+	if p == nil || other == nil {
+		return
+	}
+	if p.InstalledAt <= 0 && other.InstalledAt > 0 {
+		p.InstalledAt = other.InstalledAt
+	}
+	if p.PlaytimeSeconds <= 0 && other.PlaytimeSeconds > 0 {
+		p.PlaytimeSeconds = other.PlaytimeSeconds
+	}
+	if p.LastPlayed <= 0 && other.LastPlayed > 0 {
+		p.LastPlayed = other.LastPlayed
+	}
+	if p.Store == "" {
+		p.Store = other.Store
+	}
+	if p.StoreAppID == "" {
+		p.StoreAppID = other.StoreAppID
+	}
+	if p.MetadataProvider == "" {
+		p.MetadataProvider = other.MetadataProvider
+	}
+	if p.MetadataID == "" {
+		p.MetadataID = other.MetadataID
+	}
+	if p.GOGID == "" {
+		p.GOGID = other.GOGID
+	}
+	if p.SGDBID == "" {
+		p.SGDBID = other.SGDBID
+	}
+	if p.CustomCoverURL == "" {
+		p.CustomCoverURL = other.CustomCoverURL
+	}
+	if p.CustomBannerURL == "" {
+		p.CustomBannerURL = other.CustomBannerURL
+	}
+	if p.CustomHeroURL == "" {
+		p.CustomHeroURL = other.CustomHeroURL
+	}
+	if p.CustomLogoURL == "" {
+		p.CustomLogoURL = other.CustomLogoURL
+	}
+	if p.CustomIconURL == "" {
+		p.CustomIconURL = other.CustomIconURL
+	}
+	if !p.LockedArtwork && other.LockedArtwork {
+		p.LockedArtwork = true
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 3. Dedicated Model: ReadinessStatus (Computed Health & Integration State)
 // ---------------------------------------------------------------------------
@@ -289,6 +424,7 @@ type ReadinessStatus struct {
 	IsReady            bool     `json:"is_ready"`
 	OriginalBackups    []string `json:"original_backups,omitempty"`
 	SettingsDirExists  bool     `json:"settings_dir_exists"`
+	SettingsDirs       []string `json:"settings_dirs,omitempty"`
 	SteamAppIDTxtFound bool     `json:"steam_appid_txt_found"`
 	CurrentLanguage    string   `json:"current_language,omitempty"`
 }
@@ -351,6 +487,93 @@ func NewGame(name, gameDir, appID, platform string) *Game {
 	}
 }
 
+// ApplyProfile synchronizes custom user profile overrides, metadata bindings, external IDs,
+// artwork, and playtime metrics from the launch profile onto the Game entity.
+func (g *Game) ApplyProfile(profile *LaunchProfile, launchProfileExists bool) {
+	if g == nil || profile == nil {
+		return
+	}
+	g.LaunchProfile = profile
+	if profile.SourceOverride != "" {
+		g.Source = profile.SourceOverride
+	} else if profile.Store != "" && (g.Source == "" || g.Source == StoreStandalone) {
+		switch strings.ToLower(profile.Store) {
+		case "steam":
+			g.Source = SourceSteam
+			g.Store = StoreSteam
+		case "gog":
+			g.Source = SourceGOG
+			g.Store = StoreGOG
+		case "epic":
+			g.Source = SourceEpic
+			g.Store = StoreEpic
+		case "itch":
+			g.Source = SourceItch
+			g.Store = StoreItch
+		default:
+			g.Store = profile.Store
+		}
+	}
+	if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(g.Source)) {
+		g.Store = profile.Store
+	}
+	if profile.MetadataID != "" {
+		if strings.EqualFold(profile.MetadataProvider, "steam") {
+			if num, ok := util.ParseAppID(profile.MetadataID); ok && num > 0 {
+				g.ExternalIDs.SteamAppID = num
+			}
+		} else if strings.EqualFold(profile.MetadataProvider, "gog") {
+			g.ExternalIDs.GOGID = profile.MetadataID
+		} else if strings.EqualFold(profile.MetadataProvider, "rawg") {
+			g.ExternalIDs.RAWGID = profile.MetadataID
+		}
+	}
+	if launchProfileExists {
+		appID := strings.TrimSpace(profile.StoreAppID)
+		if appID == "" {
+			appID = strings.TrimSpace(profile.AppID)
+		}
+		if appID != "" {
+			g.AppID = appID
+			g.NumericAppID, _ = util.ParseAppID(appID)
+			if g.NumericAppID > 0 {
+				g.ExternalIDs.SteamAppID = g.NumericAppID
+			}
+		}
+	}
+	if profile.GOGID != "" {
+		g.ExternalIDs.GOGID = profile.GOGID
+	}
+	if profile.SGDBID != "" {
+		g.ExternalIDs.SGDBID = profile.SGDBID
+	}
+	if profile.CustomCoverURL != "" {
+		g.CustomCoverURL = profile.CustomCoverURL
+	}
+	if profile.CustomBannerURL != "" {
+		g.CustomBannerURL = profile.CustomBannerURL
+	}
+	if profile.CustomHeroURL != "" {
+		g.CustomHeroURL = profile.CustomHeroURL
+	}
+	if profile.CustomLogoURL != "" {
+		g.CustomLogoURL = profile.CustomLogoURL
+	}
+	if profile.CustomIconURL != "" {
+		g.CustomIconURL = profile.CustomIconURL
+	}
+	if profile.LockedArtwork {
+		g.LockedArtwork = true
+	}
+	if profile.InstalledAt > 0 {
+		g.InstalledAt = profile.InstalledAt
+	} else if g.InstalledAt > 0 {
+		profile.InstalledAt = g.InstalledAt
+	}
+	g.PlaytimeSeconds = profile.PlaytimeSeconds
+	g.LastPlayed = profile.LastPlayed
+}
+
 // EffectiveExePath returns the resolved executable path (profile override taking priority over detected binary).
 func (g *Game) EffectiveExePath() string {
 	if g.LaunchProfile != nil && g.LaunchProfile.ExePath != "" {
@@ -377,6 +600,27 @@ func (g *Game) EffectiveExeArgs() string {
 		return g.LaunchCandidates[0].Arguments
 	}
 	return ""
+}
+
+// CandidateExes returns all unique executable paths across LaunchProfile, GameRecord, and LaunchCandidates.
+func (g *Game) CandidateExes() []string {
+	seen := make(map[string]bool)
+	var exes []string
+	add := func(p string) {
+		p = strings.TrimSpace(p)
+		if p != "" && !seen[p] {
+			seen[p] = true
+			exes = append(exes, p)
+		}
+	}
+	if g.LaunchProfile != nil {
+		add(g.LaunchProfile.ExePath)
+	}
+	add(g.GameRecord.ExePath)
+	for _, c := range g.LaunchCandidates {
+		add(c.Executable)
+	}
+	return exes
 }
 
 // NormalizeOperatingMode normalizes alias strings (e.g. "injected", "standalone", "drm-free") to canonical operating modes.
@@ -513,11 +757,15 @@ func (g *Game) RequiresSteamEmulator() bool {
 // RecomputeState recalculates computed flags (IsPatched, IsPortable, IsReady, HasUpdatesOrIssues, IsInstalled, IsStub).
 func (g *Game) RecomputeState() {
 	mode := NormalizeOperatingMode(g.EffectiveOperatingMode())
-	if len(g.OriginalBackups) > 0 || mode == ModePortable {
+	if mode == ModePortable {
 		g.State = "Portable-Patched"
+	} else if mode == ModeLoader {
+		g.State = "Loader-Configured"
 	} else if mode == ModeNone {
 		g.State = "Original"
-	} else if g.SettingsDirExists || g.SteamAppIDTxtFound || mode == ModeLoader {
+	} else if len(g.OriginalBackups) > 0 {
+		g.State = "Portable-Patched"
+	} else if g.SettingsDirExists {
 		g.State = "Loader-Configured"
 	} else if g.State == "" {
 		g.State = "Original"

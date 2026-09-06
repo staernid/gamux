@@ -12,6 +12,7 @@
   import CredentialsTab from './settings/CredentialsTab.svelte';
   import ToolsMaintenanceTab from './settings/ToolsMaintenanceTab.svelte';
   import LogsTab from './settings/LogsTab.svelte';
+  import { RUNNER_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS } from '../../constants/options.js';
 
   let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'persona' | 'coop' | 'credentials' | 'tools' | 'logs'
   let cfgDraft = {
@@ -39,7 +40,32 @@
     achievements: true,
     transfer_speed_limit: 0,
     save_manifest_url: '',
-    global_env: {}
+    global_env: {},
+    multiseat: {
+      player2_account_name: 'PlayerTwo',
+      player2_account_steamid: '76561198998877665',
+      player2_language: 'english',
+      player2_ip_country: 'US',
+      player2_wine_prefix: '',
+      default_seat1_mode: 'local',
+      default_seat2_mode: 'local',
+      default_layout: 'dual_monitor',
+      broadcast_relay_enabled: true,
+      seat1_gamepad: 'auto',
+      seat2_gamepad: 'auto',
+      seat1_keyboard: 'auto',
+      seat2_keyboard: 'auto',
+      seat1_mouse: 'auto',
+      seat2_mouse: 'auto',
+      seat2_force_grab_cursor: false,
+      seat2_grab_keyboard: false,
+      seat2_show_cursor: true,
+      seat2_compositor: 'auto',
+      seat1_display_index: 0,
+      seat2_display_index: 1,
+      sunshine_port_p1: 47989,
+      sunshine_port_p2: 48010,
+    }
   };
   let userCfgDraft = {
     account_name: 'GamuxPlayer',
@@ -96,54 +122,9 @@
   let updatingTools = {};
   let isSubmittingBatch = false;
 
-  const runnersList = [
-    { value: 'umu', label: 'UMU (Unified Linux Wine/Proton Runtime - Recommended)' },
-    { value: 'wine', label: 'Wine (System Wine Binary)' }
-  ];
-
-  const languagesList = [
-    { value: 'auto', label: 'Auto (System Locale)' },
-    { value: 'english', label: 'English' },
-    { value: 'french', label: 'French' },
-    { value: 'german', label: 'German' },
-    { value: 'italian', label: 'Italian' },
-    { value: 'spanish', label: 'Spanish' },
-    { value: 'japanese', label: 'Japanese' },
-    { value: 'schinese', label: 'Simplified Chinese' },
-    { value: 'russian', label: 'Russian' },
-    { value: 'brazilian', label: 'Brazilian Portuguese' },
-    { value: 'koreana', label: 'Korean' },
-    { value: 'polish', label: 'Polish' }
-  ];
-
-  const countriesList = [
-    { value: 'US', label: 'United States (US)' },
-    { value: 'GB', label: 'United Kingdom (GB)' },
-    { value: 'DE', label: 'Germany (DE)' },
-    { value: 'FR', label: 'France (FR)' },
-    { value: 'CA', label: 'Canada (CA)' },
-    { value: 'AU', label: 'Australia (AU)' },
-    { value: 'JP', label: 'Japan (JP)' },
-    { value: 'KR', label: 'South Korea (KR)' },
-    { value: 'CN', label: 'China (CN)' },
-    { value: 'RU', label: 'Russia (RU)' },
-    { value: 'BR', label: 'Brazil (BR)' },
-    { value: 'ES', label: 'Spain (ES)' },
-    { value: 'IT', label: 'Italy (IT)' },
-    { value: 'NL', label: 'Netherlands (NL)' },
-    { value: 'PL', label: 'Poland (PL)' },
-    { value: 'SE', label: 'Sweden (SE)' },
-    { value: 'NO', label: 'Norway (NO)' },
-    { value: 'FI', label: 'Finland (FI)' },
-    { value: 'DK', label: 'Denmark (DK)' },
-    { value: 'CH', label: 'Switzerland (CH)' },
-    { value: 'AT', label: 'Austria (AT)' },
-    { value: 'MX', label: 'Mexico (MX)' },
-    { value: 'AR', label: 'Argentina (AR)' },
-    { value: 'TR', label: 'Turkey (TR)' },
-    { value: 'UA', label: 'Ukraine (UA)' },
-    { value: 'NZ', label: 'New Zealand (NZ)' }
-  ];
+  const runnersList = RUNNER_OPTIONS;
+  const languagesList = LANGUAGE_OPTIONS;
+  const countriesList = COUNTRY_OPTIONS;
 
   onMount(async () => {
     try {
@@ -162,7 +143,14 @@
 
       const cfg = await AppAPI.getConfig();
       if (cfg) {
-        cfgDraft = { ...cfgDraft, ...JSON.parse(JSON.stringify(cfg)) };
+        cfgDraft = {
+          ...cfgDraft,
+          ...JSON.parse(JSON.stringify(cfg)),
+          multiseat: {
+            ...cfgDraft.multiseat,
+            ...(cfg.multiseat ? JSON.parse(JSON.stringify(cfg.multiseat)) : {})
+          }
+        };
       }
       const userCfg = await AppAPI.getGSEUserConfig();
       if (userCfg) {
@@ -226,7 +214,16 @@
   async function handleDiscard() {
     if (!isDirty) return;
     const cfg = await AppAPI.getConfig();
-    if (cfg) cfgDraft = { ...cfgDraft, ...JSON.parse(JSON.stringify(cfg)) };
+    if (cfg) {
+      cfgDraft = {
+        ...cfgDraft,
+        ...JSON.parse(JSON.stringify(cfg)),
+        multiseat: {
+          ...cfgDraft.multiseat,
+          ...(cfg.multiseat ? JSON.parse(JSON.stringify(cfg.multiseat)) : {})
+        }
+      };
+    }
     const userCfg = await AppAPI.getGSEUserConfig();
     if (userCfg) userCfgDraft = { ...userCfgDraft, ...JSON.parse(JSON.stringify(userCfg)) };
 

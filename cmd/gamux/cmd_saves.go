@@ -28,7 +28,7 @@ var savesCommand = &cli.Command{
 
 		if c.Bool("update-manifest") {
 			fmt.Printf("Updating Ludusavi save manifest from GitHub...\n")
-			if err := eng.UpdateSaveManifest(c.Context); err != nil {
+			if err := eng.Saves.UpdateManifest(c.Context); err != nil {
 				return fmt.Errorf("update save manifest: %w", err)
 			}
 			fmt.Printf("Successfully updated and indexed Ludusavi save manifest.\n")
@@ -46,7 +46,7 @@ var savesCommand = &cli.Command{
 
 		// 1. Restore Backup
 		if restoreID := c.String("restore"); restoreID != "" {
-			if err := eng.RestoreSaveBackup(c.Context, path, restoreID); err != nil {
+			if err := eng.Saves.RestoreBackup(c.Context, path, restoreID); err != nil {
 				return fmt.Errorf("restore save backup: %w", err)
 			}
 			fmt.Printf("Successfully restored save backup %q for %s\n", restoreID, path)
@@ -56,7 +56,7 @@ var savesCommand = &cli.Command{
 		// 2. Create Backup Snapshot
 		if c.Bool("backup") {
 			note := c.String("note")
-			info, err := eng.CreateSaveBackup(c.Context, path, note, "cli")
+			info, err := eng.Saves.CreateBackup(c.Context, path, note, "cli")
 			if err != nil {
 				return fmt.Errorf("create save backup: %w", err)
 			}
@@ -80,7 +80,7 @@ var savesCommand = &cli.Command{
 
 		// 3. List Backups
 		if c.Bool("list") {
-			backups, err := eng.ListSaveBackups(c.Context, path)
+			backups, err := eng.Saves.ListBackups(c.Context, path)
 			if err != nil {
 				return fmt.Errorf("list save backups: %w", err)
 			}
@@ -107,7 +107,7 @@ var savesCommand = &cli.Command{
 		}
 
 		// 4. Default: Inspect Save Locations
-		res, err := eng.InspectSaveLocations(c.Context, path)
+		res, err := eng.Saves.InspectLocations(c.Context, path)
 		if err != nil {
 			return fmt.Errorf("inspect save locations: %w", err)
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/events"
+	"github.com/staernid/gamux/util"
 )
 
 // ProcessEvent communicates status changes when a game starts or terminates.
@@ -24,8 +25,9 @@ type ProcessEvent struct {
 }
 
 type trackedProcess struct {
-	cmd  *exec.Cmd
-	pgid int
+	cmd    *exec.Cmd
+	pgid   int
+	cancel context.CancelFunc
 }
 
 // Manager tracks and supervises running game processes.
@@ -64,20 +66,36 @@ func DefaultManager() *Manager {
 
 // Start launches a game, tracks the process, and dispatches status events upon start and termination.
 func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.Cmd, error) {
+	resolved := ResolveEffectiveOptions(cfg, opts)
+
+	var steamCleanup func()
+	if resolved.Platform == "linux" && domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
+		var pErr error
+		steamCleanup, pErr = PrepareLinuxSteamEnvironment(cfg, resolved)
+		if pErr != nil {
+			slog.Warn("Failed to prepare Linux Steam environment for loader mode", "error", pErr)
+		}
+	}
+
 	cmd, logFile, err := Launch(ctx, cfg, opts)
 	if err != nil {
+		if steamCleanup != nil {
+			steamCleanup()
+		}
 		return nil, err
 	}
 
-	gameDir := opts.GameDir
+	gameDir := util.CanonicalPath(opts.GameDir)
 	if gameDir != "" && cmd != nil && cmd.Process != nil {
 		pgid := 0
 		if p, err := syscall.Getpgid(cmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
 			pgid = p
 		}
 
+		supCtx, supCancel := context.WithCancel(context.Background())
+
 		m.mu.Lock()
-		m.processes[gameDir] = &trackedProcess{cmd: cmd, pgid: pgid}
+		m.processes[gameDir] = &trackedProcess{cmd: cmd, pgid: pgid, cancel: supCancel}
 		b := m.bus
 		m.mu.Unlock()
 
@@ -87,115 +105,56 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 			PID:       cmd.Process.Pid,
 		})
 
-		startTime := time.Now()
-
 		if b != nil {
 			b.Publish(events.NewGameLaunched(gameDir, opts.Name, opts.AppID, cmd.Process.Pid))
 		}
 
-		go func(gDir string, pCmd *exec.Cmd, resolvedPgid int, lFile *os.File, eb *events.Bus, name, appID string, started time.Time) {
-			pgid := resolvedPgid
-			if pgid <= 1 && pCmd != nil && pCmd.Process != nil {
-				if p, err := syscall.Getpgid(pCmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
-					pgid = p
-				}
-			}
+		isGamescope := isGamescopeCmd(cfg, opts.Gamescope, cmd)
 
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
+		go func() {
+			_ = superviseProcess(supCtx, cmd, SuperviseOptions{
+				GameDir:     gameDir,
+				IsGamescope: isGamescope,
+				LogFile:     logFile,
+				OnExit: func(waitErr error, sessionSec int64) {
+					if steamCleanup != nil {
+						steamCleanup()
+					}
 
-			lastFlushedTime := started
-			var totalPlaytime int64
-			var lastPlayed int64
+					var totalPlaytime int64
+					var lastPlayed int64
+					if prof, err := compat.LoadProfile(gameDir); err == nil && prof != nil {
+						totalPlaytime = prof.PlaytimeSeconds
+						lastPlayed = prof.LastPlayed
+					}
 
-			flushDelta := func() {
-				now := time.Now()
-				delta := int64(now.Sub(lastFlushedTime).Seconds())
-				if gDir != "" {
-					tot, lp, err := compat.IncrementPlaytime(gDir, delta)
-					if err == nil {
-						if delta > 0 {
-							lastFlushedTime = now
+					m.mu.Lock()
+					delete(m.processes, gameDir)
+					m.mu.Unlock()
+
+					m.emit(ProcessEvent{
+						GameDir:   gameDir,
+						IsRunning: false,
+						PID:       0,
+					})
+
+					if b != nil {
+						ev := events.NewGameExited(gameDir, opts.Name, opts.AppID, waitErr)
+						if ev.Metadata == nil {
+							ev.Metadata = make(map[string]string)
 						}
-						totalPlaytime = tot
-						lastPlayed = lp
+						ev.Metadata["session_seconds"] = fmt.Sprintf("%d", sessionSec)
+						if totalPlaytime > 0 {
+							ev.Metadata["playtime_seconds"] = fmt.Sprintf("%d", totalPlaytime)
+						}
+						if lastPlayed > 0 {
+							ev.Metadata["last_played"] = fmt.Sprintf("%d", lastPlayed)
+						}
+						b.Publish(ev)
 					}
-				}
-			}
-
-			waitDone := make(chan error, 1)
-			go func() {
-				waitDone <- pCmd.Wait()
-			}()
-
-			var waitErr error
-			waiting := true
-			for waiting {
-				select {
-				case <-ticker.C:
-					flushDelta()
-				case waitErr = <-waitDone:
-					waiting = false
-				}
-			}
-
-			// If the root process exited but child processes in the process group remain active,
-			// continue supervising the process group until all child processes exit.
-			if pgid > 1 {
-				superviseTicker := time.NewTicker(1 * time.Second)
-				defer superviseTicker.Stop()
-				for {
-					if err := syscall.Kill(-pgid, 0); err != nil {
-						break
-					}
-					select {
-					case <-ticker.C:
-						flushDelta()
-					case <-superviseTicker.C:
-					}
-				}
-			}
-
-			flushDelta()
-			elapsed := time.Since(started)
-			sessionSec := int64(elapsed.Seconds())
-
-			if prof, err := compat.LoadProfile(gDir); err == nil && prof != nil {
-				totalPlaytime = prof.PlaytimeSeconds
-				lastPlayed = prof.LastPlayed
-			}
-
-			if lFile != nil {
-				exitMsg := fmt.Sprintf("\n\n=== Process Finished ===\nTime: %s\nSession Duration: %v\nExit State: %v\n", time.Now().Format(time.RFC1123), elapsed.Round(time.Second), waitErr)
-				_, _ = lFile.WriteString(exitMsg)
-				_ = lFile.Close()
-			}
-
-			m.mu.Lock()
-			delete(m.processes, gDir)
-			m.mu.Unlock()
-
-			m.emit(ProcessEvent{
-				GameDir:   gDir,
-				IsRunning: false,
-				PID:       0,
+				},
 			})
-
-			if eb != nil {
-				ev := events.NewGameExited(gDir, name, appID, waitErr)
-				if ev.Metadata == nil {
-					ev.Metadata = make(map[string]string)
-				}
-				ev.Metadata["session_seconds"] = fmt.Sprintf("%d", sessionSec)
-				if totalPlaytime > 0 {
-					ev.Metadata["playtime_seconds"] = fmt.Sprintf("%d", totalPlaytime)
-				}
-				if lastPlayed > 0 {
-					ev.Metadata["last_played"] = fmt.Sprintf("%d", lastPlayed)
-				}
-				eb.Publish(ev)
-			}
-		}(gameDir, cmd, pgid, logFile, b, opts.Name, opts.AppID, startTime)
+		}()
 	}
 
 	return cmd, nil
@@ -300,6 +259,7 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 
 // Stop terminates an active game process and its child process group.
 func (m *Manager) Stop(gameDir string) error {
+	gameDir = util.CanonicalPath(gameDir)
 	if gameDir == "" {
 		return fmt.Errorf("game directory cannot be empty")
 	}
@@ -322,18 +282,12 @@ func (m *Manager) Stop(gameDir string) error {
 
 	slog.Info("Terminating running game process", "dir", gameDir, "pgid", pgid)
 
-	// Send SIGTERM to process group, fallback to SIGKILL after graceful grace period
+	if proc.cancel != nil {
+		proc.cancel()
+	}
+
 	if pgid > 1 {
-		_ = syscall.Kill(-pgid, syscall.SIGTERM)
-		deadline := time.Now().Add(2500 * time.Millisecond)
-		for time.Now().Before(deadline) {
-			if err := syscall.Kill(-pgid, 0); err != nil {
-				return nil // Process group exited cleanly
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-		// Force kill if still running after grace period
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		terminateProcessGroup(pgid, 2500*time.Millisecond)
 	} else if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		deadline := time.Now().Add(2500 * time.Millisecond)
@@ -351,6 +305,7 @@ func (m *Manager) Stop(gameDir string) error {
 
 // IsRunning checks if a game process in the given game directory is active.
 func (m *Manager) IsRunning(gameDir string) bool {
+	gameDir = util.CanonicalPath(gameDir)
 	if gameDir == "" {
 		return false
 	}
@@ -366,7 +321,7 @@ func (m *Manager) RunningGames() []string {
 	defer m.mu.Unlock()
 	var list []string
 	for dir := range m.processes {
-		list = append(list, dir)
+		list = append(list, util.CanonicalPath(dir))
 	}
 	return list
 }

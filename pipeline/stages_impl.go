@@ -65,6 +65,17 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 	if pctx.Options.ExeArgs != "" {
 		pctx.Game.ExeArgs = pctx.Options.ExeArgs
 	}
+	if pctx.Options.OperatingMode != "" {
+		if pctx.Game.LaunchProfile == nil {
+			pctx.Game.LaunchProfile = &domain.LaunchProfile{
+				GameDir:  pctx.Game.GameDir,
+				AppID:    pctx.Game.AppID,
+				Platform: pctx.Game.Platform,
+				ExePath:  pctx.Game.EffectiveExePath(),
+			}
+		}
+		pctx.Game.LaunchProfile.OperatingMode = domain.NormalizeOperatingMode(pctx.Options.OperatingMode)
+	}
 
 	return nil
 }
@@ -400,14 +411,6 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 	opMode = domain.NormalizeOperatingMode(opMode)
 
-	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
-	if !pctx.Game.RequiresSteamEmulator() || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
-		if pctx.Game.HasBackups() || pctx.Game.SettingsDirExists {
-			_, _ = compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
-		}
-		return nil
-	}
-
 	profile := pctx.Game.LaunchProfile
 	if profile == nil {
 		profile = &domain.LaunchProfile{
@@ -419,6 +422,7 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 			WinePrefix:    pctx.Options.WinePrefix,
 			Language:      pctx.Options.Language,
 		}
+		pctx.Game.LaunchProfile = profile
 	} else {
 		profile.OperatingMode = opMode
 		if pctx.Options.WinePrefix != "" {
@@ -427,6 +431,17 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 		if pctx.Options.Language != "" {
 			profile.Language = pctx.Options.Language
 		}
+	}
+
+	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
+	if (!pctx.Game.IsSteam() && pctx.Game.AppID == "") || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
+		if pctx.Game.HasBackups() || pctx.Game.SettingsDirExists {
+			_, _ = compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
+		}
+		if !pctx.Options.DryRun {
+			_ = compat.SaveProfileDirect(profile)
+		}
+		return nil
 	}
 
 	err := compat.Apply(ctx, pctx.Config, pctx.Game, profile, pctx.Options.DryRun)

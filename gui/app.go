@@ -195,6 +195,13 @@ func (a *App) Quit() {
 	}
 }
 
+// Shutdown cleanly terminates all active multi-seat background sessions and resources.
+func (a *App) Shutdown(ctx context.Context) {
+	if a.Engine != nil && a.Engine.Multiseat != nil {
+		a.Engine.Multiseat.StopAll()
+	}
+}
+
 // getContext returns the current context (useful for fallback and testing).
 func (a *App) getContext() context.Context {
 	if a.ctx != nil {

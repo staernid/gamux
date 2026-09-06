@@ -8,6 +8,7 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/events"
+	"github.com/staernid/gamux/multiseat"
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/saves"
 	"github.com/staernid/gamux/steam"
@@ -27,6 +28,7 @@ type Engine struct {
 	StoreRegistry  *store.Registry
 	ArtworkService *store.ArtworkService
 	Saves          *saves.Service
+	Multiseat      *multiseat.Supervisor
 	Notifier       func(ctx context.Context, title, message string) error
 	StepReporter   func(ctx context.Context, prog StepProgress)
 	toolManager    *tools.Manager
@@ -81,6 +83,7 @@ func New(cfg *config.Config) *Engine {
 		StoreRegistry:  reg,
 		ArtworkService: artSvc,
 		Saves:          savesSvc,
+		Multiseat:      multiseat.NewSupervisor(cfg, bus),
 		toolManager:    tools.NewManager(cfg),
 	}
 
@@ -96,3 +99,40 @@ func New(cfg *config.Config) *Engine {
 	eng.registerDefaultTaskRunners()
 	return eng
 }
+
+// UpdateConfig dynamically reapplies a modified configuration in-place without tearing down
+// the central EventBus, background tasks supervisor, or losing active UI/notification subscriptions.
+func (eng *Engine) UpdateConfig(newCfg *config.Config) {
+	if eng == nil || newCfg == nil {
+		return
+	}
+	eng.Config = newCfg
+
+	if eng.Tasks != nil {
+		eng.Tasks.SetSpeedLimit(newCfg.TransferSpeedLimit)
+	}
+
+	reg := store.NewRegistry()
+	reg.Register(store.NewSteamProvider())
+	reg.Register(store.NewGOGProvider())
+	reg.Register(store.NewRAWGProvider(newCfg.RAWGAPIKey))
+	reg.Register(store.NewSGDBProvider(newCfg.SteamGridDBAPIKey))
+	eng.StoreRegistry = reg
+	eng.ArtworkService = store.NewArtworkService(newCfg.ArtworkDir, reg)
+
+	eng.Saves = saves.NewService(saves.ServiceConfig{
+		BackupDir:      newCfg.BackupDir,
+		RetentionCount: newCfg.BackupRetentionCount,
+		ManifestURL:    newCfg.SaveManifestURL,
+		HTTPClient:     eng.HTTPClient,
+		GlobalPrefix:   newCfg.WinePrefix,
+	})
+
+	if eng.Multiseat != nil {
+		eng.Multiseat.SetConfig(newCfg)
+	} else {
+		eng.Multiseat = multiseat.NewSupervisor(newCfg, eng.EventBus)
+	}
+	eng.toolManager = tools.NewManager(newCfg)
+}
+

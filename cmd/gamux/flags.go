@@ -2,17 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
-	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/ui"
-	"github.com/staernid/gamux/util"
 	"github.com/urfave/cli/v2"
 )
 
@@ -68,41 +64,20 @@ func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, stri
 		appID = uint32(c.Uint("app"))
 	}
 
-	if customDir != "" {
-		if appID > 0 && activeConfig != nil {
-			canonicalCustom := util.CanonicalPath(customDir)
-			for _, lib := range activeConfig.LibraryPaths {
-				if canonicalCustom != "" && canonicalCustom == util.CanonicalPath(lib) {
-					if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", appID)); err == nil && installDir != "" {
-						if steam.IsSoundtrack(appType) {
-							return appID, filepath.Join(util.GetMusicDir(), installDir)
-						}
-						return appID, filepath.Join(customDir, installDir)
-					}
-				}
-			}
-		}
-		return appID, customDir
+	targetDir := customDir
+	if targetDir == "" && arg != "" && (appID == 0 || arg != strconv.FormatUint(uint64(appID), 10)) {
+		targetDir = arg
 	}
 
-	if appID > 0 && (arg == "" || arg == strconv.FormatUint(uint64(appID), 10)) {
-		name, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", appID))
-		if err == nil && installDir != "" {
-			if steam.IsSoundtrack(appType) {
-				return appID, filepath.Join(util.GetMusicDir(), installDir)
-			}
-			return appID, filepath.Join(".", installDir)
-		}
-		if name != "" {
-			return appID, filepath.Join(".", util.SanitizeInstallDir(name))
-		}
-		return appID, fmt.Sprintf("./%d", appID)
+	platform := c.String("platform")
+	resolved, err := engine.ResolveDownloadTarget(ctx, activeConfig, appID, targetDir, platform)
+	if err == nil && resolved != "" {
+		return appID, resolved
 	}
 
-	if arg != "" {
-		return appID, arg
+	if targetDir != "" {
+		return appID, targetDir
 	}
-
 	return appID, "."
 }
 

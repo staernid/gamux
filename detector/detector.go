@@ -36,6 +36,9 @@ var (
 	numericAppIDRegex = regexp.MustCompile(`^\d+$`)
 )
 
+// ParseColdClientLoaderExe parses ColdClientLoader.ini if present and returns the resolved executable target path.
+var ParseColdClientLoaderExe = util.ParseColdClientLoaderExe
+
 type scanState struct {
 	fileCount              int
 	diskSizeBytes          int64
@@ -43,6 +46,7 @@ type scanState struct {
 	steamAppIDTxtFound     bool
 	appIDFromTxt           string
 	settingsDirExists      bool
+	settingsDirs           []string
 	currentLanguage        string
 	targetLibPath          string
 	detectedPlatform       string
@@ -68,6 +72,22 @@ type GOGInfo struct {
 	Title  string `json:"title"`
 }
 
+// hasEmulatorArtifacts checks if a steam_settings directory contains actual emulator configuration files
+// rather than being empty or only containing an execution log.
+func hasEmulatorArtifacts(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return false
+	}
+	for _, e := range entries {
+		name := strings.ToLower(e.Name())
+		if name != "last_run.log" {
+			return true
+		}
+	}
+	return false
+}
+
 // Inspect performs a comprehensive single-pass filesystem inspection of a game directory,
 // extracting identity, platform, executables, backups, manifest integrity markers, and launch configuration.
 func Inspect(ctx context.Context, path string) (*GameInfo, error) {
@@ -84,7 +104,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	// Guard against scanning runner prefix roots or system folders as games
 	hasProfile := util.FileExists(filepath.Join(absPath, ".gamux", "launch_profile.json")) ||
 		util.FileExists(filepath.Join(absPath, "steam_settings", "launch_profile.json"))
-	if IsRunnerPrefixDir(absPath) && !hasProfile {
+	if (IsRunnerPrefixDir(absPath) || IsIgnoredLibraryDir(absPath)) && !hasProfile {
 		return nil, fmt.Errorf("path %s is a runner/wine prefix directory, not a game", absPath)
 	}
 
@@ -117,11 +137,14 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		lowerName := strings.ToLower(name)
 
 		if d.IsDir() {
-			if p != absPath && (lowerName == "drive_c" || lowerName == "dosdevices" || lowerName == "pfx" || lowerName == ".git" || lowerName == ".gamux" || lowerName == ".gamux_backup" || lowerName == "node_modules") {
+			if p != absPath && (lowerName == "drive_c" || lowerName == "dosdevices" || lowerName == "pfx" || lowerName == ".git" || lowerName == ".gamux" || lowerName == ".gamux_backup" || lowerName == "node_modules" || IsRunnerPrefixDir(p)) {
 				return filepath.SkipDir
 			}
 			if lowerName == "steam_settings" {
-				state.settingsDirExists = true
+				if hasEmulatorArtifacts(p) {
+					state.settingsDirExists = true
+					state.settingsDirs = append(state.settingsDirs, p)
+				}
 			}
 			if lowerName == ".egstore" {
 				state.epicFound = true
@@ -169,21 +192,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		// ColdClientLoader.ini
 		if lowerName == "coldclientloader.ini" {
 			state.coldClientLoaderExists = true
-			if data, err := os.ReadFile(p); err == nil {
-				reIniExe := regexp.MustCompile(`(?i)^\s*Exe\s*=\s*(.+)`)
-				for _, line := range strings.Split(string(data), "\n") {
-					if m := reIniExe.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 1 {
-						realExe := strings.TrimSpace(m[1])
-						if !filepath.IsAbs(realExe) {
-							realExe = util.JoinPaths(absPath, realExe)
-						} else {
-							realExe = util.CanonicalPath(realExe)
-						}
-						state.coldClientLoaderExe = realExe
-						break
-					}
-				}
-			}
+			state.coldClientLoaderExe = ParseColdClientLoaderExe(absPath)
 		}
 
 		// ACF Manifests: appmanifest_(\d+).acf
@@ -294,6 +303,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	info.OriginalBackups = state.originalBackups
 	info.SteamAppIDTxtFound = state.steamAppIDTxtFound
 	info.SettingsDirExists = state.settingsDirExists
+	info.SettingsDirs = state.settingsDirs
 	info.CurrentLanguage = state.currentLanguage
 	info.TargetLibPath = state.targetLibPath
 	info.ManifestPath = state.manifestPath
@@ -440,85 +450,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	launchProfilePath := filepath.Join(info.GameDir, ".gamux", "launch_profile.json")
 	launchProfileExists := util.FileExists(launchProfilePath) || util.FileExists(filepath.Join(info.GameDir, "steam_settings", "launch_profile.json"))
 	if profile, err := compat.LoadProfile(info.GameDir); err == nil && profile != nil {
-		info.LaunchProfile = profile
-		if profile.SourceOverride != "" {
-			info.Source = profile.SourceOverride
-		} else if profile.Store != "" && (info.Source == "" || info.Source == domain.SourceStandalone) {
-			switch strings.ToLower(profile.Store) {
-			case "steam":
-				info.Source = domain.SourceSteam
-				info.Store = domain.StoreSteam
-			case "gog":
-				info.Source = domain.SourceGOG
-				info.Store = domain.StoreGOG
-			case "epic":
-				info.Source = domain.SourceEpic
-				info.Store = domain.StoreEpic
-			case "itch":
-				info.Source = domain.SourceItch
-				info.Store = domain.StoreItch
-			default:
-				info.Store = profile.Store
-			}
-		}
-		if launchProfileExists && profile.Store != "" && !strings.EqualFold(profile.Store, string(info.Source)) {
-			info.Store = profile.Store
-		}
-		if profile.MetadataID != "" {
-			if strings.EqualFold(profile.MetadataProvider, "steam") {
-				if num, ok := util.ParseAppID(profile.MetadataID); ok && num > 0 {
-					info.ExternalIDs.SteamAppID = num
-				}
-			} else if strings.EqualFold(profile.MetadataProvider, "gog") {
-				info.ExternalIDs.GOGID = profile.MetadataID
-			} else if strings.EqualFold(profile.MetadataProvider, "rawg") {
-				info.ExternalIDs.RAWGID = profile.MetadataID
-			}
-		}
-		if launchProfileExists {
-			appID := strings.TrimSpace(profile.StoreAppID)
-			if appID == "" {
-				appID = strings.TrimSpace(profile.AppID)
-			}
-			if appID != "" {
-				info.AppID = appID
-				info.NumericAppID, _ = util.ParseAppID(appID)
-				if info.NumericAppID > 0 {
-					info.ExternalIDs.SteamAppID = info.NumericAppID
-				}
-			}
-		}
-		if profile.GOGID != "" {
-			info.ExternalIDs.GOGID = profile.GOGID
-		}
-		if profile.SGDBID != "" {
-			info.ExternalIDs.SGDBID = profile.SGDBID
-		}
-		if profile.CustomCoverURL != "" {
-			info.CustomCoverURL = profile.CustomCoverURL
-		}
-		if profile.CustomBannerURL != "" {
-			info.CustomBannerURL = profile.CustomBannerURL
-		}
-		if profile.CustomHeroURL != "" {
-			info.CustomHeroURL = profile.CustomHeroURL
-		}
-		if profile.CustomLogoURL != "" {
-			info.CustomLogoURL = profile.CustomLogoURL
-		}
-		if profile.CustomIconURL != "" {
-			info.CustomIconURL = profile.CustomIconURL
-		}
-		if profile.LockedArtwork {
-			info.LockedArtwork = true
-		}
-		if profile.InstalledAt > 0 {
-			info.InstalledAt = profile.InstalledAt
-		} else if info.InstalledAt > 0 {
-			profile.InstalledAt = info.InstalledAt
-		}
-		info.PlaytimeSeconds = profile.PlaytimeSeconds
-		info.LastPlayed = profile.LastPlayed
+		info.ApplyProfile(profile, launchProfileExists)
 	}
 
 	if info.ExePath == "" && len(info.LaunchCandidates) > 0 {
@@ -605,15 +537,75 @@ func ScoreExecutable(exePath string, gameDir string, gameName string) int {
 	return score
 }
 
-// IsRunnerPrefixDir returns true if a directory structure matches Wine/Proton/UMU prefix conventions.
+// IsRunnerPrefixDir returns true if a directory structure matches Wine/Proton/UMU prefix conventions
+// or contains prefix directory trees (e.g. umu-p2, umu-default, wine, prefixes).
 func IsRunnerPrefixDir(path string) bool {
+	if path == "" {
+		return false
+	}
+
 	baseLower := strings.ToLower(filepath.Base(path))
-	if baseLower == "umu" || baseLower == "umu-default" || baseLower == "wine" || baseLower == "proton" || baseLower == "pfx" || baseLower == "prefix" || baseLower == "prefixes" {
+
+	// Prefix directory name patterns
+	if baseLower == "umu" || strings.HasPrefix(baseLower, "umu-") || strings.HasPrefix(baseLower, "umu_") ||
+		baseLower == "wine" || strings.HasPrefix(baseLower, "wine-") || strings.HasPrefix(baseLower, "wine_") ||
+		baseLower == "proton" || strings.HasPrefix(baseLower, "proton-") || strings.HasPrefix(baseLower, "proton_") ||
+		baseLower == "pfx" || strings.HasPrefix(baseLower, "pfx-") || strings.HasPrefix(baseLower, "pfx_") ||
+		baseLower == "prefix" || baseLower == "prefixes" || strings.HasPrefix(baseLower, "prefix-") || strings.HasPrefix(baseLower, "prefix_") {
 		return true
 	}
-	// Prefix root check: contains drive_c and (system.reg or user.reg or dosdevices or tracked_files)
-	if util.FileExists(filepath.Join(path, "drive_c")) && (util.FileExists(filepath.Join(path, "system.reg")) || util.FileExists(filepath.Join(path, "user.reg")) || util.FileExists(filepath.Join(path, "dosdevices"))) {
+
+	// Known default prefix paths from compat layer (e.g. ~/Games/umu, ~/Games/umu-p2)
+	if compat.IsKnownPrefixDir(path) {
 		return true
 	}
+
+	// Direct Wine prefix check: contains drive_c and (system.reg, user.reg, dosdevices, tracked_files, or .update-timestamp)
+	if util.FileExists(filepath.Join(path, "drive_c")) &&
+		(util.FileExists(filepath.Join(path, "system.reg")) ||
+			util.FileExists(filepath.Join(path, "user.reg")) ||
+			util.FileExists(filepath.Join(path, "dosdevices")) ||
+			util.FileExists(filepath.Join(path, "tracked_files")) ||
+			util.FileExists(filepath.Join(path, ".update-timestamp"))) {
+		return true
+	}
+
+	// Prefix container check: contains umu-default or immediate child directories that are Wine prefixes
+	if util.FileExists(filepath.Join(path, "umu-default")) {
+		return true
+	}
+
+	if entries, err := os.ReadDir(path); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			childPath := filepath.Join(path, e.Name())
+			if util.FileExists(filepath.Join(childPath, "drive_c")) &&
+				(util.FileExists(filepath.Join(childPath, "system.reg")) ||
+					util.FileExists(filepath.Join(childPath, "user.reg")) ||
+					util.FileExists(filepath.Join(childPath, "dosdevices"))) {
+				return true
+			}
+		}
+	}
+
 	return false
+}
+
+// IsIgnoredLibraryDir returns true if a directory in a game library should not be treated as a game
+// (e.g. runner prefixes, art directories, backup repositories, or hidden folders).
+func IsIgnoredLibraryDir(path string) bool {
+	if path == "" {
+		return false
+	}
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, ".") {
+		return true
+	}
+	baseLower := strings.ToLower(base)
+	if baseLower == "art" || baseLower == "backups" {
+		return true
+	}
+	return IsRunnerPrefixDir(path)
 }

@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/github"
+	"github.com/staernid/gamux/ini"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
@@ -59,8 +60,9 @@ type Options struct {
 	Language   string
 	DryRun     bool
 	Portable   bool
-	WinePrefix string
-	ExePath    string
+	WinePrefix    string
+	ExePath       string
+	CandidateExes []string
 }
 
 // EnsureAvailable ensures that Goldberg Emulator release assets are present locally, auto-downloading them if missing.
@@ -145,7 +147,14 @@ func Apply(ctx context.Context, opts Options) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && d.Name() == platformCfg.Target {
+		if d.IsDir() {
+			lower := strings.ToLower(d.Name())
+			if path != absTargetDir && (lower == "drive_c" || lower == "dosdevices" || lower == "pfx" || lower == ".git" || lower == ".gamux" || lower == ".gamux_backup" || lower == "node_modules" || lower == "gbe_fork" || lower == "win_release" || lower == "linux_release" || lower == "steamclient_experimental") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == platformCfg.Target {
 			targetFiles = append(targetFiles, path)
 		}
 		return nil
@@ -203,6 +212,16 @@ func Apply(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to get hash of source file: %w", err)
 	}
 
+	candidateExes := opts.CandidateExes
+	if len(candidateExes) == 0 && exePath != "" {
+		candidateExes = []string{exePath}
+	}
+	allSettingsDirs := ResolveTargetSettingsDirs(absTargetDir, targetFiles, candidateExes...)
+
+	if portable {
+		CleanLoaderArtifacts(absTargetDir, dryRun)
+	}
+
 	for _, file := range targetFiles {
 		slog.Info("Found target library", "file", file)
 
@@ -247,15 +266,15 @@ func Apply(ctx context.Context, opts Options) error {
 				if targetExe == "" {
 					targetExe = file
 				}
-				if err := SetupLoaderMode(gbeBase, absTargetDir, platform, appID, targetExe, targetFiles, dryRun); err != nil {
+				if err := SetupLoaderMode(gbeBase, absTargetDir, platform, appID, targetExe, targetFiles, dryRun, candidateExes...); err != nil {
 					slog.Warn("Failed to setup Goldberg loader mode", "error", err)
 				}
-				dllPath := filepath.Join(gbePath, platformCfg.Additional)
-				ConfigureWineRegistry(winePrefix, platform, dllPath, dryRun)
+				if winePrefix != "" {
+					settingsDir := filepath.Join(absTargetDir, "steam_settings")
+					_ = SetupWinePrefixSteamDir(winePrefix, gbeBase, settingsDir, appID, dryRun)
+				}
 			}
 		}
-
-
 
 		// Determine the source original binary for interface detection
 		sourceDll := file
@@ -273,11 +292,8 @@ func Apply(ctx context.Context, opts Options) error {
 		if dryRun {
 			slog.Info("[DRY RUN] Would extract steam_interfaces.txt into steam_settings", "source", sourceDll)
 		} else {
-			targetDirs := []string{
-				filepath.Join(absTargetDir, "steam_settings"),       // Root steam_settings (for Loader mode)
-				filepath.Join(filepath.Dir(file), "steam_settings"), // Subdir steam_settings (for plugin folders)
-				filepath.Dir(file),                                  // Alongside steam_api.dll (for portable mode)
-			}
+			targetDirs := []string{filepath.Dir(file)}
+			targetDirs = append(targetDirs, allSettingsDirs...)
 			if err := GenerateAndSaveInterfaces(sourceDll, targetDirs...); err != nil {
 				slog.Warn("Failed to extract Steam interfaces from binary", "source", sourceDll, "error", err)
 			}
@@ -291,34 +307,49 @@ func Apply(ctx context.Context, opts Options) error {
 			slog.Warn("Failed to fetch and configure DLCs", "appID", appID, "libraryPath", libraryPath, "error", err)
 		}
 	}
-
-	// Configure language, persona profile, SteamID, and overlay settings in steam_settings/
-	supportedLangs, _ := steam.FetchSupportedLanguages(ctx, appID)
-	for _, file := range targetFiles {
-		steamSettingsDir := filepath.Join(filepath.Dir(file), "steam_settings")
-		if err := ConfigureCustomSettings(steamSettingsDir, cfg, supportedLangs, dryRun); err != nil {
-			slog.Warn("Failed to configure custom emulator settings", "dir", steamSettingsDir, "error", err)
+	if appID != "" && appID != "0" {
+		if err := steam.FetchDLCs(ctx, appID, absTargetDir, dryRun); err != nil {
+			slog.Debug("Failed to fetch DLCs for root", "appID", appID, "error", err)
 		}
 	}
 
-	// Ensure steam_appid.txt exists in root directory, steam_settings, and alongside library
-	if appID != "" && appID != "0" {
-		appidDirs := []string{
-			absTargetDir,
-			filepath.Join(absTargetDir, "steam_settings"),
+	// Synchronize configs.app.ini across all steam_settings directories if present
+	var iniData []byte
+	for _, sDir := range allSettingsDirs {
+		iniPath := filepath.Join(sDir, "configs.app.ini")
+		if data, err := os.ReadFile(iniPath); err == nil && len(data) > 0 {
+			iniData = data
+			break
 		}
-		for _, file := range targetFiles {
-			appidDirs = append(appidDirs, filepath.Dir(file))
-			appidDirs = append(appidDirs, filepath.Join(filepath.Dir(file), "steam_settings"))
-		}
-		for _, dir := range appidDirs {
-			if dryRun {
-				slog.Info("[DRY RUN] Would ensure steam_appid.txt", "dir", dir, "appID", appID)
-			} else {
-				_ = os.MkdirAll(dir, 0755)
-				_ = os.WriteFile(filepath.Join(dir, "steam_appid.txt"), []byte(appID+"\n"), 0644)
+	}
+	if len(iniData) > 0 {
+		for _, sDir := range allSettingsDirs {
+			iniPath := filepath.Join(sDir, "configs.app.ini")
+			if !util.FileExists(iniPath) {
+				if dryRun {
+					slog.Info("[DRY RUN] Would sync configs.app.ini", "path", iniPath)
+				} else {
+					_ = os.MkdirAll(sDir, 0755)
+					_ = os.WriteFile(iniPath, iniData, 0644)
+					slog.Info("Synchronized configs.app.ini", "path", iniPath)
+				}
 			}
 		}
+	}
+
+	// Synchronize emulator settings across all discovered steam_settings dirs, libraries, and executables
+	supportedLangs, _ := steam.FetchSupportedLanguages(ctx, appID)
+	prof := &domain.LaunchProfile{
+		GameDir:  absTargetDir,
+		AppID:    appID,
+		Language: opts.Language,
+		ExePath:  exePath,
+	}
+	var extraPaths []string
+	extraPaths = append(extraPaths, candidateExes...)
+	extraPaths = append(extraPaths, targetFiles...)
+	if err := SyncEmulatorSettings(absTargetDir, prof, cfg, supportedLangs, dryRun, extraPaths...); err != nil {
+		slog.Warn("Failed to synchronize emulator settings", "error", err)
 	}
 
 	slog.Info("GBE application process completed")
@@ -396,39 +427,370 @@ func ConfigureCustomSettings(steamSettingsDir string, cfg *config.Config, suppor
 	return nil
 }
 
-// ConfigureWineRegistry configures the Wine registry to load Goldberg's steamclient DLL for non-portable loader mode.
-func ConfigureWineRegistry(winePrefix, platform, dllPath string, dryRun bool) {
-	winePath, err := exec.LookPath("wine")
-	if err != nil {
-		slog.Warn("Wine binary not found in PATH; skipping Wine registry configuration", "platform", platform)
-		return
+// SyncEmulatorSettings synchronizes emulator text configuration files (steam_appid.txt, force_language.txt,
+// disable_overlay.txt, offline.txt) across all target steam_settings directories and root/exe directories.
+func SyncEmulatorSettings(targetDir string, p *domain.LaunchProfile, cfg *config.Config, supportedLanguages []string, dryRun bool, extraPaths ...string) error {
+	absTargetDir := util.CanonicalPath(targetDir)
+	if absTargetDir == "" {
+		return fmt.Errorf("target directory cannot be empty")
+	}
+	if cfg == nil {
+		cfg = config.DefaultConfig()
 	}
 
-	regKey := "SteamClientDll64"
-	if platform == "win32" {
-		regKey = "SteamClientDll"
+	appID := ""
+	targetLang := strings.TrimSpace(cfg.Language)
+	disableOverlay := cfg.DisableOverlay
+	offlineMode := cfg.OfflineMode
+	var candidateExes []string
+
+	if p != nil {
+		if p.AppID != "" && p.AppID != "0" {
+			appID = p.AppID
+		}
+		if p.Language != "" {
+			targetLang = strings.TrimSpace(p.Language)
+		}
+		if p.DisableOverlay != nil {
+			disableOverlay = *p.DisableOverlay
+		}
+		if p.OfflineMode != nil {
+			offlineMode = *p.OfflineMode
+		}
+		if p.ExePath != "" {
+			candidateExes = append(candidateExes, p.ExePath)
+		}
+	}
+	for _, ep := range extraPaths {
+		if ep != "" {
+			candidateExes = append(candidateExes, ep)
+		}
+	}
+
+	allSettingsDirs := ResolveTargetSettingsDirs(absTargetDir, nil, candidateExes...)
+
+	var langBytes []byte
+	writeLang := false
+	if targetLang != "" && targetLang != "auto" {
+		if len(supportedLanguages) > 0 {
+			isSupported := false
+			for _, sl := range supportedLanguages {
+				if strings.EqualFold(sl, targetLang) {
+					isSupported = true
+					break
+				}
+			}
+			if !isSupported {
+				slog.Info("Preferred language not in game's supported list, falling back", "preferred", targetLang, "fallback", supportedLanguages[0])
+				targetLang = supportedLanguages[0]
+			}
+		}
+		langBytes = []byte(strings.ToLower(targetLang) + "\n")
+		writeLang = true
+	}
+
+	for _, sDir := range allSettingsDirs {
+		if dryRun {
+			if appID != "" {
+				slog.Info("[DRY RUN] Would write steam_appid.txt", "dir", sDir, "appID", appID)
+			}
+			if writeLang {
+				slog.Info("[DRY RUN] Would write force_language.txt", "dir", sDir, "language", targetLang)
+			}
+			if disableOverlay {
+				slog.Info("[DRY RUN] Would configure configs.overlay.ini", "dir", sDir, "overlayEnabled", false)
+			} else {
+				slog.Info("[DRY RUN] Would configure configs.overlay.ini", "dir", sDir, "overlayEnabled", true)
+			}
+			if offlineMode {
+				slog.Info("[DRY RUN] Would write offline.txt", "dir", sDir)
+			}
+			continue
+		}
+
+		_ = os.MkdirAll(sDir, 0755)
+
+		// 1. steam_appid.txt
+		if appID != "" {
+			_ = os.WriteFile(filepath.Join(sDir, "steam_appid.txt"), []byte(appID), 0644)
+		}
+
+		// 2. force_language.txt
+		langFile := filepath.Join(sDir, "force_language.txt")
+		if writeLang {
+			_ = os.WriteFile(langFile, langBytes, 0644)
+			slog.Info("Configured emulator language", "language", targetLang, "path", langFile)
+		} else {
+			_ = os.Remove(langFile)
+		}
+
+		// Clean up legacy per-game force files
+		_ = os.Remove(filepath.Join(sDir, "force_account_name.txt"))
+		_ = os.Remove(filepath.Join(sDir, "force_steamid.txt"))
+
+		// 3. configs.overlay.ini (Goldberg experimental overlay)
+		_ = SetOverlayEnabled(sDir, !disableOverlay, dryRun)
+		_ = os.Remove(filepath.Join(sDir, "disable_overlay.txt"))
+
+		// 4. offline.txt
+		offlineFile := filepath.Join(sDir, "offline.txt")
+		if offlineMode {
+			_ = os.WriteFile(offlineFile, []byte("1\n"), 0644)
+		} else {
+			_ = os.Remove(offlineFile)
+		}
+	}
+
+	// Ensure steam_appid.txt exists in root directory and alongside candidate executables / target files
+	if appID != "" {
+		appIDDirs := map[string]bool{
+			absTargetDir: true,
+		}
+		for _, ep := range candidateExes {
+			if ep == "" {
+				continue
+			}
+			var full string
+			if filepath.IsAbs(ep) {
+				full = ep
+			} else {
+				full = filepath.Join(absTargetDir, ep)
+			}
+			dir := full
+			if fi, err := os.Stat(full); err == nil && !fi.IsDir() {
+				dir = filepath.Dir(full)
+			}
+			appIDDirs[dir] = true
+		}
+		for dir := range appIDDirs {
+			if dryRun {
+				slog.Info("[DRY RUN] Would ensure steam_appid.txt", "dir", dir, "appID", appID)
+			} else {
+				_ = os.MkdirAll(dir, 0755)
+				_ = os.WriteFile(filepath.Join(dir, "steam_appid.txt"), []byte(appID), 0644)
+			}
+		}
+	}
+
+	return nil
+}
+
+// SetOverlayEnabled writes or updates configs.overlay.ini in settingsDir with enable_experimental_overlay.
+func SetOverlayEnabled(settingsDir string, enabled bool, dryRun bool) error {
+	iniPath := filepath.Join(settingsDir, "configs.overlay.ini")
+	val := "0"
+	if enabled {
+		val = "1"
 	}
 
 	if dryRun {
-		slog.Info("[DRY RUN] Would configure Wine registry key", "key", regKey, "path", dllPath)
-		return
+		slog.Info("[DRY RUN] Would update configs.overlay.ini", "dir", settingsDir, "enabled", enabled)
+		return nil
 	}
 
-	cmd := exec.Command(winePath, "reg", "add", `HKCU\Software\Valve\Steam`, "/v", regKey, "/t", "REG_SZ", "/d", dllPath, "/f")
-	if winePrefix != "" {
-		cmd.Env = append(os.Environ(), "WINEPREFIX="+winePrefix)
+	f, err := ini.LoadFile(iniPath)
+	if err != nil {
+		f = ini.NewFile()
 	}
 
-	if out, err := cmd.CombinedOutput(); err != nil {
-		slog.Warn("Failed to set Wine registry key", "key", regKey, "error", err, "output", string(out))
-	} else {
-		slog.Info("Successfully configured Wine registry key for Goldberg loader", "key", regKey, "path", dllPath)
+	f.Section("overlay::general").Set("enable_experimental_overlay", val)
+
+	if err := os.MkdirAll(settingsDir, 0755); err != nil {
+		return fmt.Errorf("create settings dir: %w", err)
 	}
+	if err := f.SaveFile(iniPath); err != nil {
+		return fmt.Errorf("save configs.overlay.ini: %w", err)
+	}
+	return nil
+}
+
+// IsOverlayEnabled reads configs.overlay.ini in settingsDir and returns whether experimental overlay is enabled.
+// If configs.overlay.ini is absent or does not specify enable_experimental_overlay, it falls back to checking disable_overlay.txt.
+func IsOverlayEnabled(settingsDir string) (bool, bool) {
+	iniPath := filepath.Join(settingsDir, "configs.overlay.ini")
+	if f, err := ini.LoadFile(iniPath); err == nil {
+		if sec, ok := f.GetSection("overlay::general"); ok {
+			if val, ok := sec.GetBool("enable_experimental_overlay"); ok {
+				return val, true
+			}
+		}
+	}
+
+	// Legacy fallback: disable_overlay.txt
+	if util.FileExists(filepath.Join(settingsDir, "disable_overlay.txt")) {
+		return false, true
+	}
+
+	return false, false
+}
+
+// SetupWinePrefixSteamDir populates <prefixDir>/drive_c/Program Files (x86)/Steam/ with Goldberg
+// Steam client emulation libraries, overlay renderer, and steam_settings symlinks.
+// This allows steam_api to discover the emulator out-of-the-box via Proton's default ActiveProcess configuration.
+func SetupWinePrefixSteamDir(prefixDir, gbeBase, gameSettingsDir, appID string, dryRun bool) error {
+	if prefixDir == "" {
+		return nil
+	}
+	if gbeBase == "" {
+		gbeBase = util.CanonicalPath(config.DefaultConfig().GbeDir)
+	}
+
+	steamDir := filepath.Join(prefixDir, "drive_c", "Program Files (x86)", "Steam")
+	if dryRun {
+		slog.Info("[DRY RUN] Would setup Wine prefix Steam directory", "steamDir", steamDir)
+		return nil
+	}
+
+	if err := os.MkdirAll(steamDir, 0755); err != nil {
+		return fmt.Errorf("create prefix steam dir: %w", err)
+	}
+
+	loaderDir := filepath.Join(gbeBase, "win_release", "steamclient_experimental")
+	loaderFiles := []string{
+		"steamclient64.dll",
+		"steamclient.dll",
+		"GameOverlayRenderer64.dll",
+		"GameOverlayRenderer.dll",
+	}
+
+	for _, fname := range loaderFiles {
+		src := filepath.Join(loaderDir, fname)
+		dst := filepath.Join(steamDir, fname)
+		if !util.FileExists(src) {
+			continue
+		}
+		_ = os.Remove(dst)
+		if err := os.Symlink(src, dst); err != nil {
+			if copyErr := util.CopyFile(src, dst); copyErr != nil {
+				slog.Warn("Failed to copy loader DLL to prefix steam dir", "file", fname, "error", copyErr)
+			}
+		}
+	}
+
+	// Symlink steam_settings
+	if gameSettingsDir != "" && util.DirExists(gameSettingsDir) {
+		prefixSettings := filepath.Join(steamDir, "steam_settings")
+		_ = os.Remove(prefixSettings)
+		if rel, err := filepath.Rel(steamDir, gameSettingsDir); err == nil {
+			_ = os.Symlink(rel, prefixSettings)
+		} else {
+			_ = os.Symlink(gameSettingsDir, prefixSettings)
+		}
+	}
+
+	// Write steam_appid.txt
+	if appID != "" && appID != "0" {
+		_ = os.WriteFile(filepath.Join(steamDir, "steam_appid.txt"), []byte(appID+"\n"), 0644)
+	}
+
+	return nil
+}
+
+
+// FindSteamSettingsDirs scans gameDir for all existing directories named steam_settings.
+func FindSteamSettingsDirs(gameDir string) []string {
+	var dirs []string
+	absDir := util.CanonicalPath(gameDir)
+	if absDir == "" {
+		return nil
+	}
+	_ = filepath.WalkDir(absDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := strings.ToLower(d.Name())
+			if p != absDir && (name == "drive_c" || name == "dosdevices" || name == "pfx" || name == ".git" || name == ".gamux" || name == ".gamux_backup" || name == "node_modules") {
+				return filepath.SkipDir
+			}
+			if name == "steam_settings" {
+				dirs = append(dirs, p)
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
+	return dirs
+}
+
+// ResolveTargetSettingsDirs computes all paths where steam_settings should be maintained.
+func ResolveTargetSettingsDirs(absTargetDir string, targetFiles []string, candidateExes ...string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	addDir := func(d string) {
+		clean := util.CanonicalPath(d)
+		if clean != "" && !seen[clean] {
+			seen[clean] = true
+			result = append(result, clean)
+		}
+	}
+
+	// 1. Root steam_settings
+	addDir(filepath.Join(absTargetDir, "steam_settings"))
+
+	// 2. Alongside each target library (steam_api.dll / libsteam_api.so)
+	for _, f := range targetFiles {
+		addDir(filepath.Join(filepath.Dir(f), "steam_settings"))
+	}
+
+	// 3. Alongside each candidate executable
+	for _, exe := range candidateExes {
+		if exe != "" {
+			if filepath.IsAbs(exe) {
+				addDir(filepath.Join(filepath.Dir(exe), "steam_settings"))
+			} else {
+				addDir(filepath.Join(absTargetDir, filepath.Dir(exe), "steam_settings"))
+			}
+		}
+	}
+
+	// 4. Any existing steam_settings found in the game directory tree
+	for _, existing := range FindSteamSettingsDirs(absTargetDir) {
+		addDir(existing)
+	}
+
+	return result
+}
+
+// CleanLoaderArtifacts removes Goldberg loader emulation libraries and loader executables from absTargetDir.
+func CleanLoaderArtifacts(absTargetDir string, dryRun bool) {
+	loaderFiles := map[string]bool{
+		"steamclient64.dll":          true,
+		"steamclient.dll":            true,
+		"GameOverlayRenderer64.dll":  true,
+		"GameOverlayRenderer.dll":    true,
+		"ColdClientLoader.ini":       true,
+		"steamclient_loader_x64.exe": true,
+		"steamclient_loader_x86.exe": true,
+	}
+
+	_ = filepath.WalkDir(absTargetDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			lower := strings.ToLower(d.Name())
+			if path != absTargetDir && (lower == "drive_c" || lower == "dosdevices" || lower == "pfx" || lower == ".git" || lower == ".gamux" || lower == ".gamux_backup" || lower == "node_modules" || lower == "gbe_fork" || lower == "win_release" || lower == "linux_release" || lower == "steamclient_experimental") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if loaderFiles[d.Name()] {
+			if dryRun {
+				slog.Info("[DRY RUN] Would remove loader artifact", "path", path)
+			} else {
+				_ = os.Remove(path)
+				slog.Info("Removed loader artifact", "path", path)
+			}
+		}
+		return nil
+	})
 }
 
 // SetupLoaderMode configures Goldberg's Steam client emulation libraries (steamclient64/steamclient.dll and overlay renderer)
 // by creating relative symlinks to central GBE binaries in ~/.local/share/gbe_fork/ across the root, exe dir, and library dirs.
-func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, targetFiles []string, dryRun bool) error {
+func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, targetFiles []string, dryRun bool, candidateExes ...string) error {
 	if platform != "win64" && platform != "win32" {
 		return nil
 	}
@@ -455,6 +817,15 @@ func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, tar
 	for _, f := range targetFiles {
 		targetDirs[filepath.Dir(f)] = true
 	}
+	for _, exe := range candidateExes {
+		if exe != "" {
+			if filepath.IsAbs(exe) {
+				targetDirs[filepath.Dir(exe)] = true
+			} else {
+				targetDirs[filepath.Join(absTargetDir, filepath.Dir(exe))] = true
+			}
+		}
+	}
 
 	for dstDir := range targetDirs {
 		for _, fname := range filesToSymlink {
@@ -478,6 +849,13 @@ func SetupLoaderMode(gbeBase, absTargetDir, platform, appID, exePath string, tar
 				}
 			} else {
 				slog.Info("Symlinked GBE loader asset", "file", fname, "dst", dst)
+			}
+		}
+
+		if appID != "" && appID != "0" {
+			appIDFile := filepath.Join(dstDir, "steam_appid.txt")
+			if !dryRun {
+				_ = os.WriteFile(appIDFile, []byte(appID+"\n"), 0644)
 			}
 		}
 	}
@@ -508,10 +886,12 @@ func GenerateAchievementsJSON(ctx context.Context, appID uint32, apiKey string, 
 	}
 
 	achievementsJSONPath := filepath.Join(steamSettingsDir, "achievements.json")
+	var data []byte
 	if dryRun {
 		slog.Info("[DRY RUN] Would write achievements.json", "path", achievementsJSONPath, "count", len(achievements))
 	} else {
-		data, err := json.MarshalIndent(achievements, "", "  ")
+		var err error
+		data, err = json.MarshalIndent(achievements, "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshal achievements.json: %w", err)
 		}
@@ -536,6 +916,29 @@ func GenerateAchievementsJSON(ctx context.Context, appID uint32, apiKey string, 
 	if len(iconNames) > 0 && !dryRun {
 		if err := steam.DownloadAchievementImages(ctx, int(appID), iconNames, imgDir); err != nil {
 			slog.Warn("Failed downloading some achievement icons", "appID", appID, "error", err)
+		}
+	}
+
+	// Synchronize achievements.json and img/ across all discovered steam_settings dirs
+	allDirs := FindSteamSettingsDirs(targetDir)
+	for _, sDir := range allDirs {
+		if sDir == steamSettingsDir {
+			continue
+		}
+		if dryRun {
+			slog.Info("[DRY RUN] Would sync achievements to directory", "dir", sDir)
+			continue
+		}
+		_ = os.MkdirAll(sDir, 0755)
+		if len(data) > 0 {
+			_ = os.WriteFile(filepath.Join(sDir, "achievements.json"), data, 0644)
+		}
+		targetImg := filepath.Join(sDir, "img")
+		if !util.FileExists(targetImg) {
+			relPath, relErr := filepath.Rel(sDir, imgDir)
+			if relErr == nil {
+				_ = os.Symlink(relPath, targetImg)
+			}
 		}
 	}
 

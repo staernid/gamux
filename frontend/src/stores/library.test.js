@@ -9,6 +9,7 @@ import {
   selectedGame,
   runningGames,
   setGameRunning,
+  isGamePathRunning,
   updateGameInStore,
   renameGameInStore,
   activeFilter,
@@ -49,6 +50,19 @@ describe('Decoupled Library Stores', () => {
 
     setGameRunning('/games/cyberpunk', false);
     expect(get(runningGames).has('/games/cyberpunk')).toBe(false);
+  });
+
+  it('handles path normalization and isGamePathRunning correctly', () => {
+    setGameRunning('/games/cyberpunk/', true);
+    expect(isGamePathRunning(get(runningGames), '/games/cyberpunk')).toBe(true);
+    expect(isGamePathRunning(get(runningGames), '/games/cyberpunk/')).toBe(true);
+    expect(isGamePathRunning(['/games/cyberpunk'], '/games/cyberpunk/')).toBe(true);
+    expect(isGamePathRunning(new Set(['/games/cyberpunk']), '/games/other')).toBe(false);
+
+    // Stop using non-trailing slash version removes the entry cleanly
+    setGameRunning('/games/cyberpunk', false);
+    expect(isGamePathRunning(get(runningGames), '/games/cyberpunk')).toBe(false);
+    expect(get(runningGames).size).toBe(0);
   });
 
   it('updates and renames games in the catalog store', () => {

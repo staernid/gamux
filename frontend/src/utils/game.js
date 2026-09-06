@@ -206,76 +206,56 @@ export function countOverrides(draft, game = null, globalCfg = {}) {
   if (!draft) return 0;
   let count = 0;
 
-  // 1. Title Override (if explicitly set and different from detected game name)
-  if (draft.name && draft.name.trim() !== '' && draft.name.trim() !== (game?.name || '').trim()) {
-    count++;
-  }
-
-  // 2. Target Platform Override (if different from detected game platform)
-  if (draft.platform && game?.platform && draft.platform !== game.platform) {
-    count++;
-  }
-
-  // 3. Executable Path Override (if different from primary launch candidate or base detected exe)
   const defaultExe = game?.launchCandidates?.[0]?.executable || game?.exePath || '';
-  if (draft.exePath && defaultExe && normalizePath(draft.exePath) !== normalizePath(defaultExe)) {
-    count++;
-  }
-
-  // 4. Executable Arguments Override
   const defaultArgs = game?.launchCandidates?.[0]?.arguments || '';
-  if (draft.exeArgs && draft.exeArgs.trim() !== '' && draft.exeArgs.trim() !== defaultArgs.trim()) {
-    count++;
+
+  const fieldRules = [
+    // 1. Title Override
+    () => Boolean(draft.name?.trim() && draft.name.trim() !== (game?.name || '').trim()),
+    // 2. Target Platform Override
+    () => Boolean(draft.platform && game?.platform && draft.platform !== game.platform),
+    // 3. Executable Path Override
+    () => Boolean(draft.exePath && defaultExe && normalizePath(draft.exePath) !== normalizePath(defaultExe)),
+    // 4. Executable Arguments Override
+    () => Boolean(draft.exeArgs?.trim() && draft.exeArgs.trim() !== defaultArgs.trim()),
+    // 5. Operating Mode Override
+    () => Boolean(draft.operatingMode?.trim()),
+    // 6. Runner Layer Override
+    () => Boolean(draft.runner?.trim() && draft.runner !== (globalCfg?.default_runner || 'umu')),
+    // 7. Wine Prefix Override
+    () => Boolean(draft.winePrefix?.trim()),
+    // 8. Proton Path Override
+    () => Boolean(draft.protonPath?.trim()),
+    // 9. DLL Overrides
+    () => Boolean(draft.dllOverrides?.trim()),
+    // 10. MangoHud Overlay Override
+    () => draft.mangoHud !== null && draft.mangoHud !== undefined && draft.mangoHud !== Boolean(globalCfg?.mangohud),
+    // 11. Disable Overlay Override
+    () => draft.disableOverlay !== null && draft.disableOverlay !== undefined && draft.disableOverlay !== Boolean(globalCfg?.disable_overlay),
+    // 12. Offline Mode Override
+    () => draft.offlineMode !== null && draft.offlineMode !== undefined && draft.offlineMode !== Boolean(globalCfg?.offline_mode),
+    // 13. Game Language Override
+    () => Boolean(draft.language?.trim() && draft.language !== 'auto' && draft.language !== (globalCfg?.language || 'auto')),
+    // 14. Physical Installation Source Override
+    () => Boolean(draft.sourceOverride?.trim()),
+    // 15. Store Metadata Provider Override
+    () => Boolean(draft.metadataProvider?.trim() && draft.metadataProvider !== 'none'),
+    // 16. Gamescope & Display Overrides
+    () => draft.gamescope !== null && draft.gamescope !== undefined && draft.gamescope !== Boolean(globalCfg?.gamescope),
+    () => Boolean(draft.gamescopeWidth && draft.gamescopeWidth !== (globalCfg?.gamescope_width || 0)),
+    () => Boolean(draft.gamescopeHeight && draft.gamescopeHeight !== (globalCfg?.gamescope_height || 0)),
+    () => Boolean(draft.gamescopeFps && draft.gamescopeFps !== (globalCfg?.gamescope_fps || 0)),
+    // 17. Working Directory Override
+    () => Boolean(draft.workingDir?.trim()),
+  ];
+
+  for (const rule of fieldRules) {
+    if (rule()) count++;
   }
 
-  // 5. Operating Mode Override (if set and not empty)
-  if (draft.operatingMode && draft.operatingMode.trim() !== '') {
-    count++;
-  }
-
-  // 6. Runner Layer Override (if set, not empty, and different from global default)
-  if (draft.runner && draft.runner.trim() !== '' && draft.runner !== (globalCfg?.default_runner || 'umu')) {
-    count++;
-  }
-
-  // 7. Wine Prefix Override
-  if (draft.winePrefix && draft.winePrefix.trim() !== '') {
-    count++;
-  }
-
-  // 8. Proton Path Override
-  if (draft.protonPath && draft.protonPath.trim() !== '') {
-    count++;
-  }
-
-  // 9. DLL Overrides
-  if (draft.dllOverrides && draft.dllOverrides.trim() !== '') {
-    count++;
-  }
-
-  // 10. MangoHud Overlay Override (if explicit boolean different from global setting)
-  if (draft.mangoHud !== null && draft.mangoHud !== undefined && draft.mangoHud !== Boolean(globalCfg?.mangohud)) {
-    count++;
-  }
-
-  // 11. Custom / Overridden Environment Variables
-  if (draft.customEnv && typeof draft.customEnv === 'object' && Object.keys(draft.customEnv).length > 0) {
+  // 18. Custom / Overridden Environment Variables
+  if (draft.customEnv && typeof draft.customEnv === 'object') {
     count += Object.keys(draft.customEnv).length;
-  }
-
-  // 12. Game Language Override (if set and not 'auto')
-  if (draft.language && draft.language.trim() !== '' && draft.language !== 'auto' && draft.language !== (globalCfg?.language || 'auto')) {
-    count++;
-  }
-
-  // 13. Physical Installation Source Override
-  if (draft.sourceOverride && draft.sourceOverride.trim() !== '') {
-    count++;
-  }
-
-  // 14. Store Metadata Provider Override (if custom metadata provider set)
-  if (draft.metadataProvider && draft.metadataProvider.trim() !== '' && draft.metadataProvider !== 'none') {
-    count++;
   }
 
   return count;

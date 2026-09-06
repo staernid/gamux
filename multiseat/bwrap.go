@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/staernid/gamux/compat"
+	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/util"
 )
 
@@ -57,9 +58,13 @@ func EnsureSeatProfile(profileDir string, profile PlayerProfile) error {
 		country = "US"
 	}
 
-	iniContent := fmt.Sprintf("[user::general]\naccount_name=%s\naccount_steamid=%s\nlanguage=%s\nip_country=%s\n",
-		name, steamID, lang, country)
-	if err := os.WriteFile(filepath.Join(gseDir, "configs.user.ini"), []byte(iniContent), 0644); err != nil {
+	userCfg := &gbe.GSEUserConfig{
+		AccountName:    name,
+		AccountSteamID: steamID,
+		Language:       lang,
+		IPCountry:      country,
+	}
+	if err := gbe.SaveGSEUserConfigToPath(filepath.Join(gseDir, "configs.user.ini"), userCfg); err != nil {
 		return fmt.Errorf("write configs.user.ini: %w", err)
 	}
 

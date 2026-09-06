@@ -212,4 +212,67 @@ func TestUpdateConfig_ReadModifyWrite(t *testing.T) {
 	}
 }
 
+func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	cfg := DefaultConfig()
+	if !cfg.Multiseat.Seat2ShowCursor {
+		t.Errorf("expected default Seat2ShowCursor to be true, got false")
+	}
+	if cfg.Multiseat.Seat2Compositor != "auto" {
+		t.Errorf("expected default Seat2Compositor to be 'auto', got %q", cfg.Multiseat.Seat2Compositor)
+	}
+
+	// Mutate to non-default values (including boolean false for Seat2ShowCursor)
+	cfg.Multiseat.Seat2ShowCursor = false
+	cfg.Multiseat.Seat2ForceGrabCursor = true
+	cfg.Multiseat.Seat2GrabKeyboard = true
+	cfg.Multiseat.Seat2Compositor = "cage"
+	cfg.Multiseat.Seat2DisplayIndex = 0
+
+	if err := SaveConfig(cfg, configFile); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	// Check the raw JSON on disk to verify false/0 are not dropped by omitempty
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var rawMap map[string]any
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	multiseatRaw, ok := rawMap["multiseat"].(map[string]any)
+	if !ok {
+		t.Fatalf("multiseat key missing from saved JSON")
+	}
+	if val, exists := multiseatRaw["seat2_show_cursor"]; !exists || val != false {
+		t.Errorf("expected seat2_show_cursor to be explicitly persisted as false in JSON, got exists=%v val=%v", exists, val)
+	}
+	if val, exists := multiseatRaw["seat2_display_index"]; !exists || val != float64(0) {
+		t.Errorf("expected seat2_display_index to be explicitly persisted as 0 in JSON, got exists=%v val=%v", exists, val)
+	}
+
+	// Now reload and ensure loaded struct preserves the values
+	loaded, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if loaded.Multiseat.Seat2ShowCursor != false {
+		t.Errorf("expected loaded.Multiseat.Seat2ShowCursor to be false, got %v", loaded.Multiseat.Seat2ShowCursor)
+	}
+	if !loaded.Multiseat.Seat2ForceGrabCursor {
+		t.Errorf("expected loaded.Multiseat.Seat2ForceGrabCursor to be true")
+	}
+	if !loaded.Multiseat.Seat2GrabKeyboard {
+		t.Errorf("expected loaded.Multiseat.Seat2GrabKeyboard to be true")
+	}
+	if loaded.Multiseat.Seat2Compositor != "cage" {
+		t.Errorf("expected loaded.Multiseat.Seat2Compositor 'cage', got %q", loaded.Multiseat.Seat2Compositor)
+	}
+}
+
 

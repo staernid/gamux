@@ -6,10 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"syscall"
-	"time"
 
-	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 )
@@ -71,6 +68,20 @@ func Launch(ctx context.Context, cfg *config.Config, opts LaunchOptions) (*exec.
 // Run executes a game synchronously, waiting for it to complete and tracking playtime.
 func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 	resolved := ResolveEffectiveOptions(cfg, opts)
+
+	// If Linux native and in loader mode, prepare ~/.steam environment
+	var steamCleanup func()
+	if resolved.Platform == "linux" && domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
+		var pErr error
+		steamCleanup, pErr = PrepareLinuxSteamEnvironment(cfg, resolved)
+		if pErr != nil {
+			slog.Warn("Failed to prepare Linux Steam environment for loader mode", "error", pErr)
+		}
+	}
+	if steamCleanup != nil {
+		defer steamCleanup()
+	}
+
 	cmd, err := BuildCommand(ctx, cfg, resolved)
 	if err != nil {
 		return fmt.Errorf("build launch command: %w", err)
@@ -93,74 +104,10 @@ func Run(ctx context.Context, cfg *config.Config, opts LaunchOptions) error {
 		return fmt.Errorf("game execution failed: %w", err)
 	}
 
-	started := time.Now()
-	pgid := 0
-	if cmd.Process != nil {
-		if p, err := syscall.Getpgid(cmd.Process.Pid); err == nil && p > 1 && p != os.Getpid() {
-			pgid = p
-		}
-	}
-
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	lastFlushedTime := started
-	flushDelta := func() {
-		now := time.Now()
-		delta := int64(now.Sub(lastFlushedTime).Seconds())
-		if resolved.GameDir != "" {
-			if _, _, err := compat.IncrementPlaytime(resolved.GameDir, delta); err == nil {
-				if delta > 0 {
-					lastFlushedTime = now
-				}
-			}
-		}
-	}
-
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- cmd.Wait()
-	}()
-
-	var waitErr error
-	waiting := true
-	for waiting {
-		select {
-		case <-ctx.Done():
-			if pgid > 1 {
-				_ = syscall.Kill(-pgid, syscall.SIGTERM)
-			} else if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
-			waitErr = ctx.Err()
-			waiting = false
-		case <-ticker.C:
-			flushDelta()
-		case waitErr = <-waitDone:
-			waiting = false
-		}
-	}
-
-	if pgid > 1 && ctx.Err() == nil {
-		superviseTicker := time.NewTicker(1 * time.Second)
-		defer superviseTicker.Stop()
-	supervise:
-		for {
-			if err := syscall.Kill(-pgid, 0); err != nil {
-				break
-			}
-			select {
-			case <-ctx.Done():
-				_ = syscall.Kill(-pgid, syscall.SIGTERM)
-				waitErr = ctx.Err()
-				break supervise
-			case <-ticker.C:
-				flushDelta()
-			case <-superviseTicker.C:
-			}
-		}
-	}
-
-	flushDelta()
-	return waitErr
+	isGamescope := isGamescopeCmd(cfg, resolved.Gamescope, cmd)
+	return superviseProcess(ctx, cmd, SuperviseOptions{
+		GameDir:     resolved.GameDir,
+		IsGamescope: isGamescope,
+		LogFile:     logFile,
+	})
 }

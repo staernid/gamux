@@ -173,15 +173,11 @@ func (eng *Engine) BatchInspect(ctx context.Context, parentDir string) ([]*GameS
 
 	var validPaths []string
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		dirLower := strings.ToLower(entry.Name())
-		if dirLower == "umu" || dirLower == "umu-default" || dirLower == "wine" || dirLower == "proton" || dirLower == "pfx" || dirLower == "prefix" || dirLower == "prefixes" || dirLower == "art" || dirLower == "backups" {
+		if !entry.IsDir() {
 			continue
 		}
 		fullPath := filepath.Join(absParent, entry.Name())
-		if util.FileExists(filepath.Join(fullPath, "drive_c")) && (util.FileExists(filepath.Join(fullPath, "system.reg")) || util.FileExists(filepath.Join(fullPath, "user.reg")) || util.FileExists(filepath.Join(fullPath, "dosdevices"))) {
+		if detector.IsIgnoredLibraryDir(fullPath) {
 			continue
 		}
 		validPaths = append(validPaths, fullPath)
@@ -294,6 +290,9 @@ func (eng *Engine) CheckLibraryUpdates(ctx context.Context, parentDir string) ([
 		}
 
 		gameDir := filepath.Join(absPath, entry.Name())
+		if detector.IsIgnoredLibraryDir(gameDir) {
+			continue
+		}
 		manifestsDir := filepath.Join(gameDir, "[Manifests]")
 		if _, err := os.Stat(manifestsDir); err != nil {
 			continue

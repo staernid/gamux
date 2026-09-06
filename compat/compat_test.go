@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/staernid/gamux/compat"
@@ -316,3 +317,154 @@ func TestLegacyProfileMigration(t *testing.T) {
 		t.Errorf("expected legacy profile %s to be deleted after migration", legacyProfile)
 	}
 }
+
+func TestArbitraryNestedSteamSettingsAndLoaderMode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// GBE Mock Repo
+	gbeDir := filepath.Join(tmpDir, "gbe_fork")
+	x64Release := filepath.Join(gbeDir, "win_release", "experimental", "x64")
+	_ = os.MkdirAll(x64Release, 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steam_api64.dll"), []byte("emulated_gbe_dll"), 0755)
+	_ = os.WriteFile(filepath.Join(x64Release, "steamclient64.dll"), []byte("emulated_steamclient_dll"), 0755)
+
+	loaderDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	_ = os.MkdirAll(loaderDir, 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient64.dll"), []byte("loader_steamclient64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "steamclient.dll"), []byte("loader_steamclient32"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer64.dll"), []byte("loader_overlay64"), 0755)
+	_ = os.WriteFile(filepath.Join(loaderDir, "GameOverlayRenderer.dll"), []byte("loader_overlay32"), 0755)
+
+	cfg := config.DefaultConfig()
+	cfg.GbeDir = gbeDir
+	cfg.OperatingMode = domain.ModeLoader
+
+	// Simulate nested Unreal Engine directory structure (like Retro Rewind)
+	gameDir := filepath.Join(tmpDir, "UnrealGame")
+	shippingExeDir := filepath.Join(gameDir, "SubGame", "Binaries", "Win64")
+	pluginLibDir := filepath.Join(gameDir, "Engine", "Binaries", "ThirdParty", "Steamworks", "Steamv153", "Win64")
+	_ = os.MkdirAll(shippingExeDir, 0755)
+	_ = os.MkdirAll(pluginLibDir, 0755)
+
+	rootExe := filepath.Join(gameDir, "Game.exe")
+	shippingExe := filepath.Join(shippingExeDir, "SubGame-Win64-Shipping.exe")
+	steamLib := filepath.Join(pluginLibDir, "steam_api64.dll")
+
+	_ = os.WriteFile(rootExe, []byte("MZ_ROOT"), 0755)
+	_ = os.WriteFile(shippingExe, []byte("MZ_SHIPPING"), 0755)
+	_ = os.WriteFile(steamLib, []byte("original_steam_api64"), 0755)
+
+	// Pre-existing nested steam_settings in shipping binary folder
+	preNestedSettings := filepath.Join(shippingExeDir, "steam_settings")
+	_ = os.MkdirAll(preNestedSettings, 0755)
+	_ = os.WriteFile(filepath.Join(preNestedSettings, "steam_appid.txt"), []byte("2986870"), 0644)
+	_ = os.WriteFile(filepath.Join(preNestedSettings, "force_language.txt"), []byte("spanish\n"), 0644)
+
+	// 1. Verify LoadProfile hydrates metadata from nested steam_settings
+	prof, err := compat.LoadProfile(gameDir)
+	if err != nil {
+		t.Fatalf("LoadProfile failed: %v", err)
+	}
+	if prof.AppID != "2986870" {
+		t.Errorf("expected hydrated AppID 2986870, got: %s", prof.AppID)
+	}
+	if prof.Language != "spanish" {
+		t.Errorf("expected hydrated Language spanish, got: %s", prof.Language)
+	}
+
+	game := domain.NewGame("Unreal Game", gameDir, "2986870", "win64")
+	game.ExePath = rootExe
+	game.LaunchCandidates = []domain.LaunchCandidate{
+		{Executable: shippingExe, Name: "Shipping"},
+	}
+
+	// 2. Apply Loader Mode
+	loaderProfile := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "2986870",
+		Platform:      "win64",
+		OperatingMode: domain.ModeLoader,
+		ExePath:       shippingExe,
+		Language:      "english",
+	}
+	if err := compat.Apply(context.Background(), cfg, game, loaderProfile, false); err != nil {
+		t.Fatalf("compat.Apply(loader) failed: %v", err)
+	}
+
+	// In Loader mode: original steam_api64.dll must remain pristine
+	libData, _ := os.ReadFile(steamLib)
+	if string(libData) != "original_steam_api64" {
+		t.Fatalf("original library was modified in loader mode: %s", string(libData))
+	}
+
+	// Loader assets must be deployed to root and candidate exe dirs
+	for _, dir := range []string{gameDir, shippingExeDir, pluginLibDir} {
+		clientDll := filepath.Join(dir, "steamclient64.dll")
+		if !util.FileExists(clientDll) {
+			t.Errorf("expected loader asset steamclient64.dll at %s", dir)
+		}
+		appIDTxt := filepath.Join(dir, "steam_appid.txt")
+		if !util.FileExists(appIDTxt) {
+			t.Errorf("expected steam_appid.txt at %s", dir)
+		}
+	}
+
+	// Force language must be synchronized across all steam_settings dirs
+	for _, dir := range []string{
+		filepath.Join(gameDir, "steam_settings"),
+		preNestedSettings,
+		filepath.Join(pluginLibDir, "steam_settings"),
+	} {
+		langFile := filepath.Join(dir, "force_language.txt")
+		if data, err := os.ReadFile(langFile); err != nil || strings.TrimSpace(string(data)) != "english" {
+			t.Errorf("expected synchronized force_language.txt in %s, got: %s (err: %v)", dir, string(data), err)
+		}
+	}
+
+	// 3. Transition to Portable Mode
+	portableProfile := &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "2986870",
+		Platform:      "win64",
+		OperatingMode: domain.ModePortable,
+		ExePath:       shippingExe,
+		Language:      "english",
+	}
+	if err := compat.Apply(context.Background(), cfg, game, portableProfile, false); err != nil {
+		t.Fatalf("compat.Apply(portable) failed: %v", err)
+	}
+
+	// In Portable mode: loader assets must be cleaned up
+	if util.FileExists(filepath.Join(gameDir, "steamclient64.dll")) {
+		t.Errorf("expected loader steamclient64.dll to be removed in portable mode")
+	}
+	if util.FileExists(filepath.Join(shippingExeDir, "steamclient64.dll")) {
+		t.Errorf("expected shipping loader steamclient64.dll to be removed in portable mode")
+	}
+
+	// Library replaced and backup created
+	newLibData, _ := os.ReadFile(steamLib)
+	if string(newLibData) != "emulated_gbe_dll" {
+		t.Errorf("expected emulated dll in portable mode, got: %s", string(newLibData))
+	}
+	backups, _ := filepath.Glob(filepath.Join(pluginLibDir, "*.ORIGINAL"))
+	if len(backups) == 0 {
+		t.Errorf("expected backup file in pluginLibDir")
+	}
+
+	// 4. Revert back to clean state
+	if _, err := compat.Revert(context.Background(), gameDir, false); err != nil {
+		t.Fatalf("compat.Revert failed: %v", err)
+	}
+	revertedLib, _ := os.ReadFile(steamLib)
+	if string(revertedLib) != "original_steam_api64" {
+		t.Errorf("expected restored original library after revert, got: %s", string(revertedLib))
+	}
+	if util.FileExists(filepath.Join(gameDir, "steam_settings")) {
+		t.Errorf("expected root steam_settings to be deleted after revert")
+	}
+	if util.FileExists(preNestedSettings) {
+		t.Errorf("expected nested steam_settings to be deleted after revert")
+	}
+}
+

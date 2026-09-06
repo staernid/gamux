@@ -106,6 +106,10 @@ export function GetPatchNote(arg1, arg2) {
   return window['go']['gui']['App']['GetPatchNote'](arg1, arg2);
 }
 
+export function GetRunningGames() {
+  return window['go']['gui']['App']['GetRunningGames']();
+}
+
 export function GetTask(arg1) {
   return window['go']['gui']['App']['GetTask'](arg1);
 }
@@ -228,6 +232,10 @@ export function SelectFile(arg1, arg2, arg3) {
 
 export function SetTransferSpeedLimit(arg1) {
   return window['go']['gui']['App']['SetTransferSpeedLimit'](arg1);
+}
+
+export function Shutdown(arg1) {
+  return window['go']['gui']['App']['Shutdown'](arg1);
 }
 
 export function StartDownloadTransfer(arg1) {

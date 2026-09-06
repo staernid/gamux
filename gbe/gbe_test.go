@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
 )
 
@@ -578,5 +580,126 @@ func TestRevert_PreservesGamuxProfile(t *testing.T) {
 		t.Errorf("expected steam_settings directory to be removed during Revert")
 	}
 }
+
+func TestSyncEmulatorSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "TestGame")
+	binDir := filepath.Join(gameDir, "bin")
+	_ = os.MkdirAll(binDir, 0755)
+	dummyExe := filepath.Join(binDir, "game.exe")
+	_ = os.WriteFile(dummyExe, []byte("exe"), 0755)
+
+	p := &domain.LaunchProfile{
+		GameDir:        gameDir,
+		AppID:          "123456",
+		Language:       "French",
+		DisableOverlay: util.Ptr(true),
+		OfflineMode:    util.Ptr(true),
+		ExePath:        dummyExe,
+	}
+
+	cfg := config.DefaultConfig()
+
+	// Dry run shouldn't write files
+	if err := SyncEmulatorSettings(gameDir, p, cfg, nil, true); err != nil {
+		t.Fatalf("SyncEmulatorSettings dry-run failed: %v", err)
+	}
+	if util.FileExists(filepath.Join(gameDir, "steam_settings", "steam_appid.txt")) {
+		t.Errorf("expected dry-run to not create files")
+	}
+
+	// Real run
+	if err := SyncEmulatorSettings(gameDir, p, cfg, nil, false); err != nil {
+		t.Fatalf("SyncEmulatorSettings failed: %v", err)
+	}
+
+	// Verify steam_appid.txt in root and steam_settings
+	appIDFile := filepath.Join(gameDir, "steam_settings", "steam_appid.txt")
+	data, err := os.ReadFile(appIDFile)
+	if err != nil || string(data) != "123456" {
+		t.Errorf("expected steam_appid.txt 123456, got: %s (err: %v)", string(data), err)
+	}
+
+	rootAppIDFile := filepath.Join(gameDir, "steam_appid.txt")
+	if data, err := os.ReadFile(rootAppIDFile); err != nil || string(data) != "123456" {
+		t.Errorf("expected root steam_appid.txt 123456, got: %s (err: %v)", string(data), err)
+	}
+
+	// Verify force_language.txt
+	langFile := filepath.Join(gameDir, "steam_settings", "force_language.txt")
+	if data, err := os.ReadFile(langFile); err != nil || string(data) != "french\n" {
+		t.Errorf("expected force_language.txt french\\n, got: %s (err: %v)", string(data), err)
+	}
+
+	// Verify configs.overlay.ini
+	overlayFile := filepath.Join(gameDir, "steam_settings", "configs.overlay.ini")
+	data, err = os.ReadFile(overlayFile)
+	if err != nil || !strings.Contains(string(data), "enable_experimental_overlay=0") {
+		t.Errorf("expected configs.overlay.ini enable_experimental_overlay=0, got: %s (err: %v)", string(data), err)
+	}
+	if util.FileExists(filepath.Join(gameDir, "steam_settings", "disable_overlay.txt")) {
+		t.Errorf("expected legacy disable_overlay.txt to not exist")
+	}
+
+	// Verify offline.txt
+	offlineFile := filepath.Join(gameDir, "steam_settings", "offline.txt")
+	if data, err := os.ReadFile(offlineFile); err != nil || string(data) != "1\n" {
+		t.Errorf("expected offline.txt 1\\n, got: %s (err: %v)", string(data), err)
+	}
+
+	// Test enabling overlay / clearing options
+	p.Language = ""
+	p.DisableOverlay = util.Ptr(false)
+	p.OfflineMode = util.Ptr(false)
+	if err := SyncEmulatorSettings(gameDir, p, cfg, nil, false); err != nil {
+		t.Fatalf("SyncEmulatorSettings clear failed: %v", err)
+	}
+
+	if util.FileExists(langFile) {
+		t.Errorf("expected force_language.txt to be removed when Language is empty")
+	}
+	data, err = os.ReadFile(overlayFile)
+	if err != nil || !strings.Contains(string(data), "enable_experimental_overlay=1") {
+		t.Errorf("expected configs.overlay.ini enable_experimental_overlay=1 when overlay enabled, got: %s (err: %v)", string(data), err)
+	}
+	if util.FileExists(offlineFile) {
+		t.Errorf("expected offline.txt to be removed when OfflineMode is false")
+	}
+}
+
+func TestSetupWinePrefixSteamDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	prefixDir := filepath.Join(tmpDir, "pfx")
+	gbeDir := filepath.Join(tmpDir, "gbe")
+	experimentalDir := filepath.Join(gbeDir, "win_release", "steamclient_experimental")
+	_ = os.MkdirAll(experimentalDir, 0755)
+
+	_ = os.WriteFile(filepath.Join(experimentalDir, "steamclient64.dll"), []byte("sc64"), 0644)
+	_ = os.WriteFile(filepath.Join(experimentalDir, "steamclient.dll"), []byte("sc32"), 0644)
+	_ = os.WriteFile(filepath.Join(experimentalDir, "GameOverlayRenderer64.dll"), []byte("gor64"), 0644)
+	_ = os.WriteFile(filepath.Join(experimentalDir, "GameOverlayRenderer.dll"), []byte("gor32"), 0644)
+
+	gameSettings := filepath.Join(tmpDir, "game", "steam_settings")
+	_ = os.MkdirAll(gameSettings, 0755)
+
+	if err := SetupWinePrefixSteamDir(prefixDir, gbeDir, gameSettings, "480", false); err != nil {
+		t.Fatalf("SetupWinePrefixSteamDir failed: %v", err)
+	}
+
+	steamDir := filepath.Join(prefixDir, "drive_c", "Program Files (x86)", "Steam")
+	if !util.FileExists(filepath.Join(steamDir, "steamclient64.dll")) {
+		t.Errorf("expected steamclient64.dll in prefix steam directory")
+	}
+	if !util.FileExists(filepath.Join(steamDir, "GameOverlayRenderer64.dll")) {
+		t.Errorf("expected GameOverlayRenderer64.dll in prefix steam directory")
+	}
+	if !util.FileExists(filepath.Join(steamDir, "steam_appid.txt")) {
+		t.Errorf("expected steam_appid.txt in prefix steam directory")
+	}
+	if !util.DirExists(filepath.Join(steamDir, "steam_settings")) {
+		t.Errorf("expected steam_settings symlink/dir in prefix steam directory")
+	}
+}
+
 
 

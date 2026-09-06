@@ -215,5 +215,48 @@ describe('drawerDraft Store', () => {
       })
     );
   });
+
+  it('dynamically preserves and maps arbitrary new profile properties without manual field unpacking', async () => {
+    const saveSpy = vi.spyOn(AppAPI, 'saveLaunchProfile').mockResolvedValue({});
+    vi.spyOn(AppAPI, 'inspectGame').mockResolvedValue(mockGame);
+
+    const gameWithFutureProps = {
+      ...mockGame,
+      launchProfile: {
+        ...mockGame.launchProfile,
+        gamescope_fps: 144,
+        gamescope_width: 2560,
+        gamescope_height: 1440,
+        working_dir: '/custom/working/dir',
+        future_arbitrary_setting: 'experimental_value',
+      },
+    };
+
+    drawerDraft.init(gameWithFutureProps, mockGlobalConfig);
+    const state = get(drawerDraft);
+
+    expect(state.gamescopeFps).toBe(144);
+    expect(state.gamescopeWidth).toBe(2560);
+    expect(state.gamescopeHeight).toBe(1440);
+    expect(state.workingDir).toBe('/custom/working/dir');
+    expect(state.futureArbitrarySetting).toBe('experimental_value');
+
+    // Mutate and save
+    drawerDraft.setField('futureArbitrarySetting', 'updated_value');
+    drawerDraft.setField('gamescopeFps', 165);
+    await drawerDraft.save(gameWithFutureProps);
+
+    expect(saveSpy).toHaveBeenLastCalledWith(
+      gameWithFutureProps.gameDir,
+      expect.objectContaining({
+        gamescope_fps: 165,
+        gamescope_width: 2560,
+        gamescope_height: 1440,
+        working_dir: '/custom/working/dir',
+        future_arbitrary_setting: 'updated_value',
+      })
+    );
+  });
 });
+
 

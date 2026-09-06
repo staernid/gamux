@@ -6,6 +6,7 @@
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
   import { AppAPI } from '../../../api/app.js';
+  import { generateRandomSteamID as createRandomSteamID, isValidSteamID64 } from '../../../utils/steam.js';
 
   export let cfgDraft = {
     multiseat: {
@@ -47,32 +48,31 @@
 
   // Ensure nested multiseat defaults exist
   $: if (!cfgDraft.multiseat) {
-    cfgDraft.multiseat = {
-      player2_account_name: 'PlayerTwo',
-      player2_account_steamid: '76561198998877665',
-      player2_language: 'english',
-      player2_ip_country: 'US',
-      player2_wine_prefix: '',
-      default_seat1_mode: 'local',
-      default_seat2_mode: 'local',
-      default_layout: 'dual_monitor',
-      broadcast_relay_enabled: true,
-      seat1_gamepad: 'auto',
-      seat2_gamepad: 'auto',
-      seat1_keyboard: 'auto',
-      seat2_keyboard: 'auto',
-      seat1_mouse: 'auto',
-      seat2_mouse: 'auto',
-      seat2_force_grab_cursor: false,
-      seat2_grab_keyboard: false,
-      seat2_show_cursor: true,
-      seat2_compositor: 'auto',
-      seat1_display_index: 0,
-      seat2_display_index: 1,
-      sunshine_port_p1: 47989,
-      sunshine_port_p2: 48010,
-    };
+    cfgDraft.multiseat = {};
   }
+  $: if (cfgDraft.multiseat.player2_account_name === undefined) cfgDraft.multiseat.player2_account_name = 'PlayerTwo';
+  $: if (cfgDraft.multiseat.player2_account_steamid === undefined) cfgDraft.multiseat.player2_account_steamid = '76561198998877665';
+  $: if (cfgDraft.multiseat.player2_language === undefined) cfgDraft.multiseat.player2_language = 'english';
+  $: if (cfgDraft.multiseat.player2_ip_country === undefined) cfgDraft.multiseat.player2_ip_country = 'US';
+  $: if (cfgDraft.multiseat.player2_wine_prefix === undefined) cfgDraft.multiseat.player2_wine_prefix = '';
+  $: if (cfgDraft.multiseat.default_seat1_mode === undefined) cfgDraft.multiseat.default_seat1_mode = 'local';
+  $: if (cfgDraft.multiseat.default_seat2_mode === undefined) cfgDraft.multiseat.default_seat2_mode = 'local';
+  $: if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
+  $: if (cfgDraft.multiseat.broadcast_relay_enabled === undefined) cfgDraft.multiseat.broadcast_relay_enabled = true;
+  $: if (cfgDraft.multiseat.seat1_gamepad === undefined) cfgDraft.multiseat.seat1_gamepad = 'auto';
+  $: if (cfgDraft.multiseat.seat2_gamepad === undefined) cfgDraft.multiseat.seat2_gamepad = 'auto';
+  $: if (cfgDraft.multiseat.seat1_keyboard === undefined) cfgDraft.multiseat.seat1_keyboard = 'auto';
+  $: if (cfgDraft.multiseat.seat2_keyboard === undefined) cfgDraft.multiseat.seat2_keyboard = 'auto';
+  $: if (cfgDraft.multiseat.seat1_mouse === undefined) cfgDraft.multiseat.seat1_mouse = 'auto';
+  $: if (cfgDraft.multiseat.seat2_mouse === undefined) cfgDraft.multiseat.seat2_mouse = 'auto';
+  $: if (cfgDraft.multiseat.seat2_force_grab_cursor === undefined) cfgDraft.multiseat.seat2_force_grab_cursor = false;
+  $: if (cfgDraft.multiseat.seat2_grab_keyboard === undefined) cfgDraft.multiseat.seat2_grab_keyboard = false;
+  $: if (cfgDraft.multiseat.seat2_show_cursor === undefined) cfgDraft.multiseat.seat2_show_cursor = true;
+  $: if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'auto';
+  $: if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
+  $: if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 1;
+  $: if (cfgDraft.multiseat.sunshine_port_p1 === undefined) cfgDraft.multiseat.sunshine_port_p1 = 47989;
+  $: if (cfgDraft.multiseat.sunshine_port_p2 === undefined) cfgDraft.multiseat.sunshine_port_p2 = 48010;
 
   onMount(() => {
     multiseatStore.loadCapabilities();
@@ -129,7 +129,7 @@
 
   let customCountryCodeP2 = '';
   $: isCustomCountryP2 = !countriesList.some(c => c.value === cfgDraft.multiseat?.player2_ip_country) && cfgDraft.multiseat?.player2_ip_country !== '';
-  $: isValidSteamIdP2 = /^\d{17}$/.test((cfgDraft.multiseat?.player2_account_steamid || '').trim());
+  $: isValidSteamIdP2 = isValidSteamID64(cfgDraft.multiseat?.player2_account_steamid);
   $: hasSteamIdCollision = Boolean(
     cfgDraft.multiseat?.player2_account_steamid &&
     userCfgDraft?.account_steamid &&
@@ -144,21 +144,15 @@
   ];
 
   function generateRandomSteamID() {
-    const base = BigInt('76561197960265728');
-    const randomOffset = BigInt(Math.floor(Math.random() * 1000000000));
-    const newId = (base + randomOffset).toString();
-
-    cfgDraft.multiseat.player2_account_steamid = newId;
+    cfgDraft.multiseat.player2_account_steamid = createRandomSteamID();
     cfgDraft = { ...cfgDraft };
   }
 
   function quickSetupPlayer2() {
-    const base = BigInt('76561197960265728');
-    const randomOffset = BigInt(Math.floor(Math.random() * 1000000000));
     cfgDraft.multiseat = {
       ...cfgDraft.multiseat,
       player2_account_name: (userCfgDraft.account_name || 'Player') + '-Coop',
-      player2_account_steamid: (base + randomOffset).toString(),
+      player2_account_steamid: createRandomSteamID(),
       player2_language: userCfgDraft.language || 'english',
       player2_ip_country: userCfgDraft.ip_country || 'US'
     };
@@ -606,7 +600,7 @@
     <div class="space-y-4">
       <div class="flex items-center justify-between pb-2 border-b border-surface-border/50">
         <p class="text-xs text-neutral-400 leading-relaxed">
-          Enables 2-player local co-op for games lacking controller support. Player 2's devices are grabbed exclusively via evdev (<code class="font-mono text-neutral-300">EVIOCGRAB</code>) and injected into Seat 2's dedicated Cage Wayland compositor (<code class="font-mono text-neutral-300">zwlr_virtual_pointer_v1</code> and <code class="font-mono text-neutral-300">zwp_virtual_keyboard_v1</code>). Cage backend is auto-selected when dedicated KBM is configured.
+          Enables 2-player local co-op for games lacking controller support. Player 2's devices are grabbed exclusively via evdev (<code class="font-mono text-neutral-300">EVIOCGRAB</code>) and injected directly into Gamescope via libei (<code class="font-mono text-neutral-300">gamescope-*-ei</code>). Gamescope with EIS redirection is auto-selected when dedicated KBM is configured.
         </p>
         <button
           type="button"
@@ -691,7 +685,8 @@
               <div class="text-3xs text-neutral-400">Relative mouse mode for 3D/FPS camera control (--force-grab-cursor)</div>
             </div>
             <SeamlessSwitch
-              checked={cfgDraft.multiseat.seat2_force_grab_cursor}
+              bind:value={cfgDraft.multiseat.seat2_force_grab_cursor}
+              tooltip="Force Grab Cursor"
               on:change={(e) => { cfgDraft.multiseat.seat2_force_grab_cursor = e.detail; cfgDraft = { ...cfgDraft }; }}
             />
           </div>
@@ -702,7 +697,8 @@
               <div class="text-3xs text-neutral-400">Captures all keypresses inside the window to prevent desktop shortcuts</div>
             </div>
             <SeamlessSwitch
-              checked={cfgDraft.multiseat.seat2_grab_keyboard}
+              bind:value={cfgDraft.multiseat.seat2_grab_keyboard}
+              tooltip="Grab Keyboard"
               on:change={(e) => { cfgDraft.multiseat.seat2_grab_keyboard = e.detail; cfgDraft = { ...cfgDraft }; }}
             />
           </div>
@@ -713,7 +709,8 @@
               <div class="text-3xs text-neutral-400">Enforces visible pointer via WLR_NO_HARDWARE_CURSORS=1</div>
             </div>
             <SeamlessSwitch
-              checked={cfgDraft.multiseat.seat2_show_cursor}
+              bind:value={cfgDraft.multiseat.seat2_show_cursor}
+              tooltip="Software Cursor"
               on:change={(e) => { cfgDraft.multiseat.seat2_show_cursor = e.detail; cfgDraft = { ...cfgDraft }; }}
             />
           </div>
@@ -721,17 +718,16 @@
           <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
             <div class="space-y-0.5 max-w-[170px]">
               <div class="text-2xs font-bold text-neutral-200">Compositor Backend</div>
-              <div class="text-3xs text-neutral-400 leading-relaxed">Cage auto-selected for dual KBM virtual input</div>
+              <div class="text-3xs text-neutral-400 leading-relaxed">Gamescope EIS auto-selected for dual KBM virtual input</div>
             </div>
             <select
               bind:value={cfgDraft.multiseat.seat2_compositor}
               on:change={() => { cfgDraft = { ...cfgDraft }; }}
               class="bg-surface-base border border-surface-border rounded-lg px-2 py-1 text-2xs text-white outline-none focus:border-neutral-400 cursor-pointer"
             >
-              <option value="auto">Auto (Cage for KBM, Gamescope for Gamepad)</option>
-              <option value="cage">Cage (Wayland Virtual Input)</option>
-              <option value="gamescope">Gamescope (Dedicated)</option>
-              <option value="cage_gamescope">Nested (Cage + Gamescope)</option>
+              <option value="auto">Auto (Gamescope EIS, Cage fallback)</option>
+              <option value="gamescope">Gamescope (Direct EIS)</option>
+              <option value="cage">Cage (Standalone Kiosk)</option>
             </select>
           </div>
         </div>
@@ -750,7 +746,8 @@
           </div>
         </div>
         <SeamlessSwitch
-          checked={cfgDraft.multiseat.broadcast_relay_enabled}
+          bind:value={cfgDraft.multiseat.broadcast_relay_enabled}
+          tooltip="UDP Broadcast Relay"
           on:change={(e) => { cfgDraft.multiseat.broadcast_relay_enabled = e.detail; cfgDraft = { ...cfgDraft }; }}
         />
       </div>

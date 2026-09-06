@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/util"
 )
 
@@ -99,58 +99,86 @@ func LoadProfile(gameDir string) (*domain.LaunchProfile, error) {
 
 // hydrateFallbacks checks on-disk GBE/ACF metadata files if fields are missing.
 func hydrateFallbacks(p *domain.LaunchProfile, gameDir string) {
-	settingsDir := filepath.Join(gameDir, "steam_settings")
+	// Discover all steam_settings dirs in the game tree
+	settingsDirs := []string{filepath.Join(gameDir, "steam_settings")}
+	_ = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			lower := strings.ToLower(d.Name())
+			if path != gameDir && (lower == "drive_c" || lower == "dosdevices" || lower == "pfx" || lower == ".git" || lower == ".gamux" || lower == ".gamux_backup" || lower == "node_modules") {
+				return filepath.SkipDir
+			}
+			if lower == "steam_settings" && path != settingsDirs[0] {
+				settingsDirs = append(settingsDirs, path)
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
 
 	// Read steam_appid.txt
 	if p.AppID == "" {
-		appIDFile := filepath.Join(settingsDir, "steam_appid.txt")
-		if !util.FileExists(appIDFile) {
-			appIDFile = filepath.Join(gameDir, "steam_appid.txt")
+		for _, sDir := range settingsDirs {
+			appIDFile := filepath.Join(sDir, "steam_appid.txt")
+			if data, err := os.ReadFile(appIDFile); err == nil {
+				val := strings.TrimSpace(string(data))
+				if val != "" && val != "0" {
+					p.AppID = val
+					break
+				}
+			}
 		}
-		if data, err := os.ReadFile(appIDFile); err == nil {
-			p.AppID = strings.TrimSpace(string(data))
+		if p.AppID == "" {
+			rootAppIDFile := filepath.Join(gameDir, "steam_appid.txt")
+			if data, err := os.ReadFile(rootAppIDFile); err == nil {
+				val := strings.TrimSpace(string(data))
+				if val != "" && val != "0" {
+					p.AppID = val
+				}
+			}
 		}
 	}
 
 	// Read force_language.txt
 	if p.Language == "" {
-		langFile := filepath.Join(settingsDir, "force_language.txt")
-		if data, err := os.ReadFile(langFile); err == nil {
-			p.Language = strings.TrimSpace(string(data))
+		for _, sDir := range settingsDirs {
+			langFile := filepath.Join(sDir, "force_language.txt")
+			if data, err := os.ReadFile(langFile); err == nil {
+				val := strings.TrimSpace(string(data))
+				if val != "" {
+					p.Language = val
+					break
+				}
+			}
 		}
 	}
 
-	// Read disable_overlay.txt
+	// Read overlay configuration from configs.overlay.ini (or legacy disable_overlay.txt)
 	if p.DisableOverlay == nil {
-		if util.FileExists(filepath.Join(settingsDir, "disable_overlay.txt")) {
-			p.DisableOverlay = util.Ptr(true)
+		for _, sDir := range settingsDirs {
+			if enabled, ok := gbe.IsOverlayEnabled(sDir); ok {
+				p.DisableOverlay = util.Ptr(!enabled)
+				break
+			}
 		}
 	}
 
 	// Read offline.txt
 	if p.OfflineMode == nil {
-		if util.FileExists(filepath.Join(settingsDir, "offline.txt")) {
-			p.OfflineMode = util.Ptr(true)
+		for _, sDir := range settingsDirs {
+			if util.FileExists(filepath.Join(sDir, "offline.txt")) {
+				p.OfflineMode = util.Ptr(true)
+				break
+			}
 		}
 	}
 
 	// Read ColdClientLoader.ini Exe target if ExePath is still empty
 	if p.ExePath == "" {
-		iniPath := filepath.Join(gameDir, "ColdClientLoader.ini")
-		if data, err := os.ReadFile(iniPath); err == nil {
-			reIniExe := regexp.MustCompile(`(?i)^\s*Exe\s*=\s*(.+)`)
-			for _, line := range strings.Split(string(data), "\n") {
-				if m := reIniExe.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 1 {
-					realExe := strings.TrimSpace(m[1])
-					if !filepath.IsAbs(realExe) {
-						realExe = filepath.Join(gameDir, realExe)
-					}
-					if util.FileExists(realExe) {
-						p.ExePath = realExe
-						break
-					}
-				}
-			}
+		if realExe := util.ParseColdClientLoaderExe(gameDir); realExe != "" {
+			p.ExePath = realExe
 		}
 	}
 
@@ -185,51 +213,7 @@ func SaveProfile(p *domain.LaunchProfile) error {
 			if data, err := os.ReadFile(profilePath); err == nil {
 				var existing domain.LaunchProfile
 				if err := json.Unmarshal(data, &existing); err == nil {
-					if p.InstalledAt <= 0 && existing.InstalledAt > 0 {
-						p.InstalledAt = existing.InstalledAt
-					}
-					if p.PlaytimeSeconds <= 0 && existing.PlaytimeSeconds > 0 {
-						p.PlaytimeSeconds = existing.PlaytimeSeconds
-					}
-					if p.LastPlayed <= 0 && existing.LastPlayed > 0 {
-						p.LastPlayed = existing.LastPlayed
-					}
-					if p.CustomCoverURL == "" && existing.CustomCoverURL != "" {
-						p.CustomCoverURL = existing.CustomCoverURL
-					}
-					if p.CustomBannerURL == "" && existing.CustomBannerURL != "" {
-						p.CustomBannerURL = existing.CustomBannerURL
-					}
-					if p.CustomHeroURL == "" && existing.CustomHeroURL != "" {
-						p.CustomHeroURL = existing.CustomHeroURL
-					}
-					if p.CustomLogoURL == "" && existing.CustomLogoURL != "" {
-						p.CustomLogoURL = existing.CustomLogoURL
-					}
-					if p.CustomIconURL == "" && existing.CustomIconURL != "" {
-						p.CustomIconURL = existing.CustomIconURL
-					}
-					if !p.LockedArtwork && existing.LockedArtwork {
-						p.LockedArtwork = existing.LockedArtwork
-					}
-					if p.MetadataProvider == "" && existing.MetadataProvider != "" {
-						p.MetadataProvider = existing.MetadataProvider
-					}
-					if p.MetadataID == "" && existing.MetadataID != "" {
-						p.MetadataID = existing.MetadataID
-					}
-					if p.StoreAppID == "" && existing.StoreAppID != "" {
-						p.StoreAppID = existing.StoreAppID
-					}
-					if p.GOGID == "" && existing.GOGID != "" {
-						p.GOGID = existing.GOGID
-					}
-					if p.SGDBID == "" && existing.SGDBID != "" {
-						p.SGDBID = existing.SGDBID
-					}
-					if p.Store == "" && existing.Store != "" {
-						p.Store = existing.Store
-					}
+					p.MergeMetadataAndStatsFrom(&existing)
 					break
 				}
 			}
@@ -370,7 +354,7 @@ func UnlinkMetadata(gameDir string) error {
 	return SaveProfileDirect(p)
 }
 
-// SyncSettings updates on-disk Goldberg settings (steam_appid.txt, force_language.txt) to match the LaunchProfile.
+// SyncSettings updates on-disk Goldberg settings (steam_appid.txt, force_language.txt, etc.) across all steam_settings dirs.
 func SyncSettings(ctx context.Context, p *domain.LaunchProfile, cfg *config.Config) error {
 	if p == nil {
 		return fmt.Errorf("profile cannot be nil")
@@ -384,46 +368,6 @@ func SyncSettings(ctx context.Context, p *domain.LaunchProfile, cfg *config.Conf
 		return fmt.Errorf("save profile: %w", err)
 	}
 
-	settingsDir := filepath.Join(p.GameDir, "steam_settings")
-	_ = os.MkdirAll(settingsDir, 0755)
-
-	// 2. Sync AppID to steam_appid.txt if set
-	if p.AppID != "" && p.AppID != "0" {
-		_ = os.WriteFile(filepath.Join(settingsDir, "steam_appid.txt"), []byte(p.AppID), 0644)
-		_ = os.WriteFile(filepath.Join(p.GameDir, "steam_appid.txt"), []byte(p.AppID), 0644)
-	}
-
-	// 3. Sync Language to force_language.txt
-	langFile := filepath.Join(settingsDir, "force_language.txt")
-	if p.Language != "" && p.Language != "auto" {
-		_ = os.WriteFile(langFile, []byte(strings.ToLower(p.Language)+"\n"), 0644)
-	} else {
-		_ = os.Remove(langFile)
-	}
-
-	// 4. Sync DisableOverlay
-	overlayFile := filepath.Join(settingsDir, "disable_overlay.txt")
-	disableOverlay := cfg.DisableOverlay
-	if p.DisableOverlay != nil {
-		disableOverlay = *p.DisableOverlay
-	}
-	if disableOverlay {
-		_ = os.WriteFile(overlayFile, []byte("1\n"), 0644)
-	} else {
-		_ = os.Remove(overlayFile)
-	}
-
-	// 5. Sync OfflineMode
-	offlineFile := filepath.Join(settingsDir, "offline.txt")
-	offlineMode := cfg.OfflineMode
-	if p.OfflineMode != nil {
-		offlineMode = *p.OfflineMode
-	}
-	if offlineMode {
-		_ = os.WriteFile(offlineFile, []byte("1\n"), 0644)
-	} else {
-		_ = os.Remove(offlineFile)
-	}
-
-	return nil
+	// 2. Synchronize emulator settings across steam_settings directories and root
+	return gbe.SyncEmulatorSettings(p.GameDir, p, cfg, nil, false)
 }

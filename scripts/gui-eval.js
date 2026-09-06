@@ -389,6 +389,7 @@ async function main() {
       } catch {}
     }
   }
+  process.exit(0);
 }
 
 main().catch((err) => {

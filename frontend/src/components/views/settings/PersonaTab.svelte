@@ -2,6 +2,7 @@
   import SettingSection from '../../common/SettingSection.svelte';
   import GhostInput from '../../common/GhostInput.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
+  import { generateRandomSteamID as createRandomSteamID, isValidSteamID64 } from '../../../utils/steam.js';
 
   export let userCfgDraft = {
     account_name: 'GamuxPlayer',
@@ -16,16 +17,12 @@
   let customCountryCodeP1 = '';
 
   $: isCustomCountryP1 = !countriesList.some(c => c.value === userCfgDraft.ip_country) && userCfgDraft.ip_country !== '';
-  $: isValidSteamIdP1 = /^\d{17}$/.test((userCfgDraft.account_steamid || '').trim());
+  $: isValidSteamIdP1 = isValidSteamID64(userCfgDraft.account_steamid);
 
   function generateRandomSteamID() {
-    const base = BigInt('76561197960265728');
-    const randomOffset = BigInt(Math.floor(Math.random() * 1000000000));
-    const newId = (base + randomOffset).toString();
-
     userCfgDraft = {
       ...userCfgDraft,
-      account_steamid: newId
+      account_steamid: createRandomSteamID()
     };
   }
 

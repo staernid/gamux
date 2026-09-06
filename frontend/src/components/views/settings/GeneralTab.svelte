@@ -12,6 +12,7 @@
   import SettingSection from '../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
+  import { UI_SCALE_OPTIONS, LAUNCH_BEHAVIOR_OPTIONS } from '../../../constants/options.js';
 
   export let cfgDraft;
 
@@ -22,19 +23,8 @@
   let sfxVolume = getSfxVolume();
   let sfxMuteInBackground = isMuteInBackground();
 
-  const uiScaleOptions = [
-    { value: 14, label: '14px — Compact' },
-    { value: 16, label: '16px — Standard' },
-    { value: 18, label: '18px — Balanced (Default)' },
-    { value: 20, label: '20px — Handheld (Deck)' },
-    { value: 24, label: '24px — Large (TV / Couch)' }
-  ];
-
-  const launchBehaviorOptions = [
-    { value: 'keep', label: 'Keep Window Open (Default)' },
-    { value: 'minimize', label: 'Minimize to Taskbar' },
-    { value: 'hide', label: 'Hide Window (Restore on Exit)' }
-  ];
+  const uiScaleOptions = UI_SCALE_OPTIONS;
+  const launchBehaviorOptions = LAUNCH_BEHAVIOR_OPTIONS;
 
   const standardSpeedPresets = [0, 5242880, 10485760, 26214400, 52428800, 104857600];
 

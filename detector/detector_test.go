@@ -367,6 +367,70 @@ func TestDetect_EngineTopologies(t *testing.T) {
 		}
 	})
 
+	t.Run("UMU Seat Prefix umu-p2 Rejection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		umuP2Dir := filepath.Join(tmpDir, "umu-p2")
+		// Simulate umu-p2 prefix container with umu-default and per-game prefix
+		_ = os.MkdirAll(filepath.Join(umuP2Dir, "umu-default", "drive_c", "windows"), 0755)
+		_ = os.WriteFile(filepath.Join(umuP2Dir, "umu-default", "drive_c", "windows", "notepad.exe"), []byte("exe"), 0755)
+		_ = os.MkdirAll(filepath.Join(umuP2Dir, "70", "drive_c", "windows"), 0755)
+		_ = os.WriteFile(filepath.Join(umuP2Dir, "70", "system.reg"), []byte("reg"), 0644)
+
+		if !IsRunnerPrefixDir(umuP2Dir) {
+			t.Fatalf("expected IsRunnerPrefixDir(umu-p2) to be true")
+		}
+		if !IsIgnoredLibraryDir(umuP2Dir) {
+			t.Fatalf("expected IsIgnoredLibraryDir(umu-p2) to be true")
+		}
+
+		_, err := Detect(context.Background(), umuP2Dir)
+		if err == nil {
+			t.Fatalf("expected Detect to reject runner prefix directory 'umu-p2', but got nil error")
+		}
+	})
+
+	t.Run("IsIgnoredLibraryDir and IsRunnerPrefixDir Recognition", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Prefixes
+		testCases := []struct {
+			path     string
+			isPrefix bool
+			isIgnore bool
+		}{
+			{"/home/user/Games/umu", true, true},
+			{"/home/user/Games/umu-p2", true, true},
+			{"/home/user/Games/umu-p3", true, true},
+			{"/home/user/Games/wine-staging", true, true},
+			{"/home/user/Games/proton-ge", true, true},
+			{"/home/user/Games/prefixes", true, true},
+			{"/home/user/Games/pfx-test", true, true},
+			{"/home/user/Games/art", false, true},
+			{"/home/user/Games/backups", false, true},
+			{"/home/user/Games/.gamux", false, true},
+			{"/home/user/Games/Cyberpunk 2077", false, false},
+			{"/home/user/Games/Half-Life 2", false, false},
+		}
+
+		for _, tc := range testCases {
+			gotPrefix := IsRunnerPrefixDir(tc.path)
+			if gotPrefix != tc.isPrefix {
+				t.Errorf("IsRunnerPrefixDir(%s) = %v, want %v", tc.path, gotPrefix, tc.isPrefix)
+			}
+			gotIgnore := IsIgnoredLibraryDir(tc.path)
+			if gotIgnore != tc.isIgnore {
+				t.Errorf("IsIgnoredLibraryDir(%s) = %v, want %v", tc.path, gotIgnore, tc.isIgnore)
+			}
+		}
+
+		// Container with umu-default inside an arbitrary folder name
+		customDir := filepath.Join(tmpDir, "custom-wine-container")
+		_ = os.MkdirAll(filepath.Join(customDir, "umu-default"), 0755)
+		if !IsRunnerPrefixDir(customDir) {
+			t.Errorf("expected custom-wine-container containing umu-default to be detected as prefix dir")
+		}
+	})
+
 	t.Run("Skip Drive C Subfolder During Game Inspection", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		gameDir := filepath.Join(tmpDir, "MySporeGame")

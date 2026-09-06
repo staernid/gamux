@@ -65,9 +65,13 @@ var applyCommand = &cli.Command{
 		if status != nil {
 			gameName = status.Name
 		}
+		targetGame := status
+		if targetGame == nil {
+			targetGame = domain.NewGame(gameName, opts.Path, "", "")
+		}
 		pctx := &pipeline.Context{
 			Options:  opts,
-			Game:     domain.NewGame(gameName, opts.Path, "", ""),
+			Game:     targetGame,
 			Config:   eng.Config,
 			EventBus: eng.EventBus,
 		}

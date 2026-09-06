@@ -1045,6 +1045,66 @@ func TestEngine_SetTransferSpeedLimit_PreservesExistingConfig(t *testing.T) {
 	}
 }
 
+func TestEngine_UpdateConfig_PreservesMultiseatSupervisor(t *testing.T) {
+	cfg := config.DefaultConfig()
+	eng := New(cfg)
+	origSup := eng.Multiseat
+	if origSup == nil {
+		t.Fatal("expected eng.Multiseat to be initialized")
+	}
+
+	newCfg := config.DefaultConfig()
+	newCfg.GamescopeWidth = 1920
+	eng.UpdateConfig(newCfg)
+
+	if eng.Multiseat != origSup {
+		t.Errorf("expected eng.Multiseat instance to be preserved across UpdateConfig, got a new instance")
+	}
+}
+
+func TestEngine_BatchInspect_IgnoresPrefixesAndUtilityDirs(t *testing.T) {
+	tmpLib := t.TempDir()
+
+	// 1. Valid Game
+	gameDir := filepath.Join(tmpLib, "Portal 2")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "portal2.exe"), []byte("MZDummyExe"), 0755)
+
+	// 2. umu-p2 runner prefix directory
+	umuP2Dir := filepath.Join(tmpLib, "umu-p2")
+	_ = os.MkdirAll(filepath.Join(umuP2Dir, "umu-default", "drive_c", "windows"), 0755)
+	_ = os.WriteFile(filepath.Join(umuP2Dir, "umu-default", "drive_c", "windows", "notepad.exe"), []byte("MZNotepad"), 0755)
+	_ = os.MkdirAll(filepath.Join(umuP2Dir, "620", "drive_c"), 0755)
+	_ = os.WriteFile(filepath.Join(umuP2Dir, "620", "system.reg"), []byte("reg"), 0644)
+
+	// 3. umu runner prefix directory
+	umuDir := filepath.Join(tmpLib, "umu")
+	_ = os.MkdirAll(filepath.Join(umuDir, "umu-default", "drive_c"), 0755)
+
+	// 4. Utility directories
+	_ = os.MkdirAll(filepath.Join(tmpLib, "art"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpLib, "backups"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpLib, ".gamux"), 0755)
+
+	eng := New(config.DefaultConfig())
+	statuses, err := eng.BatchInspect(context.Background(), tmpLib)
+	if err != nil {
+		t.Fatalf("BatchInspect failed: %v", err)
+	}
+
+	if len(statuses) != 1 {
+		var foundNames []string
+		for _, s := range statuses {
+			foundNames = append(foundNames, s.Name)
+		}
+		t.Fatalf("expected exactly 1 game, got %d: %v", len(statuses), foundNames)
+	}
+
+	if statuses[0].Name != "Portal 2" {
+		t.Errorf("expected game name 'Portal 2', got %q", statuses[0].Name)
+	}
+}
+
 
 
 

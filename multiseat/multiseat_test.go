@@ -7,9 +7,12 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/staernid/gamux/util"
 )
@@ -417,10 +420,24 @@ func TestCheckCapabilities(t *testing.T) {
 	t.Logf("Caps: %+v", caps)
 }
 
+func setupMockUMU(t *testing.T, homeDir string) {
+	t.Helper()
+	umuDir := filepath.Join(homeDir, ".local", "share", "umu")
+	if err := os.MkdirAll(umuDir, 0755); err != nil {
+		t.Fatalf("failed to create mock umu dir: %v", err)
+	}
+	umuBin := filepath.Join(umuDir, "umu-run")
+	script := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(umuBin, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write mock umu-run: %v", err)
+	}
+}
+
 func TestBuildSeatCommand_DefaultPrefixes(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "Half-Life"),
@@ -558,6 +575,7 @@ func TestBuildSeatCommand_WindowPositioning(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "Half-Life"),
@@ -686,10 +704,11 @@ func TestSnapshotWaylandSockets(t *testing.T) {
 	}
 }
 
-func TestBuildSeatCommand_P2_KBM_UsesCage(t *testing.T) {
+func TestBuildSeatCommand_P2_KBM_UsesGamescope(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "MyGame"),
@@ -721,19 +740,11 @@ func TestBuildSeatCommand_P2_KBM_UsesCage(t *testing.T) {
 	}
 
 	argsStr := strings.Join(cmdP2.Args, " ")
-	if !strings.Contains(argsStr, "cage -s --") {
-		t.Errorf("expected Seat 2 with dedicated KBM to wrap in cage, got: %s", argsStr)
+	if !strings.Contains(argsStr, "gamescope") {
+		t.Errorf("expected Seat 2 with dedicated KBM to wrap in gamescope, got: %s", argsStr)
 	}
-
-	var hasSoftwareCursor bool
-	for _, env := range cmdP2.Env {
-		if env == "WLR_NO_HARDWARE_CURSORS=1" {
-			hasSoftwareCursor = true
-			break
-		}
-	}
-	if !hasSoftwareCursor {
-		t.Errorf("expected WLR_NO_HARDWARE_CURSORS=1 in Seat 2 Env: %v", cmdP2.Env)
+	if strings.Contains(argsStr, "cage -s --") {
+		t.Errorf("expected Seat 2 with dedicated KBM to NOT wrap in cage, got: %s", argsStr)
 	}
 }
 
@@ -841,6 +852,7 @@ func TestBuildSeatCommand_ExplicitGamescope_NoCage(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "MyGame"),
@@ -885,6 +897,7 @@ func TestBuildSeatCommand_AutoCompositor_NoDedicatedKBM_NoCage(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "MyGame"),
@@ -929,7 +942,56 @@ func TestBuildSeatCommand_NestedCageGamescope(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
+	// compositor="cage_gamescope" should nest gamescope inside cage
+	sessionCfg := MultiseatSessionConfig{
+		GameDir: filepath.Join(tmpDir, "MyGame"),
+		Name:    "MyGame",
+		AppID:   "100",
+		ExePath: filepath.Join(tmpDir, "MyGame", "game.exe"),
+		Runner:  "umu",
+		Layout:  LayoutDualMonitor,
+		Seat1: SeatConfig{
+			SeatID: "p1",
+			Mode:   SeatModeLocal,
+		},
+		Seat2: SeatConfig{
+			SeatID:       "p2",
+			Mode:         SeatModeLocal,
+			Compositor:   "auto",
+			KeyboardNode: "/dev/input/event10",
+			MouseNode:    "/dev/input/event11",
+		},
+	}
+	caps := SystemCapabilities{
+		HasBwrap:     true,
+		HasGamescope: true,
+		HasCage:      true,
+	}
+
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
+	}
+
+	argsStr := strings.Join(cmdP2.Args, " ")
+	// P2 with dedicated KBM and Gamescope available should use Gamescope directly (not Cage)
+	if strings.Contains(argsStr, "cage -s --") {
+		t.Errorf("Seat 2 with Gamescope should NOT wrap in cage, got: %s", argsStr)
+	}
+	if !strings.Contains(argsStr, "gamescope") {
+		t.Errorf("Seat 2 should use gamescope, got: %s", argsStr)
+	}
+}
+
+func TestBuildSeatCommand_CageOnly_NoGamescope(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
+
+	// compositor="cage" should wrap in cage only — no gamescope at all
 	sessionCfg := MultiseatSessionConfig{
 		GameDir: filepath.Join(tmpDir, "MyGame"),
 		Name:    "MyGame",
@@ -960,17 +1022,852 @@ func TestBuildSeatCommand_NestedCageGamescope(t *testing.T) {
 
 	argsStr := strings.Join(cmdP2.Args, " ")
 	if !strings.Contains(argsStr, "cage -s --") {
-		t.Errorf("expected Seat 2 to wrap in cage, got: %s", argsStr)
+		t.Errorf("expected cage wrapper, got: %s", argsStr)
 	}
-	if !strings.Contains(argsStr, "gamescope") {
-		t.Errorf("expected Seat 2 to nest gamescope inside cage, got: %s", argsStr)
-	}
-	cageIdx := strings.Index(argsStr, "cage")
-	gamescopeIdx := strings.Index(argsStr, "gamescope")
-	if cageIdx == -1 || gamescopeIdx == -1 || cageIdx >= gamescopeIdx {
-		t.Errorf("expected cage to wrap gamescope (cageIdx=%d, gamescopeIdx=%d), got: %s", cageIdx, gamescopeIdx, argsStr)
+	if strings.Contains(argsStr, "gamescope") {
+		t.Errorf("compositor=cage should NOT include gamescope, got: %s", argsStr)
 	}
 }
 
+func TestBuildSeatCommand_Gamescope_SplitWindowPos(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
 
+	// P2 with dedicated KBM + auto compositor uses standalone Gamescope with split window pos
+	sessionCfg := MultiseatSessionConfig{
+		GameDir: filepath.Join(tmpDir, "MyGame"),
+		Name:    "MyGame",
+		AppID:   "100",
+		ExePath: filepath.Join(tmpDir, "MyGame", "game.exe"),
+		Runner:  "umu",
+		Layout:  LayoutSideBySide,
+		Seat1: SeatConfig{
+			SeatID:       "p1",
+			Mode:         SeatModeLocal,
+			TargetWidth:  1920,
+			TargetHeight: 1080,
+		},
+		Seat2: SeatConfig{
+			SeatID:       "p2",
+			Mode:         SeatModeLocal,
+			TargetWidth:  1920,
+			TargetHeight: 1080,
+			KeyboardNode: "/dev/input/event10",
+			MouseNode:    "/dev/input/event11",
+			Compositor:   "auto",
+		},
+	}
+	caps := SystemCapabilities{
+		HasBwrap:     true,
+		HasGamescope: true,
+		HasCage:      true,
+	}
+
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
+	}
+
+	var p2HasPos bool
+	for _, env := range cmdP2.Env {
+		if strings.HasPrefix(env, "SDL_VIDEO_WINDOW_POS=960,0") {
+			p2HasPos = true
+			break
+		}
+	}
+	if !p2HasPos {
+		t.Errorf("expected SDL_VIDEO_WINDOW_POS=960,0 for P2 side-by-side gamescope")
+	}
+
+	// Seat 1 (standalone gamescope) should also have SDL_VIDEO_WINDOW_POS set to 0,0
+	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p1", filepath.Join(tmpDir, "p1"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p1) failed: %v", err)
+	}
+	var p1HasPos bool
+	for _, env := range cmdP1.Env {
+		if strings.HasPrefix(env, "SDL_VIDEO_WINDOW_POS=") {
+			p1HasPos = true
+			break
+		}
+	}
+	if !p1HasPos {
+		t.Errorf("P1 (standalone gamescope, side-by-side) should have SDL_VIDEO_WINDOW_POS set")
+	}
+}
+
+func TestResolveCageDecision(t *testing.T) {
+	capsAll := SystemCapabilities{HasGamescope: true, HasCage: true}
+	capsNoCage := SystemCapabilities{HasGamescope: true, HasCage: false}
+	capsNoGS := SystemCapabilities{HasGamescope: false, HasCage: true}
+
+	tests := []struct {
+		name     string
+		seatCfg  SeatConfig
+		seatID   string
+		caps     SystemCapabilities
+		wantCage bool
+	}{
+		{
+			name:     "compositor=gamescope → no cage",
+			seatCfg:  SeatConfig{Compositor: "gamescope"},
+			seatID:   "p2",
+			caps:     capsAll,
+			wantCage: false,
+		},
+		{
+			name:     "compositor=cage → cage",
+			seatCfg:  SeatConfig{Compositor: "cage"},
+			seatID:   "p2",
+			caps:     capsAll,
+			wantCage: true,
+		},
+
+		{
+			name:     "NestCage=true → cage",
+			seatCfg:  SeatConfig{NestCage: true},
+			seatID:   "p2",
+			caps:     capsAll,
+			wantCage: true,
+		},
+		{
+			name:     "auto + P2 KBM with gamescope available → gamescope (no cage)",
+			seatCfg:  SeatConfig{Compositor: "auto", KeyboardNode: "/dev/input/event10", MouseNode: "/dev/input/event11"},
+			seatID:   "p2",
+			caps:     capsAll,
+			wantCage: false,
+		},
+		{
+			name:     "auto + P2 KBM without gamescope → cage fallback",
+			seatCfg:  SeatConfig{Compositor: "auto", KeyboardNode: "/dev/input/event10", MouseNode: "/dev/input/event11"},
+			seatID:   "p2",
+			caps:     capsNoGS,
+			wantCage: true,
+		},
+		{
+			name:     "auto + P2 no KBM → no cage",
+			seatCfg:  SeatConfig{Compositor: "auto", KeyboardNode: "none", MouseNode: "none"},
+			seatID:   "p2",
+			caps:     capsAll,
+			wantCage: false,
+		},
+		{
+			name:     "auto + P1 KBM → no cage (only P2 triggers KBM cage)",
+			seatCfg:  SeatConfig{Compositor: "auto", KeyboardNode: "/dev/input/event10"},
+			seatID:   "p1",
+			caps:     capsAll,
+			wantCage: false,
+		},
+		{
+			name:     "stream mode without gamescope → cage fallback",
+			seatCfg:  SeatConfig{Mode: SeatModeStream},
+			seatID:   "p2",
+			caps:     capsNoGS,
+			wantCage: true,
+		},
+		{
+			name:     "cage requested but not installed → no cage",
+			seatCfg:  SeatConfig{Compositor: "cage"},
+			seatID:   "p2",
+			caps:     capsNoCage,
+			wantCage: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveCageDecision(tt.seatCfg, tt.seatID, tt.caps)
+			if got != tt.wantCage {
+				t.Errorf("resolveCageDecision() = %v, want %v", got, tt.wantCage)
+			}
+		})
+	}
+}
+
+type mockInjector struct {
+	mu      sync.Mutex
+	motions [][2]int32
+	buttons [][2]uint32
+	axes    [][2]int32
+	keys    [][2]uint32
+	frames  int
+	closed  bool
+}
+
+func (m *mockInjector) SendMotion(dx, dy int32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.motions = append(m.motions, [2]int32{dx, dy})
+	return nil
+}
+
+func (m *mockInjector) SendButton(button uint32, state uint32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.buttons = append(m.buttons, [2]uint32{button, state})
+	return nil
+}
+
+func (m *mockInjector) SendAxis(axis uint32, value int32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.axes = append(m.axes, [2]int32{int32(axis), value})
+	return nil
+}
+
+func (m *mockInjector) SendFrame() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.frames++
+	return nil
+}
+
+func (m *mockInjector) SendKey(key uint32, state uint32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.keys = append(m.keys, [2]uint32{key, state})
+	return nil
+}
+
+func (m *mockInjector) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	return nil
+}
+
+func TestInputGrabber_SetInjector(t *testing.T) {
+	grabber := NewInputGrabber()
+	mock := &mockInjector{}
+
+	grabber.SetInjector(mock)
+	if grabber.injector != mock {
+		t.Errorf("expected injector to be set")
+	}
+
+	grabber.Release()
+	if !mock.closed {
+		t.Errorf("expected mock injector to be closed on release")
+	}
+}
+
+func TestEIClient_InvalidSocket(t *testing.T) {
+	client := NewEIClient()
+	err := client.Connect("/non/existent/path/gamescope-99-ei")
+	if err == nil {
+		t.Fatalf("expected connect to non-existent socket to fail")
+	}
+	_ = client.Close()
+}
+
+func TestEISocketHelpers(t *testing.T) {
+	tmpDir := t.TempDir()
+	origRuntime := os.Getenv("XDG_RUNTIME_DIR")
+	defer os.Setenv("XDG_RUNTIME_DIR", origRuntime)
+	os.Setenv("XDG_RUNTIME_DIR", tmpDir)
+
+	initial := snapshotEISockets()
+	if len(initial) != 0 {
+		t.Errorf("expected empty initial EIS sockets in temp dir, got %v", initial)
+	}
+
+	// Create dummy gamescope-5-ei socket listener
+	sockPath := filepath.Join(tmpDir, "gamescope-5-ei")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	defer l.Close()
+
+	found, err := waitForNewEISocket(initial, 1*time.Second)
+	if err != nil {
+		t.Fatalf("expected to find new socket: %v", err)
+	}
+	if found != sockPath {
+		t.Errorf("expected found socket %s, got %s", sockPath, found)
+	}
+}
+
+func TestWaitForEISocketForPID(t *testing.T) {
+	tmpDir := t.TempDir()
+	origRuntime := os.Getenv("XDG_RUNTIME_DIR")
+	defer os.Setenv("XDG_RUNTIME_DIR", origRuntime)
+	os.Setenv("XDG_RUNTIME_DIR", tmpDir)
+
+	sockPath := filepath.Join(tmpDir, "gamescope-1-ei")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("failed to listen on unix socket: %v", err)
+	}
+	defer l.Close()
+
+	// Accept in background so dial completes
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+			_ = conn.Close()
+		}
+	}()
+
+	// 1. Should match our current PID
+	found, err := waitForEISocketForPID(os.Getpid(), nil, 1*time.Second)
+	if err != nil {
+		t.Fatalf("expected to match current PID %d: %v", os.Getpid(), err)
+	}
+	if found != sockPath {
+		t.Errorf("expected sockPath %s, got %s", sockPath, found)
+	}
+
+	// 2. Should match our current PID even if socket was present in existing snapshot
+	existingMap := map[string]bool{"gamescope-1-ei": true}
+	foundExisting, err := waitForEISocketForPID(os.Getpid(), existingMap, 1*time.Second)
+	if err != nil {
+		t.Fatalf("expected to match PID even when in existing snapshot: %v", err)
+	}
+	if foundExisting != sockPath {
+		t.Errorf("expected sockPath %s, got %s", sockPath, foundExisting)
+	}
+
+	// 3. Should timeout when looking for an unrelated PID
+	_, err = waitForEISocketForPID(99999999, nil, 200*time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected timeout when searching for mismatched PID")
+	}
+
+	// 4. For generic search (targetPID <= 0), it should skip sockets in existing snapshot
+	_, err = waitForEISocketForPID(0, existingMap, 200*time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected timeout when generic search skips existing socket")
+	}
+}
+
+func TestBuildGamescopeArgs_SplitGeometry_CorrectDimensions(t *testing.T) {
+	// Full screen is 1920x1080.
+	// Side-by-Side split should give 960x1080 per seat.
+	winW, winH, winX, winY := CalculateSplitGeometry(LayoutSideBySide, "p2", 1920, 1080)
+	if winW != 960 || winH != 1080 || winX != 960 || winY != 0 {
+		t.Fatalf("unexpected split geometry: winW=%d, winH=%d, winX=%d, winY=%d", winW, winH, winX, winY)
+	}
+
+	dispOpts := DisplayOptions{
+		Mode:         SeatModeLocal,
+		Layout:       LayoutSideBySide,
+		SeatID:       "p2",
+		TargetWidth:  winW,
+		TargetHeight: winH,
+		WindowWidth:  winW,
+		WindowHeight: winH,
+		WindowX:      winX,
+		WindowY:      winY,
+		Command:      []string{"game.exe"},
+	}
+
+	args, err := BuildGamescopeArgs(dispOpts)
+	if err != nil {
+		t.Fatalf("BuildGamescopeArgs failed: %v", err)
+	}
+
+	argsStr := strings.Join(args, " ")
+	if !strings.Contains(argsStr, "-W 960") {
+		t.Errorf("expected -W 960 in gamescope args, got: %s", argsStr)
+	}
+	if !strings.Contains(argsStr, "-H 1080") {
+		t.Errorf("expected -H 1080 in gamescope args, got: %s", argsStr)
+	}
+	if strings.Contains(argsStr, "-W 480") {
+		t.Errorf("detected double-halved width (-W 480) in gamescope args: %s", argsStr)
+	}
+}
+
+func TestEIClient_LiveGamescope(t *testing.T) {
+	gsBin, err := exec.LookPath("gamescope")
+	if err != nil {
+		t.Skip("gamescope binary not available on host, skipping live test")
+	}
+
+	// Start gamescope with headless backend in background
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, gsBin, "-W", "640", "-H", "480", "--", "sleep", "5")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start gamescope: %v", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}()
+
+	// Detect gamescope's EIS socket by its exact PID
+	sockPath, err := waitForEISocketForPID(cmd.Process.Pid, nil, 3*time.Second)
+	if err != nil {
+		t.Fatalf("failed to detect gamescope EIS socket: %v", err)
+	}
+
+	client := NewEIClient()
+	if err := client.Connect(sockPath); err != nil {
+		t.Fatalf("failed to connect EIClient: %v", err)
+	}
+
+	client.SetDimensions(640, 480)
+	startX, startY := client.GetCursorPos()
+	if startX != 320 || startY != 240 {
+		t.Errorf("expected initial centered cursor at (320, 240), got (%f, %f)", startX, startY)
+	}
+
+	// Verify sending pointer motion, button, scroll, frame, and key
+	if err := client.SendMotion(10, -5); err != nil {
+		t.Errorf("SendMotion failed: %v", err)
+	}
+	curX, curY := client.GetCursorPos()
+	if curX != 330 || curY != 235 {
+		t.Errorf("expected cursor after motion at (330, 235), got (%f, %f)", curX, curY)
+	}
+
+	// Verify clamping within bounds
+	if err := client.SendMotion(2000, 2000); err != nil {
+		t.Errorf("SendMotion failed: %v", err)
+	}
+	maxX, maxY := client.GetCursorPos()
+	if maxX != 640 || maxY != 480 {
+		t.Errorf("expected cursor clamped to (640, 480), got (%f, %f)", maxX, maxY)
+	}
+
+	if err := client.SendMotion(-5000, -5000); err != nil {
+		t.Errorf("SendMotion failed: %v", err)
+	}
+	minX, minY := client.GetCursorPos()
+	if minX != 0 || minY != 0 {
+		t.Errorf("expected cursor clamped to (0, 0), got (%f, %f)", minX, minY)
+	}
+
+	if err := client.SendMotionAbsolute(200, 150); err != nil {
+		t.Errorf("SendMotionAbsolute failed: %v", err)
+	}
+	absX, absY := client.GetCursorPos()
+	if absX != 200 || absY != 150 {
+		t.Errorf("expected cursor at (200, 150), got (%f, %f)", absX, absY)
+	}
+
+	if err := client.SendButton(0x110, 1); err != nil { // BTN_LEFT press
+		t.Errorf("SendButton press failed: %v", err)
+	}
+	if err := client.SendButton(0x110, 0); err != nil { // BTN_LEFT release
+		t.Errorf("SendButton release failed: %v", err)
+	}
+	if err := client.SendAxis(0, 3840); err != nil { // vertical scroll
+		t.Errorf("SendAxis failed: %v", err)
+	}
+	if err := client.SendFrame(); err != nil {
+		t.Errorf("SendFrame failed: %v", err)
+	}
+	if err := client.SendKey(30, 1); err != nil { // KEY_A press
+		t.Errorf("SendKey press failed: %v", err)
+	}
+	if err := client.SendKey(30, 0); err != nil { // KEY_A release
+		t.Errorf("SendKey release failed: %v", err)
+	}
+
+	if err := client.Close(); err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func TestEIClient_CoordinatesAndDimensions(t *testing.T) {
+	client := NewEIClient()
+	x, y := client.GetCursorPos()
+	if x != 960 || y != 540 {
+		t.Fatalf("expected default cursor (960, 540), got (%f, %f)", x, y)
+	}
+
+	client.SetDimensions(2560, 1440)
+	x2, y2 := client.GetCursorPos()
+	if x2 != 1280 || y2 != 720 {
+		t.Fatalf("expected cursor at (1280, 720), got (%f, %f)", x2, y2)
+	}
+
+	// Negative/zero fallback to default 1920x1080
+	client.SetDimensions(0, -100)
+	x3, y3 := client.GetCursorPos()
+	if x3 != 960 || y3 != 540 {
+		t.Fatalf("expected cursor fallback to (960, 540), got (%f, %f)", x3, y3)
+	}
+
+	// Unopened client should return errors on sends
+	if err := client.SendMotion(10, 10); err == nil {
+		t.Fatalf("expected error sending motion on unopened client")
+	}
+	if err := client.SendMotionAbsolute(10, 10); err == nil {
+		t.Fatalf("expected error sending absolute motion on unopened client")
+	}
+	if err := client.SendButton(0x110, 1); err == nil {
+		t.Fatalf("expected error sending button on unopened client")
+	}
+	if err := client.SendAxis(0, 100); err == nil {
+		t.Fatalf("expected error sending axis on unopened client")
+	}
+	if err := client.SendKey(30, 1); err == nil {
+		t.Fatalf("expected error sending key on unopened client")
+	}
+	if err := client.SendFrame(); err == nil {
+		t.Fatalf("expected error sending frame on unopened client")
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("expected nil on closing unopened client: %v", err)
+	}
+}
+
+func TestFindDeviceCompanionNodes_SyntheticSysfs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origSysClass := sysClassInputDir
+	origDevInput := devInputDir
+	origDev := devDir
+	defer func() {
+		sysClassInputDir = origSysClass
+		devInputDir = origDevInput
+		devDir = origDev
+	}()
+
+	mockSys := filepath.Join(tmpDir, "sys", "class", "input")
+	mockDevIn := filepath.Join(tmpDir, "dev", "input")
+	mockDevBase := filepath.Join(tmpDir, "dev")
+	_ = os.MkdirAll(mockSys, 0755)
+	_ = os.MkdirAll(mockDevIn, 0755)
+
+	sysClassInputDir = mockSys
+	devInputDir = mockDevIn
+	devDir = mockDevBase
+
+	// Create a mock USB composite hardware root directory
+	usbRoot := filepath.Join(tmpDir, "sys", "devices", "pci0000:00", "0000:00:14.0", "usb1", "1-1")
+	_ = os.MkdirAll(usbRoot, 0755)
+	_ = os.WriteFile(filepath.Join(usbRoot, "idVendor"), []byte("1234\n"), 0644)
+
+	// Create interface 1 (event4)
+	iface1 := filepath.Join(usbRoot, "1-1:1.0", "0003:1234:5678.0001", "input", "input40", "event4")
+	_ = os.MkdirAll(iface1, 0755)
+	// Create interface 2 (event10)
+	iface2 := filepath.Join(usbRoot, "1-1:1.1", "0003:1234:5678.0002", "input", "input41", "event10")
+	_ = os.MkdirAll(iface2, 0755)
+	// Create interface 3 (event11)
+	iface3 := filepath.Join(usbRoot, "1-1:1.2", "0003:1234:5678.0003", "input", "input42", "event11")
+	_ = os.MkdirAll(iface3, 0755)
+
+	// In /sys/class/input:
+	// event4/device points to input40
+	_ = os.MkdirAll(filepath.Join(mockSys, "event4"), 0755)
+	_ = os.Symlink(filepath.Join(usbRoot, "1-1:1.0", "0003:1234:5678.0001", "input", "input40"), filepath.Join(mockSys, "event4", "device"))
+
+	_ = os.MkdirAll(filepath.Join(mockSys, "event10"), 0755)
+	_ = os.Symlink(filepath.Join(usbRoot, "1-1:1.1", "0003:1234:5678.0002", "input", "input41"), filepath.Join(mockSys, "event10", "device"))
+
+	_ = os.MkdirAll(filepath.Join(mockSys, "event11"), 0755)
+	_ = os.Symlink(filepath.Join(usbRoot, "1-1:1.2", "0003:1234:5678.0003", "input", "input42"), filepath.Join(mockSys, "event11", "device"))
+
+	// Create device nodes in mockDevInput
+	ev4Dev := filepath.Join(mockDevIn, "event4")
+	ev10Dev := filepath.Join(mockDevIn, "event10")
+	ev11Dev := filepath.Join(mockDevIn, "event11")
+	_ = os.WriteFile(ev4Dev, []byte{}, 0644)
+	_ = os.WriteFile(ev10Dev, []byte{}, 0644)
+	_ = os.WriteFile(ev11Dev, []byte{}, 0644)
+
+	// Test FindDeviceCompanionNodes on event4
+	siblings := FindDeviceCompanionNodes(ev4Dev)
+	if len(siblings) != 2 {
+		t.Fatalf("expected 2 companion sibling nodes, got %d: %v", len(siblings), siblings)
+	}
+	if !containsString(siblings, ev10Dev) || !containsString(siblings, ev11Dev) {
+		t.Errorf("expected siblings to contain %s and %s, got: %v", ev10Dev, ev11Dev, siblings)
+	}
+	if containsString(siblings, ev4Dev) {
+		t.Errorf("did not expect base event node %s to be listed in siblings", ev4Dev)
+	}
+
+	// Test NewInputGrabber automatically includes companion nodes
+	grabber := NewInputGrabber(ev4Dev)
+	if len(grabber.nodes) != 3 {
+		t.Fatalf("expected grabber to contain 3 nodes (base + 2 companions), got %d: %v", len(grabber.nodes), grabber.nodes)
+	}
+	if !containsString(grabber.nodes, ev4Dev) || !containsString(grabber.nodes, ev10Dev) || !containsString(grabber.nodes, ev11Dev) {
+		t.Errorf("grabber nodes missing expected entries: %v", grabber.nodes)
+	}
+
+	// Add capability bitmasks to test FilterKeyboards scoring
+	_ = os.MkdirAll(filepath.Join(usbRoot, "1-1:1.0", "0003:1234:5678.0001", "input", "input40", "capabilities"), 0755)
+	_ = os.WriteFile(filepath.Join(usbRoot, "1-1:1.0", "0003:1234:5678.0001", "input", "input40", "capabilities", "key"), []byte("10000 0 0\n"), 0644)
+
+	_ = os.MkdirAll(filepath.Join(usbRoot, "1-1:1.1", "0003:1234:5678.0002", "input", "input41", "capabilities"), 0755)
+	_ = os.WriteFile(filepath.Join(usbRoot, "1-1:1.1", "0003:1234:5678.0002", "input", "input41", "capabilities", "key"), []byte("ffffffff ffffffff ffffffff ffffffff\n"), 0644)
+
+	kbds := []InputDevice{
+		{DevNode: ev4Dev, IsKeyboard: true, Name: "Gaming Keyboard Boot"},
+		{DevNode: ev10Dev, IsKeyboard: true, Name: "Gaming Keyboard NKRO"},
+	}
+	filteredKbds := FilterKeyboards(kbds)
+	if len(filteredKbds) != 1 {
+		t.Fatalf("expected 1 deduplicated keyboard, got %d: %v", len(filteredKbds), filteredKbds)
+	}
+	if filteredKbds[0].DevNode != ev10Dev {
+		t.Errorf("expected FilterKeyboards to pick richest interface %s, got: %s", ev10Dev, filteredKbds[0].DevNode)
+	}
+
+	// Test FilterMice deduplication
+	mice := []InputDevice{
+		{DevNode: ev4Dev, IsMouse: true, Name: "Gaming Mouse Pointer"},
+		{DevNode: ev10Dev, IsMouse: true, Name: "Gaming Mouse Extra"},
+	}
+	filteredMice := FilterMice(mice)
+	if len(filteredMice) != 1 {
+		t.Fatalf("expected 1 deduplicated mouse, got %d: %v", len(filteredMice), filteredMice)
+	}
+	if filteredMice[0].DevNode != ev4Dev {
+		t.Errorf("expected FilterMice to keep primary pointer %s, got: %s", ev4Dev, filteredMice[0].DevNode)
+	}
+}
+
+func TestBuildSeatCommand_DedicatedKBM_NoHostGrab(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	setupMockUMU(t, tmpDir)
+
+	caps := SystemCapabilities{
+		HasBwrap:     true,
+		HasGamescope: true,
+		HasCage:      true,
+	}
+
+	// 1. Seat 2 has dedicated KBM and user specified ForceGrabCursor=true, GrabKeyboard=true
+	sessionCfg := MultiseatSessionConfig{
+		GameDir: filepath.Join(tmpDir, "MyGame"),
+		Name:    "MyGame",
+		AppID:   "100",
+		ExePath: filepath.Join(tmpDir, "MyGame", "game.exe"),
+		Runner:  "umu",
+		Layout:  LayoutDualMonitor,
+		Seat1: SeatConfig{
+			SeatID: "p1",
+			Mode:   SeatModeLocal,
+		},
+		Seat2: SeatConfig{
+			SeatID:          "p2",
+			Mode:            SeatModeLocal,
+			Compositor:      "gamescope",
+			KeyboardNode:    "/dev/input/event10",
+			MouseNode:       "/dev/input/event11",
+			ForceGrabCursor: true,
+			GrabKeyboard:    true,
+		},
+	}
+
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
+	}
+
+	argsP2 := strings.Join(cmdP2.Args, " ")
+	if strings.Contains(argsP2, "--force-grab-cursor") {
+		t.Errorf("expected --force-grab-cursor to be suppressed for Seat 2 with dedicated KBM, got: %s", argsP2)
+	}
+	if strings.Contains(argsP2, " -g ") || strings.HasSuffix(argsP2, " -g") {
+		t.Errorf("expected -g (grab keyboard) to be suppressed for Seat 2 with dedicated KBM, got: %s", argsP2)
+	}
+
+	// Verify that gamescope_cursor_composite=2 is enabled in environment for dedicated KBM
+	envP2 := strings.Join(cmdP2.Env, "\n")
+	if !strings.Contains(envP2, "gamescope_cursor_composite=2") {
+		t.Errorf("expected gamescope_cursor_composite=2 in P2 env with dedicated KBM, got: %v", cmdP2.Env)
+	}
+
+	// 2. Seat 2 with NO dedicated KBM preserves ForceGrabCursor=true and GrabKeyboard=true
+	sessionCfgNoKBM := sessionCfg
+	sessionCfgNoKBM.Seat2.KeyboardNode = "none"
+	sessionCfgNoKBM.Seat2.MouseNode = "none"
+
+	cmdP2NoKBM, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgNoKBM, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2 no kbm) failed: %v", err)
+	}
+
+	argsP2NoKBM := strings.Join(cmdP2NoKBM.Args, " ")
+	if !strings.Contains(argsP2NoKBM, "--force-grab-cursor") {
+		t.Errorf("expected --force-grab-cursor to be present when no dedicated KBM, got: %s", argsP2NoKBM)
+	}
+	if !strings.Contains(argsP2NoKBM, "-g") {
+		t.Errorf("expected -g to be present when no dedicated KBM, got: %s", argsP2NoKBM)
+	}
+
+	// Verify that gamescope_cursor_composite=2 is NOT present when no dedicated KBM and no ShowCursor
+	envP2NoKBM := strings.Join(cmdP2NoKBM.Env, "\n")
+	if strings.Contains(envP2NoKBM, "gamescope_cursor_composite=2") {
+		t.Errorf("expected gamescope_cursor_composite=2 to be absent when no dedicated KBM, got: %v", cmdP2NoKBM.Env)
+	}
+
+	// 3. Seat 2 with NO dedicated KBM, but ShowCursor=true -> gamescope_cursor_composite=2 IS present
+	sessionCfgShowCursor := sessionCfgNoKBM
+	sessionCfgShowCursor.Seat2.ShowCursor = true
+	cmdP2ShowCursor, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgShowCursor, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2 show cursor) failed: %v", err)
+	}
+	envP2ShowCursor := strings.Join(cmdP2ShowCursor.Env, "\n")
+	if !strings.Contains(envP2ShowCursor, "gamescope_cursor_composite=2") {
+		t.Errorf("expected gamescope_cursor_composite=2 to be present when ShowCursor=true, got: %v", cmdP2ShowCursor.Env)
+	}
+}
+
+func TestSupervisor_RunningSessions(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	gameDir1 := "/games/Portal 2"
+	gameDir2 := "/games/Overcooked/"
+
+	sup.sessions[util.CanonicalPath(gameDir1)] = &runningSession{
+		config: MultiseatSessionConfig{GameDir: gameDir1},
+		seat1:  runningSeat{status: SeatStatus{IsRunning: true}},
+		seat2:  runningSeat{status: SeatStatus{IsRunning: false}},
+	}
+	sup.sessions[util.CanonicalPath(gameDir2)] = &runningSession{
+		config: MultiseatSessionConfig{GameDir: gameDir2},
+		seat1:  runningSeat{status: SeatStatus{IsRunning: false}},
+		seat2:  runningSeat{status: SeatStatus{IsRunning: true}},
+	}
+
+	running := sup.RunningSessions()
+	if len(running) != 2 {
+		t.Fatalf("expected 2 running sessions, got %d: %v", len(running), running)
+	}
+
+	clean1 := util.CanonicalPath(gameDir1)
+	clean2 := util.CanonicalPath(gameDir2)
+	has1 := false
+	has2 := false
+	for _, r := range running {
+		if r == clean1 {
+			has1 = true
+		}
+		if r == clean2 {
+			has2 = true
+		}
+	}
+	if !has1 || !has2 {
+		t.Errorf("RunningSessions() missing expected paths: got %v", running)
+	}
+}
+
+func TestSupervisor_IndependentSeatDrop(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	gameDir := "/games/CoopGame"
+	cleanDir := util.CanonicalPath(gameDir)
+
+	cmdP1 := exec.Command("sleep", "3")
+	cmdP2 := exec.Command("sleep", "3")
+	if err := cmdP1.Start(); err != nil {
+		t.Skip("could not start sleep process")
+	}
+	if err := cmdP2.Start(); err != nil {
+		_ = cmdP1.Process.Kill()
+		t.Skip("could not start sleep process")
+	}
+
+	sess := &runningSession{
+		config:    MultiseatSessionConfig{GameDir: gameDir, Name: "CoopGame", AppID: "999"},
+		startTime: time.Now().Unix(),
+		seat1: runningSeat{
+			cmd:    cmdP1,
+			status: SeatStatus{IsRunning: true, PID: cmdP1.Process.Pid},
+		},
+		seat2: runningSeat{
+			cmd:    cmdP2,
+			status: SeatStatus{IsRunning: true, PID: cmdP2.Process.Pid},
+		},
+	}
+
+	sup.mu.Lock()
+	sup.sessions[cleanDir] = sess
+	sup.mu.Unlock()
+
+	go sup.superviseSession(cleanDir, sess)
+
+	// Verify session is initially running
+	if !sup.IsSessionRunning(cleanDir) {
+		t.Errorf("expected session to be running initially")
+	}
+
+	// Drop Seat 2 via StopSeat
+	if err := sup.StopSeat(cleanDir, "p2"); err != nil {
+		t.Fatalf("StopSeat(p2) failed: %v", err)
+	}
+
+	// Give a brief moment for p2 to exit and superviseSession to process p2Done
+	time.Sleep(100 * time.Millisecond)
+
+	// Player 1 MUST STILL BE RUNNING!
+	st := sup.GetStatus(cleanDir)
+	if st == nil || !st.IsRunning {
+		t.Errorf("expected session to still be running after P2 dropped")
+	}
+	if st.Seat1.IsRunning != true {
+		t.Errorf("expected Seat 1 to still be running")
+	}
+	if st.Seat2.IsRunning != false {
+		t.Errorf("expected Seat 2 to be marked stopped")
+	}
+
+	// Now stop the whole session
+	if err := sup.StopSession(cleanDir); err != nil {
+		t.Fatalf("StopSession failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if sup.IsSessionRunning(cleanDir) {
+		t.Errorf("expected session to be completely stopped after StopSession")
+	}
+}
+
+func TestVirtualSink_LifecycleAndIdempotence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	caps := CheckCapabilities()
+	if !caps.HasPipewire {
+		t.Skip("PipeWire/pactl not available on host")
+	}
+
+	sinkName := "gamux-unit-test-sink"
+	vs1, err := CreateVirtualSink(ctx, sinkName, "Unit Test Virtual Sink 1")
+	if err != nil {
+		t.Fatalf("CreateVirtualSink 1 failed: %v", err)
+	}
+	if vs1.ModuleID == "" {
+		t.Errorf("expected non-empty ModuleID")
+	}
+
+	// Idempotent re-creation: should clean up previous sink and create anew without error
+	vs2, err := CreateVirtualSink(ctx, sinkName, "Unit Test Virtual Sink 2")
+	if err != nil {
+		t.Fatalf("CreateVirtualSink 2 (idempotent overwrite) failed: %v", err)
+	}
+	if vs2.ModuleID == "" {
+		t.Errorf("expected non-empty ModuleID on second creation")
+	}
+
+	// Clean up
+	vs2.Destroy(ctx)
+	CleanupGamuxSinks(ctx)
+}
+
+func TestSupervisor_StopAll(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	sup.StopAll()
+}
 

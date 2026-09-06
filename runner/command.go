@@ -27,64 +27,7 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 	// 1. Cascading Profile Load: if GameDir is provided, load on-disk profile for missing fields
 	if res.GameDir != "" {
 		if profile, err := compat.LoadProfile(res.GameDir); err == nil && profile != nil {
-			if res.Name == "" && profile.Name != "" {
-				res.Name = profile.Name
-			}
-			if res.AppID == "" && profile.AppID != "" {
-				res.AppID = profile.AppID
-			}
-			if res.Platform == "" && profile.Platform != "" {
-				res.Platform = profile.Platform
-			}
-			if res.ExePath == "" && profile.ExePath != "" {
-				res.ExePath = profile.ExePath
-			}
-			if res.ExeArgs == "" && profile.ExeArgs != "" {
-				res.ExeArgs = profile.ExeArgs
-			}
-			if res.OperatingMode == "" && profile.OperatingMode != "" {
-				res.OperatingMode = profile.OperatingMode
-			}
-			if res.Runner == "" && profile.Runner != "" {
-				res.Runner = profile.Runner
-			}
-			if res.WinePrefix == "" && profile.WinePrefix != "" {
-				res.WinePrefix = profile.WinePrefix
-			}
-			if res.MangoHud == nil && profile.MangoHud != nil {
-				res.MangoHud = profile.MangoHud
-			}
-			if res.Gamescope == nil && profile.Gamescope != nil {
-				res.Gamescope = profile.Gamescope
-			}
-			if res.GamescopeWidth <= 0 && profile.GamescopeWidth > 0 {
-				res.GamescopeWidth = profile.GamescopeWidth
-			}
-			if res.GamescopeHeight <= 0 && profile.GamescopeHeight > 0 {
-				res.GamescopeHeight = profile.GamescopeHeight
-			}
-			if res.GamescopeFPS <= 0 && profile.GamescopeFPS > 0 {
-				res.GamescopeFPS = profile.GamescopeFPS
-			}
-			if res.DisableOverlay == nil && profile.DisableOverlay != nil {
-				res.DisableOverlay = profile.DisableOverlay
-			}
-			if res.OfflineMode == nil && profile.OfflineMode != nil {
-				res.OfflineMode = profile.OfflineMode
-			}
-			if res.DllOverrides == "" && profile.DllOverrides != "" {
-				res.DllOverrides = profile.DllOverrides
-			}
-			if profile.CustomEnv != nil {
-				if res.CustomEnv == nil {
-					res.CustomEnv = make(map[string]string)
-				}
-				for k, v := range profile.CustomEnv {
-					if _, exists := res.CustomEnv[k]; !exists {
-						res.CustomEnv[k] = v
-					}
-				}
-			}
+			res.MergeFrom(profile)
 		}
 	}
 
@@ -155,10 +98,6 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 		res.OfflineMode = util.Ptr(cfg.OfflineMode)
 	}
 
-	if res.WorkingDir == "" && res.GameDir != "" {
-		res.WorkingDir = res.GameDir
-	}
-
 	// Merge Environment Variables (Global < Custom Profile)
 	mergedEnv := make(map[string]string)
 	if cfg.GlobalEnv != nil {
@@ -173,16 +112,32 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 	}
 	res.CustomEnv = mergedEnv
 
+	if res.WorkingDir == "" {
+		if res.ExePath != "" {
+			if filepath.IsAbs(res.ExePath) {
+				res.WorkingDir = filepath.Dir(res.ExePath)
+			} else if res.GameDir != "" {
+				res.WorkingDir = filepath.Dir(filepath.Join(res.GameDir, res.ExePath))
+			}
+		}
+		if res.WorkingDir == "" && res.GameDir != "" {
+			res.WorkingDir = res.GameDir
+		}
+	}
+
 	return res
 }
 
 // LaunchSpec contains the complete resolved execution specification for a game.
 type LaunchSpec struct {
-	GameDir    string            // Absolute path to game directory
-	WorkingDir string            // Working directory for execution
-	TargetExe  string            // Absolute path to game executable
-	Env        map[string]string // Explicit Gamux/Game environment variables to set
-	Args       []string          // Command line arguments including executable: [binary/wrapper, ...args]
+	GameDir       string            // Absolute path to game directory
+	WorkingDir    string            // Working directory for execution
+	TargetExe     string            // Absolute path to game executable
+	Env           map[string]string // Explicit Gamux/Game environment variables to set
+	Args          []string          // Command line arguments including executable: [binary/wrapper, ...args]
+	OperatingMode string            // Active operating mode (loader, portable, none, etc.)
+	Platform      string            // Platform identifier (linux, win64, etc.)
+	GbeDir        string            // GBE directory path
 }
 
 // BuildLaunchSpec resolves all configuration, environment variables, runners, and wrappers into a LaunchSpec.
@@ -221,6 +176,10 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		gameEnv["UMU_ID"] = "umu-default"
 		gameEnv["STORE"] = "none"
 	}
+	gameEnv["SteamAppUser"] = "client_player"
+	gameEnv["SteamUser"] = "client_player"
+	gameEnv["SteamClientLaunch"] = "1"
+	gameEnv["SteamEnv"] = "1"
 
 	// Wine / Proton prefix isolation with central Syncthing user data symlinking
 	if resolved.Platform != "linux" || resolved.Runner == RunnerWine || resolved.Runner == RunnerProton || resolved.Runner == RunnerUMU {
@@ -232,6 +191,9 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 				NumericAppID: numAppID,
 				Platform:     resolved.Platform,
 				GameDir:      resolved.GameDir,
+			},
+			LaunchProfile: &domain.LaunchProfile{
+				OperatingMode: resolved.OperatingMode,
 			},
 		}
 		prefixDir, pErr := compat.EnsurePrefix(ctx, cfg, gameStub, resolved.WinePrefix)
@@ -273,7 +235,7 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		// If in loader or emulator mode, automatically redirect Steam client libraries through Wine DLL overrides
 		resolvedMode := domain.NormalizeOperatingMode(resolved.OperatingMode)
 		if resolvedMode == ModeLoader {
-			overridesParts = append(overridesParts, "steamclient,steamclient64=n,b")
+			overridesParts = append(overridesParts, "steamclient,steamclient64,GameOverlayRenderer,GameOverlayRenderer64=n,b")
 		}
 
 		if len(overridesParts) == 0 {
@@ -296,34 +258,33 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 			gameEnv["PROTON_VERB"] = "waitforexitandrun"
 		}
 	} else if domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
-		// Linux native loader support (only when ModeLoader is active)
-		gbeBase := cfg.GbeDir
-		if !filepath.IsAbs(gbeBase) {
-			if home, err := os.UserHomeDir(); err == nil {
-				gbeBase = filepath.Join(home, gbeBase)
+		// Linux native loader support
+		// steamclient.so requires libX11.so.6 preloaded so X11 symbols resolve at runtime for the overlay
+		if existingPreload, ok := gameEnv["LD_PRELOAD"]; ok && existingPreload != "" {
+			if !strings.Contains(existingPreload, "libX11.so.6") {
+				gameEnv["LD_PRELOAD"] = "libX11.so.6:" + existingPreload
 			}
+		} else {
+			gameEnv["LD_PRELOAD"] = "libX11.so.6"
 		}
-		archSubdir := "x64"
-		if resolved.Platform == "linux32" {
-			archSubdir = "x86"
+
+		if resolved.AppID != "" && resolved.AppID != "0" {
+			gameEnv["SteamAppId"] = resolved.AppID
+			gameEnv["SteamGameId"] = resolved.AppID
 		}
-		gbeSO := filepath.Join(gbeBase, "linux_release", "experimental", archSubdir, "steamclient.so")
-		if !util.FileExists(gbeSO) && archSubdir == "x86" {
-			fallbackSO := filepath.Join(gbeBase, "linux_release", "experimental", "x32", "steamclient.so")
-			if util.FileExists(fallbackSO) {
-				gbeSO = fallbackSO
-			}
-		}
-		if !util.FileExists(gbeSO) {
-			gbeSO = filepath.Join(gbeBase, "linux_release", "experimental", "x64", "steamclient.so")
-		}
-		if util.FileExists(gbeSO) {
-			gameEnv["LD_PRELOAD"] = gbeSO
-		}
+		gameEnv["SteamAppUser"] = "client_player"
+		gameEnv["SteamUser"] = "client_player"
+		gameEnv["SteamClientLaunch"] = "1"
+		gameEnv["SteamEnv"] = "1"
 	}
 
 	// Custom environment overrides (global + profile CustomEnv)
 	for k, v := range resolved.CustomEnv {
+		if k == "LD_PRELOAD" && domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
+			if !strings.Contains(v, "libX11.so.6") {
+				v = "libX11.so.6:" + v
+			}
+		}
 		gameEnv[k] = v
 	}
 
@@ -391,11 +352,14 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 	}
 
 	return &LaunchSpec{
-		GameDir:    absGameDir,
-		WorkingDir: workingDir,
-		TargetExe:  targetExe,
-		Env:        gameEnv,
-		Args:       finalArgs,
+		GameDir:       absGameDir,
+		WorkingDir:    workingDir,
+		TargetExe:     targetExe,
+		Env:           gameEnv,
+		Args:          finalArgs,
+		OperatingMode: domain.NormalizeOperatingMode(resolved.OperatingMode),
+		Platform:      resolved.Platform,
+		GbeDir:        cfg.GbeDir,
 	}, nil
 }
 
@@ -478,13 +442,60 @@ func GenerateLaunchScriptContent(spec *LaunchSpec) string {
 	}
 	sb.WriteString("\n")
 
+	// Linux native loader mode Steam environment setup & teardown
+	isLinuxLoader := spec.Platform == "linux" && spec.OperatingMode == ModeLoader
+	if isLinuxLoader {
+		gbeBase := spec.GbeDir
+		if gbeBase == "" {
+			gbeBase = config.DefaultConfig().GbeDir
+		}
+		if !filepath.IsAbs(gbeBase) {
+			gbeBase = "$HOME/" + strings.TrimPrefix(gbeBase, "~/")
+		}
+
+		sb.WriteString("# Goldberg Linux Steam Environment Setup\n")
+		sb.WriteString(`STEAM_BASE="$HOME/.steam"` + "\n")
+		sb.WriteString(`mkdir -p "$STEAM_BASE/sdk64" "$STEAM_BASE/sdk32"` + "\n\n")
+		sb.WriteString(`cleanup_steam() {` + "\n")
+		sb.WriteString(`    rm -f "$STEAM_BASE/steam.pid"` + "\n")
+		sb.WriteString(`    rm -f "$STEAM_BASE/sdk64/steam_settings" "$STEAM_BASE/sdk32/steam_settings"` + "\n")
+		sb.WriteString(`    rm -f "$STEAM_BASE/sdk64/steamclient.so" "$STEAM_BASE/sdk32/steamclient.so"` + "\n")
+		sb.WriteString(`    if [ -f "$STEAM_BASE/steam.pid.orig" ]; then mv -f "$STEAM_BASE/steam.pid.orig" "$STEAM_BASE/steam.pid"; fi` + "\n")
+		sb.WriteString(`    if [ -f "$STEAM_BASE/sdk64/steamclient.so.orig" ]; then mv -f "$STEAM_BASE/sdk64/steamclient.so.orig" "$STEAM_BASE/sdk64/steamclient.so"; fi` + "\n")
+		sb.WriteString(`    if [ -f "$STEAM_BASE/sdk32/steamclient.so.orig" ]; then mv -f "$STEAM_BASE/sdk32/steamclient.so.orig" "$STEAM_BASE/sdk32/steamclient.so"; fi` + "\n")
+		sb.WriteString(`}` + "\n")
+		sb.WriteString(`trap cleanup_steam EXIT INT TERM` + "\n\n")
+		sb.WriteString(`if [ -f "$STEAM_BASE/steam.pid" ] && [ ! -f "$STEAM_BASE/steam.pid.orig" ]; then mv -f "$STEAM_BASE/steam.pid" "$STEAM_BASE/steam.pid.orig"; fi` + "\n")
+		sb.WriteString(`if [ -f "$STEAM_BASE/sdk64/steamclient.so" ] && [ ! -f "$STEAM_BASE/sdk64/steamclient.so.orig" ]; then mv -f "$STEAM_BASE/sdk64/steamclient.so" "$STEAM_BASE/sdk64/steamclient.so.orig"; fi` + "\n")
+		sb.WriteString(`if [ -f "$STEAM_BASE/sdk32/steamclient.so" ] && [ ! -f "$STEAM_BASE/sdk32/steamclient.so.orig" ]; then mv -f "$STEAM_BASE/sdk32/steamclient.so" "$STEAM_BASE/sdk32/steamclient.so.orig"; fi` + "\n\n")
+		sb.WriteString(`echo $$ > "$STEAM_BASE/steam.pid"` + "\n")
+		sb.WriteString(fmt.Sprintf(`GBE_BASE="%s"`+"\n", gbeBase))
+		sb.WriteString(`ln -sf "$GBE_BASE/linux_release/experimental/x64/steamclient.so" "$STEAM_BASE/sdk64/steamclient.so"` + "\n")
+		sb.WriteString(`if [ -f "$GBE_BASE/linux_release/experimental/x86/steamclient.so" ]; then` + "\n")
+		sb.WriteString(`    ln -sf "$GBE_BASE/linux_release/experimental/x86/steamclient.so" "$STEAM_BASE/sdk32/steamclient.so"` + "\n")
+		sb.WriteString(`elif [ -f "$GBE_BASE/linux_release/experimental/x32/steamclient.so" ]; then` + "\n")
+		sb.WriteString(`    ln -sf "$GBE_BASE/linux_release/experimental/x32/steamclient.so" "$STEAM_BASE/sdk32/steamclient.so"` + "\n")
+		sb.WriteString(`fi` + "\n")
+		sb.WriteString(`if [ -d "$GAME_DIR/steam_settings" ]; then` + "\n")
+		sb.WriteString(`    ln -sf "$GAME_DIR/steam_settings" "$STEAM_BASE/sdk64/steam_settings"` + "\n")
+		sb.WriteString(`    ln -sf "$GAME_DIR/steam_settings" "$STEAM_BASE/sdk32/steam_settings"` + "\n")
+		sb.WriteString(`fi` + "\n\n")
+	}
+
 	// Exec command with pass-through arguments ($@)
 	var cmdParts []string
 	for _, arg := range spec.Args {
 		cmdParts = append(cmdParts, formatBashArg(arg, spec.GameDir))
 	}
 	cmdParts = append(cmdParts, `"$@"`)
-	sb.WriteString("exec " + strings.Join(cmdParts, " ") + "\n")
+	if isLinuxLoader {
+		sb.WriteString(strings.Join(cmdParts, " ") + "\n")
+		sb.WriteString("EXIT_CODE=$?\n")
+		sb.WriteString("cleanup_steam\n")
+		sb.WriteString("exit $EXIT_CODE\n")
+	} else {
+		sb.WriteString("exec " + strings.Join(cmdParts, " ") + "\n")
+	}
 
 	return sb.String()
 }

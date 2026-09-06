@@ -182,6 +182,15 @@
       }
     });
 
+    // Reconcile active running games on application startup
+    AppAPI.getRunningGames().then((running) => {
+      if (Array.isArray(running)) {
+        for (const dir of running) {
+          if (dir) setGameRunning(dir, true);
+        }
+      }
+    }).catch(() => {});
+
     // 3. Check URL query parameters for view / drawer previewing
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');

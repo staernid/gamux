@@ -12,7 +12,7 @@
     formatInstallDate
   } from '../../../utils/game.js';
   import PosterArt from '../../common/PosterArt.svelte';
-  import { multiseatStore } from '../../../stores/multiseat.js';
+  import { multiseatStore, getActiveSession } from '../../../stores/multiseat.js';
 
   export let game = null;
   export let isGameRunning = false;
@@ -31,7 +31,7 @@
   }
 
   $: isCoop = $multiseatStore.isCoopEnabled;
-  $: multiseatSession = game?.gameDir ? $multiseatStore.activeSessions[game.gameDir] : null;
+  $: multiseatSession = game?.gameDir ? getActiveSession($multiseatStore.activeSessions, game.gameDir) : null;
   $: isMultiseatActive = Boolean(multiseatSession?.is_running);
 
   $: pColors = game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' };

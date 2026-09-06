@@ -6,6 +6,7 @@
     queueApplyGame,
     setGameRunning,
     runningGames,
+    isGamePathRunning,
     refreshGame,
     libraryPath,
     updateGameInStore
@@ -14,7 +15,7 @@
   import { modalStore } from '../../stores/modal.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
-  import { multiseatStore } from '../../stores/multiseat.js';
+  import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
   import { AppAPI } from '../../api/app.js';
   import { isSamePath, countOverrides, normalizeGame } from '../../utils/game.js';
   import DrawerSavesTab from '../stage/drawer/DrawerSavesTab.svelte';
@@ -26,6 +27,7 @@
   import HubEnvironmentTab from './hub/HubEnvironmentTab.svelte';
   import HubFilesTab from './hub/HubFilesTab.svelte';
   import HubResourcesTab from './hub/HubResourcesTab.svelte';
+  import { RUNNER_OPTIONS, OPERATING_MODE_OPTIONS, LANGUAGE_OPTIONS } from '../../constants/options.js';
 
   // 7 Primary Consolidated Tabs: 'overview' | 'community' | 'resources' | 'general' | 'environment' | 'saves' | 'files'
   let activeTab = 'overview';
@@ -47,7 +49,7 @@
   const allTasks = tasksStore.items;
 
   $: game = $selectedGame;
-  $: isGameRunning = Boolean(game?.gameDir && $runningGames.has(game.gameDir));
+  $: isGameRunning = Boolean(game?.gameDir && isGamePathRunning($runningGames, game.gameDir));
 
   $: activeGameTask = ($allTasks || []).find(t => {
     if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending') return false;
@@ -59,31 +61,9 @@
 
   $: overrideCount = countOverrides($drawerDraft, game, globalCfg);
 
-  const runnerOptions = [
-    { value: 'umu', label: 'UMU' },
-    { value: 'wine', label: 'Wine' }
-  ];
-
-  const operatingModeOptions = [
-    { value: 'loader', label: 'Loader Mode (Clean / Non-Invasive)' },
-    { value: 'portable', label: 'Portable Mode (Injected DLL Replacement)' },
-    { value: 'none', label: 'DRM-Free / None' }
-  ];
-
-  const gameLanguageOptions = [
-    { value: 'auto', label: 'Auto' },
-    { value: 'english', label: 'English' },
-    { value: 'french', label: 'French' },
-    { value: 'german', label: 'German' },
-    { value: 'italian', label: 'Italian' },
-    { value: 'spanish', label: 'Spanish' },
-    { value: 'japanese', label: 'Japanese' },
-    { value: 'schinese', label: 'Simplified Chinese' },
-    { value: 'russian', label: 'Russian' },
-    { value: 'brazilian', label: 'Brazilian Portuguese' },
-    { value: 'koreana', label: 'Korean' },
-    { value: 'polish', label: 'Polish' }
-  ];
+  const runnerOptions = RUNNER_OPTIONS;
+  const operatingModeOptions = OPERATING_MODE_OPTIONS;
+  const gameLanguageOptions = LANGUAGE_OPTIONS;
 
   onMount(async () => {
     try {
@@ -95,6 +75,15 @@
       userCfg = await AppAPI.getGSEUserConfig();
     } catch {
       // Ignored
+    }
+
+    if (game?.gameDir) {
+      try {
+        const running = await AppAPI.isGameRunning(game.gameDir);
+        setGameRunning(game.gameDir, running);
+      } catch {
+        // Ignored
+      }
     }
 
     if (game) {
@@ -158,7 +147,8 @@
 
     if (isGameRunning) {
       try {
-        if ($multiseatStore.activeSessions[game.gameDir]?.is_running) {
+        const activeSession = getActiveSession($multiseatStore.activeSessions, game.gameDir);
+        if (activeSession?.is_running) {
           await multiseatStore.stopSession(game.gameDir);
         } else {
           await AppAPI.stopGame(game.gameDir);

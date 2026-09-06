@@ -82,20 +82,61 @@ func (a *App) QuickPlay(opts LaunchOptions) error {
 	return err
 }
 
-// IsGameRunning checks if a game process in the given game directory is currently active.
+// IsGameRunning checks if a game process in the given game directory is currently active
+// across single-player runner and multi-seat supervisor.
 func (a *App) IsGameRunning(gamePath string) bool {
-	if a.Engine != nil && a.Engine.RunnerMgr != nil {
-		return a.Engine.RunnerMgr.IsRunning(gamePath)
+	cPath := util.CanonicalPath(gamePath)
+	if cPath == "" {
+		return false
+	}
+	if a.Engine != nil && a.Engine.RunnerMgr != nil && a.Engine.RunnerMgr.IsRunning(cPath) {
+		return true
+	}
+	if a.multiseatSupervisor().IsSessionRunning(cPath) {
+		return true
 	}
 	return false
 }
 
-// StopGame terminates an active game process and its process tree.
+// StopGame terminates an active game process or multi-seat session.
 func (a *App) StopGame(gamePath string) error {
+	cPath := util.CanonicalPath(gamePath)
+	if cPath == "" {
+		return fmt.Errorf("game path cannot be empty")
+	}
+	if a.multiseatSupervisor().IsSessionRunning(cPath) {
+		return a.multiseatSupervisor().StopSession(cPath)
+	}
 	if a.Engine == nil || a.Engine.RunnerMgr == nil {
 		return fmt.Errorf("engine not initialized")
 	}
-	return a.Engine.RunnerMgr.Stop(gamePath)
+	return a.Engine.RunnerMgr.Stop(cPath)
+}
+
+// GetRunningGames returns merged, deduplicated canonical paths of all active single-player and multi-seat games.
+func (a *App) GetRunningGames() []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	if a.Engine != nil && a.Engine.RunnerMgr != nil {
+		for _, dir := range a.Engine.RunnerMgr.RunningGames() {
+			c := util.CanonicalPath(dir)
+			if c != "" && !seen[c] {
+				seen[c] = true
+				result = append(result, c)
+			}
+		}
+	}
+
+	for _, dir := range a.multiseatSupervisor().RunningSessions() {
+		c := util.CanonicalPath(dir)
+		if c != "" && !seen[c] {
+			seen[c] = true
+			result = append(result, c)
+		}
+	}
+
+	return result
 }
 
 // GetAvailableRunners returns list of detected execution runners on the host.

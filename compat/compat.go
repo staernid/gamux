@@ -85,34 +85,44 @@ func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *
 	}
 	opMode = domain.NormalizeOperatingMode(opMode)
 
+	var candidateExes []string
+	if exePath != "" {
+		candidateExes = append(candidateExes, exePath)
+	}
+	if game != nil {
+		candidateExes = append(candidateExes, game.CandidateExes()...)
+	}
+
 	// 3. Apply or revert DRM according to operating mode
 	switch opMode {
 	case domain.ModePortable:
 		if err := gbe.Apply(ctx, gbe.Options{
-			Config:     cfg,
-			TargetDir:  gameDir,
-			Platform:   platform,
-			AppID:      appID,
-			Language:   profile.Language,
-			Portable:   true,
-			WinePrefix: profile.WinePrefix,
-			ExePath:    exePath,
-			DryRun:     dryRun,
+			Config:        cfg,
+			TargetDir:     gameDir,
+			Platform:      platform,
+			AppID:         appID,
+			Language:      profile.Language,
+			Portable:      true,
+			WinePrefix:    profile.WinePrefix,
+			ExePath:       exePath,
+			CandidateExes: candidateExes,
+			DryRun:        dryRun,
 		}); err != nil {
 			slog.Warn("Failed to apply portable DRM", "dir", gameDir, "error", err)
 			return err
 		}
 	case domain.ModeLoader:
 		if err := gbe.Apply(ctx, gbe.Options{
-			Config:     cfg,
-			TargetDir:  gameDir,
-			Platform:   platform,
-			AppID:      appID,
-			Language:   profile.Language,
-			Portable:   false,
-			WinePrefix: profile.WinePrefix,
-			ExePath:    exePath,
-			DryRun:     dryRun,
+			Config:        cfg,
+			TargetDir:     gameDir,
+			Platform:      platform,
+			AppID:         appID,
+			Language:      profile.Language,
+			Portable:      false,
+			WinePrefix:    profile.WinePrefix,
+			ExePath:       exePath,
+			CandidateExes: candidateExes,
+			DryRun:        dryRun,
 		}); err != nil {
 			slog.Warn("Failed to apply loader DRM", "dir", gameDir, "error", err)
 			return err

@@ -2,7 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import PosterArt from '../common/PosterArt.svelte';
   import ArchScrollbar from './ArchScrollbar.svelte';
-  import { filteredGames, selectedGame, runningGames } from '../../stores/library.js';
+  import { filteredGames, selectedGame, runningGames, isGamePathRunning } from '../../stores/library.js';
   import { getPlatformColors, isSamePath, extractCoverColorPalette, getCachedCoverPalette, formatPlaytime } from '../../utils/game.js';
   import { playTick, playSelect } from '../../utils/audio.js';
 
@@ -577,7 +577,7 @@
     {#if activeGame}
       <div class="mt-2 sm:mt-4 flex items-center justify-center z-40 transition-opacity duration-200 ease-out">
         <div class="px-5 py-1.5 rounded-full bg-neutral-900/90 text-white font-bold text-sm sm:text-base tracking-tight shadow-2xl flex items-center justify-center gap-2 max-w-md truncate border border-white/20 hover:border-white/40 transition-all">
-          {#if $runningGames.has(activeGame.gameDir)}
+          {#if isGamePathRunning($runningGames, activeGame.gameDir)}
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
           {/if}
           <span class="truncate">{activeGame.name}</span>

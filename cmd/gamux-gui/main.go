@@ -47,6 +47,9 @@ func main() {
 			app.Startup(ctx)
 		},
 		OnShutdown: func(ctx context.Context) {
+			if app != nil {
+				app.Shutdown(ctx)
+			}
 			if guard != nil {
 				guard.Release()
 			}

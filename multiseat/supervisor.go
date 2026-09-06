@@ -68,6 +68,105 @@ func waitForNewWaylandSocket(existing map[string]bool, timeout time.Duration) (s
 	return "", fmt.Errorf("timeout waiting for new Wayland socket in %s", runtimeDir)
 }
 
+// snapshotEISockets captures all existing gamescope-*-ei socket filenames in XDG_RUNTIME_DIR.
+func snapshotEISockets() map[string]bool {
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	sockets := make(map[string]bool)
+	entries, err := os.ReadDir(runtimeDir)
+	if err == nil {
+		for _, e := range entries {
+			name := e.Name()
+			if strings.HasPrefix(name, "gamescope-") && strings.HasSuffix(name, "-ei") {
+				sockets[name] = true
+			}
+		}
+	}
+	return sockets
+}
+
+// getSocketPeerPID retrieves the server PID from a connected unix domain socket via SO_PEERCRED.
+func getSocketPeerPID(conn net.Conn) (int, error) {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return 0, fmt.Errorf("not a unix connection")
+	}
+	raw, err := unixConn.SyscallConn()
+	if err != nil {
+		return 0, fmt.Errorf("get syscall conn: %w", err)
+	}
+	var cred *syscall.Ucred
+	var credErr error
+	err = raw.Control(func(fd uintptr) {
+		cred, credErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if credErr != nil {
+		return 0, credErr
+	}
+	if cred == nil {
+		return 0, fmt.Errorf("nil credentials returned")
+	}
+	return int(cred.Pid), nil
+}
+
+// waitForEISocketForPID polls XDG_RUNTIME_DIR for the Gamescope EIS socket corresponding to targetPID.
+// If targetPID <= 0, it matches any new socket not present in the existing snapshot.
+func waitForEISocketForPID(targetPID int, existing map[string]bool, timeout time.Duration) (string, error) {
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		entries, err := os.ReadDir(runtimeDir)
+		if err == nil {
+			for _, e := range entries {
+				name := e.Name()
+				if strings.HasPrefix(name, "gamescope-") && strings.HasSuffix(name, "-ei") {
+					// Only exclude snapshot sockets when blindly waiting for a generic new socket (targetPID <= 0).
+					// If targetPID > 0, we can deterministically match the socket's owner via SO_PEERCRED,
+					// even if the socket file already existed on disk from a previous launch.
+					if targetPID <= 0 && existing != nil && existing[name] {
+						continue
+					}
+					sockPath := filepath.Join(runtimeDir, name)
+					if targetPID > 0 {
+						conn, err := net.DialTimeout("unix", sockPath, 150*time.Millisecond)
+						if err == nil {
+							pid, pidErr := getSocketPeerPID(conn)
+							_ = conn.Close()
+							if pidErr == nil && pid == targetPID {
+								return sockPath, nil
+							}
+						}
+					} else {
+						conn, err := net.DialTimeout("unix", sockPath, 150*time.Millisecond)
+						if err == nil {
+							_ = conn.Close()
+							return sockPath, nil
+						}
+					}
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if targetPID > 0 {
+		return "", fmt.Errorf("timeout waiting for Gamescope EIS socket for PID %d in %s", targetPID, runtimeDir)
+	}
+	return "", fmt.Errorf("timeout waiting for new Gamescope EIS socket in %s", runtimeDir)
+}
+
+// waitForNewEISocket polls XDG_RUNTIME_DIR for a newly created, connectable Gamescope EIS socket.
+func waitForNewEISocket(existing map[string]bool, timeout time.Duration) (string, error) {
+	return waitForEISocketForPID(0, existing, timeout)
+}
+
 // CheckCapabilities probes the host system for multi-seat support dependencies.
 func CheckCapabilities() SystemCapabilities {
 	_, bwrapErr := exec.LookPath("bwrap")
@@ -85,6 +184,24 @@ func CheckCapabilities() SystemCapabilities {
 		HasSunshine:  sunshineErr == nil,
 		HasPipewire:  pactlErr == nil,
 	}
+}
+
+// resolveCageDecision determines whether a seat should use cage as its compositor.
+// Cage is used when:
+//   - compositor is explicitly "cage" or "cage_gamescope"
+//   - NestCage is set
+//   - gamescope is not available but cage is (streaming or fallback)
+//
+// Cage is NOT used when compositor is explicitly "gamescope" or when gamescope is available.
+func resolveCageDecision(seatCfg SeatConfig, seatID string, caps SystemCapabilities) bool {
+	if seatCfg.Compositor == "gamescope" || !caps.HasCage {
+		return false
+	}
+	if seatCfg.Compositor == "cage" || seatCfg.NestCage {
+		return true
+	}
+	// Fallback to cage only if gamescope is not available
+	return !caps.HasGamescope
 }
 
 type runningSeat struct {
@@ -118,6 +235,9 @@ type Supervisor struct {
 var defaultSupervisor = NewSupervisor(nil, nil)
 
 // DefaultSupervisor returns the global supervisor singleton.
+//
+// Deprecated: Supervisor should be injected via Engine.Multiseat. DefaultSupervisor
+// remains strictly for CLI or tests requiring a fallback singleton.
 func DefaultSupervisor() *Supervisor {
 	return defaultSupervisor
 }
@@ -127,11 +247,30 @@ func NewSupervisor(cfg *config.Config, bus *events.Bus) *Supervisor {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
+	CleanupGamuxSinks(context.Background())
 	return &Supervisor{
 		sessions: make(map[string]*runningSession),
 		cfg:      cfg,
 		bus:      bus,
 	}
+}
+
+// StopAll terminates all active multi-seat sessions and unloads any virtual audio sinks.
+func (s *Supervisor) StopAll() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	dirs := make([]string, 0, len(s.sessions))
+	for dir := range s.sessions {
+		dirs = append(dirs, dir)
+	}
+	s.mu.Unlock()
+
+	for _, dir := range dirs {
+		_ = s.StopSession(dir)
+	}
+	CleanupGamuxSinks(context.Background())
 }
 
 // SetBus sets the event broker for notifications.
@@ -203,14 +342,7 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 		}
 	}
 	p2HasKBM := isExplicitDeviceNode(sessionCfg.Seat2.KeyboardNode) || isExplicitDeviceNode(sessionCfg.Seat2.MouseNode)
-	p2UsesCage := (sessionCfg.Seat2.Compositor == "cage" || sessionCfg.Seat2.Compositor == "cage_gamescope" || sessionCfg.Seat2.NestCage ||
-		((sessionCfg.Seat2.Compositor == "" || sessionCfg.Seat2.Compositor == "auto") && p2HasKBM) ||
-		(sessionCfg.Seat2.Mode == SeatModeStream && !caps.HasGamescope)) && caps.HasCage
-	if sessionCfg.Seat2.Compositor == "gamescope" {
-		p2UsesCage = false
-	}
-
-	if (sessionCfg.Seat2.ExclusiveGrab || (p2HasKBM && p2UsesCage)) && p2HasKBM {
+	if p2HasKBM {
 		p2Grabber = NewInputGrabber(sessionCfg.Seat2.KeyboardNode, sessionCfg.Seat2.MouseNode)
 		if err := p2Grabber.Grab(); err != nil {
 			slog.Warn("Failed to grab P2 input devices", "error", err)
@@ -289,6 +421,20 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 	}
 
 	// 6. Launch Player 1 Process
+	var initialWaylandSockets map[string]bool
+	var initialEISockets map[string]bool
+	p1UsesCage := resolveCageDecision(sessionCfg.Seat1, "p1", caps)
+	p1UsesGamescope := caps.HasGamescope && !p1UsesCage
+	p2UsesCage := resolveCageDecision(sessionCfg.Seat2, "p2", caps)
+	p2UsesGamescope := caps.HasGamescope && !p2UsesCage
+
+	if p1UsesCage || p2UsesCage {
+		initialWaylandSockets = snapshotWaylandSockets()
+	}
+	if (p1UsesGamescope && p1Grabber != nil) || (p2UsesGamescope && p2Grabber != nil) {
+		initialEISockets = snapshotEISockets()
+	}
+
 	p1Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := p1Cmd.Start(); err != nil {
 		s.cleanupSinks(ctx, sinkP1, sinkP2)
@@ -302,11 +448,6 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 	}
 
 	// 7. Launch Player 2 Process
-	var initialSockets map[string]bool
-	if p2UsesCage {
-		initialSockets = snapshotWaylandSockets()
-	}
-
 	p2Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := p2Cmd.Start(); err != nil {
 		_ = syscall.Kill(-p1Cmd.Process.Pid, syscall.SIGTERM)
@@ -322,7 +463,7 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 
 	var p2WaylandLink string
 	if p2UsesCage {
-		sockPath, err := waitForNewWaylandSocket(initialSockets, 4*time.Second)
+		sockPath, err := waitForNewWaylandSocket(initialWaylandSockets, 4*time.Second)
 		if err != nil {
 			slog.Warn("Failed to detect Cage Wayland socket for Seat 2", "error", err)
 		} else {
@@ -343,9 +484,55 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 				if err := wlClient.Connect(sockPath); err != nil {
 					slog.Warn("Failed to initialize Wayland virtual input for Seat 2", "socket", sockPath, "error", err)
 				} else {
-					p2Grabber.SetWaylandClient(wlClient)
+					p2Grabber.SetInjector(wlClient)
 					slog.Info("Wayland virtual input injector connected for Seat 2", "socket", sockPath)
 				}
+			}
+		}
+	} else if p2UsesGamescope && p2Grabber != nil {
+		sockPath, err := waitForEISocketForPID(p2Cmd.Process.Pid, initialEISockets, 4*time.Second)
+		if err != nil {
+			slog.Warn("Failed to detect Gamescope EIS socket for Seat 2", "pid", p2Cmd.Process.Pid, "error", err)
+		} else {
+			eiClient := NewEIClient()
+			dispW, dispH, _ := s.resolveDisplayDimensions(sessionCfg.Seat2)
+			winW, winH, _, _ := CalculateSplitGeometry(sessionCfg.Layout, "p2", dispW, dispH)
+			renderW := sessionCfg.Seat2.TargetWidth
+			renderH := sessionCfg.Seat2.TargetHeight
+			if renderW <= 0 || renderH <= 0 {
+				renderW, renderH = winW, winH
+			}
+			eiClient.SetDimensions(renderW, renderH)
+
+			if err := eiClient.Connect(sockPath); err != nil {
+				slog.Warn("Failed to initialize Gamescope EIS virtual input for Seat 2", "socket", sockPath, "error", err)
+			} else {
+				p2Grabber.SetInjector(eiClient)
+				slog.Info("Gamescope EIS virtual input injector connected for Seat 2", "socket", sockPath, "pid", p2Cmd.Process.Pid, "dimensions", fmt.Sprintf("%dx%d", renderW, renderH))
+			}
+		}
+	}
+
+	if p1UsesGamescope && p1Grabber != nil {
+		sockPath, err := waitForEISocketForPID(p1Cmd.Process.Pid, initialEISockets, 4*time.Second)
+		if err != nil {
+			slog.Warn("Failed to detect Gamescope EIS socket for Seat 1", "pid", p1Cmd.Process.Pid, "error", err)
+		} else {
+			eiClient := NewEIClient()
+			dispW, dispH, _ := s.resolveDisplayDimensions(sessionCfg.Seat1)
+			winW, winH, _, _ := CalculateSplitGeometry(sessionCfg.Layout, "p1", dispW, dispH)
+			renderW := sessionCfg.Seat1.TargetWidth
+			renderH := sessionCfg.Seat1.TargetHeight
+			if renderW <= 0 || renderH <= 0 {
+				renderW, renderH = winW, winH
+			}
+			eiClient.SetDimensions(renderW, renderH)
+
+			if err := eiClient.Connect(sockPath); err != nil {
+				slog.Warn("Failed to initialize Gamescope EIS virtual input for Seat 1", "socket", sockPath, "error", err)
+			} else {
+				p1Grabber.SetInjector(eiClient)
+				slog.Info("Gamescope EIS virtual input injector connected for Seat 1", "socket", sockPath, "pid", p1Cmd.Process.Pid, "dimensions", fmt.Sprintf("%dx%d", renderW, renderH))
 			}
 		}
 	}
@@ -421,6 +608,34 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 	go s.superviseSession(gameDir, session)
 
 	return nil
+}
+
+func (s *Supervisor) resolveDisplayDimensions(seatCfg SeatConfig) (dispWidth, dispHeight, dispFPS int) {
+	dispWidth = seatCfg.TargetWidth
+	dispHeight = seatCfg.TargetHeight
+	dispFPS = seatCfg.TargetFPS
+
+	if s.cfg != nil {
+		if dispWidth <= 0 && s.cfg.GamescopeWidth > 0 {
+			dispWidth = s.cfg.GamescopeWidth
+		}
+		if dispHeight <= 0 && s.cfg.GamescopeHeight > 0 {
+			dispHeight = s.cfg.GamescopeHeight
+		}
+		if dispFPS <= 0 && s.cfg.GamescopeFPS > 0 {
+			dispFPS = s.cfg.GamescopeFPS
+		}
+	}
+
+	if dispWidth <= 0 || dispHeight <= 0 {
+		info := util.DetectPrimaryDisplay()
+		dispWidth = info.Width
+		dispHeight = info.Height
+		if dispFPS <= 0 {
+			dispFPS = info.RefreshRate
+		}
+	}
+	return dispWidth, dispHeight, dispFPS
 }
 
 func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatSessionConfig, seatID string, profileDir string, sink *VirtualSink, caps SystemCapabilities) (*exec.Cmd, *os.File, string, error) {
@@ -506,31 +721,7 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	}
 
 	// Calculate display geometry
-	dispWidth := seatCfg.TargetWidth
-	dispHeight := seatCfg.TargetHeight
-	dispFPS := seatCfg.TargetFPS
-
-	if s.cfg != nil {
-		if dispWidth <= 0 && s.cfg.GamescopeWidth > 0 {
-			dispWidth = s.cfg.GamescopeWidth
-		}
-		if dispHeight <= 0 && s.cfg.GamescopeHeight > 0 {
-			dispHeight = s.cfg.GamescopeHeight
-		}
-		if dispFPS <= 0 && s.cfg.GamescopeFPS > 0 {
-			dispFPS = s.cfg.GamescopeFPS
-		}
-	}
-
-	if dispWidth <= 0 || dispHeight <= 0 {
-		info := util.DetectPrimaryDisplay()
-		dispWidth = info.Width
-		dispHeight = info.Height
-		if dispFPS <= 0 {
-			dispFPS = info.RefreshRate
-		}
-	}
-
+	dispWidth, dispHeight, dispFPS := s.resolveDisplayDimensions(seatCfg)
 	winW, winH, winX, winY := CalculateSplitGeometry(sessionCfg.Layout, seatID, dispWidth, dispHeight)
 
 	// 3. Wrap in Pasta network namespace (for Seat 2 to prevent port collisions; Seat 1 if requested)
@@ -551,21 +742,36 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 		cmdArgs = append([]string{pastaBin}, pArgs...)
 	}
 
-	// 4. Wrap in Cage (if requested, dedicated KBM, or streaming fallback) and/or Gamescope (for window composition on host)
-	p2HasKBM := seatID == "p2" && (isExplicitDeviceNode(seatCfg.KeyboardNode) || isExplicitDeviceNode(seatCfg.MouseNode))
-	useCage := (seatCfg.Compositor == "cage" || seatCfg.Compositor == "cage_gamescope" || seatCfg.NestCage ||
-		((seatCfg.Compositor == "" || seatCfg.Compositor == "auto") && p2HasKBM) ||
-		(seatCfg.Mode == SeatModeStream && !caps.HasGamescope)) && caps.HasCage
-	if seatCfg.Compositor == "gamescope" {
-		useCage = false
-	}
+	// 4. Wrap in compositors:
+	//   Path 1: gamescope (scaling/resolution/FPS limit, split-screen or dual monitor, EIS input redirection)
+	//   Path 2: cage (standalone kiosk Wayland compositor, fallback or explicit)
+	useCage := resolveCageDecision(seatCfg, seatID, caps)
+	useGamescope := caps.HasGamescope && !useCage
 
-	if caps.HasGamescope {
+	hasDedicatedKBM := (seatID == "p1" && sessionCfg.Seat1.ExclusiveGrab && (isExplicitDeviceNode(sessionCfg.Seat1.KeyboardNode) || isExplicitDeviceNode(sessionCfg.Seat1.MouseNode))) ||
+		(seatID == "p2" && (isExplicitDeviceNode(sessionCfg.Seat2.KeyboardNode) || isExplicitDeviceNode(sessionCfg.Seat2.MouseNode)))
+
+	if useGamescope {
 		renderW := seatCfg.TargetWidth
 		renderH := seatCfg.TargetHeight
 		if renderW <= 0 || renderH <= 0 {
 			renderW = winW
 			renderH = winH
+		}
+
+		gsBin, err := exec.LookPath("gamescope")
+		if err != nil {
+			gsBin = "gamescope"
+		}
+
+		forceGrab := seatCfg.ForceGrabCursor
+		grabKbd := seatCfg.GrabKeyboard
+		if hasDedicatedKBM {
+			// In multi-seat sessions with exclusive hardware input grabbers, input is injected
+			// directly via EIS. Gamescope's nested host window must NEVER grab the host's
+			// desktop keyboard (-g) or mouse cursor (--force-grab-cursor), preventing conflict with Player 1.
+			forceGrab = false
+			grabKbd = false
 		}
 
 		dispOpts := DisplayOptions{
@@ -582,24 +788,17 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 			WindowY:         winY,
 			Fullscreen:      seatCfg.Mode == SeatModeLocal && sessionCfg.Layout == LayoutDualMonitor,
 			Borderless:      sessionCfg.Layout == LayoutSideBySide || sessionCfg.Layout == LayoutTopBottom,
-			ForceGrabCursor: seatCfg.ForceGrabCursor,
-			GrabKeyboard:    seatCfg.GrabKeyboard,
+			ForceGrabCursor: forceGrab,
+			GrabKeyboard:    grabKbd,
 			CursorPath:      seatCfg.CursorPath,
 			Command:         cmdArgs,
 		}
-
 		gsArgs, gErr := BuildGamescopeArgs(dispOpts)
 		if gErr != nil {
 			return nil, nil, "", fmt.Errorf("build gamescope args: %w", gErr)
 		}
-		gsBin, err := exec.LookPath("gamescope")
-		if err != nil {
-			gsBin = "gamescope"
-		}
 		cmdArgs = append([]string{gsBin}, gsArgs...)
-	}
-
-	if useCage && caps.HasCage {
+	} else if useCage {
 		cageBin, err := exec.LookPath("cage")
 		if err != nil {
 			cageBin = "cage"
@@ -641,9 +840,19 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 		finalCmd.Env = append(finalCmd.Env, "WLR_NO_HARDWARE_CURSORS=1")
 	}
 
-	// If split layout is requested or coordinates are nonzero, set SDL window position environment variables
-	// so SDL/Gamescope opens at the calculated (winX, winY) half of the screen rather than centered.
-	if winX > 0 || winY > 0 || sessionCfg.Layout == LayoutSideBySide || sessionCfg.Layout == LayoutTopBottom {
+	// In nested mode, Gamescope defaults to cv_cursor_composite=1 ("composite when not nested"),
+	// expecting the host window manager to draw the cursor over the window.
+	// However, for multi-seat sessions with dedicated hardware grabbers (or when ShowCursor is toggled),
+	// physical input is redirected via EIS and the host desktop never renders a cursor for the seat.
+	// Setting gamescope_cursor_composite=2 ("Always composite a cursor manually") forces Gamescope's
+	// internal Vulkan compositor to render the mouse cursor plane directly into its frame output.
+	if useGamescope && (seatCfg.ShowCursor || hasDedicatedKBM) {
+		finalCmd.Env = append(finalCmd.Env, "gamescope_cursor_composite=2")
+	}
+
+	// If split layout is requested or coordinates are nonzero, set SDL window position environment
+	// variables so SDL/Gamescope opens at the calculated (winX, winY) half of the screen.
+	if useGamescope && (winX > 0 || winY > 0 || sessionCfg.Layout == LayoutSideBySide || sessionCfg.Layout == LayoutTopBottom) {
 		posStr := fmt.Sprintf("%d,%d", winX, winY)
 		finalCmd.Env = append(finalCmd.Env,
 			"SDL_VIDEO_WINDOW_POS="+posStr,
@@ -691,23 +900,81 @@ func (s *Supervisor) superviseSession(gameDir string, session *runningSession) {
 		p2Done <- session.seat2.cmd.Wait()
 	}()
 
-	var firstErr error
-	failedSeat := ""
-	failedLogPath := ""
+	var p1Err, p2Err error
+	p1Finished := false
+	p2Finished := false
 
-	select {
-	case err := <-p1Done:
-		session.seat1.status.IsRunning = false
-		firstErr = err
-		failedSeat = "Player 1"
-		failedLogPath = session.seat1.logPath
-		slog.Info("Multi-seat Seat 1 terminated", "dir", gameDir, "err", err)
-	case err := <-p2Done:
-		session.seat2.status.IsRunning = false
-		firstErr = err
-		failedSeat = "Player 2"
-		failedLogPath = session.seat2.logPath
-		slog.Info("Multi-seat Seat 2 terminated", "dir", gameDir, "err", err)
+	for !p1Finished || !p2Finished {
+		select {
+		case err := <-p1Done:
+			p1Finished = true
+			p1Err = err
+			s.mu.Lock()
+			session.seat1.status.IsRunning = false
+			eb := s.bus
+			s.mu.Unlock()
+
+			slog.Info("Multi-seat Seat 1 terminated", "dir", gameDir, "err", err)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if session.seat1.grabber != nil {
+				session.seat1.grabber.Release()
+			}
+			if session.seat1.sink != nil {
+				session.seat1.sink.Destroy(ctx)
+			}
+			if session.seat1.sunshineCmd != nil && session.seat1.sunshineCmd.Process != nil {
+				_ = session.seat1.sunshineCmd.Process.Kill()
+			}
+			cancel()
+
+			// If Seat 1 exited unexpectedly while Seat 2 is still active
+			if (err != nil || time.Now().Unix()-session.startTime < 10) && !p2Finished {
+				if eb != nil {
+					msg := "Player 1 seat exited unexpectedly."
+					if snippet := readLogTail(session.seat1.logPath, 15); snippet != "" {
+						msg += "\n\nLog tail:\n" + snippet
+					}
+					eb.Publish(events.NewNotification("Multi-Seat Player 1 Error", msg))
+				}
+			}
+
+		case err := <-p2Done:
+			p2Finished = true
+			p2Err = err
+			s.mu.Lock()
+			session.seat2.status.IsRunning = false
+			link := session.seat2.waylandLink
+			session.seat2.waylandLink = ""
+			eb := s.bus
+			s.mu.Unlock()
+
+			slog.Info("Multi-seat Seat 2 terminated", "dir", gameDir, "err", err)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if session.seat2.grabber != nil {
+				session.seat2.grabber.Release()
+			}
+			if session.seat2.sink != nil {
+				session.seat2.sink.Destroy(ctx)
+			}
+			if link != "" {
+				_ = os.Remove(link)
+			}
+			if session.seat2.sunshineCmd != nil && session.seat2.sunshineCmd.Process != nil {
+				_ = session.seat2.sunshineCmd.Process.Kill()
+			}
+			cancel()
+
+			// If Seat 2 exited unexpectedly while Seat 1 is still active
+			if (err != nil || time.Now().Unix()-session.startTime < 10) && !p1Finished {
+				if eb != nil {
+					msg := "Player 2 seat exited unexpectedly."
+					if snippet := readLogTail(session.seat2.logPath, 15); snippet != "" {
+						msg += "\n\nLog tail:\n" + snippet
+					}
+					eb.Publish(events.NewNotification("Multi-Seat Player 2 Error", msg))
+				}
+			}
+		}
 	}
 
 	duration := time.Now().Unix() - session.startTime
@@ -716,24 +983,35 @@ func (s *Supervisor) superviseSession(gameDir string, session *runningSession) {
 	eb := s.bus
 	s.mu.Unlock()
 
+	var exitErr error
+	if p1Err != nil {
+		exitErr = p1Err
+	} else if p2Err != nil {
+		exitErr = p2Err
+	}
+
 	if eb != nil {
-		if firstErr != nil || duration < 10 {
-			msg := fmt.Sprintf("%s exited unexpectedly after %ds.", failedSeat, duration)
+		if exitErr != nil || duration < 10 {
+			failedSeat := "Multi-Seat Session"
+			failedLogPath := session.seat1.logPath
+			if p2Err != nil && p1Err == nil {
+				failedLogPath = session.seat2.logPath
+			}
+			msg := fmt.Sprintf("%s terminated after %ds.", failedSeat, duration)
 			if snippet := readLogTail(failedLogPath, 15); snippet != "" {
 				msg += "\n\nLog tail:\n" + snippet
 			}
 			eb.Publish(events.NewNotification("Multi-Seat Session Error", msg))
 		}
-		eb.Publish(events.NewGameExited(gameDir, session.config.Name, session.config.AppID, firstErr))
+		eb.Publish(events.NewGameExited(gameDir, session.config.Name, session.config.AppID, exitErr))
 	}
 
-	// Check if both have finished or user initiates teardown
+	// Check if session still exists and clean up remaining session state
 	s.mu.Lock()
 	activeSession := s.sessions[gameDir]
 	s.mu.Unlock()
 
 	if activeSession != nil {
-		// Stop session cleans up both processes, sinks, relay, and removes from map
 		_ = s.StopSession(gameDir)
 	}
 }
@@ -829,7 +1107,9 @@ func (s *Supervisor) StopSeat(gameDir string, seatID string) error {
 		if session.seat1.sink != nil {
 			session.seat1.sink.Destroy(ctx)
 		}
+		s.mu.Lock()
 		session.seat1.status.IsRunning = false
+		s.mu.Unlock()
 	} else if seatID == "p2" {
 		if session.seat2.grabber != nil {
 			session.seat2.grabber.Release()
@@ -842,11 +1122,14 @@ func (s *Supervisor) StopSeat(gameDir string, seatID string) error {
 		if session.seat2.sink != nil {
 			session.seat2.sink.Destroy(ctx)
 		}
-		if session.seat2.waylandLink != "" {
-			_ = os.Remove(session.seat2.waylandLink)
-			session.seat2.waylandLink = ""
-		}
+		s.mu.Lock()
+		link := session.seat2.waylandLink
+		session.seat2.waylandLink = ""
 		session.seat2.status.IsRunning = false
+		s.mu.Unlock()
+		if link != "" {
+			_ = os.Remove(link)
+		}
 	} else {
 		return s.StopSession(gameDir)
 	}
@@ -859,9 +1142,9 @@ func (s *Supervisor) GetStatus(gameDir string) *MultiseatSessionStatus {
 	gameDir = util.CanonicalPath(gameDir)
 
 	s.mu.Lock()
-	session, exists := s.sessions[gameDir]
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
+	session, exists := s.sessions[gameDir]
 	if !exists || session == nil {
 		return &MultiseatSessionStatus{
 			GameDir:   gameDir,
@@ -882,6 +1165,19 @@ func (s *Supervisor) GetStatus(gameDir string) *MultiseatSessionStatus {
 func (s *Supervisor) IsSessionRunning(gameDir string) bool {
 	st := s.GetStatus(gameDir)
 	return st != nil && st.IsRunning
+}
+
+// RunningSessions returns canonical paths of all active multi-seat sessions.
+func (s *Supervisor) RunningSessions() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list := make([]string, 0, len(s.sessions))
+	for dir, sess := range s.sessions {
+		if sess != nil && (sess.seat1.status.IsRunning || sess.seat2.status.IsRunning) {
+			list = append(list, util.CanonicalPath(dir))
+		}
+	}
+	return list
 }
 
 func (s *Supervisor) cleanupSinks(ctx context.Context, s1, s2 *VirtualSink) {

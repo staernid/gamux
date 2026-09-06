@@ -1,14 +1,13 @@
 package gbe
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/ini"
 	"github.com/staernid/gamux/util"
 )
 
@@ -54,40 +53,34 @@ func LoadGSEUserConfigFromPath(path string) (*GSEUserConfig, error) {
 		return cfg, nil
 	}
 
-	data, err := os.ReadFile(path)
+	f, err := ini.LoadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read configs.user.ini: %w", err)
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "[") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.ToLower(strings.TrimSpace(parts[0]))
-		val := strings.TrimSpace(parts[1])
-
-		switch key {
-		case "account_name":
-			cfg.AccountName = val
-		case "account_steamid":
-			cfg.AccountSteamID = val
-		case "language":
-			cfg.Language = val
-		case "ip_country":
-			cfg.IPCountry = val
+	sec, ok := f.GetSection("user::general")
+	if !ok {
+		// Fallback to default/global section if user omitted section header
+		if defaultSec, ok := f.GetSection(""); ok && len(defaultSec.Keys()) > 0 {
+			sec = defaultSec
+		} else if len(f.Sections()) > 0 {
+			sec = f.Sections()[0]
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("parse configs.user.ini: %w", err)
+	if sec != nil {
+		if val, ok := sec.Get("account_name"); ok && val != "" {
+			cfg.AccountName = val
+		}
+		if val, ok := sec.Get("account_steamid"); ok && val != "" {
+			cfg.AccountSteamID = val
+		}
+		if val, ok := sec.Get("language"); ok && val != "" {
+			cfg.Language = val
+		}
+		if val, ok := sec.Get("ip_country"); ok && val != "" {
+			cfg.IPCountry = val
+		}
 	}
 
 	return cfg, nil
@@ -113,34 +106,38 @@ func SaveGSEUserConfigToPath(path string, cfg *GSEUserConfig) error {
 		return fmt.Errorf("create gse settings directory: %w", err)
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString("[user::general]\n")
-
-	if cfg.AccountSteamID != "" {
-		buf.WriteString(fmt.Sprintf("account_steamid=%s\n", strings.TrimSpace(cfg.AccountSteamID)))
-	} else {
-		buf.WriteString("account_steamid=76561197960287930\n")
+	f, err := ini.LoadFile(path)
+	if err != nil {
+		f = ini.NewFile()
 	}
 
-	if cfg.AccountName != "" {
-		buf.WriteString(fmt.Sprintf("account_name=%s\n", strings.TrimSpace(cfg.AccountName)))
-	} else {
-		buf.WriteString("account_name=GamuxPlayer\n")
-	}
+	sec := f.Section("user::general")
 
-	if cfg.Language != "" {
-		buf.WriteString(fmt.Sprintf("language=%s\n", strings.ToLower(strings.TrimSpace(cfg.Language))))
-	} else {
-		buf.WriteString("language=english\n")
+	accountSteamID := strings.TrimSpace(cfg.AccountSteamID)
+	if accountSteamID == "" {
+		accountSteamID = "76561197960287930"
 	}
+	sec.Set("account_steamid", accountSteamID)
 
-	if cfg.IPCountry != "" {
-		buf.WriteString(fmt.Sprintf("ip_country=%s\n", strings.ToUpper(strings.TrimSpace(cfg.IPCountry))))
-	} else {
-		buf.WriteString("ip_country=US\n")
+	accountName := strings.TrimSpace(cfg.AccountName)
+	if accountName == "" {
+		accountName = "GamuxPlayer"
 	}
+	sec.Set("account_name", accountName)
 
-	if err := util.WriteFileAtomic(path, buf.Bytes(), 0644); err != nil {
+	language := strings.ToLower(strings.TrimSpace(cfg.Language))
+	if language == "" {
+		language = "english"
+	}
+	sec.Set("language", language)
+
+	ipCountry := strings.ToUpper(strings.TrimSpace(cfg.IPCountry))
+	if ipCountry == "" {
+		ipCountry = "US"
+	}
+	sec.Set("ip_country", ipCountry)
+
+	if err := f.SaveFile(path); err != nil {
 		return fmt.Errorf("write configs.user.ini: %w", err)
 	}
 

@@ -171,9 +171,15 @@ var launchCommand = &cli.Command{
 		if c.Bool("setup") || status.IsClean() || !status.IsReady {
 			if status.IsClean() || !status.IsReady {
 				ui.RenderStep(1, 2, fmt.Sprintf("Auto-applying setup for %s before launch...", status.Name))
+				opMode := domain.ModeLoader
+				if status.EffectiveOperatingMode() != "" {
+					opMode = status.EffectiveOperatingMode()
+				} else if eng.Config != nil && eng.Config.OperatingMode != "" {
+					opMode = domain.NormalizeOperatingMode(eng.Config.OperatingMode)
+				}
 				applyOpts := engine.ProcessOptions{
 					Path:          targetPath,
-					OperatingMode: domain.ModePortable,
+					OperatingMode: opMode,
 					WinePrefix:    status.EffectiveWinePrefix(),
 					ExePath:       status.EffectiveExePath(),
 					ExeArgs:       status.EffectiveExeArgs(),

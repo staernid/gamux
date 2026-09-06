@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 )
@@ -55,41 +56,81 @@ func DecodeLinuxInputEvent(buf []byte) (LinuxInputEvent, error) {
 	}, nil
 }
 
+// InputInjector represents an abstract display server input sink capable of receiving
+// synthetic pointer, scrolling, button, and keyboard events.
+type InputInjector interface {
+	SendMotion(dx, dy int32) error
+	SendButton(button uint32, state uint32) error
+	SendAxis(axis uint32, value int32) error
+	SendFrame() error
+	SendKey(key uint32, state uint32) error
+	Close() error
+}
+
 // InputGrabber manages exclusive kernel grabs (EVIOCGRAB) on assigned input devices
-// and runs an active event reading loop routing events to a WaylandInjector.
+// and runs an active event reading loop routing events to an InputInjector.
 type InputGrabber struct {
-	mu         sync.Mutex
-	fds        map[string]*os.File
-	nodes      []string
-	active     bool
-	wayland    *WaylandClient
-	cancel     context.CancelFunc
-	ctx        context.Context
-	wg         sync.WaitGroup
-	onEvent    func(node string, ev LinuxInputEvent) // Optional listener for telemetry/tests
+	mu       sync.Mutex
+	fds      map[string]*os.File
+	nodes    []string
+	active   bool
+	injector InputInjector
+	cancel   context.CancelFunc
+	ctx      context.Context
+	wg       sync.WaitGroup
+	onEvent  func(node string, ev LinuxInputEvent) // Optional listener for telemetry/tests
 }
 
 // NewInputGrabber instantiates an input grabber for specified device nodes.
+// For each assigned device node, it automatically discovers and binds all companion
+// sibling event nodes belonging to the same physical hardware device (e.g. composite
+// keyboards and mice with multiple interfaces) to ensure complete capture and isolation.
 func NewInputGrabber(devNodes ...string) *InputGrabber {
 	var valid []string
 	seen := make(map[string]bool)
-	for _, n := range devNodes {
-		if isExplicitDeviceNode(n) && !seen[n] {
-			valid = append(valid, n)
-			seen[n] = true
+
+	addNode := func(p string) {
+		if !isExplicitDeviceNode(p) {
+			return
+		}
+		realP := p
+		if resolved, err := filepath.EvalSymlinks(p); err == nil && resolved != "" {
+			realP = resolved
+		}
+		if !seen[realP] {
+			valid = append(valid, realP)
+			seen[realP] = true
 		}
 	}
+
+	for _, n := range devNodes {
+		if !isExplicitDeviceNode(n) {
+			continue
+		}
+		addNode(n)
+
+		// Discover sibling companion event nodes for this physical device
+		for _, sib := range FindDeviceCompanionNodes(n) {
+			addNode(sib)
+		}
+	}
+
 	return &InputGrabber{
 		fds:   make(map[string]*os.File),
 		nodes: valid,
 	}
 }
 
-// SetWaylandClient attaches a Wayland client to receive forwarded input events.
-func (g *InputGrabber) SetWaylandClient(client *WaylandClient) {
+// SetInjector attaches an input injector (such as EIClient or WaylandClient) to receive forwarded input events.
+func (g *InputGrabber) SetInjector(injector InputInjector) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.wayland = client
+	g.injector = injector
+}
+
+// SetWaylandClient attaches a Wayland client to receive forwarded input events.
+func (g *InputGrabber) SetWaylandClient(client *WaylandClient) {
+	g.SetInjector(client)
 }
 
 // SetEventListener registers a callback invoked on each received evdev event.
@@ -174,7 +215,7 @@ func (g *InputGrabber) readLoop(ctx context.Context, node string, f *os.File) {
 		}
 
 		g.mu.Lock()
-		wl := g.wayland
+		inj := g.injector
 		listener := g.onEvent
 		g.mu.Unlock()
 
@@ -182,7 +223,7 @@ func (g *InputGrabber) readLoop(ctx context.Context, node string, f *os.File) {
 			listener(node, ev)
 		}
 
-		if wl == nil {
+		if inj == nil {
 			continue
 		}
 
@@ -194,16 +235,16 @@ func (g *InputGrabber) readLoop(ctx context.Context, node string, f *os.File) {
 			case REL_Y:
 				pendingDY += ev.Value
 			case REL_WHEEL:
-				// Vertical scroll wheel: In Wayland, scrolling down is positive.
+				// Vertical scroll wheel: In Wayland/EIS, scrolling down is positive.
 				// Invert Linux REL_WHEEL so wheel-down scrolls down (positive).
 				// 15 pixels (in 24.8 fixed point: 15 * 256 = 3840) per click.
 				val := -ev.Value * 15 * 256
-				_ = wl.SendAxis(0, val)
+				_ = inj.SendAxis(0, val)
 				hasPointerEvent = true
 			case REL_HWHEEL:
 				// Horizontal scroll wheel
 				val := ev.Value * 15 * 256
-				_ = wl.SendAxis(1, val)
+				_ = inj.SendAxis(1, val)
 				hasPointerEvent = true
 			}
 
@@ -214,26 +255,30 @@ func (g *InputGrabber) readLoop(ctx context.Context, node string, f *os.File) {
 				if ev.Value != 0 {
 					state = 1
 				}
-				_ = wl.SendButton(uint32(ev.Code), state)
+				_ = inj.SendButton(uint32(ev.Code), state)
 				hasPointerEvent = true
 			} else if ev.Code < BTN_MISC || (ev.Code >= 0x160 && ev.Code < 0x2ff) {
 				// Keyboard key (state: 0 = release, 1 = press)
+				if ev.Value == 2 {
+					// Ignore evdev kernel autorepeat events; Wayland/Xwayland manages client-side repeat
+					continue
+				}
 				var state uint32
 				if ev.Value != 0 {
 					state = 1
 				}
-				_ = wl.SendKey(uint32(ev.Code), state)
+				_ = inj.SendKey(uint32(ev.Code), state)
 			}
 
 		case EV_SYN:
 			if ev.Code == SYN_REPORT {
 				if pendingDX != 0 || pendingDY != 0 {
-					_ = wl.SendMotion(pendingDX, pendingDY)
+					_ = inj.SendMotion(pendingDX, pendingDY)
 					pendingDX, pendingDY = 0, 0
 					hasPointerEvent = true
 				}
 				if hasPointerEvent {
-					_ = wl.SendFrame()
+					_ = inj.SendFrame()
 					hasPointerEvent = false
 				}
 			}
@@ -241,13 +286,13 @@ func (g *InputGrabber) readLoop(ctx context.Context, node string, f *os.File) {
 	}
 }
 
-// Release releases all grabbed input devices back to the host system and closes Wayland injection.
+// Release releases all grabbed input devices back to the host system and closes the input injector.
 func (g *InputGrabber) Release() {
 	if g == nil {
 		return
 	}
 	g.mu.Lock()
-	if !g.active && len(g.fds) == 0 {
+	if !g.active && len(g.fds) == 0 && g.injector == nil {
 		g.mu.Unlock()
 		return
 	}
@@ -265,16 +310,16 @@ func (g *InputGrabber) Release() {
 		}
 	}
 
-	wl := g.wayland
-	g.wayland = nil
+	inj := g.injector
+	g.injector = nil
 	g.fds = make(map[string]*os.File)
 	g.active = false
 	g.mu.Unlock()
 
 	g.wg.Wait()
 
-	if wl != nil {
-		_ = wl.Close()
+	if inj != nil {
+		_ = inj.Close()
 	}
 }
 

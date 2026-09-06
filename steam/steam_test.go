@@ -170,6 +170,79 @@ func TestFetchDLCs(t *testing.T) {
 	}
 }
 
+func TestFetchDLCs_PreservesExistingSections(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "testdlc_preserve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	settingsDir := filepath.Join(tmpDir, "steam_settings")
+	if err := os.MkdirAll(settingsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	existingIni := `# App general config
+[app::general]
+enable_lan_only=1
+
+[app::custom]
+custom_param=abc
+`
+	if err := os.WriteFile(filepath.Join(settingsDir, "configs.app.ini"), []byte(existingIni), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "ajaxgetfilteredrecommendations") {
+				htmlResp := `{"results_html": "<div data-ds-appid=\"456\"></div>"}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(htmlResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			if strings.Contains(req.URL.Path, "appdetails") {
+				jsonResp := `{"456": {"success": true, "data": {"name": "DLC Expansion Pack 1"}}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	if err := FetchDLCs(ctx, "123", tmpDir, false); err != nil {
+		t.Fatalf("FetchDLCs failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(settingsDir, "configs.app.ini"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	iniStr := string(data)
+
+	if !strings.Contains(iniStr, "# App general config") {
+		t.Errorf("comment in configs.app.ini lost:\n%s", iniStr)
+	}
+	if !strings.Contains(iniStr, "[app::general]") || !strings.Contains(iniStr, "enable_lan_only=1") {
+		t.Errorf("[app::general] section lost:\n%s", iniStr)
+	}
+	if !strings.Contains(iniStr, "[app::custom]") || !strings.Contains(iniStr, "custom_param=abc") {
+		t.Errorf("[app::custom] section lost:\n%s", iniStr)
+	}
+	if !strings.Contains(iniStr, "[app::dlcs]") || !strings.Contains(iniStr, "456=DLC Expansion Pack 1") {
+		t.Errorf("[app::dlcs] not added:\n%s", iniStr)
+	}
+}
+
 func TestDownloadAchievementImages(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "testachievements")
 	if err != nil {

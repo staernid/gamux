@@ -226,4 +226,89 @@ func TestGame_InjectedOperatingMode(t *testing.T) {
 	}
 }
 
+func TestLaunchProfile_MergeFrom(t *testing.T) {
+	primary := &LaunchProfile{
+		GameDir:       "/games/portal2",
+		ExePath:       "portal2.exe",
+		OperatingMode: ModeLoader,
+		CustomEnv: map[string]string{
+			"EXISTING_VAR": "val1",
+		},
+	}
+
+	fallback := &LaunchProfile{
+		Name:            "Portal 2",
+		AppID:           "620",
+		Platform:        "win64",
+		ExePath:         "fallback.exe", // should NOT overwrite primary
+		OperatingMode:   ModePortable,  // should NOT overwrite primary
+		Runner:          RunnerUMU,
+		PlaytimeSeconds: 7200,
+		LastPlayed:      1700000000,
+		InstalledAt:     1650000000,
+		CustomCoverURL:  "https://example.com/cover.jpg",
+		LockedArtwork:   true,
+		CustomEnv: map[string]string{
+			"EXISTING_VAR": "should_not_overwrite",
+			"NEW_VAR":      "val2",
+		},
+	}
+
+	primary.MergeFrom(fallback)
+
+	if primary.Name != "Portal 2" {
+		t.Errorf("expected Name 'Portal 2', got %q", primary.Name)
+	}
+	if primary.AppID != "620" {
+		t.Errorf("expected AppID '620', got %q", primary.AppID)
+	}
+	if primary.Platform != "win64" {
+		t.Errorf("expected Platform 'win64', got %q", primary.Platform)
+	}
+	if primary.ExePath != "portal2.exe" {
+		t.Errorf("expected ExePath to remain 'portal2.exe', got %q", primary.ExePath)
+	}
+	if primary.OperatingMode != ModeLoader {
+		t.Errorf("expected OperatingMode to remain ModeLoader, got %q", primary.OperatingMode)
+	}
+	if primary.Runner != RunnerUMU {
+		t.Errorf("expected Runner 'umu', got %q", primary.Runner)
+	}
+	if primary.PlaytimeSeconds != 7200 || primary.LastPlayed != 1700000000 || primary.InstalledAt != 1650000000 {
+		t.Errorf("playtime or timestamp fields not merged properly")
+	}
+	if primary.CustomCoverURL != "https://example.com/cover.jpg" || !primary.LockedArtwork {
+		t.Errorf("artwork fields not merged properly")
+	}
+	if primary.CustomEnv["EXISTING_VAR"] != "val1" || primary.CustomEnv["NEW_VAR"] != "val2" {
+		t.Errorf("custom env not merged properly: %+v", primary.CustomEnv)
+	}
+}
+
+func TestGame_ApplyProfile(t *testing.T) {
+	g := NewGame("Skyrim", "/games/skyrim", "489830", "win64")
+	profile := &LaunchProfile{
+		Store:            "Steam",
+		MetadataProvider: "steam",
+		MetadataID:       "489830",
+		CustomCoverURL:   "https://example.com/skyrim_cover.jpg",
+		LockedArtwork:    true,
+		PlaytimeSeconds:  12345,
+		LastPlayed:       1710000000,
+	}
+
+	g.ApplyProfile(profile, true)
+
+	if g.CustomCoverURL != "https://example.com/skyrim_cover.jpg" {
+		t.Errorf("expected CustomCoverURL applied to game, got %q", g.CustomCoverURL)
+	}
+	if !g.LockedArtwork {
+		t.Error("expected LockedArtwork applied to game")
+	}
+	if g.PlaytimeSeconds != 12345 || g.LastPlayed != 1710000000 {
+		t.Errorf("expected playtime 12345 / 1710000000, got %d / %d", g.PlaytimeSeconds, g.LastPlayed)
+	}
+}
+
+
 

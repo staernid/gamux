@@ -7,15 +7,20 @@ import (
 	"strings"
 )
 
+var (
+	sysClassInputDir = "/sys/class/input"
+	devInputDir      = "/dev/input"
+	devDir           = "/dev"
+)
+
 // EnumerateInputDevices scans /sys/class/input for connected gamepads and controllers.
 func EnumerateInputDevices() ([]InputDevice, error) {
-	const inputClassDir = "/sys/class/input"
-	entries, err := os.ReadDir(inputClassDir)
+	entries, err := os.ReadDir(sysClassInputDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read %s: %w", inputClassDir, err)
+		return nil, fmt.Errorf("read %s: %w", sysClassInputDir, err)
 	}
 
 	var devices []InputDevice
@@ -27,8 +32,8 @@ func EnumerateInputDevices() ([]InputDevice, error) {
 			continue
 		}
 
-		eventPath := filepath.Join(inputClassDir, name)
-		devNode := filepath.Join("/dev", "input", name)
+		eventPath := filepath.Join(sysClassInputDir, name)
+		devNode := filepath.Join(devInputDir, name)
 		if seenNodes[devNode] {
 			continue
 		}
@@ -262,6 +267,8 @@ func FilterGamepads(devices []InputDevice) []InputDevice {
 }
 
 // FilterKeyboards returns only devices flagged as keyboards.
+// For composite devices with multiple event interfaces, it groups them by physical
+// device and keeps the primary keyboard interface (with richest key capabilities).
 func FilterKeyboards(devices []InputDevice) []InputDevice {
 	var kbds []InputDevice
 	for _, d := range devices {
@@ -269,10 +276,54 @@ func FilterKeyboards(devices []InputDevice) []InputDevice {
 			kbds = append(kbds, d)
 		}
 	}
-	return kbds
+	return deduplicateKeyboards(kbds)
+}
+
+func deduplicateKeyboards(kbds []InputDevice) []InputDevice {
+	if len(kbds) <= 1 {
+		return kbds
+	}
+	type kbdScore struct {
+		dev      InputDevice
+		capScore int
+	}
+	byRoot := make(map[string]kbdScore)
+	var order []string
+
+	for _, k := range kbds {
+		_, root := findDeviceRootSysPath(k.DevNode)
+		if root == "" {
+			root = k.DevNode
+		}
+		score := 0
+		base := filepath.Base(k.DevNode)
+		if realNode, err := filepath.EvalSymlinks(k.DevNode); err == nil && realNode != "" {
+			base = filepath.Base(realNode)
+		}
+		keyCapFile := filepath.Join(sysClassInputDir, base, "device", "capabilities", "key")
+		if data, err := os.ReadFile(keyCapFile); err == nil {
+			score = len(strings.TrimSpace(string(data)))
+		}
+		if existing, exists := byRoot[root]; exists {
+			if score > existing.capScore {
+				byRoot[root] = kbdScore{dev: k, capScore: score}
+			}
+		} else {
+			byRoot[root] = kbdScore{dev: k, capScore: score}
+			order = append(order, root)
+		}
+	}
+
+	var result []InputDevice
+	for _, root := range order {
+		result = append(result, byRoot[root].dev)
+	}
+	return result
 }
 
 // FilterMice returns only devices flagged as mice/pointers.
+// For composite devices with multiple event interfaces, it groups them by physical
+// device and keeps the primary pointer interface.
 func FilterMice(devices []InputDevice) []InputDevice {
 	var mice []InputDevice
 	for _, d := range devices {
@@ -280,7 +331,32 @@ func FilterMice(devices []InputDevice) []InputDevice {
 			mice = append(mice, d)
 		}
 	}
-	return mice
+	return deduplicateMice(mice)
+}
+
+func deduplicateMice(mice []InputDevice) []InputDevice {
+	if len(mice) <= 1 {
+		return mice
+	}
+	byRoot := make(map[string]InputDevice)
+	var order []string
+
+	for _, m := range mice {
+		_, root := findDeviceRootSysPath(m.DevNode)
+		if root == "" {
+			root = m.DevNode
+		}
+		if _, exists := byRoot[root]; !exists {
+			byRoot[root] = m
+			order = append(order, root)
+		}
+	}
+
+	var result []InputDevice
+	for _, root := range order {
+		result = append(result, byRoot[root])
+	}
+	return result
 }
 
 func containsString(list []string, item string) bool {
@@ -292,85 +368,118 @@ func containsString(list []string, item string) bool {
 	return false
 }
 
-// FindGamepadCompanionNodes discovers all companion js*, hidraw*, and sibling event*
-// device nodes that belong to the same hardware device as devNode (e.g. /dev/input/event29).
-func FindGamepadCompanionNodes(devNode string) (jsNodes, hidrawNodes, siblingEventNodes []string) {
+// findDeviceRootSysPath resolves the physical hardware root directory (e.g. parent USB or Bluetooth device)
+// for a given /dev/input/eventX node or symlink by inspecting sysfs.
+func findDeviceRootSysPath(devNode string) (baseEvent, rootSysPath string) {
 	if devNode == "" {
-		return nil, nil, nil
+		return "", ""
 	}
-
-	base := filepath.Base(devNode) // e.g. "event29"
-	sysInput := filepath.Join("/sys/class/input", base)
-
+	realNode, err := filepath.EvalSymlinks(devNode)
+	if err != nil || realNode == "" {
+		realNode = devNode
+	}
+	base := filepath.Base(realNode) // e.g. "event4"
+	if !strings.HasPrefix(base, "event") {
+		return "", ""
+	}
+	sysInput := filepath.Join(sysClassInputDir, base)
 	sysDev, err := filepath.EvalSymlinks(filepath.Join(sysInput, "device"))
 	if err != nil {
 		sysDev = filepath.Join(sysInput, "device")
 	}
 
-	// 1. Sibling js* and event* nodes directly under input device
-	if entries, err := os.ReadDir(sysDev); err == nil {
-		for _, e := range entries {
-			name := e.Name()
-			if strings.HasPrefix(name, "js") {
-				p := filepath.Join("/dev/input", name)
-				if _, err := os.Stat(p); err == nil {
-					jsNodes = append(jsNodes, p)
-				}
-			} else if strings.HasPrefix(name, "event") && name != base {
-				p := filepath.Join("/dev/input", name)
-				if _, err := os.Stat(p); err == nil {
-					siblingEventNodes = append(siblingEventNodes, p)
-				}
-			}
-		}
-	}
-
-	// 2. Parent USB or composite device to find companion interfaces (e.g. hidraw4, hidraw9, sibling event30)
 	curr := sysDev
-	var usbParent string
-	for i := 0; i < 4; i++ {
+	var rootPath string
+	for i := 0; i < 8; i++ {
 		curr = filepath.Dir(curr)
 		if curr == "/" || curr == "." {
 			break
 		}
-		if entries, err := os.ReadDir(curr); err == nil {
-			for _, e := range entries {
-				if strings.Contains(e.Name(), ":") {
-					usbParent = curr
-					break
-				}
-			}
-		}
-		if usbParent != "" {
+		// In Linux sysfs, a physical USB device root contains idVendor,
+		// and Bluetooth devices contain address or uevent.
+		if fi, err := os.Stat(filepath.Join(curr, "idVendor")); err == nil && !fi.IsDir() {
+			rootPath = curr
 			break
 		}
+		if rootPath == "" {
+			if fi, err := os.Stat(filepath.Join(curr, "uevent")); err == nil && !fi.IsDir() {
+				rootPath = curr
+			}
+		}
+	}
+	if rootPath == "" {
+		rootPath = sysDev
+	}
+	return base, rootPath
+}
+
+// FindDeviceCompanionNodes discovers all companion sibling /dev/input/event* device nodes
+// that belong to the same physical hardware device as devNode (e.g. companion interfaces on composite keyboards/mice).
+func FindDeviceCompanionNodes(devNode string) []string {
+	base, rootPath := findDeviceRootSysPath(devNode)
+	if base == "" || rootPath == "" {
+		return nil
 	}
 
-	if usbParent != "" {
-		_ = filepath.Walk(usbParent, func(path string, info os.FileInfo, err error) error {
-			if err != nil || !info.IsDir() {
-				return nil
-			}
-			name := info.Name()
-			if strings.HasPrefix(name, "hidraw") && name != "hidraw" {
-				p := filepath.Join("/dev", name)
-				if _, err := os.Stat(p); err == nil && !containsString(hidrawNodes, p) {
-					hidrawNodes = append(hidrawNodes, p)
-				}
-			} else if strings.HasPrefix(name, "js") && name != "js" {
-				p := filepath.Join("/dev/input", name)
-				if _, err := os.Stat(p); err == nil && !containsString(jsNodes, p) {
-					jsNodes = append(jsNodes, p)
-				}
-			} else if strings.HasPrefix(name, "event") && name != "event" && name != base {
-				p := filepath.Join("/dev/input", name)
-				if _, err := os.Stat(p); err == nil && !containsString(siblingEventNodes, p) {
-					siblingEventNodes = append(siblingEventNodes, p)
-				}
-			}
+	var siblings []string
+	seen := make(map[string]bool)
+
+	_ = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
 			return nil
-		})
+		}
+		name := info.Name()
+		if strings.HasPrefix(name, "event") && name != "event" && name != base {
+			p := filepath.Join(devInputDir, name)
+			if _, err := os.Stat(p); err == nil && !seen[p] {
+				siblings = append(siblings, p)
+				seen[p] = true
+			}
+		}
+		return nil
+	})
+
+	return siblings
+}
+
+// FindGamepadCompanionNodes discovers all companion js*, hidraw*, and sibling event*
+// device nodes that belong to the same hardware device as devNode (e.g. /dev/input/event29).
+func FindGamepadCompanionNodes(devNode string) (jsNodes, hidrawNodes, siblingEventNodes []string) {
+	base, rootPath := findDeviceRootSysPath(devNode)
+	if base == "" || rootPath == "" {
+		return nil, nil, nil
 	}
+
+	seenJs := make(map[string]bool)
+	seenHid := make(map[string]bool)
+	seenEvent := make(map[string]bool)
+
+	_ = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		name := info.Name()
+		if strings.HasPrefix(name, "hidraw") && name != "hidraw" {
+			p := filepath.Join(devDir, name)
+			if _, err := os.Stat(p); err == nil && !seenHid[p] {
+				hidrawNodes = append(hidrawNodes, p)
+				seenHid[p] = true
+			}
+		} else if strings.HasPrefix(name, "js") && name != "js" {
+			p := filepath.Join(devInputDir, name)
+			if _, err := os.Stat(p); err == nil && !seenJs[p] {
+				jsNodes = append(jsNodes, p)
+				seenJs[p] = true
+			}
+		} else if strings.HasPrefix(name, "event") && name != "event" && name != base {
+			p := filepath.Join(devInputDir, name)
+			if _, err := os.Stat(p); err == nil && !seenEvent[p] {
+				siblingEventNodes = append(siblingEventNodes, p)
+				seenEvent[p] = true
+			}
+		}
+		return nil
+	})
 
 	return jsNodes, hidrawNodes, siblingEventNodes
 }

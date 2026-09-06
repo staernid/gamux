@@ -47,19 +47,11 @@ func SanitizeFolderName(name string) string {
 	if s == "" {
 		return "Unknown_Game"
 	}
-	var sb strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == ' ' {
-			sb.WriteRune(r)
-		} else {
-			sb.WriteRune('_')
-		}
-	}
-	res := strings.TrimSpace(sb.String())
-	if res == "" {
+	clean := util.SanitizeInstallDir(s)
+	if clean == "" {
 		return "Game"
 	}
-	return res
+	return clean
 }
 
 // CreateBackup archives all active save, config, and cloud files for a game into a timestamped portable .zip archive.

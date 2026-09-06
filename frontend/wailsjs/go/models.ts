@@ -16,13 +16,13 @@ export namespace config {
 	    seat2_keyboard?: string;
 	    seat1_mouse?: string;
 	    seat2_mouse?: string;
-	    seat2_force_grab_cursor?: boolean;
-	    seat2_grab_keyboard?: boolean;
+	    seat2_force_grab_cursor: boolean;
+	    seat2_grab_keyboard: boolean;
 	    seat2_compositor?: string;
-	    seat2_nest_cage?: boolean;
-	    seat2_show_cursor?: boolean;
-	    seat1_display_index?: number;
-	    seat2_display_index?: number;
+	    seat2_nest_cage: boolean;
+	    seat2_show_cursor: boolean;
+	    seat1_display_index: number;
+	    seat2_display_index: number;
 	    sunshine_port_p1?: number;
 	    sunshine_port_p2?: number;
 	
@@ -430,6 +430,7 @@ export namespace domain {
 	    is_ready: boolean;
 	    original_backups?: string[];
 	    settings_dir_exists: boolean;
+	    settings_dirs?: string[];
 	    steam_appid_txt_found: boolean;
 	    current_language?: string;
 	    cover_url?: string;
@@ -516,6 +517,7 @@ export namespace domain {
 	        this.is_ready = source["is_ready"];
 	        this.original_backups = source["original_backups"];
 	        this.settings_dir_exists = source["settings_dir_exists"];
+	        this.settings_dirs = source["settings_dirs"];
 	        this.steam_appid_txt_found = source["steam_appid_txt_found"];
 	        this.current_language = source["current_language"];
 	        this.cover_url = source["cover_url"];

@@ -13,6 +13,7 @@ import (
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/manifest"
+	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util/testutil"
 )
@@ -125,8 +126,18 @@ func TestApp_SaveConfig_UpdatesStateAndDisk(t *testing.T) {
 	updatedCfg.MangoHud = true
 	updatedCfg.LibraryPaths = nil
 
+	originalEngine := app.Engine
+	originalBus := app.Engine.EventBus
+
 	if err := app.SaveConfig(&updatedCfg); err != nil {
 		t.Fatalf("app.SaveConfig failed: %v", err)
+	}
+
+	if app.Engine != originalEngine {
+		t.Errorf("expected app.Engine instance to be preserved across SaveConfig")
+	}
+	if app.Engine.EventBus != originalBus {
+		t.Errorf("expected app.Engine.EventBus to be preserved across SaveConfig")
 	}
 
 	// Verify app.Config retained HubcapAPIKey, updated OperatingMode, and cleared LibraryPaths
@@ -455,3 +466,73 @@ func TestApp_MetadataAndSpeedLimit(t *testing.T) {
 		t.Errorf("expected updated speed limit 5242880, got %d", limit)
 	}
 }
+
+func TestApp_ProcessTrackingAndRunningGames(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "TrackedGame")
+	_ = os.MkdirAll(gameDir, 0755)
+	scriptPath := filepath.Join(gameDir, "sleep.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 10\n"), 0755)
+
+	app := NewApp(config.DefaultConfig())
+
+	// Initially not running
+	if app.IsGameRunning(gameDir) {
+		t.Errorf("expected game not to be running initially")
+	}
+	if app.IsGameRunning(gameDir + "/") {
+		t.Errorf("expected game not to be running initially with trailing slash")
+	}
+
+	// Test empty path validation
+	if app.IsGameRunning("") {
+		t.Errorf("expected empty path IsGameRunning to be false")
+	}
+	if err := app.StopGame(""); err == nil {
+		t.Errorf("expected StopGame with empty path to return error")
+	}
+
+	// Launch dummy game
+	opts := runner.LaunchOptions{
+		GameDir:  gameDir + "/",
+		ExePath:  scriptPath,
+		Platform: "linux",
+		Runner:   runner.RunnerLinux,
+	}
+	_, err := app.Engine.RunnerMgr.Start(context.Background(), app.Config, opts)
+	if err != nil {
+		t.Fatalf("RunnerMgr.Start failed: %v", err)
+	}
+
+	// Verify running via canonical and non-canonical path
+	if !app.IsGameRunning(gameDir) {
+		t.Errorf("expected IsGameRunning(%q) = true", gameDir)
+	}
+	if !app.IsGameRunning(gameDir + "/") {
+		t.Errorf("expected IsGameRunning(%q) with trailing slash = true", gameDir+"/")
+	}
+
+	// Verify GetRunningGames includes canonical path
+	runningList := app.GetRunningGames()
+	found := false
+	for _, p := range runningList {
+		if p == gameDir {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected %q in GetRunningGames(), got: %v", gameDir, runningList)
+	}
+
+	// Stop game via path with trailing slash
+	if err := app.StopGame(gameDir + "/"); err != nil {
+		t.Fatalf("StopGame failed: %v", err)
+	}
+
+	// Verify stopped
+	if app.IsGameRunning(gameDir) {
+		t.Errorf("expected game to be stopped")
+	}
+}
+

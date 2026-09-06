@@ -77,4 +77,20 @@ describe('SeamlessSwitch Component', () => {
     expect(toggle.getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByText('(Override)')).not.toBeInTheDocument();
   });
+
+  it('supports checked prop and compact mode without label', async () => {
+    const { component } = render(SeamlessSwitch, {
+      props: {
+        checked: true,
+        tooltip: 'Software Cursor'
+      }
+    });
+
+    const toggle = screen.getByRole('switch', { name: /Software Cursor/i });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+
+    await fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
 });
+

@@ -37,6 +37,7 @@ const DEFAULT_MOCKS = {
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
   isGameRunning: () => false,
+  getRunningGames: () => [],
   getMultiseatCapabilities: () => ({
     has_bwrap: true,
     has_pasta: true,

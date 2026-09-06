@@ -23,6 +23,7 @@ import (
 
 	"github.com/bodgit/sevenzip"
 	"github.com/klauspost/compress/zstd"
+	"github.com/staernid/gamux/ini"
 	"github.com/ulikunitz/xz/lzma"
 )
 
@@ -165,6 +166,12 @@ func CopyFile(src, dest string) error {
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+// DirExists checks if a path exists and is a directory.
+func DirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // ExpandPath expands ~ to the user's home directory and standardizes slashes.
@@ -943,4 +950,49 @@ func WriteFileAtomic(filePath string, data []byte, perm os.FileMode) error {
 	cleanUp = false
 	return nil
 }
+
+// ParseColdClientLoaderExe parses ColdClientLoader.ini if present and returns the resolved executable target path.
+func ParseColdClientLoaderExe(gameDir string) string {
+	iniPath := filepath.Join(gameDir, "ColdClientLoader.ini")
+	f, err := ini.LoadFile(iniPath)
+	if err != nil {
+		return ""
+	}
+
+	var rawExe string
+	// Check standard launcher sections first: [Loader], [Launcher], [SmartSteamEmu], and default section ""
+	for _, secName := range []string{"Loader", "Launcher", "SmartSteamEmu", ""} {
+		if sec, ok := f.GetSection(secName); ok {
+			if val, ok := sec.Get("Exe"); ok && strings.TrimSpace(val) != "" {
+				rawExe = strings.TrimSpace(val)
+				break
+			}
+		}
+	}
+
+	// Fallback: check all sections for an Exe key
+	if rawExe == "" {
+		for _, sec := range f.Sections() {
+			if val, ok := sec.Get("Exe"); ok && strings.TrimSpace(val) != "" {
+				rawExe = strings.TrimSpace(val)
+				break
+			}
+		}
+	}
+
+	if rawExe == "" {
+		return ""
+	}
+
+	rawExe = strings.Trim(rawExe, "\"'")
+	if rawExe == "" {
+		return ""
+	}
+
+	if !filepath.IsAbs(rawExe) {
+		return JoinPaths(gameDir, rawExe)
+	}
+	return CanonicalPath(rawExe)
+}
+
 

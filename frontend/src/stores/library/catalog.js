@@ -6,14 +6,31 @@ export const games = writable([]);
 export const isScanning = writable(false);
 export const runningGames = writable(new Set());
 
+export function isGamePathRunning(runningSetOrArray, path) {
+  if (!path || !runningSetOrArray) return false;
+  if (runningSetOrArray instanceof Set) {
+    for (const p of runningSetOrArray) {
+      if (isSamePath(p, path)) return true;
+    }
+    return false;
+  }
+  if (Array.isArray(runningSetOrArray)) {
+    return runningSetOrArray.some(p => isSamePath(p, path));
+  }
+  return false;
+}
+
 export function setGameRunning(gameDir, isRunning, playtimeSeconds, lastPlayed) {
   if (!gameDir) return;
   runningGames.update(set => {
-    const next = new Set(set);
+    const next = new Set();
+    for (const p of set) {
+      if (!isSamePath(p, gameDir)) {
+        next.add(p);
+      }
+    }
     if (isRunning) {
       next.add(gameDir);
-    } else {
-      next.delete(gameDir);
     }
     return next;
   });

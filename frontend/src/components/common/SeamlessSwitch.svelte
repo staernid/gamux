@@ -5,16 +5,24 @@
   export let description = '';
   export let tooltip = '';
   export let value = false; // boolean or null (for inherit mode)
+  export let checked = undefined;
   export let inheritedValue = undefined; // boolean global default if in inherit mode
   export let disabled = false;
+  export let compact = false;
 
   const dispatch = createEventDispatcher();
+
+  // If checked is passed, sync value from checked
+  $: if (checked !== undefined && value !== checked) {
+    value = checked;
+  }
 
   $: hasInheritance = inheritedValue !== undefined && inheritedValue !== null;
   $: isInherited = hasInheritance && (value === null || value === undefined);
   $: effectiveValue = isInherited ? Boolean(inheritedValue) : Boolean(value);
   $: isOverridden = hasInheritance && !isInherited;
-  $: effectiveDescription = description || tooltip;
+  $: effectiveDescription = description;
+  $: isCompact = compact || (!label && !description);
 
   function toggleSwitch() {
     if (disabled) return;
@@ -27,6 +35,9 @@
     } else {
       value = !value;
     }
+    if (checked !== undefined) {
+      checked = value;
+    }
     dispatch('change', value);
   }
 
@@ -34,6 +45,9 @@
     e.stopPropagation();
     if (disabled || !hasInheritance) return;
     value = null;
+    if (checked !== undefined) {
+      checked = null;
+    }
     dispatch('change', null);
   }
 
@@ -51,39 +65,41 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all select-none
-    {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
-    {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
+  class="flex items-start sm:items-center justify-between gap-3 select-none
+    {isCompact ? 'p-0 bg-transparent border-0' : 'p-2.5 sm:p-3 rounded-xl transition-all ' + (isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border')}
+    {disabled ? 'opacity-40 pointer-events-none' : (isCompact ? '' : 'hover:bg-surface-card')}"
   role="switch"
   tabindex="0"
   aria-checked={effectiveValue}
-  aria-label={label || 'Setting toggle'}
+  aria-label={label || tooltip || 'Setting toggle'}
   on:click={toggleSwitch}
   on:keydown={handleKeyDown}
 >
-  <!-- Left Side: Label & Description with Override Dot -->
-  <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
-    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
+  {#if !isCompact}
+    <!-- Left Side: Label & Description with Override Dot -->
+    <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
+      <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
 
-    <div class="space-y-0.5 min-w-0 flex-1">
-      <div class="flex items-center space-x-2 flex-wrap">
-        <span class="text-xs font-semibold {isOverridden ? 'text-white font-bold' : 'text-neutral-200'}">
-          {label}
-        </span>
-        {#if isOverridden}
-          <span class="text-3xs font-mono text-neutral-300 font-medium">
-            (Override)
+      <div class="space-y-0.5 min-w-0 flex-1">
+        <div class="flex items-center space-x-2 flex-wrap">
+          <span class="text-xs font-semibold {isOverridden ? 'text-white font-bold' : 'text-neutral-200'}">
+            {label}
           </span>
+          {#if isOverridden}
+            <span class="text-3xs font-mono text-neutral-300 font-medium">
+              (Override)
+            </span>
+          {/if}
+        </div>
+
+        {#if effectiveDescription}
+          <p class="text-xs text-neutral-400 leading-relaxed">
+            {effectiveDescription}
+          </p>
         {/if}
       </div>
-
-      {#if effectiveDescription}
-        <p class="text-xs text-neutral-400 leading-relaxed">
-          {effectiveDescription}
-        </p>
-      {/if}
     </div>
-  </div>
+  {/if}
 
   <!-- Right Side: Reset Button + Switch -->
   <div class="flex items-center space-x-2 flex-shrink-0">
@@ -119,5 +135,3 @@
     </div>
   </div>
 </div>
-
-

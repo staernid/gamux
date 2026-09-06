@@ -4,22 +4,14 @@
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import StepperRow from '../../common/StepperRow.svelte';
   import GhostInput from '../../common/GhostInput.svelte';
+  import { BACKUP_RETENTION_OPTIONS } from '../../../constants/options.js';
 
   export let cfgDraft;
 
   let showAdvancedStorage = false;
   let pendingRemovePath = null;
 
-  const retentionOptions = [
-    { value: 1, label: '1 backup' },
-    { value: 2, label: '2 backups' },
-    { value: 3, label: '3 backups' },
-    { value: 5, label: '5 backups (Recommended)' },
-    { value: 10, label: '10 backups' },
-    { value: 15, label: '15 backups' },
-    { value: 20, label: '20 backups' },
-    { value: 30, label: '30 backups' }
-  ];
+  const retentionOptions = BACKUP_RETENTION_OPTIONS;
 
   async function handleAddLibraryPath() {
     try {

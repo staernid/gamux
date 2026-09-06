@@ -105,7 +105,11 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 				args = append(args, "-f")
 			}
 		case LayoutSideBySide, LayoutTopBottom:
-			ww, wh, _, _ := CalculateSplitGeometry(opts.Layout, opts.SeatID, opts.WindowWidth, opts.WindowHeight)
+			ww := opts.WindowWidth
+			wh := opts.WindowHeight
+			if ww <= 0 || wh <= 0 {
+				ww, wh, _, _ = CalculateSplitGeometry(opts.Layout, opts.SeatID, opts.WindowWidth, opts.WindowHeight)
+			}
 			// For split layouts, default render resolution to window resolution for 1:1 pixel mapping
 			if tw <= 0 || th <= 0 {
 				tw = ww

@@ -33,10 +33,13 @@ func (a *App) SaveConfig(newCfg *config.Config) error {
 	loadedCfg, err := config.LoadConfig("")
 	if err == nil {
 		a.Config = loadedCfg
-		a.Engine = engine.New(loadedCfg)
 	} else {
 		a.Config = newCfg
-		a.Engine = engine.New(newCfg)
+	}
+	if a.Engine != nil {
+		a.Engine.UpdateConfig(a.Config)
+	} else {
+		a.Engine = engine.New(a.Config)
 	}
 	slog.Info("Configuration updated and saved via GUI")
 	return nil

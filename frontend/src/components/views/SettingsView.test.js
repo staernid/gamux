@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import SettingsView from './SettingsView.svelte';
+import { AppAPI } from '../../api/app.js';
 
 describe('SettingsView Component', () => {
   it('renders primary system settings tabs and general form fields by default', async () => {
@@ -86,4 +87,41 @@ describe('SettingsView Component', () => {
     expect(screen.getByText('Normalize Folders')).toBeInTheDocument();
     expect(screen.getByText('Verify Manifests')).toBeInTheDocument();
   });
+
+  it('switches to Co-Op tab and persists software cursor and pointer toggles', async () => {
+    const saveSpy = vi.spyOn(AppAPI, 'saveConfig').mockResolvedValue();
+    render(SettingsView);
+
+    // Wait for onMount to complete initial config hydration
+    await new Promise(r => setTimeout(r, 50));
+
+    const coopTab = screen.getByRole('tab', { name: /Co-Op/i });
+    await fireEvent.click(coopTab);
+
+    expect(screen.getByText('Player 2 Pointer & Compositor Options')).toBeInTheDocument();
+    const softwareCursorText = screen.getByText('Software Cursor');
+    const softwareCursorContainer = softwareCursorText.closest('div.flex');
+    const softwareCursorSwitch = softwareCursorContainer.querySelector('[role="switch"]');
+
+    expect(softwareCursorSwitch).toBeInTheDocument();
+    expect(softwareCursorSwitch.getAttribute('aria-checked')).toBe('true');
+
+    // Click toggle
+    await fireEvent.click(softwareCursorSwitch);
+    expect(softwareCursorSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // Save changes
+    const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+    await fireEvent.click(saveBtn);
+
+    expect(saveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        multiseat: expect.objectContaining({
+          seat2_show_cursor: false,
+          seat2_compositor: 'auto'
+        })
+      })
+    );
+  });
 });
+

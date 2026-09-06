@@ -1,6 +1,16 @@
 import { writable, get } from 'svelte/store';
 import { AppAPI } from '../api/app.js';
 import { configStore } from './config.js';
+import { isSamePath } from '../utils/game.js';
+
+export function getActiveSession(sessions, gameDir) {
+  if (!sessions || !gameDir) return null;
+  if (sessions[gameDir]) return sessions[gameDir];
+  for (const [key, sess] of Object.entries(sessions)) {
+    if (isSamePath(key, gameDir)) return sess;
+  }
+  return null;
+}
 
 export function resolveGamepadAssignments(gamepads = [], seat1Pref = 'auto', seat2Pref = 'auto') {
   const pads = Array.isArray(gamepads) ? gamepads : [];
@@ -305,10 +315,7 @@ function createMultiseatStore() {
       const isExplicitDeviceNode = (node) => Boolean(node && node !== 'none' && node !== 'auto');
       const p2HasDedicatedKBM = isExplicitDeviceNode(seat2Kbd) || isExplicitDeviceNode(seat2Mouse);
 
-      let seat2Compositor = state.staging?.seat2?.compositor || mCfg.seat2_compositor || 'auto';
-      if ((seat2Compositor === 'auto' || !seat2Compositor) && p2HasDedicatedKBM) {
-        seat2Compositor = 'cage';
-      }
+      const seat2Compositor = state.staging?.seat2?.compositor || mCfg.seat2_compositor || 'auto';
       const seat2NestCage = state.staging?.seat2?.nest_cage ?? mCfg.seat2_nest_cage ?? false;
       const seat2ShowCursor = state.staging?.seat2?.show_cursor ?? mCfg.seat2_show_cursor ?? true;
 
@@ -371,8 +378,12 @@ function createMultiseatStore() {
     async stopSession(gameDir) {
       await AppAPI.stopMultiseatSession(gameDir);
       update(state => {
-        const next = { ...state.activeSessions };
-        delete next[gameDir];
+        const next = {};
+        for (const [key, sess] of Object.entries(state.activeSessions)) {
+          if (!isSamePath(key, gameDir)) {
+            next[key] = sess;
+          }
+        }
         return { ...state, activeSessions: next };
       });
     },
@@ -380,17 +391,26 @@ function createMultiseatStore() {
     async stopSeat(gameDir, seatId) {
       await AppAPI.stopMultiseatSeat(gameDir, seatId);
       update(state => {
-        const sess = state.activeSessions[gameDir];
-        if (!sess) return state;
-        const nextSeat = { ...sess[seatId], is_running: false };
-        const isStillRunning = (seatId === 'p1' ? sess.seat2?.is_running : sess.seat1?.is_running) ?? false;
+        let matchedKey = null;
+        for (const key of Object.keys(state.activeSessions)) {
+          if (isSamePath(key, gameDir)) {
+            matchedKey = key;
+            break;
+          }
+        }
+        if (!matchedKey) return state;
+        const sess = state.activeSessions[matchedKey];
+        const seatKey = (seatId === 'p1' || seatId === 'seat1') ? 'seat1' : 'seat2';
+        const nextSeat = { ...(sess[seatKey] || {}), is_running: false };
+        const otherKey = seatKey === 'seat1' ? 'seat2' : 'seat1';
+        const isStillRunning = (sess[otherKey]?.is_running) ?? false;
         return {
           ...state,
           activeSessions: {
             ...state.activeSessions,
-            [gameDir]: {
+            [matchedKey]: {
               ...sess,
-              [seatId]: nextSeat,
+              [seatKey]: nextSeat,
               is_running: isStillRunning,
             },
           },
@@ -400,9 +420,16 @@ function createMultiseatStore() {
 
     setSessionInactive(gameDir) {
       update(state => {
-        if (!state.activeSessions[gameDir]) return state;
-        const next = { ...state.activeSessions };
-        delete next[gameDir];
+        let changed = false;
+        const next = {};
+        for (const [key, sess] of Object.entries(state.activeSessions)) {
+          if (isSamePath(key, gameDir)) {
+            changed = true;
+          } else {
+            next[key] = sess;
+          }
+        }
+        if (!changed) return state;
         return { ...state, activeSessions: next };
       });
     },
@@ -411,13 +438,19 @@ function createMultiseatStore() {
       try {
         const st = await AppAPI.getMultiseatSessionStatus(gameDir);
         if (st) {
-          update(state => ({
-            ...state,
-            activeSessions: {
-              ...state.activeSessions,
-              [gameDir]: st,
-            },
-          }));
+          update(state => {
+            const next = { ...state.activeSessions };
+            for (const key of Object.keys(next)) {
+              if (isSamePath(key, gameDir) && key !== gameDir) {
+                delete next[key];
+              }
+            }
+            next[gameDir] = st;
+            return {
+              ...state,
+              activeSessions: next,
+            };
+          });
         }
       } catch (err) {
         console.warn('Failed to refresh multiseat status:', err);

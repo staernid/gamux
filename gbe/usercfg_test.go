@@ -3,6 +3,7 @@ package gbe
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +76,59 @@ ip_country=US
 	}
 	if cfg.AccountSteamID != "76561198077567604" {
 		t.Errorf("expected '76561198077567604', got %q", cfg.AccountSteamID)
+	}
+}
+
+func TestGSEUserConfig_PreservesCommentsAndExtraSections(t *testing.T) {
+	tmpDir := t.TempDir()
+	iniPath := filepath.Join(tmpDir, "configs.user.ini")
+
+	content := `# Global user persona comment
+[user::general]
+# User account name
+account_name=OriginalPlayer
+account_steamid=76561197960287930
+language=english
+ip_country=US
+
+[user::custom]
+custom_broadcast=1
+`
+	if err := os.WriteFile(iniPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadGSEUserConfigFromPath(iniPath)
+	if err != nil {
+		t.Fatalf("LoadGSEUserConfigFromPath failed: %v", err)
+	}
+
+	cfg.AccountName = "NewPlayer"
+	cfg.Language = "german"
+
+	if err := SaveGSEUserConfigToPath(iniPath, cfg); err != nil {
+		t.Fatalf("SaveGSEUserConfigToPath failed: %v", err)
+	}
+
+	data, err := os.ReadFile(iniPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := string(data)
+
+	if !strings.Contains(res, "# Global user persona comment") {
+		t.Errorf("expected global comment to be preserved, got:\n%s", res)
+	}
+	if !strings.Contains(res, "# User account name") {
+		t.Errorf("expected account name comment to be preserved, got:\n%s", res)
+	}
+	if !strings.Contains(res, "account_name=NewPlayer") {
+		t.Errorf("expected updated account_name, got:\n%s", res)
+	}
+	if !strings.Contains(res, "language=german") {
+		t.Errorf("expected updated language, got:\n%s", res)
+	}
+	if !strings.Contains(res, "[user::custom]") || !strings.Contains(res, "custom_broadcast=1") {
+		t.Errorf("expected [user::custom] section to be preserved, got:\n%s", res)
 	}
 }

@@ -418,4 +418,46 @@ func TestSplitArgs(t *testing.T) {
 	}
 }
 
+func TestParseColdClientLoaderExe(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Missing file returns empty string
+	if got := ParseColdClientLoaderExe(tmpDir); got != "" {
+		t.Errorf("expected empty string for missing file, got %q", got)
+	}
+
+	// 2. Relative exe in [Loader] section
+	iniContent := `
+[SmartSteamEmu]
+AppId = 12345
+
+[Loader]
+# Target game executable
+Exe = bin/game.exe
+CommandLine = -novid
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "ColdClientLoader.ini"), []byte(iniContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := JoinPaths(tmpDir, "bin/game.exe")
+	if got := ParseColdClientLoaderExe(tmpDir); got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+
+	// 3. Quoted path in [Launcher]
+	iniContent2 := `
+[Launcher]
+Exe = "game_special.exe"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "ColdClientLoader.ini"), []byte(iniContent2), 0644); err != nil {
+		t.Fatal(err)
+	}
+	expected2 := JoinPaths(tmpDir, "game_special.exe")
+	if got := ParseColdClientLoaderExe(tmpDir); got != expected2 {
+		t.Errorf("expected %q, got %q", expected2, got)
+	}
+}
+
+
 

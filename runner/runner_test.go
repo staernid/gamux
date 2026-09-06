@@ -835,8 +835,8 @@ func TestBuildCommand_DllOverrides(t *testing.T) {
 	if !strings.Contains(foundOverride, "d3d11=n,b") {
 		t.Errorf("expected d3d11=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
 	}
-	if !strings.Contains(foundOverride, "steamclient,steamclient64=n,b") {
-		t.Errorf("expected loader redirection steamclient,steamclient64=n,b in WINEDLLOVERRIDES, got: %s", foundOverride)
+	if !strings.Contains(foundOverride, "steamclient,steamclient64,GameOverlayRenderer,GameOverlayRenderer64=n,b") {
+		t.Errorf("expected loader redirection in WINEDLLOVERRIDES, got: %s", foundOverride)
 	}
 }
 
@@ -880,7 +880,7 @@ func TestBuildCommand_Linux_LoaderPreload(t *testing.T) {
 	binPath := filepath.Join(tmpDir, "game.x86_64")
 	_ = os.WriteFile(binPath, []byte("\x7fELF..."), 0755)
 
-	// ModeLoader -> should have LD_PRELOAD
+	// ModeLoader -> should have libX11.so.6 in LD_PRELOAD
 	optsLoader := LaunchOptions{
 		GameDir:       tmpDir,
 		ExePath:       "game.x86_64",
@@ -895,16 +895,30 @@ func TestBuildCommand_Linux_LoaderPreload(t *testing.T) {
 	}
 
 	var foundPreload string
+	var foundUser string
+	var foundClientLaunch string
 	for _, env := range cmdLoader.Env {
 		if strings.HasPrefix(env, "LD_PRELOAD=") {
 			foundPreload = strings.TrimPrefix(env, "LD_PRELOAD=")
 		}
+		if strings.HasPrefix(env, "SteamAppUser=") {
+			foundUser = strings.TrimPrefix(env, "SteamAppUser=")
+		}
+		if strings.HasPrefix(env, "SteamClientLaunch=") {
+			foundClientLaunch = strings.TrimPrefix(env, "SteamClientLaunch=")
+		}
 	}
-	if !strings.Contains(foundPreload, "steamclient.so") {
-		t.Errorf("expected steamclient.so in LD_PRELOAD for linux loader mode, got: %s", foundPreload)
+	if !strings.Contains(foundPreload, "libX11.so.6") {
+		t.Errorf("expected libX11.so.6 in LD_PRELOAD for linux loader mode, got: %s", foundPreload)
+	}
+	if foundUser != "client_player" {
+		t.Errorf("expected SteamAppUser=client_player, got: %s", foundUser)
+	}
+	if foundClientLaunch != "1" {
+		t.Errorf("expected SteamClientLaunch=1, got: %s", foundClientLaunch)
 	}
 
-	// ModeNone -> should NOT have LD_PRELOAD
+	// ModeNone -> should NOT have libX11.so.6 in LD_PRELOAD
 	optsNone := LaunchOptions{
 		GameDir:       tmpDir,
 		ExePath:       "game.x86_64",
@@ -920,8 +934,8 @@ func TestBuildCommand_Linux_LoaderPreload(t *testing.T) {
 
 	for _, env := range cmdNone.Env {
 		if strings.HasPrefix(env, "LD_PRELOAD=") {
-			if strings.Contains(env, "steamclient.so") {
-				t.Errorf("expected ModeNone to NOT have steamclient.so in LD_PRELOAD, got: %s", env)
+			if strings.Contains(env, "libX11.so.6") {
+				t.Errorf("expected ModeNone to NOT have libX11.so.6 in LD_PRELOAD, got: %s", env)
 			}
 		}
 	}
@@ -1252,7 +1266,7 @@ func TestGenerateLaunchScript_Windows(t *testing.T) {
 	if !strings.Contains(content, `export MY_CUSTOM_VAR="custom_val"`) {
 		t.Errorf("expected MY_CUSTOM_VAR in launch.sh")
 	}
-	if !strings.Contains(content, "steamclient,steamclient64=n,b") {
+	if !strings.Contains(content, "steamclient,steamclient64,GameOverlayRenderer,GameOverlayRenderer64=n,b") {
 		t.Errorf("expected loader dll overrides in launch.sh")
 	}
 	if !strings.Contains(content, `"$GAME_DIR/Binaries/Win64/Game.exe"`) {
@@ -1293,6 +1307,126 @@ func TestGenerateLaunchScript_Linux(t *testing.T) {
 
 	if !strings.Contains(content, `exec "$GAME_DIR/game.x86_64" "$@"`) {
 		t.Errorf("expected direct native exec in launch.sh, got:\n%s", content)
+	}
+}
+
+func TestGenerateLaunchScript_LinuxLoader(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "LinuxGameLoader")
+	_ = os.MkdirAll(gameDir, 0755)
+	exePath := filepath.Join(gameDir, "game.x86_64")
+	_ = os.WriteFile(exePath, []byte("#!/bin/sh\n"), 0755)
+
+	profile := LaunchOptions{
+		GameDir:       gameDir,
+		Name:          "Test Linux Game Loader",
+		Platform:      "linux",
+		ExePath:       exePath,
+		OperatingMode: domain.ModeLoader,
+		Runner:        RunnerLinux,
+	}
+
+	cfg := config.DefaultConfig()
+	if err := GenerateLaunchScript(context.Background(), cfg, profile); err != nil {
+		t.Fatalf("GenerateLaunchScript failed: %v", err)
+	}
+
+	scriptPath := filepath.Join(gameDir, ".gamux", "launch.sh")
+	contentBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(contentBytes)
+
+	if !strings.Contains(content, `cleanup_steam`) {
+		t.Errorf("expected cleanup_steam trap in launch.sh for Linux loader mode")
+	}
+	if !strings.Contains(content, `trap cleanup_steam EXIT INT TERM`) {
+		t.Errorf("expected trap cleanup_steam in launch.sh")
+	}
+	if !strings.Contains(content, `export LD_PRELOAD="libX11.so.6"`) {
+		t.Errorf("expected libX11.so.6 preload in launch.sh")
+	}
+}
+
+func TestPrepareLinuxSteamEnvironment(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeHome := filepath.Join(tmpDir, "fake_home")
+	t.Setenv("HOME", fakeHome)
+
+	gbeDir := filepath.Join(tmpDir, "gbe")
+	x64Dir := filepath.Join(gbeDir, "linux_release", "experimental", "x64")
+	x86Dir := filepath.Join(gbeDir, "linux_release", "experimental", "x86")
+	_ = os.MkdirAll(x64Dir, 0755)
+	_ = os.MkdirAll(x86Dir, 0755)
+	_ = os.WriteFile(filepath.Join(x64Dir, "steamclient.so"), []byte("gbe_so_64"), 0755)
+	_ = os.WriteFile(filepath.Join(x86Dir, "steamclient.so"), []byte("gbe_so_86"), 0755)
+
+	gameDir := filepath.Join(tmpDir, "game")
+	gameSettings := filepath.Join(gameDir, "steam_settings")
+	_ = os.MkdirAll(gameSettings, 0755)
+
+	// Pre-create an existing steam.pid to test backup/restore
+	steamDir := filepath.Join(fakeHome, ".steam")
+	_ = os.MkdirAll(steamDir, 0755)
+	existingPidFile := filepath.Join(steamDir, "steam.pid")
+	_ = os.WriteFile(existingPidFile, []byte("999999\n"), 0644)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	opts := LaunchOptions{
+		GameDir:       gameDir,
+		Platform:      "linux",
+		OperatingMode: ModeLoader,
+	}
+
+	cleanup, err := PrepareLinuxSteamEnvironment(cfg, opts)
+	if err != nil {
+		t.Fatalf("PrepareLinuxSteamEnvironment failed: %v", err)
+	}
+
+	// Verify current PID is written
+	pidBytes, err := os.ReadFile(existingPidFile)
+	if err != nil {
+		t.Fatalf("failed to read steam.pid: %v", err)
+	}
+	expectedPid := fmt.Sprintf("%d\n", os.Getpid())
+	if string(pidBytes) != expectedPid {
+		t.Errorf("expected steam.pid to be %q, got %q", expectedPid, string(pidBytes))
+	}
+
+	// Verify steam.pid.orig exists
+	if !util.FileExists(filepath.Join(steamDir, "steam.pid.orig")) {
+		t.Errorf("expected steam.pid.orig to exist")
+	}
+
+	// Verify steamclient.so symlinks exist
+	sdk64Client := filepath.Join(steamDir, "sdk64", "steamclient.so")
+	if !util.FileExists(sdk64Client) {
+		t.Errorf("expected sdk64/steamclient.so to exist")
+	}
+	sdk32Client := filepath.Join(steamDir, "sdk32", "steamclient.so")
+	if !util.FileExists(sdk32Client) {
+		t.Errorf("expected sdk32/steamclient.so to exist")
+	}
+
+	// Verify steam_settings symlinks exist
+	if !util.DirExists(filepath.Join(steamDir, "sdk64", "steam_settings")) {
+		t.Errorf("expected sdk64/steam_settings to exist")
+	}
+
+	// Run cleanup
+	cleanup()
+
+	// Verify steam.pid was restored to original value
+	restoredPid, _ := os.ReadFile(existingPidFile)
+	if string(restoredPid) != "999999\n" {
+		t.Errorf("expected restored steam.pid to be 999999\\n, got: %q", string(restoredPid))
+	}
+	if util.FileExists(sdk64Client) {
+		t.Errorf("expected sdk64/steamclient.so to be removed after cleanup")
+	}
+	if util.DirExists(filepath.Join(steamDir, "sdk64", "steam_settings")) {
+		t.Errorf("expected sdk64/steam_settings symlink to be removed after cleanup")
 	}
 }
 
@@ -1516,6 +1650,157 @@ func TestFindLatestInstalledProton(t *testing.T) {
 		if !util.FileExists(latest) {
 			t.Errorf("FindLatestInstalledProton returned non-existent path: %s", latest)
 		}
+	}
+}
+
+func TestIsHelperDaemon(t *testing.T) {
+	cases := []struct {
+		name     string
+		expected bool
+	}{
+		{"wineserver", true},
+		{"services.exe", true},
+		{"SERVICES.EXE", true},
+		{"C:\\windows\\system32\\explorer.exe", true},
+		{"conhost.exe", true},
+		{"gamemoded", true},
+		{"bwrap", true},
+		{"pressure-vessel-wrap", true},
+		{"steam-runtime-launch-client", true},
+		{"pv-bwrap", true},
+		{"cyberpunk2077.exe", false},
+		{"game.x86_64", false},
+		{"hl2.exe", false},
+		{"wine", false},
+		{"wine64", false},
+	}
+
+	for _, c := range cases {
+		if got := isHelperDaemon(c.name); got != c.expected {
+			t.Errorf("isHelperDaemon(%q) = %v, want %v", c.name, got, c.expected)
+		}
+	}
+
+	// Test isProcessHelperDaemon with wine loaders
+	if !isProcessHelperDaemon("explorer.exe", []string{"explorer.exe", "/desktop"}) {
+		t.Errorf("expected explorer.exe to be detected as helper daemon")
+	}
+	if !isProcessHelperDaemon("wine64-preloader", []string{"wine64-preloader", "C:\\windows\\system32\\services.exe"}) {
+		t.Errorf("expected wine-launched services.exe to be detected as helper daemon")
+	}
+	if isProcessHelperDaemon("wine64-preloader", []string{"wine64-preloader", "Z:\\Games\\Cyberpunk\\bin\\x64\\Cyberpunk2077.exe"}) {
+		t.Errorf("expected wine-launched Cyberpunk2077.exe NOT to be detected as helper daemon")
+	}
+}
+
+func TestManager_PathCanonicalization(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "sleep.sh")
+	_ = os.WriteFile(scriptPath, []byte("#!/bin/sh\nsleep 5\n"), 0755)
+
+	mgr := NewManager()
+	cfg := config.DefaultConfig()
+
+	// Launch with trailing slash
+	dirWithSlash := tmpDir + "/"
+	opts := LaunchOptions{
+		GameDir:  dirWithSlash,
+		ExePath:  scriptPath,
+		Platform: "linux",
+		Runner:   RunnerLinux,
+	}
+
+	cmd, err := mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("mgr.Start failed: %v", err)
+	}
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd")
+	}
+
+	// Verify IsRunning matches both with and without trailing slash
+	cleanDir := filepath.Clean(tmpDir)
+	if !mgr.IsRunning(cleanDir) {
+		t.Errorf("expected IsRunning(%q) = true", cleanDir)
+	}
+	if !mgr.IsRunning(dirWithSlash) {
+		t.Errorf("expected IsRunning(%q) = true", dirWithSlash)
+	}
+
+	// Verify RunningGames returns canonical path
+	running := mgr.RunningGames()
+	if len(running) != 1 || running[0] != cleanDir {
+		t.Errorf("expected RunningGames() = [%q], got %v", cleanDir, running)
+	}
+
+	// Stop using the other path format
+	if err := mgr.Stop(cleanDir); err != nil {
+		t.Fatalf("mgr.Stop failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if mgr.IsRunning(cleanDir) || mgr.IsRunning(dirWithSlash) {
+		t.Errorf("expected game to be stopped for both path variations")
+	}
+}
+
+func TestManager_LingeringDaemonCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create mock helper script that copies /bin/sleep to a binary named "wineserver"
+	helperBin := filepath.Join(tmpDir, "wineserver")
+	sleepBin, _ := exec.LookPath("sleep")
+	if sleepBin == "" {
+		t.Skip("sleep binary not available")
+	}
+	data, err := os.ReadFile(sleepBin)
+	if err != nil {
+		t.Skip("could not read sleep binary")
+	}
+	if err := os.WriteFile(helperBin, data, 0755); err != nil {
+		t.Skip("could not create mock helper binary")
+	}
+
+	// Wrapper script runs the mock "wineserver" in background and immediately exits
+	wrapperScript := filepath.Join(tmpDir, "launch.sh")
+	scriptContent := fmt.Sprintf("#!/bin/sh\n%s 30 &\nexit 0\n", helperBin)
+	_ = os.WriteFile(wrapperScript, []byte(scriptContent), 0755)
+
+	bus := events.NewBus()
+	exitEventCh := make(chan events.Event, 1)
+	bus.SubscribeFunc(func(ev events.Event) {
+		if ev.Type == events.EventGameExited {
+			exitEventCh <- ev
+		}
+	})
+
+	mgr := NewManager(bus)
+	cfg := config.DefaultConfig()
+	opts := LaunchOptions{
+		GameDir:  tmpDir,
+		ExePath:  wrapperScript,
+		Platform: "linux",
+		Runner:   RunnerLinux,
+	}
+
+	_, err = mgr.Start(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("mgr.Start failed: %v", err)
+	}
+
+	// The wrapper exits immediately. Only the mock "wineserver" remains in pgid.
+	// The manager should recognize that no active game processes remain, terminate the daemon,
+	// and emit EventGameExited within 3 seconds.
+	select {
+	case ev := <-exitEventCh:
+		if ev.GameDir != util.CanonicalPath(tmpDir) {
+			t.Errorf("expected exit event for %q, got %q", tmpDir, ev.GameDir)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatalf("timeout: manager did not clean up lingering daemon and emit exit event")
+	}
+
+	if mgr.IsRunning(tmpDir) {
+		t.Errorf("expected manager not to report running after daemon cleanup")
 	}
 }
 

@@ -174,7 +174,63 @@ describe('CoopTab Component', () => {
     expect(screen.getByText('Player 2 Pointer & Compositor Options')).toBeInTheDocument();
     expect(screen.getByText('Force Grab Cursor')).toBeInTheDocument();
     expect(screen.getByText('Grab Keyboard (-g)')).toBeInTheDocument();
-    expect(screen.getByText('Software Cursor')).toBeInTheDocument();
-    expect(screen.getByText(/Cage Wayland compositor/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gamescope via libei/i)).toBeInTheDocument();
+  });
+
+  it('reflects and updates software cursor and pointer switches', async () => {
+    const draft = {
+      ...mockCfgDraft,
+      multiseat: {
+        ...mockCfgDraft.multiseat,
+        seat2_force_grab_cursor: true,
+        seat2_grab_keyboard: false,
+        seat2_show_cursor: true,
+        seat2_compositor: 'auto',
+      }
+    };
+
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    const softwareCursorText = screen.getByText('Software Cursor');
+    const softwareCursorContainer = softwareCursorText.closest('div.flex');
+    const softwareCursorSwitch = softwareCursorContainer.querySelector('[role="switch"]');
+
+    expect(softwareCursorSwitch).toBeInTheDocument();
+    expect(softwareCursorSwitch.getAttribute('aria-checked')).toBe('true');
+
+    // Clicking software cursor switch flips it to false
+    await fireEvent.click(softwareCursorSwitch);
+    expect(draft.multiseat.seat2_show_cursor).toBe(false);
+    expect(softwareCursorSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // Verify Force Grab Cursor switch is true and can be toggled
+    const forceGrabText = screen.getByText('Force Grab Cursor');
+    const forceGrabContainer = forceGrabText.closest('div.flex');
+    const forceGrabSwitch = forceGrabContainer.querySelector('[role="switch"]');
+    expect(forceGrabSwitch.getAttribute('aria-checked')).toBe('true');
+    await fireEvent.click(forceGrabSwitch);
+    expect(draft.multiseat.seat2_force_grab_cursor).toBe(false);
+
+    // Verify Grab Keyboard switch is false and can be toggled to true
+    const grabKbdText = screen.getByText('Grab Keyboard (-g)');
+    const grabKbdContainer = grabKbdText.closest('div.flex');
+    const grabKbdSwitch = grabKbdContainer.querySelector('[role="switch"]');
+    expect(grabKbdSwitch.getAttribute('aria-checked')).toBe('false');
+    await fireEvent.click(grabKbdSwitch);
+    expect(draft.multiseat.seat2_grab_keyboard).toBe(true);
+
+    // Verify Compositor Backend select updates value
+    const compositorText = screen.getByText('Compositor Backend');
+    const compositorContainer = compositorText.closest('div.flex');
+    const compositorSelect = compositorContainer.querySelector('select');
+    expect(compositorSelect.value).toBe('auto');
+    await fireEvent.change(compositorSelect, { target: { value: 'gamescope' } });
+    expect(draft.multiseat.seat2_compositor).toBe('gamescope');
   });
 });
+

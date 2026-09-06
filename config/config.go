@@ -77,13 +77,13 @@ type MultiseatConfig struct {
 	Seat2Keyboard         string `json:"seat2_keyboard,omitempty"`
 	Seat1Mouse            string `json:"seat1_mouse,omitempty"`
 	Seat2Mouse            string `json:"seat2_mouse,omitempty"`
-	Seat2ForceGrabCursor  bool   `json:"seat2_force_grab_cursor,omitempty"`
-	Seat2GrabKeyboard     bool   `json:"seat2_grab_keyboard,omitempty"`
+	Seat2ForceGrabCursor  bool   `json:"seat2_force_grab_cursor"`
+	Seat2GrabKeyboard     bool   `json:"seat2_grab_keyboard"`
 	Seat2Compositor       string `json:"seat2_compositor,omitempty"`
-	Seat2NestCage         bool   `json:"seat2_nest_cage,omitempty"`
-	Seat2ShowCursor       bool   `json:"seat2_show_cursor,omitempty"`
-	Seat1DisplayIndex     int    `json:"seat1_display_index,omitempty"`
-	Seat2DisplayIndex     int    `json:"seat2_display_index,omitempty"`
+	Seat2NestCage         bool   `json:"seat2_nest_cage"`
+	Seat2ShowCursor       bool   `json:"seat2_show_cursor"`
+	Seat1DisplayIndex     int    `json:"seat1_display_index"`
+	Seat2DisplayIndex     int    `json:"seat2_display_index"`
 	SunshinePortP1        int    `json:"sunshine_port_p1,omitempty"`
 	SunshinePortP2        int    `json:"sunshine_port_p2,omitempty"`
 }
@@ -165,6 +165,11 @@ func DefaultConfig() *Config {
 			Seat2Keyboard:         "auto",
 			Seat1Mouse:            "auto",
 			Seat2Mouse:            "auto",
+			Seat2ForceGrabCursor:  false,
+			Seat2GrabKeyboard:     false,
+			Seat2Compositor:       "auto",
+			Seat2NestCage:         false,
+			Seat2ShowCursor:       true,
 			Seat1DisplayIndex:     0,
 			Seat2DisplayIndex:     1,
 			SunshinePortP1:        47989,
@@ -216,6 +221,9 @@ func LoadConfig(customPath string) (*Config, error) {
 		cfg.Multiseat.DefaultLayout = "side_by_side"
 	} else if cfg.Multiseat.DefaultLayout == "vertical_split" {
 		cfg.Multiseat.DefaultLayout = "top_bottom"
+	}
+	if cfg.Multiseat.Seat2Compositor == "" {
+		cfg.Multiseat.Seat2Compositor = "auto"
 	}
 
 	hydrateAPIKeys(cfg)

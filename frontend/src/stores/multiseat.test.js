@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { multiseatStore, resolveGamepadAssignments } from './multiseat.js';
+import { multiseatStore, resolveGamepadAssignments, getActiveSession } from './multiseat.js';
 import { AppAPI } from '../api/app.js';
 
 describe('multiseatStore', () => {
@@ -85,7 +85,7 @@ describe('multiseatStore', () => {
     expect(get(multiseatStore).activeSessions[mockGame.gameDir]).toBeUndefined();
   });
 
-  it('defaults Seat 2 compositor to cage when dedicated KBM is configured with auto compositor', async () => {
+  it('preserves Seat 2 compositor as auto when dedicated KBM is configured with auto compositor', async () => {
     const launchSpy = vi.spyOn(AppAPI, 'launchMultiseatSession').mockResolvedValue();
 
     const mockGame = {
@@ -104,7 +104,7 @@ describe('multiseatStore', () => {
 
     expect(launchSpy).toHaveBeenCalled();
     const callArgs = launchSpy.mock.calls[launchSpy.mock.calls.length - 1][0];
-    expect(callArgs.seat2.compositor).toBe('cage');
+    expect(callArgs.seat2.compositor).toBe('auto');
     expect(callArgs.seat2.keyboard_node).toBe('/dev/input/event10');
     expect(callArgs.seat2.mouse_node).toBe('/dev/input/event11');
   });
@@ -151,6 +151,34 @@ describe('multiseatStore', () => {
     expect(launchSpy).toHaveBeenCalled();
     const callArgs = launchSpy.mock.calls[launchSpy.mock.calls.length - 1][0];
     expect(callArgs.seat2.compositor).toBe('auto');
+  });
+
+  it('retrieves active session regardless of trailing slash differences', () => {
+    const sessions = {
+      '/games/Portal 2': { is_running: true, seat1: { is_running: true } },
+    };
+    expect(getActiveSession(sessions, '/games/Portal 2')).toBeTruthy();
+    expect(getActiveSession(sessions, '/games/Portal 2/')).toBeTruthy();
+    expect(getActiveSession(sessions, '/games/Portal 2')?.is_running).toBe(true);
+    expect(getActiveSession(sessions, '/games/OtherGame')).toBeNull();
+  });
+
+  it('stops session and removes entry respecting path normalization', async () => {
+    await multiseatStore.launchSession({
+      gameDir: '/games/CoopGame/',
+      name: 'Co-op Game',
+      appId: '123',
+      exePath: '/games/CoopGame/game.exe',
+      runner: 'umu',
+    });
+
+    await multiseatStore.stopSeat('/games/CoopGame', 'p2');
+    const sessAfterSeat = getActiveSession(get(multiseatStore).activeSessions, '/games/CoopGame');
+    expect(sessAfterSeat?.seat2?.is_running).toBe(false);
+    expect(sessAfterSeat?.is_running).toBe(true);
+
+    multiseatStore.setSessionInactive('/games/CoopGame');
+    expect(getActiveSession(get(multiseatStore).activeSessions, '/games/CoopGame')).toBeNull();
   });
 
   describe('resolveGamepadAssignments', () => {

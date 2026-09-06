@@ -2,17 +2,17 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
+	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
@@ -86,8 +86,7 @@ func (eng *Engine) BatchProcess(ctx context.Context, parentDir string, opts Proc
 		}
 		gamePath := filepath.Join(absParent, entry.Name())
 
-		// Skip hidden folders
-		if strings.HasPrefix(entry.Name(), ".") {
+		if detector.IsIgnoredLibraryDir(gamePath) {
 			continue
 		}
 
@@ -167,9 +166,18 @@ func (eng *Engine) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOp
 		status, err := eng.InspectStatus(ctx, opts.GameDir)
 		if err == nil && status != nil && (status.IsClean() || !status.IsReady) {
 			slog.Info("EnsureAndLaunchGame auto-applying setup before launch", "dir", opts.GameDir, "game", status.Name)
+			opMode := domain.ModeLoader
+			if opts.OperatingMode != "" {
+				opMode = domain.NormalizeOperatingMode(opts.OperatingMode)
+			} else if status != nil && status.EffectiveOperatingMode() != "" {
+				opMode = status.EffectiveOperatingMode()
+			} else if eng.Config != nil && eng.Config.OperatingMode != "" {
+				opMode = domain.NormalizeOperatingMode(eng.Config.OperatingMode)
+			}
+
 			applyOpts := ProcessOptions{
 				Path:          opts.GameDir,
-				OperatingMode: domain.ModePortable,
+				OperatingMode: opMode,
 				WinePrefix:    opts.WinePrefix,
 				ExePath:       opts.ExePath,
 				ExeArgs:       opts.ExeArgs,
@@ -210,7 +218,7 @@ func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*domai
 //
 // NOTE (Architecture Invariant):
 // Profile saves must NOT trigger heavyweight binary modifications (gbe.Apply) unless the OperatingMode
-// explicitly transitioned (e.g. from portable to loader, or loader to standalone/none).
+// explicitly transitioned (e.g. from portable to loader, or loader to standalone/none), or if the game is unconfigured.
 // Normal configuration updates (launch arguments, HUD options, environment variables, artwork) are persisted
 // purely via SyncSettings/SaveProfile.
 func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts runner.LaunchOptions) error {
@@ -223,8 +231,6 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 	prevMode := ""
 	if existingProf != nil && existingProf.OperatingMode != "" {
 		prevMode = domain.NormalizeOperatingMode(existingProf.OperatingMode)
-	} else if eng.Config != nil && eng.Config.OperatingMode != "" {
-		prevMode = domain.NormalizeOperatingMode(eng.Config.OperatingMode)
 	}
 	newMode := ""
 	if opts.OperatingMode != "" {
@@ -240,10 +246,54 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 	// Ensure portable .gamux/launch.sh is regenerated with new profile options
 	_ = runner.GenerateLaunchScript(ctx, eng.Config, opts)
 
-	// Only trigger binary DRM application if the operating mode transitioned
-	if newMode != "" && !strings.EqualFold(newMode, prevMode) {
-		game, _ := eng.InspectLocal(ctx, opts.GameDir)
-		return compat.Apply(ctx, eng.Config, game, &opts, false)
+	game, _ := eng.InspectLocal(ctx, opts.GameDir)
+	isConfigured := false
+	if game != nil {
+		if newMode == domain.ModeLoader {
+			isConfigured = game.IsLoaderConfigured()
+		} else if newMode == domain.ModePortable {
+			isConfigured = game.IsPatched
+		}
+	}
+
+	// Trigger binary DRM application if the operating mode transitioned, or if the game is not yet configured for the selected mode
+	if newMode != "" && (!strings.EqualFold(newMode, prevMode) || !isConfigured) {
+		gameName := ""
+		if game != nil {
+			gameName = game.Name
+		}
+		if newMode == domain.ModeNone || newMode == domain.ModeStandalone {
+			pctx := &pipeline.Context{
+				Options: pipeline.Options{
+					Path: opts.GameDir,
+				},
+				Game:     domain.NewGame(gameName, opts.GameDir, "", ""),
+				Config:   eng.Config,
+				EventBus: eng.EventBus,
+			}
+			if eng.Tasks != nil {
+				return eng.Tasks.RunSyncOp(ctx, pipeline.NewRollbackOperation(gameName, opts.GameDir, pctx))
+			}
+			return pipeline.NewRollback().Execute(ctx, pctx)
+		}
+
+		applyOpts := ProcessOptions{
+			Path:          opts.GameDir,
+			OperatingMode: newMode,
+			WinePrefix:    opts.WinePrefix,
+			ExePath:       opts.ExePath,
+			ExeArgs:       opts.ExeArgs,
+		}
+		pctx := &pipeline.Context{
+			Options:  applyOpts,
+			Game:     domain.NewGame(gameName, opts.GameDir, "", ""),
+			Config:   eng.Config,
+			EventBus: eng.EventBus,
+		}
+		if eng.Tasks != nil {
+			return eng.Tasks.RunSyncOp(ctx, pipeline.NewSetupOperation(gameName, opts.GameDir, pctx))
+		}
+		return pipeline.NewSetup().Execute(ctx, pctx)
 	}
 
 	return nil
@@ -327,7 +377,22 @@ func (eng *Engine) ResetLaunchProfile(ctx context.Context, gameDir string) error
 		return err
 	}
 	game, _ := eng.InspectLocal(ctx, gameDir)
-	return compat.Apply(ctx, eng.Config, game, nil, false)
+	gameName := ""
+	if game != nil {
+		gameName = game.Name
+	}
+	pctx := &pipeline.Context{
+		Options: ProcessOptions{
+			Path: gameDir,
+		},
+		Game:     domain.NewGame(gameName, gameDir, "", ""),
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+	}
+	if eng.Tasks != nil {
+		return eng.Tasks.RunSyncOp(ctx, pipeline.NewSetupOperation(gameName, gameDir, pctx))
+	}
+	return pipeline.NewSetup().Execute(ctx, pctx)
 }
 
 // NotifyLaunch inspects a game directory for updates or configuration issues, and triggers a console/desktop notification if found.
@@ -388,200 +453,73 @@ func (eng *Engine) GetGameAchievements(ctx context.Context, gameDir string) ([]d
 	gameDir = util.CanonicalPath(gameDir)
 	status, _ := eng.InspectStatus(ctx, gameDir)
 
+	var settingsDirs []string
 	var appID uint32
-	if status != nil && status.AppID != "" {
-		appID, _ = util.ParseAppID(status.AppID)
+	if status != nil {
+		settingsDirs = status.SettingsDirs
+		if status.AppID != "" {
+			appID, _ = util.ParseAppID(status.AppID)
+		}
 	}
 
-	// Fallback to steam_appid.txt if appID wasn't parsed from ACF/status
-	if appID == 0 {
-		for _, p := range []string{
-			filepath.Join(gameDir, "steam_appid.txt"),
-			filepath.Join(gameDir, "steam_settings", "steam_appid.txt"),
-		} {
-			if data, err := os.ReadFile(p); err == nil {
-				txt := strings.TrimSpace(string(data))
-				if parsed, ok := util.ParseAppID(txt); ok && parsed > 0 {
-					appID = parsed
-					break
+	apiKey := ""
+	if eng.Config != nil {
+		apiKey = eng.Config.SteamWebAPIKey
+	}
+
+	return gbe.LoadAchievements(ctx, gameDir, appID, settingsDirs, apiKey)
+}
+
+// ResolveDownloadTarget computes the effective filesystem target directory for downloading a Steam AppID.
+// It detects whether targetDir is empty, ".", or points directly to a configured games library root,
+// queries Steam metadata for canonical installdir and soundtrack type, and routes soundtracks to MusicDir.
+func ResolveDownloadTarget(ctx context.Context, cfg *config.Config, appID uint32, targetDir, platform string) (string, error) {
+	isLibraryRoot := false
+	if cfg != nil && targetDir != "" {
+		canonicalTarget := util.CanonicalPath(targetDir)
+		for _, lib := range cfg.LibraryPaths {
+			if canonicalTarget != "" && canonicalTarget == util.CanonicalPath(lib) {
+				isLibraryRoot = true
+				break
+			}
+		}
+	}
+
+	if targetDir == "" || targetDir == "." || isLibraryRoot {
+		if appID > 0 {
+			name, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", appID))
+			if err == nil && installDir != "" {
+				if steam.IsSoundtrack(appType) || platform == "soundtrack" {
+					targetDir = filepath.Join(util.GetMusicDir(), installDir)
+				} else if isLibraryRoot {
+					targetDir = filepath.Join(targetDir, installDir)
+				} else if targetDir == "" && cfg != nil && len(cfg.LibraryPaths) > 0 {
+					targetDir = filepath.Join(cfg.LibraryPaths[0], installDir)
+				} else {
+					targetDir = installDir
 				}
-			}
-		}
-	}
-
-	// Fallback to launch_profile.json
-	if appID == 0 {
-		if prof, err := compat.LoadProfile(gameDir); err == nil && prof != nil && prof.AppID != "" {
-			if parsed, ok := util.ParseAppID(prof.AppID); ok && parsed > 0 {
-				appID = parsed
-			}
-		}
-	}
-
-	achievementsFile := filepath.Join(gameDir, "steam_settings", "achievements.json")
-	var schemas []steam.AchievementSchema
-
-	if util.FileExists(achievementsFile) {
-		if data, err := os.ReadFile(achievementsFile); err == nil {
-			if err := json.Unmarshal(data, &schemas); err != nil {
-				// Try map format {"ACH_NAME": {displayName: "...", ...}}
-				var schemaMap map[string]steam.AchievementSchema
-				if err2 := json.Unmarshal(data, &schemaMap); err2 == nil {
-					for k, v := range schemaMap {
-						if v.Name == "" {
-							v.Name = k
-						}
-						schemas = append(schemas, v)
-					}
+			} else if name != "" {
+				cleanName := util.SanitizeInstallDir(name)
+				if isLibraryRoot {
+					targetDir = filepath.Join(targetDir, cleanName)
+				} else if targetDir == "" && cfg != nil && len(cfg.LibraryPaths) > 0 {
+					targetDir = filepath.Join(cfg.LibraryPaths[0], cleanName)
+				} else {
+					targetDir = cleanName
 				}
+			} else if platform == "soundtrack" {
+				targetDir = util.GetMusicDir()
+			} else if targetDir == "" {
+				targetDir = fmt.Sprintf("./%d", appID)
 			}
+		} else if platform == "soundtrack" {
+			targetDir = util.GetMusicDir()
+		} else if targetDir == "" {
+			targetDir = "."
 		}
 	}
 
-	if len(schemas) == 0 && appID > 0 {
-		apiKey := ""
-		if eng.Config != nil {
-			apiKey = eng.Config.SteamWebAPIKey
-		}
-		if fetched, err := steam.FetchAchievementSchema(ctx, appID, apiKey, "english"); err == nil && len(fetched) > 0 {
-			schemas = fetched
-		}
-	}
-
-	if len(schemas) == 0 {
-		return []domain.AchievementItem{}, nil
-	}
-
-	// Discover unlocked achievements from standard GSE emulator save paths
-	unlockedMap := make(map[string]int64)
-
-	home, _ := os.UserHomeDir()
-	candidatePaths := []string{
-		filepath.Join(gameDir, "steam_settings", "achievements_unlocked.json"),
-	}
-
-	if appID > 0 && home != "" {
-		appIDStr := fmt.Sprintf("%d", appID)
-		candidatePaths = append(candidatePaths,
-			filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "achievements.json"),
-			filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "remote", "achievements.json"),
-			filepath.Join(home, ".local", "share", "GSE Saves", "settings", "achievements.json"),
-			filepath.Join(home, "Games", "umu", "umu-default", "drive_c", "users", "steamuser", "AppData", "Roaming", "GSE Saves", appIDStr, "achievements.json"),
-		)
-
-		// Expand nested remote folder patterns (e.g. GSE Saves/<appID>/remote/*/achievements.json)
-		if matches, err := filepath.Glob(filepath.Join(home, ".local", "share", "GSE Saves", appIDStr, "remote", "*", "achievements.json")); err == nil {
-			candidatePaths = append(candidatePaths, matches...)
-		}
-	}
-
-	for _, p := range candidatePaths {
-		if !util.FileExists(p) {
-			continue
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-
-		var simpleMap map[string]any
-		if err := json.Unmarshal(data, &simpleMap); err == nil {
-			for k, v := range simpleMap {
-				switch val := v.(type) {
-				case float64:
-					if val > 0 {
-						unlockedMap[strings.ToUpper(k)] = int64(val)
-					}
-				case bool:
-					if val {
-						unlockedMap[strings.ToUpper(k)] = 1
-					}
-				case map[string]any:
-					earned := false
-					if e, ok := val["earned"].(bool); ok && e {
-						earned = true
-					} else if u, ok := val["unlocked"].(bool); ok && u {
-						earned = true
-					}
-
-					if earned {
-						var t int64 = 1
-						if et, ok := val["earned_time"].(float64); ok && et > 0 {
-							t = int64(et)
-						} else if ut, ok := val["unlock_time"].(float64); ok && ut > 0 {
-							t = int64(ut)
-						}
-						unlockedMap[strings.ToUpper(k)] = t
-					}
-				default:
-					unlockedMap[strings.ToUpper(k)] = 1
-				}
-			}
-		} else {
-			var arr []string
-			if err := json.Unmarshal(data, &arr); err == nil {
-				for _, k := range arr {
-					unlockedMap[strings.ToUpper(k)] = 1
-				}
-			}
-		}
-	}
-
-	items := make([]domain.AchievementItem, 0, len(schemas))
-	for _, s := range schemas {
-		unlockedTime, isUnlocked := unlockedMap[strings.ToUpper(s.Name)]
-
-		iconURL := s.Icon
-		iconGrayURL := s.IconGray
-
-		cleanIcon := strings.TrimPrefix(s.Icon, "img/")
-		cleanGray := strings.TrimPrefix(s.IconGray, "img/")
-
-		// Check if local image files exist
-		localImgPath := filepath.Join(gameDir, "steam_settings", "img", cleanIcon)
-		if !util.FileExists(localImgPath) {
-			localImgPath = filepath.Join(gameDir, "steam_settings", s.Icon)
-		}
-		if util.FileExists(localImgPath) {
-			iconURL = "/local-img" + localImgPath
-		} else if appID > 0 && !strings.HasPrefix(iconURL, "http") {
-			iconURL = fmt.Sprintf("https://shared.fastly.steamstatic.com/community_assets/images/apps/%d/%s", appID, cleanIcon)
-		}
-
-		localGrayPath := filepath.Join(gameDir, "steam_settings", "img", cleanGray)
-		if !util.FileExists(localGrayPath) {
-			localGrayPath = filepath.Join(gameDir, "steam_settings", s.IconGray)
-		}
-		if util.FileExists(localGrayPath) {
-			iconGrayURL = "/local-img" + localGrayPath
-		} else if appID > 0 && !strings.HasPrefix(iconGrayURL, "http") {
-			iconGrayURL = fmt.Sprintf("https://shared.fastly.steamstatic.com/community_assets/images/apps/%d/%s", appID, cleanGray)
-		}
-
-		items = append(items, domain.AchievementItem{
-			ID:          s.Name,
-			Name:        s.DisplayName,
-			Description: s.Description,
-			IconURL:     iconURL,
-			IconGrayURL: iconGrayURL,
-			Hidden:      s.Hidden == 1,
-			Unlocked:    isUnlocked,
-			UnlockTime:  unlockedTime,
-		})
-	}
-
-	// Sort achievements: completed/unlocked first (sorted by most recent unlock time desc), then locked
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Unlocked != items[j].Unlocked {
-			return items[i].Unlocked // true comes before false
-		}
-		if items[i].Unlocked {
-			return items[i].UnlockTime > items[j].UnlockTime // most recently unlocked first
-		}
-		return false // preserve schema order for locked items
-	})
-
-	return items, nil
+	return util.CanonicalPath(targetDir), nil
 }
 
 // DownloadGame orchestrates key resolution, manifest persistence, depot chunk downloading, and optional post-download setup.
@@ -590,36 +528,12 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 	if opts.AppID == 0 {
 		return nil, fmt.Errorf("invalid Steam AppID")
 	}
-	// Check if TargetDir is empty, ".", or points directly to a configured games library root
-	isLibraryRoot := false
-	if eng.Config != nil && opts.TargetDir != "" {
-		canonicalTarget := util.CanonicalPath(opts.TargetDir)
-		for _, lib := range eng.Config.LibraryPaths {
-			if canonicalTarget != "" && canonicalTarget == util.CanonicalPath(lib) {
-				isLibraryRoot = true
-				break
-			}
-		}
-	}
 
-	if opts.TargetDir == "" || opts.TargetDir == "." || isLibraryRoot {
-		if _, appType, installDir, err := steam.FetchAppInfo(ctx, fmt.Sprintf("%d", opts.AppID)); err == nil && installDir != "" {
-			if steam.IsSoundtrack(appType) || opts.Platform == "soundtrack" {
-				opts.TargetDir = filepath.Join(util.GetMusicDir(), installDir)
-			} else if isLibraryRoot {
-				opts.TargetDir = filepath.Join(opts.TargetDir, installDir)
-			} else if opts.TargetDir == "" && eng.Config != nil && len(eng.Config.LibraryPaths) > 0 {
-				opts.TargetDir = filepath.Join(eng.Config.LibraryPaths[0], installDir)
-			} else {
-				opts.TargetDir = installDir
-			}
-		} else if opts.Platform == "soundtrack" {
-			opts.TargetDir = util.GetMusicDir()
-		} else if opts.TargetDir == "" {
-			opts.TargetDir = "."
-		}
+	resolvedTarget, err := ResolveDownloadTarget(ctx, eng.Config, opts.AppID, opts.TargetDir, opts.Platform)
+	if err != nil {
+		return nil, err
 	}
-	opts.TargetDir = util.CanonicalPath(opts.TargetDir)
+	opts.TargetDir = resolvedTarget
 
 	hubcapKey := ""
 	if eng.Config != nil {
