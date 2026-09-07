@@ -102,6 +102,43 @@ describe('SearchGridModal Component', () => {
     activeView.subscribe(v => currentView = v)();
     expect(currentView).toBe('game-hub');
   });
+
+  it('switches to dedicated command mode when query starts with >', async () => {
+    render(SearchGridModal);
+
+    const input = screen.getByPlaceholderText(/Type to filter.*titles/i);
+    await fireEvent.input(input, { target: { value: '>' } });
+
+    expect(screen.getByText(/Commands & Actions/i)).toBeInTheDocument();
+    expect(screen.getByText('Go to Settings')).toBeInTheDocument();
+    expect(screen.getByText('Scan Library Folders')).toBeInTheDocument();
+
+    // Filter to a specific command
+    await fireEvent.input(input, { target: { value: '>settings' } });
+    const settingsBtn = screen.getByText('Go to Settings');
+    await fireEvent.click(settingsBtn);
+
+    let currentView = null;
+    const { activeView } = await import('../../stores/library.js');
+    activeView.subscribe(v => currentView = v)();
+    expect(currentView).toBe('settings');
+  });
+
+  it('shows suggested commands when search query matches command keywords', async () => {
+    render(SearchGridModal);
+
+    const input = screen.getByPlaceholderText(/Type to filter.*titles/i);
+    await fireEvent.input(input, { target: { value: 'tasks' } });
+
+    expect(screen.getByText(/Suggested Commands/i)).toBeInTheDocument();
+    const tasksCmdBtn = screen.getByText('Go to Tasks');
+    await fireEvent.click(tasksCmdBtn);
+
+    let currentView = null;
+    const { activeView } = await import('../../stores/library.js');
+    activeView.subscribe(v => currentView = v)();
+    expect(currentView).toBe('tasks');
+  });
 });
 
 

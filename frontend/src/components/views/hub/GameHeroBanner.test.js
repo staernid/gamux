@@ -63,4 +63,39 @@ describe('GameHeroBanner Component', () => {
       expect(screen.getByText(/UPDATE AVAILABLE/i)).toBeInTheDocument();
     });
   });
+
+  it('opens launch options popover and toggles 2-player co-op mode', async () => {
+    const { fireEvent } = await import('@testing-library/svelte');
+    const { multiseatStore } = await import('../../../stores/multiseat.js');
+
+    render(GameHeroBanner, {
+      props: {
+        game: { ...mockSteamGame, isReady: true, is_ready: true },
+        isGameRunning: false,
+        isTaskActive: false,
+      },
+    });
+
+    expect(screen.getByText('Play Now')).toBeInTheDocument();
+
+    // Click the split menu trigger
+    const splitBtn = screen.getByLabelText(/Launch Options/i);
+    await fireEvent.click(splitBtn);
+
+    // Popover appears
+    expect(screen.getByText('Launch Mode')).toBeInTheDocument();
+    expect(screen.getByText('Single Player')).toBeInTheDocument();
+    const coopOption = screen.getByText('2-Player Co-op');
+    expect(coopOption).toBeInTheDocument();
+
+    // Select 2-Player Co-op
+    await fireEvent.click(coopOption);
+
+    // Button updates to 2-Player Session
+    expect(screen.getByText('Launch 2-Player Session')).toBeInTheDocument();
+    expect(screen.getByText('2P')).toBeInTheDocument();
+
+    // Reset store
+    multiseatStore.toggleCoop();
+  });
 });

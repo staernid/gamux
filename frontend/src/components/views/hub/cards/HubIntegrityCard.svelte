@@ -10,7 +10,7 @@
 </script>
 
 <div class="space-y-3">
-  <p class="text-slate-400 text-xs">
+  <p class="text-neutral-400 text-xs">
     Verify local depot checksums against official SteamPipe SHA-256 manifests:
   </p>
 
@@ -54,7 +54,7 @@
       type="button"
       on:click={onNormalizeDirectory}
       disabled={isNormalizing}
-      class="bg-[#1a1a24] hover:bg-[#252535] text-slate-200 border border-[#2e2e42] font-semibold px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50"
+      class="bg-surface-header hover:bg-surface-cardHover text-neutral-200 border border-surface-border font-semibold px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50 cursor-pointer"
       title="Rename game directory to steam naming conventions"
     >
       {isNormalizing ? 'Renaming...' : 'Normalize Directory'}
@@ -62,7 +62,7 @@
   </div>
 
   {#if integrityError}
-    <div class="p-3.5 rounded-xl bg-[#1e1014] border border-rose-900/50 text-rose-300 text-xs space-y-1">
+    <div class="p-3.5 rounded-xl bg-[#181214] border border-rose-900/50 text-rose-300 text-xs space-y-1">
       <strong class="block font-bold">Verification Notice</strong>
       <p>{integrityError}</p>
     </div>
@@ -75,9 +75,9 @@
     {@const missing = integrityReport.missing_files ?? integrityReport.MissingFiles ?? []}
     {@const untracked = integrityReport.untracked_files ?? integrityReport.UntrackedFiles ?? []}
 
-    <div class="bg-[#0b0b10] border border-[#242436] p-4 rounded-xl space-y-2 font-mono text-xs">
-      <div class="flex items-center justify-between pb-2 border-b border-[#1c1c28]">
-        <span class="text-slate-400">Total Official Files:</span>
+    <div class="bg-surface-header border border-surface-border p-4 rounded-xl space-y-2 font-mono text-xs">
+      <div class="flex items-center justify-between pb-2 border-b border-surface-border">
+        <span class="text-neutral-400">Total Official Files:</span>
         <strong class="text-white">{total} files</strong>
       </div>
       <div class="flex items-center justify-between text-emerald-400">
@@ -85,34 +85,34 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
-          <span>Intact & Valid:</span>
+          <span>Intact & Verified:</span>
         </span>
-        <span>{valid} files</span>
+        <strong>{valid} files</strong>
       </div>
       {#if modified.length > 0}
         <div class="flex items-center justify-between text-rose-400">
           <span class="flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span>Modified / Corrupted:</span>
+            <span>Corrupted / Modified:</span>
           </span>
           <span>{modified.length} files</span>
         </div>
       {/if}
       {#if missing.length > 0}
-        <div class="flex items-center justify-between text-amber-400">
+        <div class="flex items-center justify-between text-rose-400">
           <span class="flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
-            <span>Missing Files:</span>
+            <span>Missing Official Files:</span>
           </span>
           <span>{missing.length} files</span>
         </div>
       {/if}
       {#if untracked.length > 0}
-        <div class="flex items-center justify-between text-slate-400">
+        <div class="flex items-center justify-between text-neutral-400">
           <span class="flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -124,11 +124,11 @@
       {/if}
 
       {#if modified.length > 0 || missing.length > 0}
-        <div class="pt-2 border-t border-[#1c1c28] flex justify-end">
+        <div class="pt-2 border-t border-surface-border flex justify-end">
           <button
             type="button"
             on:click={onUpdateGame}
-            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
           >
             Repair & Download Missing Files
           </button>

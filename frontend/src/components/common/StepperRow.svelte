@@ -117,7 +117,7 @@
     </button>
 
     <!-- Value Display -->
-    <span class="px-2 py-0.5 text-xs font-mono font-bold text-sky-300 min-w-[32px] text-center truncate select-none cursor-default">
+    <span class="px-2 py-0.5 text-xs font-mono font-bold text-white min-w-[32px] text-center truncate select-none cursor-default">
       {currentLabel}
     </span>
 
@@ -127,7 +127,7 @@
       tabindex="-1"
       on:click|stopPropagation={() => step(1)}
       {disabled}
-      class="p-1 rounded text-slate-400 hover:text-white hover:bg-[#20202e] disabled:opacity-30 transition-colors outline-none cursor-pointer"
+      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Next Option (Right)"
       aria-label="Next Option"
     >

@@ -2,7 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import PosterArt from '../common/PosterArt.svelte';
   import ModalShell from '../common/ModalShell.svelte';
-  import { games, selectedGame, activeView, sortBy, getSortLabel } from '../../stores/library.js';
+  import { games, selectedGame, activeView, sortBy, getSortLabel, scanLibrary, importGame } from '../../stores/library.js';
   import { getPlatformColors, isSamePath, formatPlaytime, formatLastPlayed, formatInstallDate, normalizeGame } from '../../utils/game.js';
   import { formatBytes } from '../../utils/format.js';
   import { AppAPI } from '../../api/app.js';
@@ -21,6 +21,108 @@
   let isSearchingStore = false;
   let storeSearchTimeout = null;
   let lastStoreQuery = '';
+
+  const availableCommands = [
+    {
+      id: 'nav-library',
+      title: 'Go to Shelf (Library)',
+      description: 'View installed and local game titles',
+      category: 'Navigation',
+      shortcut: '1',
+      icon: 'shelf',
+      keywords: ['shelf', 'library', 'games', 'home'],
+      action: () => {
+        $activeView = 'library';
+        dispatch('close');
+      },
+    },
+    {
+      id: 'nav-tasks',
+      title: 'Go to Tasks',
+      description: 'View active downloads, transfers, and background jobs',
+      category: 'Navigation',
+      shortcut: '2',
+      icon: 'tasks',
+      keywords: ['tasks', 'downloads', 'queue', 'transfers', 'jobs'],
+      action: () => {
+        $activeView = 'tasks';
+        dispatch('close');
+      },
+    },
+    {
+      id: 'nav-settings',
+      title: 'Go to Settings',
+      description: 'Configure library paths, runners, and preferences',
+      category: 'Navigation',
+      shortcut: '3',
+      icon: 'settings',
+      keywords: ['settings', 'config', 'preferences', 'runners', 'wine', 'proton'],
+      action: () => {
+        $activeView = 'settings';
+        dispatch('close');
+      },
+    },
+    {
+      id: 'act-scan',
+      title: 'Scan Library Folders',
+      description: 'Rescan game directories for newly added titles',
+      category: 'Actions',
+      shortcut: 'Scan',
+      icon: 'scan',
+      keywords: ['scan', 'refresh', 'rescan', 'reload', 'detect'],
+      action: () => {
+        scanLibrary();
+        dispatch('close');
+      },
+    },
+    {
+      id: 'act-import',
+      title: 'Import Game Folder...',
+      description: 'Select an external game directory to import',
+      category: 'Actions',
+      shortcut: 'Import',
+      icon: 'import',
+      keywords: ['import', 'add', 'folder', 'directory'],
+      action: () => {
+        dispatch('close');
+        importGame();
+      },
+    },
+    {
+      id: 'act-store',
+      title: 'Search Online Store Catalog',
+      description: 'Search Steam, GOG, and RAWG for uninstalled titles',
+      category: 'Catalog',
+      shortcut: 'Store',
+      icon: 'store',
+      keywords: ['store', 'catalog', 'steam', 'gog', 'rawg', 'online'],
+      action: () => {
+        searchMode = 'store';
+        focusedIndex = 0;
+        searchInputEl?.focus();
+      },
+    },
+  ];
+
+  $: isCommandMode = searchMode === 'library' && query.trim().startsWith('>');
+  $: commandQuery = isCommandMode ? query.trim().slice(1).trim().toLowerCase() : query.trim().toLowerCase();
+
+  $: matchingCommands = searchMode === 'library' && (isCommandMode || commandQuery.length >= 2)
+    ? availableCommands.filter(cmd => {
+        if (!commandQuery) return true;
+        if (cmd.title.toLowerCase().includes(commandQuery)) return true;
+        if (cmd.description.toLowerCase().includes(commandQuery)) return true;
+        if (cmd.category.toLowerCase().includes(commandQuery)) return true;
+        return cmd.keywords.some(k => k.includes(commandQuery));
+      })
+    : [];
+
+  let focusedCommandIndex = 0;
+  $: {
+    if (focusedCommandIndex >= matchingCommands.length) {
+      focusedCommandIndex = Math.max(0, matchingCommands.length - 1);
+    }
+  }
 
   const quickSortOptions = [
     { id: 'name_asc', label: 'Name' },
@@ -205,10 +307,28 @@
       return;
     }
 
+    if (isCommandMode) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (focusedCommandIndex < matchingCommands.length - 1) focusedCommandIndex += 1;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (focusedCommandIndex > 0) focusedCommandIndex -= 1;
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (matchingCommands[focusedCommandIndex]) {
+          matchingCommands[focusedCommandIndex].action();
+        }
+      }
+      return;
+    }
+
     if (e.key === 'Enter') {
       e.preventDefault();
       if (displayedItems[focusedIndex]) {
         selectAndClose(displayedItems[focusedIndex]);
+      } else if (matchingCommands.length > 0) {
+        matchingCommands[0].action();
       }
       return;
     }
@@ -239,7 +359,7 @@
   <!-- Top Search Bar Header -->
   <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-6 flex-shrink-0">
     <!-- Mode Switcher Tabs -->
-    <div class="flex items-center justify-between border-b border-[#222232] pb-3">
+    <div class="flex items-center justify-between border-b border-surface-border pb-3">
       <div class="flex items-center space-x-2">
         <button
           type="button"
@@ -264,6 +384,9 @@
 
       <!-- Stats & Close Hint -->
       <div class="flex items-center space-x-4 text-xs font-mono text-neutral-400">
+        <span class="hidden sm:inline-block text-neutral-500">
+          Tip: Type <kbd class="px-1.5 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-300 font-bold text-3xs">&gt;</kbd> for commands
+        </span>
         <span>{displayedItems.length} {displayedItems.length === 1 ? 'title' : 'titles'}</span>
         <button
           type="button"
@@ -286,7 +409,7 @@
           bind:this={searchInputEl}
           bind:value={query}
           type="text"
-          placeholder={searchMode === 'library' ? 'Type to filter library titles...' : 'Search Steam, GOG, RAWG catalogs by title or AppID...'}
+          placeholder={searchMode === 'library' ? (isCommandMode ? 'Type a command name (e.g. settings, scan, tasks)...' : 'Type to filter library titles or run commands (e.g. >settings, scan)...') : 'Search Steam, GOG, RAWG catalogs by title or AppID...'}
           class="w-full bg-surface-input border border-surface-border focus:border-neutral-400 rounded-2xl pl-12 pr-10 py-3 text-base text-white outline-none font-mono transition-all shadow-xl placeholder:text-neutral-500"
         />
         {#if query}
@@ -326,15 +449,94 @@
     bind:this={gridContainerEl}
     class="flex-1 max-w-5xl w-full mx-auto overflow-y-auto pr-2 custom-scrollbar"
   >
-    {#if searchMode === 'library'}
+    {#if isCommandMode}
+      <!-- Command Palette Dedicated List -->
+      <div class="flex flex-col space-y-2 pb-8 max-w-2xl mx-auto w-full">
+        <div class="text-3xs font-mono uppercase tracking-wider text-neutral-500 font-bold px-1 mb-1">
+          Commands &amp; Actions ({matchingCommands.length})
+        </div>
+        {#if matchingCommands.length === 0}
+          <div class="h-40 flex items-center justify-center text-neutral-500 text-sm font-mono">
+            No commands matching "{commandQuery}"
+          </div>
+        {:else}
+          {#each matchingCommands as cmd, idx (cmd.id)}
+            {@const isCmdFocused = idx === focusedCommandIndex}
+            <button
+              type="button"
+              on:click={cmd.action}
+              on:mouseenter={() => { focusedCommandIndex = idx; }}
+              class="w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer {isCmdFocused ? 'bg-surface-cardHover border-surface-borderHighlight text-white shadow-md' : 'bg-surface-card border-surface-border text-neutral-300 hover:border-neutral-600'}"
+            >
+              <div class="flex items-center space-x-3.5 min-w-0">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 {isCmdFocused ? 'bg-white text-neutral-950' : 'bg-surface-input border border-surface-border text-neutral-400'}">
+                  {#if cmd.icon === 'shelf'}
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                  {:else if cmd.icon === 'tasks'}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  {:else if cmd.icon === 'settings'}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  {:else if cmd.icon === 'scan'}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  {:else if cmd.icon === 'import'}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+                  {:else}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                  {/if}
+                </div>
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold truncate {isCmdFocused ? 'text-white' : 'text-neutral-200'}">
+                    {cmd.title}
+                  </div>
+                  <div class="text-2xs text-neutral-400 font-mono truncate">
+                    {cmd.description}
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2 flex-shrink-0 pl-3">
+                <span class="text-3xs font-mono uppercase text-neutral-500">{cmd.category}</span>
+                {#if cmd.shortcut}
+                  <span class="px-2 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400 font-mono text-3xs font-bold">
+                    {cmd.shortcut}
+                  </span>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        {/if}
+      </div>
+    {:else if searchMode === 'library'}
+      <!-- Suggested Commands Strip if searching keyword -->
+      {#if matchingCommands.length > 0}
+        <div class="mb-5 pb-4 border-b border-surface-border">
+          <div class="text-3xs font-mono uppercase tracking-wider text-neutral-500 font-bold mb-2">
+            Suggested Commands
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {#each matchingCommands.slice(0, 3) as cmd}
+              <button
+                type="button"
+                on:click={cmd.action}
+                class="flex items-center justify-between p-2.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border hover:border-surface-borderHighlight text-left transition-all cursor-pointer group"
+              >
+                <div class="flex items-center space-x-2.5 min-w-0">
+                  <span class="text-xs font-semibold text-neutral-200 group-hover:text-white truncate">{cmd.title}</span>
+                </div>
+                <span class="text-3xs font-mono px-1.5 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400 font-bold">{cmd.shortcut || '↵'}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       <!-- Local Library Grid -->
       {#if filtered.length === 0}
-        <div class="h-64 flex flex-col items-center justify-center text-slate-500 text-sm font-mono space-y-2">
+        <div class="h-64 flex flex-col items-center justify-center text-neutral-500 text-sm font-mono space-y-2">
           <p>No local library games matching "{query}"</p>
           <button
             type="button"
             on:click={() => { searchMode = 'store'; }}
-            class="text-xs text-cyan-400 hover:underline font-bold mt-1"
+            class="text-xs text-neutral-300 hover:text-white hover:underline font-bold mt-1 bg-surface-card px-3 py-1.5 rounded-xl border border-surface-border hover:bg-surface-cardHover transition-colors cursor-pointer"
           >
             Search online store catalog for "{query}" ➔
           </button>
@@ -439,7 +641,7 @@
                 {#if item.poster_url}
                   <img src={item.poster_url} alt={item.name} class="w-full h-full object-cover" />
                 {:else}
-                  <div class="w-full h-full bg-[#121218] flex items-center justify-center p-3 text-center text-3xs text-neutral-500 font-mono">
+                  <div class="w-full h-full bg-surface-card border border-surface-border flex items-center justify-center p-3 text-center text-3xs text-neutral-500 font-mono">
                     {item.name}
                   </div>
                 {/if}

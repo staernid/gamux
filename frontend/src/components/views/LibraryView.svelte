@@ -291,11 +291,21 @@
 
                   <!-- Top Left Badge: Platform / Stub -->
                   <div
-                    class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider text-white shadow-md backdrop-blur-md"
-                    style="background-color: {game.isStub ? '#3f3f46' : pColors.badgeBg};"
+                    class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider text-neutral-200 bg-neutral-900/85 border border-neutral-700/80 shadow-md backdrop-blur-md"
                   >
                     {game.isStub ? 'STUB' : pColors.label}
                   </div>
+
+                  <!-- Top Right Status Signifier: Setup Required if unpatched -->
+                  {#if !game.isReady && !game.isPatched && !game.isStub}
+                    <div
+                      class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md backdrop-blur-md flex items-center space-x-1"
+                      title="Setup Required (Unpatched)"
+                    >
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      <span>Setup</span>
+                    </div>
+                  {/if}
 
                   <!-- Bottom Gradient Overlay with Playtime -->
                   {#if game.playtimeSeconds > 0}

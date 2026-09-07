@@ -134,21 +134,21 @@
       case 'save':
         return { label: 'Save Data', class: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' };
       case 'config':
-        return { label: 'Config', class: 'bg-sky-500/20 text-sky-300 border-sky-500/40' };
+        return { label: 'Config', class: 'bg-neutral-800 text-neutral-200 border-neutral-700' };
       case 'cloud':
-        return { label: 'Goldberg Cloud', class: 'bg-purple-500/20 text-purple-300 border-purple-500/40' };
+        return { label: 'Goldberg Cloud', class: 'bg-neutral-800 text-neutral-200 border-neutral-700' };
       case 'portable':
-        return { label: 'Portable Save', class: 'bg-amber-500/20 text-amber-300 border-amber-500/40' };
+        return { label: 'Portable Save', class: 'bg-neutral-800 text-neutral-200 border-neutral-700' };
       default:
-        return { label: 'Data', class: 'bg-slate-700/40 text-slate-300 border-slate-600/40' };
+        return { label: 'Data', class: 'bg-surface-header text-neutral-400 border-surface-border' };
     }
   }
 </script>
 
 <div class="space-y-4">
   {#if isLoading}
-    <div class="flex flex-col items-center justify-center p-12 text-slate-400 space-y-3">
-      <div class="w-7 h-7 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+    <div class="flex flex-col items-center justify-center p-12 text-neutral-400 space-y-3">
+      <div class="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       <span class="text-xs font-mono">Discovering game save and config paths...</span>
     </div>
   {:else if errorMsg}
@@ -158,30 +158,30 @@
   {:else}
     <!-- Top Summary Metrics Banner -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-      <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Total Save Size</span>
-        <p class="font-mono text-sm font-bold text-emerald-400">
+      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
+        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Total Save Size</span>
+        <p class="font-mono text-sm font-bold text-neutral-100">
           {formatBytes(saveResult?.total_save_bytes || 0)}
         </p>
       </div>
 
-      <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Discovered Paths</span>
-        <p class="font-mono text-sm font-bold text-sky-400">
+      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
+        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Discovered Paths</span>
+        <p class="font-mono text-sm font-bold text-neutral-100">
           {(saveResult?.locations || []).filter(l => l.exists).length} / {(saveResult?.locations || []).length}
         </p>
       </div>
 
-      <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Steam Cloud Emulation</span>
-        <p class="font-mono text-sm font-bold {saveResult?.has_cloud_saves ? 'text-purple-400' : 'text-slate-500'}">
+      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
+        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Steam Cloud Emulation</span>
+        <p class="font-mono text-sm font-bold {saveResult?.has_cloud_saves ? 'text-neutral-100' : 'text-neutral-500'}">
           {saveResult?.has_cloud_saves ? 'Active (GSE)' : 'None'}
         </p>
       </div>
 
-      <div class="bg-[#0b0b10] border border-[#20202e] p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-slate-500 uppercase font-bold tracking-wider">Backup Snapshots</span>
-        <p class="font-mono text-sm font-bold text-slate-200">
+      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
+        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Backup Snapshots</span>
+        <p class="font-mono text-sm font-bold text-neutral-100">
           {backups.length}
         </p>
       </div>
@@ -190,13 +190,13 @@
     <!-- Discovered Save & Config Locations Section -->
     <div class="space-y-2">
       <div class="flex items-center justify-between">
-        <span class="block text-slate-400 font-bold uppercase tracking-wider text-3xs">
+        <span class="block text-neutral-400 font-bold uppercase tracking-wider text-3xs">
           Discovered Save & Config Directories
         </span>
         <button
           type="button"
           on:click={handleUpdateManifest}
-          class="text-3xs text-sky-400 hover:text-sky-300 font-bold transition-colors"
+          class="text-3xs text-neutral-300 hover:text-white font-bold transition-colors cursor-pointer"
           title="Force update Ludusavi database from GitHub"
         >
           Refresh Manifest
@@ -257,7 +257,7 @@
                   type="button"
                   on:click={() => handleOpenPath(loc.path)}
                   disabled={!loc.exists}
-                  class="px-3 py-1.5 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-sky-300 border border-sky-800/50 text-2xs font-bold transition-colors flex items-center space-x-1"
+                  class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover disabled:opacity-40 disabled:cursor-not-allowed text-neutral-200 hover:text-white border border-surface-border text-2xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
                   title="Open folder in File Manager"
                 >
                   <span>Open</span>
@@ -267,20 +267,20 @@
           {/each}
         </div>
       {:else}
-        <div class="p-4 rounded-xl bg-[#09090d] border border-[#20202e] text-center text-slate-500 text-xs">
+        <div class="p-4 rounded-xl bg-surface-header border border-surface-border text-center text-neutral-400 text-xs">
           No save locations identified yet. Launch the game once to create initial saves.
         </div>
       {/if}
     </div>
 
     <!-- Snapshot History & Backup Manager Section -->
-    <div class="space-y-2 pt-2 border-t border-[#20202c]">
+    <div class="space-y-2 pt-2 border-t border-surface-border">
       <div class="flex items-center justify-between">
         <div>
-          <span class="block text-slate-300 font-bold uppercase tracking-wider text-3xs">
+          <span class="block text-neutral-300 font-bold uppercase tracking-wider text-3xs">
             Save Snapshots & Backups
           </span>
-          <span class="text-3xs text-slate-500">
+          <span class="text-3xs text-neutral-400">
             Portable cross-device .zip snapshots (PC ↔ Steam Deck).
           </span>
         </div>
@@ -288,7 +288,7 @@
         <button
           type="button"
           on:click={() => { showBackupInput = !showBackupInput; }}
-          class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-2xs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm"
+          class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-2xs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer"
         >
           <span>+ Create Backup</span>
         </button>
@@ -296,8 +296,8 @@
 
       <!-- New Backup Note Input Form -->
       {#if showBackupInput}
-        <div class="p-3 bg-[#0d0d14] border border-emerald-700/50 rounded-xl space-y-2 animate-fade-in">
-          <label for="backupNoteInput" class="block text-slate-200 text-xs font-bold">
+        <div class="p-3 bg-surface-header border border-emerald-700/50 rounded-xl space-y-2 animate-fade-in">
+          <label for="backupNoteInput" class="block text-neutral-200 text-xs font-bold">
             Backup Description / Note (Optional)
           </label>
           <div class="flex items-center space-x-2">
@@ -306,20 +306,20 @@
               type="text"
               bind:value={backupNote}
               placeholder="e.g. Before Final Boss / Chapter 4"
-              class="flex-1 bg-[#14141e] border border-[#2c2c3e] focus:border-emerald-400 rounded-lg px-3 py-1.5 text-slate-100 font-mono text-xs outline-none transition-colors"
+              class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-3 py-1.5 text-white font-mono text-xs outline-none transition-colors"
             />
             <button
               type="button"
               on:click={handleCreateBackup}
               disabled={isCreatingBackup}
-              class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-slate-950 font-black text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0"
+              class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-neutral-950 font-black text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0 cursor-pointer"
             >
               {isCreatingBackup ? 'Saving...' : 'Take Snapshot'}
             </button>
             <button
               type="button"
               on:click={() => { showBackupInput = false; }}
-              class="text-slate-400 hover:text-white text-xs px-2 py-1.5 rounded-lg"
+              class="text-neutral-400 hover:text-white text-xs px-2 py-1.5 rounded-lg cursor-pointer"
             >
               Cancel
             </button>
@@ -331,19 +331,19 @@
       {#if backups.length > 0}
         <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
           {#each backups as bk}
-            <div class="p-2.5 bg-[#09090d] border border-[#20202c] rounded-xl flex items-center justify-between gap-2.5 text-xs">
+            <div class="p-2.5 bg-surface-header border border-surface-border rounded-xl flex items-center justify-between gap-2.5 text-xs">
               <div class="space-y-0.5 min-w-0">
                 <div class="flex items-center space-x-2">
-                  <span class="font-mono font-bold text-slate-200">{bk.id}</span>
-                  <span class="text-3xs text-slate-400">({formatTimeAgo(bk.created_at)})</span>
-                  <span class="text-4xs px-1.5 py-0.2 rounded border font-mono {bk.created_by === 'auto_exit' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-sky-500/10 text-sky-300 border-sky-500/30'}">
+                  <span class="font-mono font-bold text-neutral-200">{bk.id}</span>
+                  <span class="text-3xs text-neutral-400">({formatTimeAgo(bk.created_at)})</span>
+                  <span class="text-4xs px-1.5 py-0.2 rounded border font-mono {bk.created_by === 'auto_exit' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-neutral-800 text-neutral-300 border-neutral-700'}">
                     {bk.created_by === 'auto_exit' ? 'Auto Exit' : 'Manual'}
                   </span>
                 </div>
                 {#if bk.note}
                   <p class="text-2xs text-emerald-300/90 italic truncate">{bk.note}</p>
                 {/if}
-                <div class="flex items-center space-x-2 text-3xs text-slate-500 font-mono">
+                <div class="flex items-center space-x-2 text-3xs text-neutral-400 font-mono">
                   <span>{formatBytes(bk.size_bytes)}</span>
                   <span>·</span>
                   <span>{bk.file_count} {bk.file_count === 1 ? 'file' : 'files'}</span>

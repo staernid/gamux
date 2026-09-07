@@ -186,10 +186,10 @@
               type="button"
               on:click={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
               disabled={isUpdating}
-              class="flex-1 py-1 rounded-lg font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white' : 'bg-white hover:bg-neutral-200 text-black'}"
+              class="flex-1 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-400 hover:text-white' : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 shadow-sm'}"
             >
               {#if isUpdating}
-                <svg class="animate-spin w-3 h-3 {isInstalled && !tool.has_update ? 'text-white' : 'text-black'}" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>

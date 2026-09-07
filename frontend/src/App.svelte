@@ -298,7 +298,15 @@
     function handleKeydown(e) {
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
 
-      if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !isInput && !$modalStore) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if ($modalStore && $modalStore.type === 'search-grid') {
+          playBack();
+          modalStore.close();
+        } else {
+          openSearchGrid();
+        }
+      } else if (e.key === '/' && !isInput && !$modalStore) {
         e.preventDefault();
         if ($activeView === 'library' && libraryViewRef?.focusSearch) {
           libraryViewRef.focusSearch();

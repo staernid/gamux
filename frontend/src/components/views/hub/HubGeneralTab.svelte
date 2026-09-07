@@ -208,7 +208,7 @@
               <button
                 type="button"
                 on:click={() => drawerDraft.selectCandidate(cand)}
-                class="p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 cursor-pointer {isSelected ? 'bg-sky-950/40 border-sky-500/70 shadow-sm shadow-sky-950/30' : 'bg-surface-header border-surface-border hover:border-surface-borderHighlight text-neutral-300'}"
+                class="p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 cursor-pointer {isSelected ? 'bg-surface-cardHover border-neutral-300 shadow-md text-white' : 'bg-surface-header border-surface-border hover:border-surface-borderHighlight text-neutral-300'}"
               >
                 <div class="space-y-0.5 min-w-0 flex-1">
                   <div class="flex items-center space-x-1.5 flex-wrap">
@@ -216,7 +216,7 @@
                       {cand.name || cand.executable.split('/').pop()}
                     </span>
                     {#if idx === 0}
-                      <span class="px-1.5 py-0.2 rounded text-4xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                      <span class="px-1.5 py-0.2 rounded text-4xs font-bold bg-neutral-800 text-neutral-200 border border-neutral-700">
                         Primary
                       </span>
                     {/if}
@@ -226,9 +226,9 @@
                   </p>
                 </div>
 
-                <div class="w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 {isSelected ? 'border-sky-400 bg-sky-500' : 'border-surface-borderHighlight'}" aria-hidden="true">
+                <div class="w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 {isSelected ? 'border-white bg-white' : 'border-surface-borderHighlight'}" aria-hidden="true">
                   {#if isSelected}
-                    <div class="w-1.5 h-1.5 rounded-full bg-black"></div>
+                    <div class="w-1.5 h-1.5 rounded-full bg-neutral-950"></div>
                   {/if}
                 </div>
               </button>

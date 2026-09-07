@@ -12,9 +12,14 @@
 
   const dispatch = createEventDispatcher();
   let confirmBtn;
+  let cancelBtn;
 
   onMount(() => {
-    if (confirmBtn && typeof confirmBtn.focus === 'function') {
+    if (danger) {
+      if (cancelBtn && typeof cancelBtn.focus === 'function') {
+        cancelBtn.focus();
+      }
+    } else if (confirmBtn && typeof confirmBtn.focus === 'function') {
       confirmBtn.focus();
     }
   });
@@ -82,6 +87,7 @@
     <div class="flex items-center justify-end space-x-2.5 pt-2 border-t border-surface-border">
       <button
         type="button"
+        bind:this={cancelBtn}
         on:click={handleCancel}
         class="px-4 py-2 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-xs font-bold text-neutral-200 hover:text-white transition-colors cursor-pointer"
       >

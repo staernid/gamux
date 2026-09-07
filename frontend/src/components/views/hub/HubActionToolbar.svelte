@@ -29,8 +29,8 @@
   <!-- Status Badge & Save Actions -->
   <div class="flex items-center space-x-2 flex-shrink-0">
     {#if overrideCount > 0}
-      <span class="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 flex items-center space-x-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+      <span class="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-neutral-800 text-neutral-200 border border-neutral-700 flex items-center space-x-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-neutral-300"></span>
         <span>{overrideCount} Override{overrideCount === 1 ? '' : 's'}</span>
       </span>
     {:else}
@@ -64,10 +64,10 @@
       type="button"
       on:click={handleSave}
       disabled={isSaving}
-      class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-xs shadow-md transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+      class="px-3.5 py-1.5 rounded-lg bg-white hover:bg-neutral-200 active:bg-neutral-300 text-neutral-950 font-bold text-xs shadow-md transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
     >
       {#if isSaving}
-        <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin w-3.5 h-3.5 text-neutral-950" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
         </svg>

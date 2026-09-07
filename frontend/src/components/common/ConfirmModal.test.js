@@ -65,4 +65,26 @@ describe('ConfirmModal Component', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(get(modalStore)).toBeNull();
   });
+
+  it('focuses Cancel button when danger is true to prevent accidental confirmation', () => {
+    render(ConfirmModal, {
+      danger: true,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel'
+    });
+
+    const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
+    expect(document.activeElement).toBe(cancelBtn);
+  });
+
+  it('focuses Confirm button when danger is false', () => {
+    render(ConfirmModal, {
+      danger: false,
+      confirmLabel: 'Proceed',
+      cancelLabel: 'Cancel'
+    });
+
+    const confirmBtn = screen.getByRole('button', { name: 'Proceed' });
+    expect(document.activeElement).toBe(confirmBtn);
+  });
 });

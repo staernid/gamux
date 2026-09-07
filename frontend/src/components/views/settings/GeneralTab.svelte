@@ -94,7 +94,7 @@
 <div class="space-y-3">
   <!-- Display & Interface -->
   <SettingSection title="Display & Interface">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+    <div class="space-y-2.5">
       <InheritSelect
         label="Interface Scale"
         description="Base UI scale and font sizing for handhelds, desktops, or TVs (applies immediately)"

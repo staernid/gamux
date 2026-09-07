@@ -70,5 +70,18 @@ describe('TopBar Component', () => {
 
     runningGames.set(new Set());
   });
+
+  it('renders search and command palette button and opens search-grid modal on click', async () => {
+    const { modalStore } = await import('../../stores/modal.js');
+    const openSpy = vi.spyOn(modalStore, 'open');
+
+    render(TopBar);
+
+    const searchBtn = screen.getByTitle(/Search & Commands \(Ctrl\+K\)/i);
+    expect(searchBtn).toBeInTheDocument();
+
+    await fireEvent.click(searchBtn);
+    expect(openSpy).toHaveBeenCalledWith('search-grid');
+  });
 });
 

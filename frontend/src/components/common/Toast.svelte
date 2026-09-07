@@ -111,7 +111,7 @@
         </div>
         <button
           on:click={() => notificationStore.toasts.dismiss(toast.id)}
-          class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+          class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           aria-label="Dismiss toast"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
