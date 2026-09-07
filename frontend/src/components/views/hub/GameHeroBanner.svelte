@@ -13,6 +13,7 @@
   } from '../../../utils/game.js';
   import PosterArt from '../../common/PosterArt.svelte';
   import { multiseatStore, getActiveSession } from '../../../stores/multiseat.js';
+  import { AppAPI } from '../../../api/app.js';
 
   export let game = null;
   export let isGameRunning = false;
@@ -24,10 +25,60 @@
 
   let logoFailed = false;
   let heroFailed = false;
+  let livePlayerCount = 0;
+  let loadedPlayerAppId = '';
+  let versionStatus = null;
+  let loadedVersionGameDir = '';
 
   $: if (game) {
     logoFailed = false;
     heroFailed = false;
+  }
+
+  $: if (game?.appId && isSteamApp(game.appId)) {
+    const aid = String(game.appId).trim();
+    if (aid !== loadedPlayerAppId) {
+      loadedPlayerAppId = aid;
+      livePlayerCount = 0;
+      fetchLivePlayers(aid);
+    }
+  } else if (!isSteamApp(game?.appId)) {
+    livePlayerCount = 0;
+    loadedPlayerAppId = '';
+  }
+
+  async function fetchLivePlayers(appId) {
+    try {
+      const count = await AppAPI.getGameCurrentPlayers(appId);
+      if (typeof count === 'number' && count > 0) {
+        livePlayerCount = count;
+      }
+    } catch {
+      livePlayerCount = 0;
+    }
+  }
+
+  $: if (game?.gameDir && isSteam) {
+    const gdir = game.gameDir;
+    if (gdir !== loadedVersionGameDir) {
+      loadedVersionGameDir = gdir;
+      versionStatus = game.versionStatus || null;
+      checkGameUpdates(gdir);
+    }
+  } else if (!game?.gameDir || !isSteam) {
+    versionStatus = null;
+    loadedVersionGameDir = '';
+  }
+
+  async function checkGameUpdates(gameDir) {
+    try {
+      const res = await AppAPI.checkGameUpdates(gameDir);
+      if (res && res.checked) {
+        versionStatus = res;
+      }
+    } catch {
+      // Quiet fallback
+    }
   }
 
   $: isCoop = $multiseatStore.isCoopEnabled;
@@ -236,6 +287,23 @@
             {#if game.appId && game.appId !== '0'}
               <span class="text-neutral-500">·</span>
               <span class="text-neutral-500">#{game.appId}</span>
+            {/if}
+            {#if livePlayerCount > 0}
+              <span class="text-neutral-500">·</span>
+              <span class="text-neutral-300 flex items-center space-x-1.5 font-mono">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{livePlayerCount.toLocaleString()} playing</span>
+              </span>
+            {/if}
+            {#if versionStatus && !versionStatus.is_up_to_date}
+              <span class="text-neutral-500">·</span>
+              <span
+                class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono flex items-center space-x-1.5"
+                title={versionStatus.message || versionStatus.latest_patch_title || 'Update available'}
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>UPDATE AVAILABLE</span>
+              </span>
             {/if}
           </div>
         </div>

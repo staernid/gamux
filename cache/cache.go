@@ -36,6 +36,14 @@ var (
 	// In-memory thread-safe cache for Steam news items
 	newsItemsMu          sync.RWMutex
 	newsItemsMemoryCache = make(map[string][]byte)
+
+	// In-memory thread-safe cache for Steam global achievement percentages
+	achPercentagesMu          sync.RWMutex
+	achPercentagesMemoryCache = make(map[string][]byte)
+
+	// In-memory thread-safe cache for Steam version and update statuses
+	versionsMu          sync.RWMutex
+	versionsMemoryCache = make(map[string][]byte)
 )
 
 // IsDisabled reports whether caching is globally disabled (useful for testing or forced refresh).
@@ -59,20 +67,24 @@ var cacheSubdirs = []string{
 	"sgdb",
 	"store_meta",
 	"games",
+	"achievements",
+	"versions",
 }
 
 // subdirTTLs maps each cache subdirectory to its canonical TTL.
 // Used by Prune to determine which entries are expired.
 var subdirTTLs = map[string]time.Duration{
-	"appdetails":  7 * 24 * time.Hour,
-	"news":        24 * time.Hour,
-	"github":      1 * time.Hour,
+	"appdetails":   7 * 24 * time.Hour,
+	"news":         24 * time.Hour,
+	"github":       1 * time.Hour,
 	"steamdepotdb": 24 * time.Hour,
-	"manifesthub": 24 * time.Hour,
-	"sgdb":        7 * 24 * time.Hour,
-	"store_meta":  24 * time.Hour,
-	"hubcap":      30 * 24 * time.Hour,
-	"revobd":      30 * 24 * time.Hour,
+	"manifesthub":  24 * time.Hour,
+	"sgdb":         7 * 24 * time.Hour,
+	"store_meta":   24 * time.Hour,
+	"hubcap":       30 * 24 * time.Hour,
+	"revobd":       30 * 24 * time.Hour,
+	"achievements": 7 * 24 * time.Hour,
+	"versions":     30 * time.Minute,
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -102,6 +114,14 @@ func SetCacheDir(dir string) {
 	newsItemsMu.Lock()
 	newsItemsMemoryCache = make(map[string][]byte)
 	newsItemsMu.Unlock()
+
+	achPercentagesMu.Lock()
+	achPercentagesMemoryCache = make(map[string][]byte)
+	achPercentagesMu.Unlock()
+
+	versionsMu.Lock()
+	versionsMemoryCache = make(map[string][]byte)
+	versionsMu.Unlock()
 }
 
 func getCacheDir() string {
@@ -392,6 +412,102 @@ func SaveNewsItems(appID string, itemsJSON []byte) {
 	}
 	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
 	_ = writeTTLFile(path, itemsJSON)
+}
+
+// GetAchievementPercentages retrieves cached Steam global achievement percentages if less than 7 days old.
+func GetAchievementPercentages(appID string) ([]byte, bool) {
+	if disableCache.Load() || appID == "" {
+		return nil, false
+	}
+
+	// 1. Fast in-memory cache check
+	achPercentagesMu.RLock()
+	if cached, ok := achPercentagesMemoryCache[appID]; ok && len(cached) > 0 {
+		achPercentagesMu.RUnlock()
+		return cached, true
+	}
+	achPercentagesMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "achievements", fmt.Sprintf("%s_percentages.json", appID))
+	if data, ok := readTTLFile(path, 7*24*time.Hour); ok {
+		achPercentagesMu.Lock()
+		achPercentagesMemoryCache[appID] = data
+		achPercentagesMu.Unlock()
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveAchievementPercentages caches Steam global achievement percentages to in-memory and disk cache for 7 days.
+func SaveAchievementPercentages(appID string, data []byte) {
+	if disableCache.Load() || appID == "" || len(data) == 0 {
+		return
+	}
+
+	achPercentagesMu.Lock()
+	achPercentagesMemoryCache[appID] = data
+	achPercentagesMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "achievements", fmt.Sprintf("%s_percentages.json", appID))
+	_ = writeTTLFile(path, data)
+}
+
+// GetVersionStatus retrieves cached Steam version status if less than 30 minutes old.
+func GetVersionStatus(key string) ([]byte, bool) {
+	if disableCache.Load() || key == "" {
+		return nil, false
+	}
+
+	// 1. Fast in-memory cache check
+	versionsMu.RLock()
+	if cached, ok := versionsMemoryCache[key]; ok && len(cached) > 0 {
+		versionsMu.RUnlock()
+		return cached, true
+	}
+	versionsMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	cleanKey := strings.ReplaceAll(key, ":", "_")
+	path := filepath.Join(dir, "versions", fmt.Sprintf("%s.json", cleanKey))
+	if data, ok := readTTLFile(path, 30*time.Minute); ok {
+		versionsMu.Lock()
+		versionsMemoryCache[key] = data
+		versionsMu.Unlock()
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveVersionStatus caches Steam version status to in-memory and disk cache for 30 minutes.
+func SaveVersionStatus(key string, data []byte) {
+	if disableCache.Load() || key == "" || len(data) == 0 {
+		return
+	}
+
+	versionsMu.Lock()
+	versionsMemoryCache[key] = data
+	versionsMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	cleanKey := strings.ReplaceAll(key, ":", "_")
+	path := filepath.Join(dir, "versions", fmt.Sprintf("%s.json", cleanKey))
+	_ = writeTTLFile(path, data)
 }
 
 // ==========================================

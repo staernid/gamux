@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/staernid/gamux/cache"
@@ -16,6 +17,7 @@ import (
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/ini"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/runner"
@@ -640,4 +642,93 @@ func (eng *Engine) SaveGSEUserConfig(cfg *gbe.GSEUserConfig) error {
 // GetAvailableRunners returns list of detected execution runners on the host.
 func (eng *Engine) GetAvailableRunners() []string {
 	return runner.GetAvailableRunners()
+}
+
+// CheckGameUpdates inspects a game's update status using hybrid version checking.
+func (eng *Engine) CheckGameUpdates(ctx context.Context, gameDir string) (*domain.VersionStatus, error) {
+	if gameDir == "" {
+		return nil, fmt.Errorf("game directory cannot be empty")
+	}
+	cleanDir := util.CanonicalPath(gameDir)
+	game, err := eng.DetectGame(ctx, cleanDir)
+	if err != nil {
+		return nil, err
+	}
+	if game == nil || game.NumericAppID == 0 {
+		return &domain.VersionStatus{Checked: false, IsUpToDate: true, Message: "Not a Steam game"}, nil
+	}
+
+	return steam.CheckGameVersion(ctx, game.NumericAppID, game.BuildID, game.InstalledAt)
+}
+
+// GetGameDLCs retrieves configured DLCs from configs.app.ini, falling back to Store API discovery.
+func (eng *Engine) GetGameDLCs(ctx context.Context, gameDir string) ([]domain.DLCItem, error) {
+	if gameDir == "" {
+		return nil, fmt.Errorf("game directory cannot be empty")
+	}
+	cleanDir := util.CanonicalPath(gameDir)
+	game, err := eng.DetectGame(ctx, cleanDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Read existing configs.app.ini if present
+	candidateFiles := make([]string, 0, len(game.SettingsDirs)+2)
+	for _, sDir := range game.SettingsDirs {
+		candidateFiles = append(candidateFiles, filepath.Join(sDir, "configs.app.ini"))
+	}
+	candidateFiles = append(candidateFiles,
+		filepath.Join(cleanDir, "steam_settings", "configs.app.ini"),
+		filepath.Join(cleanDir, ".gamux", "configs.app.ini"),
+	)
+
+	for _, iniFile := range candidateFiles {
+		if f, err := ini.LoadFile(iniFile); err == nil {
+			sec := f.Section("app::dlcs")
+			var items []domain.DLCItem
+			for _, k := range sec.Keys() {
+				if k != "unlock_all" {
+					name := sec.GetString(k, "")
+					if strings.TrimSpace(name) != "" {
+						items = append(items, domain.DLCItem{AppID: k, Name: name})
+					}
+				}
+			}
+			if len(items) > 0 {
+				sort.Slice(items, func(i, j int) bool {
+					return items[i].AppID < items[j].AppID
+				})
+				return items, nil
+			}
+		}
+	}
+
+	// 2. If nothing configured locally yet and game has Steam AppID, discover via Steam Store API
+	if game.NumericAppID > 0 {
+		return steam.DiscoverDLCs(ctx, fmt.Sprintf("%d", game.NumericAppID))
+	}
+
+	return []domain.DLCItem{}, nil
+}
+
+// FetchGameDLCs fetches DLC definitions from Steam and saves them into configs.app.ini.
+func (eng *Engine) FetchGameDLCs(ctx context.Context, gameDir string) error {
+	if gameDir == "" {
+		return fmt.Errorf("game directory cannot be empty")
+	}
+	cleanDir := util.CanonicalPath(gameDir)
+	game, err := eng.DetectGame(ctx, cleanDir)
+	if err != nil {
+		return err
+	}
+	if game == nil || game.NumericAppID == 0 {
+		return fmt.Errorf("game at %s has no valid Steam AppID", cleanDir)
+	}
+
+	appIDStr := fmt.Sprintf("%d", game.NumericAppID)
+	if err := steam.FetchDLCs(ctx, appIDStr, cleanDir, false); err != nil {
+		return err
+	}
+	cache.InvalidateGameCache(cleanDir)
+	return nil
 }

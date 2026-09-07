@@ -14,6 +14,10 @@ export function CancelTask(arg1) {
   return window['go']['gui']['App']['CancelTask'](arg1);
 }
 
+export function CheckGameUpdates(arg1) {
+  return window['go']['gui']['App']['CheckGameUpdates'](arg1);
+}
+
 export function ClearFinishedTasks() {
   return window['go']['gui']['App']['ClearFinishedTasks']();
 }
@@ -32,6 +36,10 @@ export function DeleteSaveBackup(arg1, arg2) {
 
 export function DetectGame(arg1) {
   return window['go']['gui']['App']['DetectGame'](arg1);
+}
+
+export function FetchDLCs(arg1) {
+  return window['go']['gui']['App']['FetchDLCs'](arg1);
 }
 
 export function FetchNews(arg1, arg2) {
@@ -74,6 +82,14 @@ export function GetGameBackups(arg1) {
   return window['go']['gui']['App']['GetGameBackups'](arg1);
 }
 
+export function GetGameCurrentPlayers(arg1) {
+  return window['go']['gui']['App']['GetGameCurrentPlayers'](arg1);
+}
+
+export function GetGameDLCs(arg1) {
+  return window['go']['gui']['App']['GetGameDLCs'](arg1);
+}
+
 export function GetGameDepots(arg1) {
   return window['go']['gui']['App']['GetGameDepots'](arg1);
 }
@@ -88,6 +104,10 @@ export function GetGameMetadata(arg1, arg2) {
 
 export function GetGameSaveLocations(arg1) {
   return window['go']['gui']['App']['GetGameSaveLocations'](arg1);
+}
+
+export function GetInitialTarget() {
+  return window['go']['gui']['App']['GetInitialTarget']();
 }
 
 export function GetLaunchProfile(arg1) {
@@ -106,6 +126,10 @@ export function GetPatchNote(arg1, arg2) {
   return window['go']['gui']['App']['GetPatchNote'](arg1, arg2);
 }
 
+export function GetRecentGames(arg1) {
+  return window['go']['gui']['App']['GetRecentGames'](arg1);
+}
+
 export function GetRunningGames() {
   return window['go']['gui']['App']['GetRunningGames']();
 }
@@ -122,6 +146,10 @@ export function GetTransferSpeedLimit() {
   return window['go']['gui']['App']['GetTransferSpeedLimit']();
 }
 
+export function HandleOpenTarget(arg1) {
+  return window['go']['gui']['App']['HandleOpenTarget'](arg1);
+}
+
 export function InspectGame(arg1, arg2) {
   return window['go']['gui']['App']['InspectGame'](arg1, arg2);
 }
@@ -136,6 +164,10 @@ export function IsGameRunning(arg1) {
 
 export function IsMultiseatSessionRunning(arg1) {
   return window['go']['gui']['App']['IsMultiseatSessionRunning'](arg1);
+}
+
+export function IsQuitting() {
+  return window['go']['gui']['App']['IsQuitting']();
 }
 
 export function LaunchGame(arg1) {
@@ -182,6 +214,10 @@ export function Quit() {
   return window['go']['gui']['App']['Quit']();
 }
 
+export function RecordGamePlayed(arg1, arg2, arg3) {
+  return window['go']['gui']['App']['RecordGamePlayed'](arg1, arg2, arg3);
+}
+
 export function RemoveTask(arg1) {
   return window['go']['gui']['App']['RemoveTask'](arg1);
 }
@@ -196,6 +232,10 @@ export function ResetLaunchProfile(arg1) {
 
 export function ResolveArtwork(arg1) {
   return window['go']['gui']['App']['ResolveArtwork'](arg1);
+}
+
+export function ResolveSteamProfile(arg1) {
+  return window['go']['gui']['App']['ResolveSteamProfile'](arg1);
 }
 
 export function RestoreSaveBackup(arg1, arg2) {
@@ -230,8 +270,16 @@ export function SelectFile(arg1, arg2, arg3) {
   return window['go']['gui']['App']['SelectFile'](arg1, arg2, arg3);
 }
 
+export function SetQuitting(arg1) {
+  return window['go']['gui']['App']['SetQuitting'](arg1);
+}
+
 export function SetTransferSpeedLimit(arg1) {
   return window['go']['gui']['App']['SetTransferSpeedLimit'](arg1);
+}
+
+export function SetTrayManager(arg1) {
+  return window['go']['gui']['App']['SetTrayManager'](arg1);
 }
 
 export function Shutdown(arg1) {
@@ -292,6 +340,14 @@ export function UninstallDepot(arg1, arg2) {
 
 export function UnlinkGameMetadata(arg1) {
   return window['go']['gui']['App']['UnlinkGameMetadata'](arg1);
+}
+
+export function UpdateCachedGame(arg1) {
+  return window['go']['gui']['App']['UpdateCachedGame'](arg1);
+}
+
+export function UpdateCachedGames(arg1) {
+  return window['go']['gui']['App']['UpdateCachedGames'](arg1);
 }
 
 export function UpdateSaveManifest() {

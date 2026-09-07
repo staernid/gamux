@@ -41,16 +41,17 @@ type ProgressUpdate struct {
 
 // DownloadRequest encapsulates parameters and telemetry hooks for downloading or updating game depots.
 type DownloadRequest struct {
-	AppID        uint32
-	TargetDir    string
-	Platform     string // "win64", "linux", "all"
-	LuaPath      string
-	HubcapAPIKey string
-	ManifestGIDs map[uint32]string // Optional map of DepotID -> ManifestGID to acquire via GMRC
-	GMRCEndpoint string            // Optional custom GMRC endpoint URL
-	WorkerLimit  int
-	DryRun       bool
-	HTTPClient   *http.Client
+	AppID            uint32
+	TargetDir        string
+	Platform         string // "win64", "linux", "all"
+	LuaPath          string
+	HubcapAPIKey     string
+	ManifestGIDs     map[uint32]string // Optional map of DepotID -> ManifestGID to acquire via GMRC
+	GMRCEndpoint     string            // Optional custom GMRC endpoint URL
+	WorkerLimit      int
+	DryRun           bool
+	HTTPClient       *http.Client
+	PreviousManifest *manifest.Manifest // Optional previous manifest for delta patching
 
 	// Telemetry & lifecycle control hooks
 	OnProgress  func(update ProgressUpdate)
@@ -70,6 +71,7 @@ type DownloadOptions struct {
 	DryRun               bool
 	WorkerLimit          int
 	AuditTrace           []string
+	PreviousManifest     *manifest.Manifest
 	ProgressCallback     func(current, total int, item string)
 	ByteProgressCallback func(downloadedBytes, totalBytes int64, speedBps float64, etaSeconds int, pct float64, item string)
 	HTTPClient           *http.Client
@@ -80,11 +82,16 @@ type Result struct {
 	TotalFiles      int    `json:"total_files"`
 	UpdatedFiles    int    `json:"updated_files"`
 	DownloadedBytes uint64 `json:"downloaded_bytes"`
+	NetworkBytes    uint64 `json:"network_bytes,omitempty"`
 }
 
 type cdnServerEntry struct {
-	Host  string `json:"host"`
-	VHost string `json:"vhost"`
+	Host          string `json:"host"`
+	VHost         string `json:"vhost"`
+	Load          int    `json:"load"`
+	WeightedLoad  int    `json:"weighted_load"`
+	PriorityClass int    `json:"priority_class"`
+	HTTPSSupport  string `json:"https_support"`
 }
 
 type cdnServerResponse struct {
@@ -167,7 +174,11 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 				if existingEntries, err := os.ReadDir(manifestsDir); err == nil {
 					for _, ee := range existingEntries {
 						if !ee.IsDir() && strings.HasPrefix(ee.Name(), prefix) && strings.HasSuffix(ee.Name(), ".manifest") && ee.Name() != fname {
-							_ = os.Remove(filepath.Join(manifestsDir, ee.Name()))
+							oldPath := filepath.Join(manifestsDir, ee.Name())
+							prevPath := filepath.Join(manifestsDir, strings.TrimSuffix(ee.Name(), ".manifest")+".manifest.previous")
+							_ = os.Remove(prevPath)
+							_ = os.Rename(oldPath, prevPath)
+							slog.Info("Preserved previous manifest for delta patching", "previous", prevPath)
 						}
 					}
 				}
@@ -259,9 +270,9 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 	cdnHosts, err := fetchCDNServers(ctx, httpClient)
 	if err != nil {
 		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
-		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
+		cdnHosts = rankCDNEdges(ctx, httpClient, []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"})
 	}
-	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
+	rankedHosts := cdnHosts
 
 	if req.OnStage != nil {
 		req.OnStage("Streaming Depot Chunks", fmt.Sprintf("Downloading %d files to %s", len(loadedManifest.Files), targetDir))
@@ -279,16 +290,17 @@ func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions)
 	}
 
 	req := DownloadRequest{
-		AppID:        opts.AppID,
-		TargetDir:    opts.TargetDir,
-		Platform:     opts.Platform,
-		LuaPath:      opts.LuaPath,
-		HubcapAPIKey: hubcapKey,
-		ManifestGIDs: opts.ManifestGIDs,
-		GMRCEndpoint: opts.GMRCEndpoint,
-		WorkerLimit:  opts.WorkerLimit,
-		DryRun:       opts.DryRun,
-		HTTPClient:   opts.HTTPClient,
+		AppID:            opts.AppID,
+		TargetDir:        opts.TargetDir,
+		Platform:         opts.Platform,
+		LuaPath:          opts.LuaPath,
+		HubcapAPIKey:     hubcapKey,
+		ManifestGIDs:     opts.ManifestGIDs,
+		GMRCEndpoint:     opts.GMRCEndpoint,
+		WorkerLimit:      opts.WorkerLimit,
+		DryRun:           opts.DryRun,
+		HTTPClient:       opts.HTTPClient,
+		PreviousManifest: opts.PreviousManifest,
 	}
 
 	if opts.ByteProgressCallback != nil || opts.ProgressCallback != nil {
@@ -387,17 +399,18 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 	cdnHosts, err := fetchCDNServers(ctx, httpClient)
 	if err != nil {
 		slog.Warn("Failed to fetch CDN servers from SteamPipe API, using fallbacks", "error", err)
-		cdnHosts = []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"}
+		cdnHosts = rankCDNEdges(ctx, httpClient, []string{"cache10-fra1.steamcontent.com", "cache4-fra1.steamcontent.com", "cache1-fra1.steamcontent.com"})
 	}
-	rankedHosts := rankCDNEdges(ctx, httpClient, cdnHosts)
+	rankedHosts := cdnHosts
 
 	req := DownloadRequest{
-		AppID:       opts.AppID,
-		TargetDir:   absTargetDir,
-		Platform:    opts.Platform,
-		WorkerLimit: opts.WorkerLimit,
-		DryRun:      opts.DryRun,
-		HTTPClient:  httpClient,
+		AppID:            opts.AppID,
+		TargetDir:        absTargetDir,
+		Platform:         opts.Platform,
+		WorkerLimit:      opts.WorkerLimit,
+		DryRun:           opts.DryRun,
+		HTTPClient:       httpClient,
+		PreviousManifest: opts.PreviousManifest,
 	}
 
 	if opts.ByteProgressCallback != nil || opts.ProgressCallback != nil {
@@ -466,6 +479,73 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 					_ = os.Remove(parent)
 				}
 				_ = os.MkdirAll(parent, 0755)
+			}
+		}
+	}
+
+	// Calculate delta depot differences against previous manifests
+	diffMap := make(map[string]manifest.FileChunkDiff)
+	var deletedFiles []string
+
+	if req.PreviousManifest != nil {
+		diff := manifest.DiffDepotManifests(req.PreviousManifest, m)
+		if diff != nil {
+			for path, fd := range diff.ModifiedFiles {
+				diffMap[manifest.NormalizePath(path)] = fd
+			}
+			deletedFiles = append(deletedFiles, diff.DeletedFiles...)
+		}
+	} else {
+		// Group target files by depot ID to diff each depot against its previous manifest
+		depotFiles := make(map[uint32][]manifest.ManifestFileEntry)
+		for _, f := range m.Files {
+			did := f.DepotID
+			if did == 0 {
+				did = m.DepotID
+			}
+			depotFiles[did] = append(depotFiles[did], f)
+		}
+
+		for did, dFiles := range depotFiles {
+			prevM, err := manifest.LoadPreviousManifestFromDir(absTargetDir, did, m.DepotKeys)
+			if err == nil && prevM != nil {
+				targetDepotM := &manifest.Manifest{
+					AppID:         m.AppID,
+					DepotID:       did,
+					DecryptionKey: m.GetDecryptionKey(did),
+					DepotKeys:     m.DepotKeys,
+					Files:         dFiles,
+				}
+				diff := manifest.DiffDepotManifests(prevM, targetDepotM)
+				if diff != nil {
+					for path, fd := range diff.ModifiedFiles {
+						diffMap[manifest.NormalizePath(path)] = fd
+					}
+					deletedFiles = append(deletedFiles, diff.DeletedFiles...)
+				}
+			}
+		}
+	}
+
+	if len(diffMap) > 0 {
+		slog.Info("Discovered previous depot manifests for delta patching",
+			"deltaFiles", len(diffMap),
+			"deletedFiles", len(deletedFiles),
+		)
+	}
+
+	// Purge deleted files if not in dry-run
+	if !req.DryRun && len(deletedFiles) > 0 {
+		for _, delPath := range deletedFiles {
+			normDel := manifest.NormalizePath(delPath)
+			if normDel == "" {
+				continue
+			}
+			absDel := filepath.Join(absTargetDir, normDel)
+			if fi, err := os.Stat(absDel); err == nil && !fi.IsDir() {
+				if err := os.Remove(absDel); err == nil {
+					slog.Info("Removed deleted depot file", "path", normDel)
+				}
 			}
 		}
 	}
@@ -547,9 +627,11 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 			}
 
 			needsDownload := false
+			info, statErr := os.Stat(filePath)
+			fileExists := statErr == nil && !info.IsDir()
 
 			// Check if file exists and hash matches
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			if fileExists {
 				if uint64(info.Size()) != entry.Size {
 					slog.Debug("File size mismatch, redownloading", "path", filePath, "actual", info.Size(), "expected", entry.Size)
 					needsDownload = true
@@ -618,12 +700,27 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
 				reportTelemetry(entry.Path)
 			} else {
+				fileDiff, isDelta := diffMap[relPath]
+				canDelta := isDelta && fileExists && info.Size() > 0
+
 				fileFlags := os.O_CREATE | os.O_RDWR
 				f, err := os.OpenFile(filePath, fileFlags, 0644)
 				if err != nil {
 					return fmt.Errorf("open target file %s: %w", filePath, err)
 				}
-				_ = f.Truncate(int64(entry.Size))
+
+				if !canDelta {
+					_ = f.Truncate(int64(entry.Size))
+				}
+
+				unchangedChunkIDs := make(map[string]bool)
+				if canDelta {
+					for _, ch := range fileDiff.UnchangedChunks {
+						if info.Size() >= int64(ch.Offset+uint64(ch.UncompressedSize)) {
+							unchangedChunkIDs[ch.ChunkID] = true
+						}
+					}
+				}
 
 				for _, chunk := range entry.Chunks {
 					if req.CheckCancel != nil {
@@ -633,10 +730,11 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 						}
 					}
 
-					if cp.isCompleted(chunk.ChunkID) {
-						slog.Debug("Chunk already completed in checkpoint, skipping", "chunkID", chunk.ChunkID)
+					if cp.isCompleted(chunk.ChunkID) || unchangedChunkIDs[chunk.ChunkID] {
+						slog.Debug("Chunk already present or completed in checkpoint, skipping network fetch", "chunkID", chunk.ChunkID, "path", filePath)
 						atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
 						reportTelemetry(entry.Path)
+						cp.markCompleted(checkpointFile, chunk.ChunkID)
 						continue
 					}
 
@@ -659,7 +757,44 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 					reportTelemetry(entry.Path)
 					cp.markCompleted(checkpointFile, chunk.ChunkID)
 				}
+
+				_ = f.Truncate(int64(entry.Size))
 				f.Close()
+
+				// If delta patching was performed and SHA-1 is known, verify the final file integrity
+				if canDelta && entry.SHA1 != "" {
+					localHash, err := util.GetSHA1Hash(filePath)
+					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
+						slog.Warn("Delta patched file hash mismatch, falling back to full file download",
+							"path", filePath, "actual", localHash, "expected", entry.SHA1)
+
+						fFull, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+						if err != nil {
+							return fmt.Errorf("reopen file for full download %s: %w", filePath, err)
+						}
+						_ = fFull.Truncate(int64(entry.Size))
+
+						for _, chunk := range entry.Chunks {
+							depotID := entry.DepotID
+							if depotID == 0 {
+								depotID = m.DepotID
+							}
+							decKey := m.GetDecryptionKey(depotID)
+							if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, fFull); err != nil {
+								fFull.Close()
+								return fmt.Errorf("download chunk during fallback for %s: %w", filePath, err)
+							}
+							atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
+							cp.markCompleted(checkpointFile, chunk.ChunkID)
+						}
+						fFull.Close()
+
+						fallbackHash, err := util.GetSHA1Hash(filePath)
+						if err != nil || !strings.EqualFold(fallbackHash, entry.SHA1) {
+							return fmt.Errorf("full redownload hash mismatch for %s: got %s, want %s", filePath, fallbackHash, entry.SHA1)
+						}
+					}
+				}
 			}
 
 			slog.Debug("Successfully updated file", "path", filePath)
@@ -674,6 +809,7 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 
 	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
 	result.DownloadedBytes = uint64(atomic.LoadInt64(&downloadedBytes))
+	result.NetworkBytes = uint64(atomic.LoadInt64(&networkTransferredBytes))
 
 	// Remove checkpoint file and sweep for any remaining VSZa compressed files on successful completion
 	if !req.DryRun {
@@ -787,22 +923,47 @@ func fetchCDNServers(ctx context.Context, client *http.Client) ([]string, error)
 		return nil, fmt.Errorf("decode cdn response json: %w", err)
 	}
 
-	hosts := make([]string, 0, len(payload.Response.Servers))
+	var validServers []cdnServerEntry
 	for _, s := range payload.Response.Servers {
-		h := s.Host
+		h := strings.TrimSpace(s.Host)
 		if h == "" {
-			h = s.VHost
+			h = strings.TrimSpace(s.VHost)
 		}
-		if h != "" {
-			hosts = append(hosts, h)
+		if h == "" {
+			continue
 		}
+		if strings.EqualFold(s.HTTPSSupport, "unsupported") || strings.EqualFold(s.HTTPSSupport, "none") {
+			continue
+		}
+		s.Host = h
+		validServers = append(validServers, s)
 	}
 
-	if len(hosts) == 0 {
+	if len(validServers) == 0 {
 		return nil, fmt.Errorf("no cdn hosts returned by SteamPipe service")
 	}
 
-	return rankCDNEdges(ctx, client, hosts), nil
+	// Rank servers by Valve's official metrics:
+	// 1. Primary sort: PriorityClass DESC (Valve's preferred tier)
+	// 2. Secondary sort: WeightedLoad ASC (least congested node)
+	sort.SliceStable(validServers, func(i, j int) bool {
+		if validServers[i].PriorityClass != validServers[j].PriorityClass {
+			return validServers[i].PriorityClass > validServers[j].PriorityClass
+		}
+		return validServers[i].WeightedLoad < validServers[j].WeightedLoad
+	})
+
+	limit := 5
+	if len(validServers) < limit {
+		limit = len(validServers)
+	}
+
+	topHosts := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		topHosts = append(topHosts, validServers[i].Host)
+	}
+
+	return topHosts, nil
 }
 
 func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, depotID uint32, decKey string, chunk manifest.ChunkInfo, dst io.WriterAt) error {

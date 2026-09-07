@@ -1,5 +1,5 @@
 <script>
-  import { formatNewsHTML } from '../../../utils/format.js';
+  import { formatNewsHTML } from '../../../../utils/format.js';
 
   export let isLoadingNews = false;
   export let newsError = '';

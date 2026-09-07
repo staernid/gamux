@@ -222,6 +222,7 @@ type runningSession struct {
 	seat1     runningSeat
 	seat2     runningSeat
 	startTime int64
+	kwinCoord *KWinSplitCoordinator
 }
 
 // Supervisor manages concurrent multi-seat sessions and their lifecycle.
@@ -591,6 +592,22 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 		session.seat2.sunshineCmd = sunP2Cmd
 		session.seat2.status.StreamURL = fmt.Sprintf("https://localhost:%d", sessionCfg.SunshinePortP2)
 		session.seat2.status.WebUIURL = fmt.Sprintf("https://localhost:%d", sessionCfg.SunshinePortP2+1)
+	}
+
+	// For local splitscreen sessions on KDE Plasma, initialize transient pixel-perfect window placement
+	if sessionCfg.Seat1.Mode == SeatModeLocal && sessionCfg.Seat2.Mode == SeatModeLocal &&
+		(sessionCfg.Layout == LayoutSideBySide || sessionCfg.Layout == LayoutTopBottom) &&
+		IsKWinAvailable() {
+		coord, err := NewKWinSplitCoordinator(p1Cmd.Process.Pid, p2Cmd.Process.Pid, sessionCfg.Layout)
+		if err != nil {
+			slog.Warn("Failed to initialize KWin splitscreen coordinator", "error", err)
+		} else {
+			if err := coord.Start(ctx); err != nil {
+				slog.Warn("Failed to start KWin splitscreen coordinator", "error", err)
+			} else {
+				session.kwinCoord = coord
+			}
+		}
 	}
 
 	s.mu.Lock()
@@ -1074,6 +1091,11 @@ func (s *Supervisor) StopSession(gameDir string) error {
 	// 6. Cleanup Wayland symlink if created
 	if session.seat2.waylandLink != "" {
 		_ = os.Remove(session.seat2.waylandLink)
+	}
+
+	// 7. Cleanup KWin splitscreen coordinator if active
+	if session.kwinCoord != nil {
+		_ = session.kwinCoord.Stop()
 	}
 
 	slog.Info("Multi-seat session cleanly terminated", "dir", gameDir)

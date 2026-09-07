@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/runner"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/util"
 	"github.com/staernid/gamux/util/testutil"
@@ -712,6 +714,82 @@ func TestEngine_GetGameDepots(t *testing.T) {
 	}
 	if len(depots) != 0 {
 		t.Errorf("expected 0 depots for empty dir, got %d", len(depots))
+	}
+}
+
+func TestEngine_CheckGameUpdates(t *testing.T) {
+	cache.SetDisabled(true)
+	defer cache.SetDisabled(false)
+
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	// Create dummy game files with steam_appid.txt and appmanifest
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("440"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "game.exe"), []byte("MZ"), 0755)
+	acfContent := `"AppState"
+{
+	"appid" "440"
+	"name" "Team Fortress 2"
+	"buildid" "100"
+}`
+	_ = os.WriteFile(filepath.Join(tmpDir, "appmanifest_440.acf"), []byte(acfContent), 0644)
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "UpToDateCheck") {
+				jsonResp := `{"response": {"success": true, "up_to_date": true, "required_version": 123}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	ctx := steam.WithHTTPClient(context.Background(), mockClient)
+	status, err := eng.CheckGameUpdates(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("CheckGameUpdates failed: %v", err)
+	}
+	if status == nil || !status.Checked {
+		t.Errorf("expected status.Checked == true")
+	}
+}
+
+func TestEngine_GetGameDLCs(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New(nil)
+
+	// Create steam_settings with configs.app.ini
+	sDir := filepath.Join(tmpDir, "steam_settings")
+	_ = os.MkdirAll(sDir, 0755)
+	iniContent := `[app::dlcs]
+unlock_all=0
+2004110=Expansion 1
+2147250=Expansion 2
+`
+	_ = os.WriteFile(filepath.Join(sDir, "configs.app.ini"), []byte(iniContent), 0644)
+
+	dlcs, err := eng.GetGameDLCs(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("GetGameDLCs failed: %v", err)
+	}
+
+	if len(dlcs) != 2 {
+		t.Fatalf("expected 2 DLCs, got %d", len(dlcs))
+	}
+	if dlcs[0].AppID != "2004110" || dlcs[0].Name != "Expansion 1" {
+		t.Errorf("unexpected first DLC: %+v", dlcs[0])
+	}
+	if dlcs[1].AppID != "2147250" || dlcs[1].Name != "Expansion 2" {
+		t.Errorf("unexpected second DLC: %+v", dlcs[1])
 	}
 }
 

@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
-  import { notificationStore } from '../../../stores/notifications.js';
-  import { formatBytes, formatTimeAgo } from '../../../utils/format.js';
+  import { AppAPI } from '../../../../api/app.js';
+  import { notificationStore } from '../../../../stores/notifications.js';
+  import { formatBytes, formatTimeAgo } from '../../../../utils/format.js';
 
   export let game = null;
 

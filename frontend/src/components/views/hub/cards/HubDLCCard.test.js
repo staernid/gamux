@@ -1,11 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
-import DrawerDLCTab from './DrawerDLCTab.svelte';
-import { AppAPI } from '../../../api/app.js';
-import { tasksStore } from '../../../stores/tasks.js';
-import { normalizeGame } from '../../../utils/game.js';
+import HubDLCCard from './HubDLCCard.svelte';
+import { AppAPI } from '../../../../api/app.js';
+import { tasksStore } from '../../../../stores/tasks.js';
+import { normalizeGame } from '../../../../utils/game.js';
 
-describe('DrawerDLCTab Component', () => {
+describe('HubDLCCard Component', () => {
   const mockGame = normalizeGame({
     name: 'Torchlight II',
     app_id: '200710',
@@ -36,7 +36,7 @@ describe('DrawerDLCTab Component', () => {
   it('renders depot list and soundtrack download button', async () => {
     vi.spyOn(AppAPI, 'getGameDepots').mockResolvedValue(mockDepots);
 
-    render(DrawerDLCTab, { props: { game: mockGame } });
+    render(HubDLCCard, { props: { game: mockGame } });
 
     await waitFor(() => {
       expect(screen.getByText(/DLC & Content Depots/i)).toBeInTheDocument();
@@ -50,7 +50,7 @@ describe('DrawerDLCTab Component', () => {
     vi.spyOn(AppAPI, 'getGameDepots').mockResolvedValue(mockDepots);
     const startSpy = vi.spyOn(tasksStore, 'start').mockResolvedValue('task_soundtrack_1');
 
-    render(DrawerDLCTab, { props: { game: mockGame } });
+    render(HubDLCCard, { props: { game: mockGame } });
 
     await waitFor(() => {
       expect(screen.getByText(/🎵 Save to Music/i)).toBeInTheDocument();
@@ -67,5 +67,25 @@ describe('DrawerDLCTab Component', () => {
         auto_apply: false,
       })
     );
+  });
+
+  it('renders configured DLCs and allows syncing via AppAPI.fetchDLCs', async () => {
+    vi.spyOn(AppAPI, 'getGameDepots').mockResolvedValue([]);
+    vi.spyOn(AppAPI, 'getGameDLCs').mockResolvedValue([
+      { app_id: '200715', name: 'Torchlight II: Pet Pack' },
+    ]);
+    const fetchSpy = vi.spyOn(AppAPI, 'fetchDLCs').mockResolvedValue();
+
+    render(HubDLCCard, { props: { game: mockGame } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Torchlight II: Pet Pack')).toBeInTheDocument();
+      expect(screen.getByText(/Sync Steam DLCs/i)).toBeInTheDocument();
+    });
+
+    const syncBtn = screen.getByText(/Sync Steam DLCs/i);
+    await fireEvent.click(syncBtn);
+
+    expect(fetchSpy).toHaveBeenCalledWith(mockGame.gameDir);
   });
 });

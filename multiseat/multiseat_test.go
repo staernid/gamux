@@ -1871,3 +1871,115 @@ func TestSupervisor_StopAll(t *testing.T) {
 	sup.StopAll()
 }
 
+func TestGenerateKWinSplitScript_SideBySide(t *testing.T) {
+	script := GenerateKWinSplitScript(1234, 5678, LayoutSideBySide)
+
+	if !strings.Contains(script, "var p1PID = 1234;") {
+		t.Errorf("expected p1PID 1234 in script")
+	}
+	if !strings.Contains(script, "var p2PID = 5678;") {
+		t.Errorf("expected p2PID 5678 in script")
+	}
+	if !strings.Contains(script, "var isSideBySide = true;") {
+		t.Errorf("expected isSideBySide true in script")
+	}
+	if !strings.Contains(script, "w.noBorder = true;") {
+		t.Errorf("expected w.noBorder = true in script")
+	}
+	if !strings.Contains(script, "w.keepAbove = true;") {
+		t.Errorf("expected w.keepAbove = true in script")
+	}
+	if !strings.Contains(script, "workspace.virtualScreenSize") {
+		t.Errorf("expected workspace.virtualScreenSize in script")
+	}
+	if !strings.Contains(script, "workspace.windowAdded") {
+		t.Errorf("expected workspace.windowAdded in script")
+	}
+	if !strings.Contains(script, "halfW = Math.round(sW * 0.5)") {
+		t.Errorf("expected halfW calculation in script")
+	}
+}
+
+func TestGenerateKWinSplitScript_TopBottom(t *testing.T) {
+	script := GenerateKWinSplitScript(1111, 2222, LayoutTopBottom)
+
+	if !strings.Contains(script, "var p1PID = 1111;") {
+		t.Errorf("expected p1PID 1111 in script")
+	}
+	if !strings.Contains(script, "var p2PID = 2222;") {
+		t.Errorf("expected p2PID 2222 in script")
+	}
+	if !strings.Contains(script, "var isSideBySide = false;") {
+		t.Errorf("expected isSideBySide false in script")
+	}
+	if !strings.Contains(script, "halfH = Math.round(sH * 0.5)") {
+		t.Errorf("expected halfH calculation in script")
+	}
+}
+
+func TestNewKWinSplitCoordinator_Validation(t *testing.T) {
+	_, err := NewKWinSplitCoordinator(0, 100, LayoutSideBySide)
+	if err == nil {
+		t.Errorf("expected error for seat1PID <= 0")
+	}
+
+	_, err = NewKWinSplitCoordinator(100, 0, LayoutSideBySide)
+	if err == nil {
+		t.Errorf("expected error for seat2PID <= 0")
+	}
+}
+
+func TestBuildGamescopeArgs_NestedUnfocusedRefresh(t *testing.T) {
+	opts := DisplayOptions{
+		Mode:         SeatModeLocal,
+		Layout:       LayoutSideBySide,
+		SeatID:       "p1",
+		WindowWidth:  960,
+		WindowHeight: 1080,
+		TargetFPS:    100,
+		Command:      []string{"game.exe"},
+	}
+
+	args, err := BuildGamescopeArgs(opts)
+	if err != nil {
+		t.Fatalf("BuildGamescopeArgs failed: %v", err)
+	}
+
+	argsStr := strings.Join(args, " ")
+	if !strings.Contains(argsStr, "-r 100") {
+		t.Errorf("expected -r 100 in args, got: %s", argsStr)
+	}
+	if !strings.Contains(argsStr, "-o 100") {
+		t.Errorf("expected -o 100 (unfocused refresh rate) in args, got: %s", argsStr)
+	}
+	if !strings.Contains(argsStr, "-W 960") || !strings.Contains(argsStr, "-H 1080") {
+		t.Errorf("expected window resolution 960x1080 in args, got: %s", argsStr)
+	}
+	if !strings.Contains(argsStr, "-w 960") || !strings.Contains(argsStr, "-h 1080") {
+		t.Errorf("expected 1:1 render resolution 960x1080 in args, got: %s", argsStr)
+	}
+}
+
+func TestKWinSplitCoordinator_LiveLifecycle(t *testing.T) {
+	if !IsKWinAvailable() {
+		t.Skip("KWin DBus scripting not available on host")
+	}
+
+	coord, err := NewKWinSplitCoordinator(os.Getpid(), os.Getpid()+1, LayoutSideBySide)
+	if err != nil {
+		t.Fatalf("NewKWinSplitCoordinator failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := coord.Start(ctx); err != nil {
+		t.Fatalf("coord.Start failed: %v", err)
+	}
+
+	if err := coord.Stop(); err != nil {
+		t.Fatalf("coord.Stop failed: %v", err)
+	}
+}
+
+

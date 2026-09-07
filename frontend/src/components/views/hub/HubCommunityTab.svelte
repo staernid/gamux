@@ -1,8 +1,8 @@
 <script>
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
-  import DrawerAchievementsTab from '../../stage/drawer/DrawerAchievementsTab.svelte';
-  import DrawerNewsTab from '../../stage/drawer/DrawerNewsTab.svelte';
+  import HubAchievementsCard from './cards/HubAchievementsCard.svelte';
+  import HubNewsCard from './cards/HubNewsCard.svelte';
 
   export let game = null;
   export let initialSubTab = 'achievements';
@@ -96,9 +96,9 @@
   </div>
 
   {#if activeCommunitySubTab === 'achievements'}
-    <DrawerAchievementsTab gameDir={game?.gameDir} />
+    <HubAchievementsCard gameDir={game?.gameDir} />
   {:else if activeCommunitySubTab === 'news'}
-    <DrawerNewsTab
+    <HubNewsCard
       {isLoadingNews}
       {newsError}
       {newsItems}

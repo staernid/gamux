@@ -170,6 +170,76 @@ func TestFetchDLCs(t *testing.T) {
 	}
 }
 
+func TestFetchDLCs_Structured(t *testing.T) {
+	cache.SetDisabled(true)
+	defer cache.SetDisabled(false)
+
+	tmpDir, err := os.MkdirTemp("", "testfetchdlcs_structured")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "ajaxgetfilteredrecommendations") {
+				t.Fatalf("Structured DLC discovery should not call legacy ajax recommendations endpoint!")
+			}
+			if strings.Contains(req.URL.Path, "appdetails") {
+				if strings.Contains(req.URL.RawQuery, "appids=846770") {
+					jsonResp := `{"846770": {"success": true, "data": {"name": "Dysmantle", "dlc": [101, 102]}}}`
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+						Header:     make(http.Header),
+					}, nil
+				}
+				if strings.Contains(req.URL.RawQuery, "appids=101") {
+					jsonResp := `{"101": {"success": true, "data": {"name": "Underworld DLC"}}}`
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+						Header:     make(http.Header),
+					}, nil
+				}
+				if strings.Contains(req.URL.RawQuery, "appids=102") {
+					jsonResp := `{"102": {"success": true, "data": {"name": "Doomsday DLC"}}}`
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+						Header:     make(http.Header),
+					}, nil
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	ctx := WithHTTPClient(context.Background(), mockClient)
+	err = FetchDLCs(ctx, "846770", tmpDir, false)
+	if err != nil {
+		t.Fatalf("FetchDLCs failed: %v", err)
+	}
+
+	iniPath := filepath.Join(tmpDir, "steam_settings", "configs.app.ini")
+	iniContent, err := os.ReadFile(iniPath)
+	if err != nil {
+		t.Fatalf("failed to read configs.app.ini: %v", err)
+	}
+
+	iniStr := string(iniContent)
+	if !strings.Contains(iniStr, "101=Underworld DLC") {
+		t.Errorf("expected 101=Underworld DLC, got:\n%s", iniStr)
+	}
+	if !strings.Contains(iniStr, "102=Doomsday DLC") {
+		t.Errorf("expected 102=Doomsday DLC, got:\n%s", iniStr)
+	}
+}
+
 func TestFetchDLCs_PreservesExistingSections(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "testdlc_preserve")
 	if err != nil {

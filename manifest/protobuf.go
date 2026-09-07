@@ -390,3 +390,94 @@ func LoadManifestFromDirWithPlatform(targetDir string, appID uint32, depotKeys m
 	}, nil
 }
 
+// LoadPreviousManifestFromDir loads the previous (.manifest.previous) depot manifest from <targetDir>/[Manifests].
+func LoadPreviousManifestFromDir(targetDir string, depotID uint32, depotKeys map[uint32]string) (*Manifest, error) {
+	manifestsDir := filepath.Join(targetDir, "[Manifests]")
+	entries, err := os.ReadDir(manifestsDir)
+	if err != nil {
+		return nil, fmt.Errorf("read manifests dir: %w", err)
+	}
+
+	// Try reading local keys from any .lua files in [Manifests] if depotKeys is empty
+	if len(depotKeys) == 0 {
+		depotKeys = make(map[uint32]string)
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".lua") {
+				luaPath := filepath.Join(manifestsDir, e.Name())
+				if content, err := os.ReadFile(luaPath); err == nil {
+					if parsed, err := ParseLua(string(content)); err == nil && len(parsed.Depots) > 0 {
+						for _, pair := range parsed.Depots {
+							depotKeys[pair.DepotID] = pair.DecryptionKey
+						}
+					}
+				}
+			}
+		}
+	}
+
+	prefix := ""
+	if depotID != 0 {
+		prefix = fmt.Sprintf("%d_", depotID)
+	}
+
+	var bestPath string
+	var bestManifestID uint64
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".manifest.previous") {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
+			continue
+		}
+
+		parts := strings.Split(name, "_")
+		if len(parts) >= 2 {
+			midStr := strings.TrimSuffix(parts[1], ".manifest.previous")
+			if mid, err := strconv.ParseUint(midStr, 10, 64); err == nil {
+				if mid > bestManifestID {
+					bestManifestID = mid
+					bestPath = filepath.Join(manifestsDir, name)
+				}
+			}
+		} else if bestPath == "" {
+			bestPath = filepath.Join(manifestsDir, name)
+		}
+	}
+
+	if bestPath == "" {
+		return nil, fmt.Errorf("no previous manifest found in %s", manifestsDir)
+	}
+
+	data, err := os.ReadFile(bestPath)
+	if err != nil {
+		return nil, fmt.Errorf("read previous manifest %s: %w", bestPath, err)
+	}
+
+	hexKey := ""
+	if depotKeys != nil {
+		hexKey = depotKeys[depotID]
+	}
+
+	files, err := ParseBinaryManifestWithKey(data, hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("parse previous binary manifest: %w", err)
+	}
+
+	for i := range files {
+		files[i].DepotID = depotID
+	}
+
+	return &Manifest{
+		DepotID:       depotID,
+		ManifestID:    bestManifestID,
+		DecryptionKey: hexKey,
+		DepotKeys:     depotKeys,
+		Files:         files,
+	}, nil
+}
+

@@ -536,3 +536,44 @@ func TestApp_ProcessTrackingAndRunningGames(t *testing.T) {
 	}
 }
 
+func TestApp_CheckGameUpdates_and_DLCs(t *testing.T) {
+	tmpDir := t.TempDir()
+	app := &App{
+		Engine: engine.New(nil),
+	}
+
+	gameDir := filepath.Join(tmpDir, "TestGame")
+	sDir := filepath.Join(gameDir, "steam_settings")
+	if err := os.MkdirAll(sDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = os.WriteFile(filepath.Join(gameDir, "steam_appid.txt"), []byte("12345"), 0644)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("MZ"), 0755)
+
+	iniContent := `[app::dlcs]
+unlock_all=0
+1001=Test DLC 1
+`
+	_ = os.WriteFile(filepath.Join(sDir, "configs.app.ini"), []byte(iniContent), 0644)
+
+	// 1. GetGameDLCs
+	dlcs, err := app.GetGameDLCs(gameDir)
+	if err != nil {
+		t.Fatalf("GetGameDLCs failed: %v", err)
+	}
+	if len(dlcs) != 1 || dlcs[0].AppID != "1001" {
+		t.Errorf("expected 1 DLC with AppID 1001, got %+v", dlcs)
+	}
+
+	// 2. CheckGameUpdates
+	status, err := app.CheckGameUpdates(gameDir)
+	if err != nil {
+		t.Fatalf("CheckGameUpdates failed: %v", err)
+	}
+	if status == nil {
+		t.Fatalf("expected non-nil VersionStatus")
+	}
+}
+
+

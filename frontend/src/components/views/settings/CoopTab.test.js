@@ -1,7 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/svelte';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import CoopTab from './CoopTab.svelte';
 import { multiseatStore } from '../../../stores/multiseat.js';
+import { AppAPI } from '../../../api/app.js';
 
 describe('CoopTab Component', () => {
   const mockCfgDraft = {
@@ -231,6 +232,39 @@ describe('CoopTab Component', () => {
     expect(compositorSelect.value).toBe('auto');
     await fireEvent.change(compositorSelect, { target: { value: 'gamescope' } });
     expect(draft.multiseat.seat2_compositor).toBe('gamescope');
+  });
+
+  it('imports Player 2 profile via 1-click Steam sync', async () => {
+    vi.spyOn(AppAPI, 'resolveSteamProfile').mockResolvedValue({
+      steam_id: '76561198000000002',
+      persona_name: 'CoopBuddy',
+      avatar_url: 'https://avatars.steamstatic.com/buddy.jpg',
+      country_code: 'CA',
+      profile_url: 'https://steamcommunity.com/id/coopbuddy',
+    });
+
+    const draft = { ...mockCfgDraft, multiseat: { ...mockCfgDraft.multiseat } };
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    expect(screen.getByText('Auto-Sync Player 2 Profile')).toBeInTheDocument();
+    const importInput = screen.getByPlaceholderText(/e\.g\. gaben or https:\/\/steamcommunity\.com\/id/i);
+    await fireEvent.input(importInput, { target: { value: 'coopbuddy' } });
+
+    const importBtn = screen.getAllByRole('button', { name: /Import/i })[0];
+    await fireEvent.click(importBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Imported profile: CoopBuddy \(76561198000000002\)/i)).toBeInTheDocument();
+    });
+
+    expect(draft.multiseat.player2_account_name).toBe('CoopBuddy');
+    expect(draft.multiseat.player2_account_steamid).toBe('76561198000000002');
+    expect(draft.multiseat.player2_ip_country).toBe('CA');
   });
 });
 

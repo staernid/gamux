@@ -6,7 +6,8 @@
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
   import { AppAPI } from '../../../api/app.js';
-  import { generateRandomSteamID as createRandomSteamID, isValidSteamID64 } from '../../../utils/steam.js';
+  import { generateRandomSteamID as createRandomSteamID } from '../../../utils/steam.js';
+  import SteamPersonaCard from './SteamPersonaCard.svelte';
 
   export let cfgDraft = {
     multiseat: {
@@ -127,15 +128,6 @@
     }))
   ];
 
-  let customCountryCodeP2 = '';
-  $: isCustomCountryP2 = !countriesList.some(c => c.value === cfgDraft.multiseat?.player2_ip_country) && cfgDraft.multiseat?.player2_ip_country !== '';
-  $: isValidSteamIdP2 = isValidSteamID64(cfgDraft.multiseat?.player2_account_steamid);
-  $: hasSteamIdCollision = Boolean(
-    cfgDraft.multiseat?.player2_account_steamid &&
-    userCfgDraft?.account_steamid &&
-    cfgDraft.multiseat.player2_account_steamid === userCfgDraft.account_steamid
-  );
-
   const layoutOptions = [
     { value: 'dual_monitor', label: 'Dual Monitor (Auto Display 0 & 1)' },
     { value: 'side_by_side', label: 'Side-by-Side (Left / Right - Vertical Split)' },
@@ -143,36 +135,14 @@
     { value: 'windowed', label: 'Windowed (Floating Windows)' }
   ];
 
-  function generateRandomSteamID() {
-    cfgDraft.multiseat.player2_account_steamid = createRandomSteamID();
-    cfgDraft = { ...cfgDraft };
-  }
-
   function quickSetupPlayer2() {
     cfgDraft.multiseat = {
       ...cfgDraft.multiseat,
-      player2_account_name: (userCfgDraft.account_name || 'Player') + '-Coop',
+      player2_account_name: (userCfgDraft?.account_name || 'Player') + '-Coop',
       player2_account_steamid: createRandomSteamID(),
-      player2_language: userCfgDraft.language || 'english',
-      player2_ip_country: userCfgDraft.ip_country || 'US'
+      player2_language: userCfgDraft?.language || 'english',
+      player2_ip_country: userCfgDraft?.ip_country || 'US'
     };
-    cfgDraft = { ...cfgDraft };
-  }
-
-  function handleCountrySelectP2(e) {
-    const val = e.detail;
-    if (val === 'CUSTOM') {
-      if (!customCountryCodeP2) customCountryCodeP2 = 'US';
-      cfgDraft.multiseat.player2_ip_country = customCountryCodeP2.toUpperCase();
-    } else {
-      cfgDraft.multiseat.player2_ip_country = val;
-    }
-    cfgDraft = { ...cfgDraft };
-  }
-
-  function handleCustomCountryInput(e) {
-    customCountryCodeP2 = e.target.value.toUpperCase();
-    cfgDraft.multiseat.player2_ip_country = customCountryCodeP2;
     cfgDraft = { ...cfgDraft };
   }
 
@@ -295,88 +265,28 @@
         </button>
       </div>
 
-      <div class="space-y-2.5">
-        <GhostInput
-          label="Guest Display Name"
-          description="Persona nickname for the second player in split-screen or streaming sessions"
-          bind:value={cfgDraft.multiseat.player2_account_name}
-          placeholder="PlayerTwo"
-        />
-
-        <InheritSelect
-          label="Guest Language"
-          description="Language injected into Player 2's Goldberg Steamworks emulation"
-          bind:value={cfgDraft.multiseat.player2_language}
-          options={languagesList}
-        />
-
-        <div class="space-y-1">
-          <GhostInput
-            label="Guest Steam ID (64-Bit)"
-            description="Must differ from Player 1 to avoid Steamworks lobby collisions"
-            bind:value={cfgDraft.multiseat.player2_account_steamid}
-            placeholder="76561198998877665"
-            mono={true}
-          >
-            <button
-              slot="action"
-              type="button"
-              on:click={generateRandomSteamID}
-              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
-              title="Generate a new randomized Steam ID for Player 2"
-            >
-              <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Random</span>
-            </button>
-          </GhostInput>
-
-          {#if cfgDraft.multiseat?.player2_account_steamid && !isValidSteamIdP2}
-            <div class="flex items-center space-x-1.5 text-xs text-amber-400 font-mono px-1">
-              <svg class="w-3.5 h-3.5 flex-shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span>Warning: Standard SteamID64 format should be exactly 17 digits.</span>
-            </div>
-          {/if}
-
-          {#if hasSteamIdCollision}
-            <div class="flex items-center space-x-1.5 text-xs text-rose-400 font-mono px-1">
-              <svg class="w-3.5 h-3.5 flex-shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Collision: Player 1 and Player 2 have the same SteamID. Click "Random" to generate a unique ID.</span>
-            </div>
-          {/if}
-        </div>
-
-        <div class="space-y-1.5">
-          <InheritSelect
-            label="Guest Country Code"
-            description="Two-letter ISO country code reported by Player 2's emulator"
-            value={isCustomCountryP2 ? 'CUSTOM' : cfgDraft.multiseat.player2_ip_country}
-            options={[...countriesList, { value: 'CUSTOM', label: 'Other (Custom 2-Letter ISO)...' }]}
-            on:change={handleCountrySelectP2}
-          />
-
-          {#if isCustomCountryP2 || cfgDraft.multiseat.player2_ip_country === 'CUSTOM'}
-            <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
-              <span class="text-xs font-semibold text-neutral-300">Custom ISO Country Code:</span>
-              <div class="flex items-center space-x-1.5">
-                <input
-                  type="text"
-                  maxlength="2"
-                  value={cfgDraft.multiseat.player2_ip_country === 'CUSTOM' ? customCountryCodeP2 : cfgDraft.multiseat.player2_ip_country}
-                  on:input={handleCustomCountryInput}
-                  placeholder="US"
-                  class="w-16 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase text-center outline-none"
-                />
-              </div>
-            </div>
-          {/if}
-        </div>
-
+      <SteamPersonaCard
+        bind:accountName={cfgDraft.multiseat.player2_account_name}
+        bind:accountSteamId={cfgDraft.multiseat.player2_account_steamid}
+        bind:language={cfgDraft.multiseat.player2_language}
+        bind:ipCountry={cfgDraft.multiseat.player2_ip_country}
+        collisionSteamId={userCfgDraft?.account_steamid || ''}
+        nameLabel="Guest Display Name"
+        nameDescription="Persona nickname for the second player in split-screen or streaming sessions"
+        namePlaceholder="PlayerTwo"
+        langLabel="Guest Language"
+        langDescription="Language injected into Player 2's Goldberg Steamworks emulation"
+        steamidLabel="Guest Steam ID (64-Bit)"
+        steamidDescription="Must differ from Player 1 to avoid Steamworks lobby collisions"
+        steamidPlaceholder="76561198998877665"
+        countryLabel="Guest Country Code"
+        countryDescription="Two-letter ISO country code reported by Player 2's emulator"
+        syncTitle="Auto-Sync Player 2 Profile"
+        syncSubtitle="Enter Player 2's Steam vanity URL or SteamID64 to sync co-op persona and avatar"
+        {languagesList}
+        {countriesList}
+        on:change={() => { cfgDraft = { ...cfgDraft }; }}
+      >
         <div class="space-y-1">
           <GhostInput
             label="Guest Wine Prefix"
@@ -395,7 +305,7 @@
             </button>
           </GhostInput>
         </div>
-      </div>
+      </SteamPersonaCard>
     </div>
   </SettingSection>
 

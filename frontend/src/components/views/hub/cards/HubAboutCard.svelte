@@ -11,9 +11,9 @@
 
 <script>
   import { onMount } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
-  import { modalStore } from '../../../stores/modal.js';
-  import { getMetadataInfo, isSteamApp, getGameSource } from '../../../utils/game.js';
+  import { AppAPI } from '../../../../api/app.js';
+  import { modalStore } from '../../../../stores/modal.js';
+  import { getMetadataInfo, isSteamApp, getGameSource } from '../../../../utils/game.js';
 
   export let game = null;
 
@@ -142,6 +142,13 @@
             <div class="flex items-center space-x-1.5">
               <span class="text-slate-500">Released:</span>
               <span class="text-slate-300 font-medium">{releaseDate}</span>
+            </div>
+          {/if}
+
+          {#if game?.buildId && game.buildId !== '0'}
+            <div class="flex items-center space-x-1.5 font-mono">
+              <span class="text-slate-500">Build:</span>
+              <span class="text-slate-300 font-medium">{game.buildId}</span>
             </div>
           {/if}
 

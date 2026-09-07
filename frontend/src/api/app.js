@@ -64,9 +64,17 @@ const DEFAULT_MOCKS = {
   submitBatchLibraryOp: (kind) => Promise.resolve(`task_batch_${kind}_1`),
   getGameLog: (path) => Promise.resolve(`=== Gamux Launch Log ===\nTime: Tue, 25 Aug 2026 20:30:00 CEST\nGame: Mock Game Title\nPlatform: win64\nMode: standalone\nRunner: umu\nExecutable: /mock/game.exe\nWorkingDir: /mock\nCommand: umu-run /mock/game.exe\n========================\n\n[umu-run] Initializing Proton prefix...\n[Proton] Game process started successfully (PID: 12345)\n[DXVK] Found Vulkan 1.3 driver\n[Audio] PulseAudio sink connected\n`),
   getGameAchievements: (path) => Promise.resolve([
-    { id: 'ACH_1', name: 'First Steps', description: 'Complete the tutorial', icon_url: '', icon_gray_url: '', hidden: false, unlocked: true, unlock_time: 1690000000 },
-    { id: 'ACH_2', name: 'Master Collector', description: 'Collect all hidden items', icon_url: '', icon_gray_url: '', hidden: false, unlocked: false, unlock_time: 0 }
+    { id: 'ACH_1', name: 'First Steps', description: 'Complete the tutorial', icon_url: '', icon_gray_url: '', hidden: false, unlocked: true, unlock_time: 1690000000, global_percent: 74.2, rarity: 'common' },
+    { id: 'ACH_2', name: 'Master Collector', description: 'Collect all hidden items', icon_url: '', icon_gray_url: '', hidden: false, unlocked: false, unlock_time: 0, global_percent: 3.8, rarity: 'ultra_rare' }
   ]),
+  getGameCurrentPlayers: (appId) => Promise.resolve(14250),
+  resolveSteamProfile: (identifier) => Promise.resolve({
+    steam_id: '76561197960287930',
+    persona_name: 'GamuxPlayer',
+    avatar_url: '',
+    country_code: 'US',
+    profile_url: 'https://steamcommunity.com/id/gamuxplayer'
+  }),
   verifyIntegrity: () => ({
     official_count: 1420,
     intact_count: 1420,
@@ -82,6 +90,20 @@ const DEFAULT_MOCKS = {
     { depot_id: 41504, name: 'Linux Native Binaries (41504)', category: 'linux', installed: false, size: 28000000, file_count: 18, manifest_id: 1003 },
     { depot_id: 41505, name: 'Official Soundtrack (41505)', category: 'soundtrack', installed: false, size: 150000000, file_count: 24, manifest_id: 1004 },
   ],
+  checkGameUpdates: (path) => Promise.resolve({
+    is_up_to_date: true,
+    checked: true,
+    current_build_id: '123456',
+    latest_build_id: '123456',
+    latest_patch_date: 1672531199,
+    latest_patch_title: 'Latest Game Update',
+    message: 'Game is up to date'
+  }),
+  getGameDLCs: (path) => Promise.resolve([
+    { app_id: '2004110', name: 'Expansion Pass' },
+    { app_id: '2147250', name: 'Soundtrack & Artwork' }
+  ]),
+  fetchDLCs: (path) => Promise.resolve(),
   switchGamePlatform: (path, plat) => Promise.resolve({ ...mockData.MOCK_GAMES[0], platform: plat }),
   uninstallDepot: (path, depotId) => Promise.resolve({ ...mockData.MOCK_GAMES[0] }),
   openDirectory: () => Promise.resolve(),
@@ -279,6 +301,7 @@ const RUNTIME_EVENT_MAP = [
   { key: 'onDownloadProgress', event: 'gamux:download-progress' },
   { key: 'onStepProgress', event: 'gamux:step-progress' },
   { key: 'onGameStatus', event: 'gamux:game-status' },
+  { key: 'onOpenTarget', event: 'gamux:open-target' },
 ];
 
 // Initialize and bind all runtime event listeners to Wails and dev bridge

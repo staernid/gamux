@@ -31,7 +31,11 @@ func (a *App) InspectLibraries(dirs []string) ([]*engine.GameStatus, error) {
 	if len(cleanDirs) == 0 {
 		return nil, fmt.Errorf("library directories cannot be empty")
 	}
-	return a.Engine.BatchInspectLibraries(a.getContext(), cleanDirs)
+	res, err := a.Engine.BatchInspectLibraries(a.getContext(), cleanDirs)
+	if err == nil && len(res) > 0 {
+		a.UpdateCachedGames(res)
+	}
+	return res, err
 }
 
 // InspectGame inspects a game directory and returns its full GameStatus, optionally fetching news/patch notes.
@@ -40,10 +44,16 @@ func (a *App) InspectGame(gamePath string, newsCount int) (*engine.GameStatus, e
 	if err != nil {
 		return nil, err
 	}
+	var st *engine.GameStatus
 	if newsCount > 0 {
-		return a.Engine.InspectStatusEx(a.getContext(), path, newsCount)
+		st, err = a.Engine.InspectStatusEx(a.getContext(), path, newsCount)
+	} else {
+		st, err = a.Engine.InspectStatus(a.getContext(), path)
 	}
-	return a.Engine.InspectStatus(a.getContext(), path)
+	if err == nil && st != nil {
+		a.UpdateCachedGame(st)
+	}
+	return st, err
 }
 
 // DetectGame inspects a given game directory and returns detected game metadata.
@@ -165,6 +175,42 @@ func (a *App) GetGameAchievements(gamePath string) ([]domain.AchievementItem, er
 	return a.Engine.GetGameAchievements(a.getContext(), path)
 }
 
+// GetGameCurrentPlayers returns the real-time concurrent player count for a Steam AppID.
+func (a *App) GetGameCurrentPlayers(appID string) (int, error) {
+	parsed, ok := util.ParseAppID(appID)
+	if !ok || parsed == 0 {
+		return 0, fmt.Errorf("invalid appID %q", appID)
+	}
+	return steam.FetchCurrentPlayers(a.getContext(), parsed)
+}
+
+// CheckGameUpdates inspects a game's update status using hybrid version checking.
+func (a *App) CheckGameUpdates(gamePath string) (*domain.VersionStatus, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	return a.Engine.CheckGameUpdates(a.getContext(), path)
+}
+
+// GetGameDLCs retrieves configured DLCs or discovers available DLCs for a game.
+func (a *App) GetGameDLCs(gamePath string) ([]domain.DLCItem, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	return a.Engine.GetGameDLCs(a.getContext(), path)
+}
+
+// FetchDLCs fetches DLC definitions from Steam and writes them into configs.app.ini.
+func (a *App) FetchDLCs(gamePath string) error {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return err
+	}
+	return a.Engine.FetchGameDLCs(a.getContext(), path)
+}
+
 // -----------------------------------------------------------------------------
 // Configuration & Launch Profiles
 // -----------------------------------------------------------------------------
@@ -177,7 +223,11 @@ func (a *App) mutateAndInspect(gamePath string, mutate func(cleanPath string) er
 	if err := mutate(cleanPath); err != nil {
 		return nil, err
 	}
-	return a.Engine.InspectStatus(a.getContext(), cleanPath)
+	st, err := a.Engine.InspectStatus(a.getContext(), cleanPath)
+	if err == nil && st != nil {
+		a.UpdateCachedGame(st)
+	}
+	return st, err
 }
 
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.

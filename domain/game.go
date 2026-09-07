@@ -76,17 +76,63 @@ type NewsItem struct {
 	AppID     uint32 `json:"appid,omitempty"`
 }
 
-// AchievementItem represents a game achievement with metadata and unlock status.
+// AchievementItem represents a game achievement with metadata, unlock status, and rarity.
 type AchievementItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IconURL     string `json:"icon_url"`
-	IconGrayURL string `json:"icon_gray_url"`
-	Hidden      bool   `json:"hidden"`
-	Unlocked    bool   `json:"unlocked"`
-	UnlockTime  int64  `json:"unlock_time,omitempty"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Description   string  `json:"description"`
+	IconURL       string  `json:"icon_url"`
+	IconGrayURL   string  `json:"icon_gray_url"`
+	Hidden        bool    `json:"hidden"`
+	Unlocked      bool    `json:"unlocked"`
+	UnlockTime    int64   `json:"unlock_time,omitempty"`
+	GlobalPercent float64 `json:"global_percent,omitempty"`
+	Rarity        string  `json:"rarity,omitempty"` // "ultra_rare", "rare", "uncommon", "common"
 }
+
+// ComputeRarityTier classifies an achievement unlock percentage into standard rarity tiers.
+func ComputeRarityTier(percent float64) string {
+	if percent <= 0 {
+		return ""
+	}
+	if percent < 5.0 {
+		return "ultra_rare"
+	}
+	if percent < 15.0 {
+		return "rare"
+	}
+	if percent < 40.0 {
+		return "uncommon"
+	}
+	return "common"
+}
+
+// SteamProfile represents resolved public Steam profile data for persona configuration.
+type SteamProfile struct {
+	SteamID     string `json:"steam_id"`
+	PersonaName string `json:"persona_name"`
+	AvatarURL   string `json:"avatar_url"`
+	CountryCode string `json:"country_code,omitempty"`
+	ProfileURL  string `json:"profile_url,omitempty"`
+}
+
+// VersionStatus encapsulates update verification metrics and patch freshness.
+type VersionStatus struct {
+	IsUpToDate       bool   `json:"is_up_to_date"`
+	Checked          bool   `json:"checked"`
+	CurrentBuildID   string `json:"current_build_id,omitempty"`
+	LatestBuildID    string `json:"latest_build_id,omitempty"`
+	LatestPatchDate  int64  `json:"latest_patch_date,omitempty"`
+	LatestPatchTitle string `json:"latest_patch_title,omitempty"`
+	Message          string `json:"message,omitempty"`
+}
+
+// DLCItem represents a structured DLC entry associated with a game.
+type DLCItem struct {
+	AppID string `json:"app_id"`
+	Name  string `json:"name"`
+}
+
 
 // ArtworkOption represents a selectable artwork asset candidate discovered from a metadata provider.
 type ArtworkOption struct {
@@ -443,6 +489,7 @@ type Game struct {
 	GameArtwork                `json:",inline"`
 	ManifestStatus             `json:",inline"`
 	StoreMetadata              `json:",inline"`
+	VersionStatus *VersionStatus `json:"version_status,omitempty"`
 }
 
 // NewGame initializes a Game entity with parsed numeric AppID and standard defaults.

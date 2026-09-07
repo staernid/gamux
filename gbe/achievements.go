@@ -173,6 +173,11 @@ func LoadAchievements(ctx context.Context, gameDir string, appID uint32, setting
 		}
 	}
 
+	var globalPercents map[string]float64
+	if appID > 0 {
+		globalPercents, _ = steam.FetchGlobalAchievementPercentages(ctx, appID)
+	}
+
 	items := make([]domain.AchievementItem, 0, len(schemas))
 	for _, s := range schemas {
 		unlockedTime, isUnlocked := unlockedMap[strings.ToUpper(s.Name)]
@@ -222,15 +227,26 @@ func LoadAchievements(ctx context.Context, gameDir string, appID uint32, setting
 			iconGrayURL = fmt.Sprintf("https://shared.fastly.steamstatic.com/community_assets/images/apps/%d/%s", appID, cleanGray)
 		}
 
+		var globalPct float64
+		var rarity string
+		if globalPercents != nil {
+			if pct, ok := globalPercents[s.Name]; ok {
+				globalPct = pct
+				rarity = domain.ComputeRarityTier(pct)
+			}
+		}
+
 		items = append(items, domain.AchievementItem{
-			ID:          s.Name,
-			Name:        s.DisplayName,
-			Description: s.Description,
-			IconURL:     iconURL,
-			IconGrayURL: iconGrayURL,
-			Hidden:      s.Hidden == 1,
-			Unlocked:    isUnlocked,
-			UnlockTime:  unlockedTime,
+			ID:            s.Name,
+			Name:          s.DisplayName,
+			Description:   s.Description,
+			IconURL:       iconURL,
+			IconGrayURL:   iconGrayURL,
+			Hidden:        s.Hidden == 1,
+			Unlocked:      isUnlocked,
+			UnlockTime:    unlockedTime,
+			GlobalPercent: globalPct,
+			Rarity:        rarity,
 		})
 	}
 

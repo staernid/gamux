@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
-import DrawerSavesTab from './DrawerSavesTab.svelte';
-import { AppAPI } from '../../../api/app.js';
-import { normalizeGame } from '../../../utils/game.js';
+import HubSavesCard from './HubSavesCard.svelte';
+import { AppAPI } from '../../../../api/app.js';
+import { normalizeGame } from '../../../../utils/game.js';
 
-describe('DrawerSavesTab Component', () => {
+describe('HubSavesCard Component', () => {
   const mockGame = normalizeGame({
     name: 'Cyberpunk 2077',
     app_id: '1091500',
@@ -14,7 +14,7 @@ describe('DrawerSavesTab Component', () => {
   });
 
   it('loads and renders discovered save locations and metrics', async () => {
-    render(DrawerSavesTab, { props: { game: mockGame } });
+    render(HubSavesCard, { props: { game: mockGame } });
 
     await waitFor(() => {
       expect(screen.getByText(/Total Save Size/i)).toBeInTheDocument();
@@ -27,7 +27,7 @@ describe('DrawerSavesTab Component', () => {
 
   it('triggers folder open on click', async () => {
     const openSpy = vi.spyOn(AppAPI, 'openDirectory').mockResolvedValue();
-    render(DrawerSavesTab, { props: { game: mockGame } });
+    render(HubSavesCard, { props: { game: mockGame } });
 
     await waitFor(() => {
       expect(screen.getAllByText(/^Open$/i).length).toBeGreaterThan(0);
@@ -45,7 +45,7 @@ describe('DrawerSavesTab Component', () => {
       size_bytes: 1024,
     });
 
-    render(DrawerSavesTab, { props: { game: mockGame } });
+    render(HubSavesCard, { props: { game: mockGame } });
 
     await waitFor(() => {
       expect(screen.getByText(/\+ Create Backup/i)).toBeInTheDocument();

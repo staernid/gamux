@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import DrawerAboutTab, { clearDrawerMetadataCache } from './DrawerAboutTab.svelte';
-import { AppAPI } from '../../../api/app.js';
-import { normalizeGame } from '../../../utils/game.js';
+import HubAboutCard, { clearDrawerMetadataCache } from './HubAboutCard.svelte';
+import { AppAPI } from '../../../../api/app.js';
+import { normalizeGame } from '../../../../utils/game.js';
 
-describe('DrawerAboutTab Component', () => {
+describe('HubAboutCard Component', () => {
   beforeEach(() => {
     clearDrawerMetadataCache();
   });
@@ -18,7 +18,7 @@ describe('DrawerAboutTab Component', () => {
       metadata_id: '1091500'
     });
 
-    render(DrawerAboutTab, { props: { game } });
+    render(HubAboutCard, { props: { game } });
 
     expect(await screen.findByText(/Cyberpunk 2077 is an open-world/i)).toBeInTheDocument();
     expect(screen.getByText('CD PROJEKT RED')).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe('DrawerAboutTab Component', () => {
       metadata_id: '1091500'
     });
 
-    const { rerender } = render(DrawerAboutTab, { props: { game: steamGame } });
+    const { rerender } = render(HubAboutCard, { props: { game: steamGame } });
 
     expect(await screen.findByText(/Cyberpunk 2077 is an open-world/i)).toBeInTheDocument();
     expect(spy).toHaveBeenCalledWith('steam', '1091500');
@@ -73,7 +73,7 @@ describe('DrawerAboutTab Component', () => {
       metadata_id: '0'
     });
 
-    render(DrawerAboutTab, { props: { game: unlinkedGame } });
+    render(HubAboutCard, { props: { game: unlinkedGame } });
 
     expect(screen.getByText('My Custom Game')).toBeInTheDocument();
     expect(screen.getByText(/No official store metadata linked yet/i)).toBeInTheDocument();

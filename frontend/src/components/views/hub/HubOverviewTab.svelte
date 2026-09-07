@@ -13,7 +13,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
-  import DrawerAboutTab from '../../stage/drawer/DrawerAboutTab.svelte';
+  import HubAboutCard from './cards/HubAboutCard.svelte';
 
   export let game = null;
 
@@ -147,7 +147,7 @@
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
   <!-- Game Summary Synopsis & Key Facts -->
-  <DrawerAboutTab {game} />
+  <HubAboutCard {game} />
 
   <!-- Minimal Achievements Spotlight (if title has achievements) -->
   {#if totalAchievements > 0}

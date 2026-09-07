@@ -1,8 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import DrawerDLCTab from '../../stage/drawer/DrawerDLCTab.svelte';
-  import DrawerIntegrityTab from '../../stage/drawer/DrawerIntegrityTab.svelte';
-  import DrawerLogsTab from '../../stage/drawer/DrawerLogsTab.svelte';
+  import HubDLCCard from './cards/HubDLCCard.svelte';
+  import HubIntegrityCard from './cards/HubIntegrityCard.svelte';
+  import HubLogsCard from './cards/HubLogsCard.svelte';
 
   export let game = null;
   export let isGameRunning = false;
@@ -71,9 +71,9 @@
 
   <!-- Files Sub-View Content -->
   {#if activeFilesSubTab === 'depots'}
-    <DrawerDLCTab {game} />
+    <HubDLCCard {game} />
   {:else if activeFilesSubTab === 'integrity'}
-    <DrawerIntegrityTab
+    <HubIntegrityCard
       {isCheckingIntegrity}
       {isNormalizing}
       isUpdating={isTaskActive}
@@ -84,6 +84,6 @@
       onNormalizeDirectory={handleNormalizeDirectory}
     />
   {:else if activeFilesSubTab === 'logs'}
-    <DrawerLogsTab {game} />
+    <HubLogsCard {game} />
   {/if}
 </div>

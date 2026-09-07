@@ -1,16 +1,19 @@
 <script>
   import { onMount } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
-  import { tasksStore } from '../../../stores/tasks.js';
-  import { notificationStore } from '../../../stores/notifications.js';
-  import { formatBytes } from '../../../utils/format.js';
+  import { AppAPI } from '../../../../api/app.js';
+  import { tasksStore } from '../../../../stores/tasks.js';
+  import { notificationStore } from '../../../../stores/notifications.js';
+  import { formatBytes } from '../../../../utils/format.js';
 
   export let game = null;
 
   const activeDownloads = tasksStore.activeDownloads;
 
   let depots = [];
+  let dlcs = [];
   let isLoading = true;
+  let isLoadingDLCs = false;
+  let isSyncingDLCs = false;
   let isActionRunning = false;
 
   $: gameDir = game?.gameDir || '';
@@ -20,8 +23,43 @@
   );
 
   onMount(async () => {
-    await loadDepots();
+    await Promise.all([loadDepots(), loadDLCs()]);
   });
+
+  async function loadDLCs() {
+    if (!gameDir) return;
+    isLoadingDLCs = true;
+    try {
+      const res = await AppAPI.getGameDLCs(gameDir);
+      dlcs = Array.isArray(res) ? res : [];
+    } catch {
+      dlcs = [];
+    } finally {
+      isLoadingDLCs = false;
+    }
+  }
+
+  async function handleSyncDLCs() {
+    if (!gameDir || isSyncingDLCs) return;
+    isSyncingDLCs = true;
+    try {
+      await AppAPI.fetchDLCs(gameDir);
+      await loadDLCs();
+      notificationStore.items.add({
+        type: 'success',
+        title: 'DLCs Synchronized',
+        message: `Found and configured ${dlcs.length} DLC items`
+      });
+    } catch (err) {
+      notificationStore.items.add({
+        type: 'error',
+        title: 'Sync Failed',
+        message: err?.message || String(err)
+      });
+    } finally {
+      isSyncingDLCs = false;
+    }
+  }
 
   async function loadDepots() {
     if (!gameDir) return;
@@ -138,6 +176,47 @@
 </script>
 
 <div class="space-y-4">
+  <!-- Configured DLCs Section -->
+  <div class="p-3.5 bg-[#0d0d12] border border-[#222230] rounded-xl text-xs space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="space-y-0.5">
+        <strong class="text-slate-200 block font-bold">Downloadable Content (DLC)</strong>
+        <span class="text-slate-400 text-2xs">
+          {dlcs.length} DLCs configured for this game
+        </span>
+      </div>
+      {#if appID && appID !== '0'}
+        <button
+          type="button"
+          on:click={handleSyncDLCs}
+          disabled={isSyncingDLCs}
+          class="px-3 py-1.5 rounded-lg bg-[#181822] hover:bg-[#20202e] text-slate-300 border border-[#2e2e42] transition-colors font-bold text-2xs flex items-center space-x-1.5 cursor-pointer"
+        >
+          <svg class="w-3 h-3 {isSyncingDLCs ? 'animate-spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>Sync Steam DLCs</span>
+        </button>
+      {/if}
+    </div>
+
+    {#if dlcs.length > 0}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+        {#each dlcs as dlc (dlc.app_id)}
+          <div class="p-2.5 bg-[#121218] border border-[#1f1f2c] rounded-lg flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <span class="font-bold text-slate-200 text-xs block truncate">{dlc.name || `DLC ${dlc.app_id}`}</span>
+              <span class="text-3xs font-mono text-slate-500">AppID #{dlc.app_id}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded text-3xs font-bold bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 flex-shrink-0">
+              Active
+            </span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
   <!-- Summary Banner -->
   <div class="flex items-center justify-between p-3.5 bg-[#0d0d12] border border-[#222230] rounded-xl text-xs">
     <div class="space-y-0.5">

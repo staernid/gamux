@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import TopBar from './components/header/TopBar.svelte';
-  import Carousel3D from './components/stage/Carousel3D.svelte';
+  import LibraryView from './components/views/LibraryView.svelte';
   import ModalHost from './components/common/ModalHost.svelte';
   import GameHubView from './components/views/GameHubView.svelte';
   import DownloadsView from './components/views/DownloadsView.svelte';
@@ -12,6 +12,8 @@
   import {
     libraryPath,
     scanLibrary,
+    games,
+    isScanning,
     activeView,
     pathPopover,
     filteredGames,
@@ -38,6 +40,7 @@
     getGameSource,
     getMetadataInfo,
     isSamePath,
+    normalizeGame,
     formatPlaytime,
     formatLastPlayed,
     formatInstallDate
@@ -46,7 +49,7 @@
   import { GamepadTracker } from './input/gamepad.js';
   import { gamuxDev } from './debug/debugBridge.js';
 
-  let carouselRef;
+  let libraryViewRef;
 
   $: activeColors = $selectedGame ? getPlatformColors($selectedGame) : null;
   $: platformType = $selectedGame ? getPlatformType($selectedGame) : '';
@@ -56,28 +59,6 @@
   const views = ['library', 'tasks', 'settings'];
 
   function navigateWithGuard(targetView, onProceed = null) {
-    const curr = get(activeView) || 'library';
-    const isDirty = get(configStore.isDirty);
-    if (curr === 'settings' && isDirty && targetView !== 'settings') {
-      modalStore.open('confirm', {
-        title: 'Unsaved Changes',
-        message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
-        confirmLabel: 'Discard Changes',
-        cancelLabel: 'Keep Editing',
-        danger: true,
-        onConfirm: () => {
-          configStore.setDirty(false);
-          if (typeof onProceed === 'function') {
-            onProceed();
-          } else {
-            playNav();
-            activeView.set(targetView);
-          }
-        }
-      });
-      return;
-    }
-
     if (typeof onProceed === 'function') {
       onProceed();
     } else {
@@ -125,6 +106,100 @@
     let nextIndex = (currentIndex + dir + list.length) % list.length;
     playTick();
     selectedGame.set(list[nextIndex]);
+  }
+
+  let pendingTargetAppId = null;
+
+  function parseAppIdFromTarget(target) {
+    if (!target) return '';
+    const clean = String(target).trim();
+    // 1. gamux://app/123 or gamux://game/123 or gamux://123
+    const gamuxMatch = clean.match(/^gamux:\/\/(?:app\/|game\/)?(\d+)/i);
+    if (gamuxMatch) return gamuxMatch[1];
+    // 2. steam://store/123 or steam://rungameid/123
+    const steamMatch = clean.match(/^steam:\/\/(?:store\/|rungameid\/)?(\d+)/i);
+    if (steamMatch) return steamMatch[1];
+    // 3. https://store.steampowered.com/app/123
+    const webMatch = clean.match(/\/app\/(\d+)/i);
+    if (webMatch) return webMatch[1];
+    // 4. Raw numeric AppID
+    if (/^\d+$/.test(clean)) return clean;
+    return '';
+  }
+
+  async function handleOpenTarget(target) {
+    if (!target) return;
+    const appId = parseAppIdFromTarget(target);
+    if (!appId) {
+      notificationStore.items.add({
+        type: 'warning',
+        title: 'Unknown Target',
+        message: `Unable to extract Steam AppID from "${target}"`
+      });
+      return;
+    }
+
+    // 1. Check local library first
+    const currentGames = get(games) || [];
+    const found = currentGames.find(g => g && String(g.appId) === String(appId));
+
+    if (found) {
+      openSelectedGameHub(found);
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Game Opened',
+        message: `Navigated to ${found.name} in Game Hub`
+      });
+      pendingTargetAppId = null;
+      return;
+    }
+
+    if (get(isScanning)) {
+      // Library scan is actively in progress; remember target to promote if found when scan completes
+      pendingTargetAppId = appId;
+    }
+
+    // 2. Open directly as Virtual Store Title in GameHubView
+    let meta = null;
+    try {
+      meta = await AppAPI.getGameMetadata('steam', appId);
+    } catch {
+      // Offline or metadata fetch fallback
+    }
+
+    const virtualGame = normalizeGame({
+      name: meta?.name || `Steam App ${appId}`,
+      app_id: String(appId),
+      store: 'Steam',
+      source: 'Steam',
+      cover_url: meta?.header_image || `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+      release_date: meta?.release_date || '',
+      is_installed: false,
+      is_stub: false,
+      is_virtual: true,
+      is_ready: false,
+      file_count: 0,
+      disk_size_bytes: 0,
+      platform: 'win64'
+    });
+
+    selectedGame.set(virtualGame);
+    $activeView = 'game-hub';
+    playSelect();
+
+    notificationStore.items.add({
+      type: 'info',
+      title: 'Store Game Opened',
+      message: `Navigated to ${virtualGame.name} in Game Hub`
+    });
+  }
+
+  $: if (pendingTargetAppId && $games?.length > 0) {
+    const found = $games.find(g => g && String(g.appId) === String(pendingTargetAppId));
+    if (found) {
+      openSelectedGameHub(found);
+      pendingTargetAppId = null;
+    }
   }
 
   onMount(() => {
@@ -179,6 +254,9 @@
             multiseatStore.setSessionInactive(data.gameDir);
           }
         }
+      },
+      onOpenTarget: (target) => {
+        handleOpenTarget(target);
       }
     });
 
@@ -188,6 +266,13 @@
         for (const dir of running) {
           if (dir) setGameRunning(dir, true);
         }
+      }
+    }).catch(() => {});
+
+    // Check for cold-start initial target forwarded via CLI/protocol
+    AppAPI.getInitialTarget().then((target) => {
+      if (target) {
+        handleOpenTarget(target);
       }
     }).catch(() => {});
 
@@ -215,7 +300,11 @@
 
       if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !isInput && !$modalStore) {
         e.preventDefault();
-        openSearchGrid();
+        if ($activeView === 'library' && libraryViewRef?.focusSearch) {
+          libraryViewRef.focusSearch();
+        } else {
+          openSearchGrid();
+        }
       } else if (e.key === 'Escape') {
         if ($modalStore) {
           playBack();
@@ -302,18 +391,18 @@
 
           // Directional Navigation (D-Pad or Left Analog Stick)
           if (actions.navLeft) {
-            if (carouselRef) carouselRef.step(-1);
+            if (libraryViewRef) libraryViewRef.step(-1);
             else stepGameSelection(-1);
           }
           if (actions.navRight) {
-            if (carouselRef) carouselRef.step(1);
+            if (libraryViewRef) libraryViewRef.step(1);
             else stepGameSelection(1);
           }
 
           // Rotary Wheel Scrubbing
           if (actions.rotaryDelta !== 0) {
-            if (carouselRef) {
-              carouselRef.addRotaryDelta(actions.rotaryDelta);
+            if (libraryViewRef) {
+              libraryViewRef.addRotaryDelta(actions.rotaryDelta);
             }
           }
         } else if (currView === 'game-hub') {
@@ -356,101 +445,7 @@
 
   <!-- Main View Area -->
   {#if $activeView === 'library'}
-    <div class="flex-1 flex flex-col min-h-0 relative items-center justify-between">
-      <!-- Center 3D 5-Item Carousel -->
-      <Carousel3D bind:this={carouselRef} on:launch={(e) => openSelectedGameHub(e.detail)} />
-
-      <!-- Bottom HUD: Left Command Glossary & Right Game Details -->
-      <div class="w-full px-8 pb-6 flex items-end justify-between z-20 flex-shrink-0">
-        <!-- Bottom Left: Command Glossary (Clickable & Controller-Mapped) -->
-        <div class="flex flex-col space-y-1.5 text-xs text-neutral-400 font-mono select-none">
-          <!-- Library Shelf Mode Glossary -->
-          <div class="flex items-center space-x-3">
-            <!-- Details / Hub -->
-            <button
-              type="button"
-              on:click={() => openSelectedGameHub()}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Open Game Hub (A or Enter)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                A / ↵
-              </span>
-              <span class="group-hover:text-neutral-200">Game Hub</span>
-            </button>
-
-            <span class="text-neutral-700">·</span>
-
-            <!-- Sort Cycling via (Y) -->
-            <button
-              type="button"
-              on:click={() => cycleSortOrder()}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Cycle library sort order (Y)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                Y
-              </span>
-              <span class="group-hover:text-neutral-200">Sort: {getSortLabel($sortBy)}</span>
-            </button>
-          </div>
-
-          <!-- Line 2: Search (Single Newline) -->
-          <div class="flex items-center">
-            <button
-              type="button"
-              on:click={openSearchGrid}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Open library search grid (/)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                /
-              </span>
-              <span class="group-hover:text-neutral-200">Search</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Bottom Right: Game Details & Telemetry -->
-        {#if $selectedGame}
-          <div class="flex flex-col items-end space-y-0.5 text-2xs text-neutral-400 font-mono text-right max-w-sm truncate">
-            <div>
-              <span class="text-neutral-500">Source:</span>
-              <span class="text-neutral-200 font-semibold">{gameSource}</span>
-              {#if metaInfo.provider && metaInfo.provider !== 'None'}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-500">Meta:</span>
-                <span class="text-neutral-300 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
-              {/if}
-            </div>
-            <div>
-              <span class="text-neutral-500">Platform:</span>
-              <span class="text-neutral-300 font-semibold">{$selectedGame.platform || 'Linux'}</span>
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
-              {#if $selectedGame.playtimeSeconds > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-200 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
-              {/if}
-              {#if $selectedGame.lastPlayed > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
-              {/if}
-              {#if $selectedGame.installedAt > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-400">Installed {formatInstallDate($selectedGame.installedAt)}</span>
-              {/if}
-            </div>
-            <div class="truncate max-w-full text-neutral-500" title={$selectedGame.gameDir}>
-              <span class="text-neutral-500">Path:</span>
-              <span class="text-neutral-500">{$selectedGame.gameDir}</span>
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
+    <LibraryView bind:this={libraryViewRef} />
   {:else if $activeView === 'game-hub'}
     <GameHubView />
   {:else if $activeView === 'tasks'}

@@ -166,6 +166,8 @@ export namespace domain {
 	    hidden: boolean;
 	    unlocked: boolean;
 	    unlock_time?: number;
+	    global_percent?: number;
+	    rarity?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AchievementItem(source);
@@ -181,6 +183,8 @@ export namespace domain {
 	        this.hidden = source["hidden"];
 	        this.unlocked = source["unlocked"];
 	        this.unlock_time = source["unlock_time"];
+	        this.global_percent = source["global_percent"];
+	        this.rarity = source["rarity"];
 	    }
 	}
 	export class ArtworkOption {
@@ -235,6 +239,20 @@ export namespace domain {
 	        this.asset_type = source["asset_type"];
 	    }
 	}
+	export class DLCItem {
+	    app_id: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DLCItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.app_id = source["app_id"];
+	        this.name = source["name"];
+	    }
+	}
 	export class DepotSummary {
 	    depot_id: number;
 	    name: string;
@@ -257,6 +275,30 @@ export namespace domain {
 	        this.size = source["size"];
 	        this.file_count = source["file_count"];
 	        this.manifest_id = source["manifest_id"];
+	    }
+	}
+	export class VersionStatus {
+	    is_up_to_date: boolean;
+	    checked: boolean;
+	    current_build_id?: string;
+	    latest_build_id?: string;
+	    latest_patch_date?: number;
+	    latest_patch_title?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VersionStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_up_to_date = source["is_up_to_date"];
+	        this.checked = source["checked"];
+	        this.current_build_id = source["current_build_id"];
+	        this.latest_build_id = source["latest_build_id"];
+	        this.latest_patch_date = source["latest_patch_date"];
+	        this.latest_patch_title = source["latest_patch_title"];
+	        this.message = source["message"];
 	    }
 	}
 	export class NewsItem {
@@ -470,6 +512,7 @@ export namespace domain {
 	    developers?: string[];
 	    publishers?: string[];
 	    genres?: string[];
+	    version_status?: VersionStatus;
 	
 	    static createFrom(source: any = {}) {
 	        return new Game(source);
@@ -557,6 +600,7 @@ export namespace domain {
 	        this.developers = source["developers"];
 	        this.publishers = source["publishers"];
 	        this.genres = source["genres"];
+	        this.version_status = this.convertValues(source["version_status"], VersionStatus);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -628,6 +672,27 @@ export namespace domain {
 	    }
 	}
 	
+	
+	export class SteamProfile {
+	    steam_id: string;
+	    persona_name: string;
+	    avatar_url: string;
+	    country_code?: string;
+	    profile_url?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.steam_id = source["steam_id"];
+	        this.persona_name = source["persona_name"];
+	        this.avatar_url = source["avatar_url"];
+	        this.country_code = source["country_code"];
+	        this.profile_url = source["profile_url"];
+	    }
+	}
 
 }
 
@@ -731,6 +796,34 @@ export namespace gui {
 	        this.publishers = source["publishers"];
 	        this.genres = source["genres"];
 	        this.release_date = source["release_date"];
+	    }
+	}
+	export class TrayGame {
+	    name: string;
+	    game_dir: string;
+	    last_played: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrayGame(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.game_dir = source["game_dir"];
+	        this.last_played = source["last_played"];
+	    }
+	}
+	export class TrayManager {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new TrayManager(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
 	    }
 	}
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/staernid/gamux/cache"
 )
 
 func TestLoadAchievements_EmptyDir(t *testing.T) {
@@ -74,6 +76,63 @@ func TestLoadAchievements_LocalSchemaAndUnlocked(t *testing.T) {
 	}
 	if !items[1].Hidden {
 		t.Errorf("expected ACH_SECOND to be hidden")
+	}
+}
+
+func TestLoadAchievements_WithRarityPercentages(t *testing.T) {
+	tmpDir := t.TempDir()
+	settingsDir := filepath.Join(tmpDir, "steam_settings")
+	_ = os.MkdirAll(settingsDir, 0755)
+
+	schemas := []map[string]any{
+		{
+			"name":        "ACH_RARE",
+			"displayName": "Rare Gem",
+			"description": "Found a rare gem",
+			"hidden":      0,
+		},
+		{
+			"name":        "ACH_COMMON",
+			"displayName": "Walked 1 Step",
+			"description": "Easy thing",
+			"hidden":      0,
+		},
+	}
+	schemaData, _ := json.Marshal(schemas)
+	_ = os.WriteFile(filepath.Join(settingsDir, "achievements.json"), schemaData, 0644)
+
+	// Populate cache directly for appID 54321
+	pctData, _ := json.Marshal(map[string]float64{
+		"ACH_RARE":   2.5,
+		"ACH_COMMON": 75.0,
+	})
+	cache.SaveAchievementPercentages("54321", pctData)
+
+	items, err := LoadAchievements(context.Background(), tmpDir, 54321, []string{settingsDir}, "")
+	if err != nil {
+		t.Fatalf("LoadAchievements failed: %v", err)
+	}
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+
+	for _, it := range items {
+		if it.ID == "ACH_RARE" {
+			if it.GlobalPercent != 2.5 {
+				t.Errorf("expected GlobalPercent 2.5, got %f", it.GlobalPercent)
+			}
+			if it.Rarity != "ultra_rare" {
+				t.Errorf("expected Rarity 'ultra_rare', got %s", it.Rarity)
+			}
+		} else if it.ID == "ACH_COMMON" {
+			if it.GlobalPercent != 75.0 {
+				t.Errorf("expected GlobalPercent 75.0, got %f", it.GlobalPercent)
+			}
+			if it.Rarity != "common" {
+				t.Errorf("expected Rarity 'common', got %s", it.Rarity)
+			}
+		}
 	}
 }
 

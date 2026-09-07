@@ -43,6 +43,10 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ---
 
+Hint: Better Steam Web API documentation can be found at https://steamwebapi.azurewebsites.net/
+
+---
+
 ## Core Conventions
 
 1. **Logging Strategy**:

@@ -110,6 +110,7 @@ export function normalizeGame(g) {
     missingFiles: g.missing_files || g.missingFiles || [],
     untrackedFiles: g.untracked_files || g.untrackedFiles || [],
     hasUpdate: Boolean(g.has_update ?? g.hasUpdate ?? false),
+    versionStatus: g.version_status || g.versionStatus || null,
     manifestId: g.manifest_id || g.manifestId || '',
     buildId: g.build_id || g.buildId || '',
     remoteManifestId: g.remote_manifest_id || g.remoteManifestId || '',

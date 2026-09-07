@@ -18,7 +18,7 @@
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
   import { AppAPI } from '../../api/app.js';
   import { isSamePath, countOverrides, normalizeGame } from '../../utils/game.js';
-  import DrawerSavesTab from '../stage/drawer/DrawerSavesTab.svelte';
+  import HubSavesCard from './hub/cards/HubSavesCard.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
   import GameTaskHud from './hub/GameTaskHud.svelte';
   import HubOverviewTab from './hub/HubOverviewTab.svelte';
@@ -625,7 +625,7 @@
           />
         {:else if activeTab === 'saves'}
           <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">
-            <DrawerSavesTab {game} />
+            <HubSavesCard {game} />
           </div>
         {:else if activeTab === 'files'}
           <HubFilesTab

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -621,6 +622,343 @@ func TestDownload_ChunkChecksumValidation(t *testing.T) {
 	})
 	if err == nil {
 		t.Errorf("expected checksum mismatch error, got nil")
+	}
+}
+
+func TestFetchCDNServers_LoadRanking(t *testing.T) {
+	jsonResponse := `{
+		"response": {
+			"servers": [
+				{"host": "cache-pri5-load10.steamcontent.com", "priority_class": 5, "weighted_load": 10, "https_support": "mandatory"},
+				{"host": "cache-pri6-load50.steamcontent.com", "priority_class": 6, "weighted_load": 50, "https_support": "mandatory"},
+				{"host": "cache-pri6-load20.steamcontent.com", "priority_class": 6, "weighted_load": 20, "https_support": "mandatory"},
+				{"host": "cache-unsupported.steamcontent.com", "priority_class": 10, "weighted_load": 1, "https_support": "unsupported"},
+				{"host": "", "vhost": "", "priority_class": 10, "weighted_load": 1, "https_support": "mandatory"},
+				{"host": "cache-pri4-load10.steamcontent.com", "priority_class": 4, "weighted_load": 10, "https_support": "mandatory"},
+				{"host": "cache-pri3-load10.steamcontent.com", "priority_class": 3, "weighted_load": 10, "https_support": "mandatory"},
+				{"host": "cache-pri2-load10.steamcontent.com", "priority_class": 2, "weighted_load": 10, "https_support": "mandatory"}
+			]
+		}
+	}`
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(jsonResponse)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	rankedHosts, err := fetchCDNServers(context.Background(), mockClient)
+	if err != nil {
+		t.Fatalf("fetchCDNServers failed: %v", err)
+	}
+
+	expected := []string{
+		"cache-pri6-load20.steamcontent.com",
+		"cache-pri6-load50.steamcontent.com",
+		"cache-pri5-load10.steamcontent.com",
+		"cache-pri4-load10.steamcontent.com",
+		"cache-pri3-load10.steamcontent.com",
+	}
+
+	if len(rankedHosts) != len(expected) {
+		t.Fatalf("expected %d hosts, got %d: %v", len(expected), len(rankedHosts), rankedHosts)
+	}
+
+	for i, host := range expected {
+		if rankedHosts[i] != host {
+			t.Errorf("at index %d: expected %s, got %s", i, host, rankedHosts[i])
+		}
+	}
+}
+
+func TestDownload_DeltaPatching(t *testing.T) {
+	tmpDir := t.TempDir()
+	chunkSize := 1024 * 1024 // 1 MB per chunk
+
+	// Generate 4 chunks
+	c0 := bytes.Repeat([]byte("A"), chunkSize)
+	c1 := bytes.Repeat([]byte("B"), chunkSize)
+	c2Old := bytes.Repeat([]byte("C"), chunkSize)
+	c2New := bytes.Repeat([]byte("X"), chunkSize)
+	c3 := bytes.Repeat([]byte("D"), chunkSize)
+
+	hash := func(b []byte) string {
+		s := sha1.Sum(b)
+		return hex.EncodeToString(s[:])
+	}
+
+	id0 := hash(c0)
+	id1 := hash(c1)
+	id2Old := hash(c2Old)
+	id2New := hash(c2New)
+	id3 := hash(c3)
+
+	var oldFileBuf bytes.Buffer
+	oldFileBuf.Write(c0)
+	oldFileBuf.Write(c1)
+	oldFileBuf.Write(c2Old)
+	oldFileBuf.Write(c3)
+	oldFileBytes := oldFileBuf.Bytes()
+	oldFileSHA1 := hash(oldFileBytes)
+
+	var newFileBuf bytes.Buffer
+	newFileBuf.Write(c0)
+	newFileBuf.Write(c1)
+	newFileBuf.Write(c2New)
+	newFileBuf.Write(c3)
+	newFileBytes := newFileBuf.Bytes()
+	newFileSHA1 := hash(newFileBytes)
+
+	// Pre-create old 4MB file on disk
+	gameBinPath := filepath.Join(tmpDir, "game.bin")
+	if err := os.WriteFile(gameBinPath, oldFileBytes, 0644); err != nil {
+		t.Fatalf("failed to write initial file: %v", err)
+	}
+
+	oldM := &manifest.Manifest{
+		AppID:   5000,
+		DepotID: 5001,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "game.bin",
+				Size: uint64(len(oldFileBytes)),
+				SHA1: oldFileSHA1,
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: id0, Offset: 0, UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id1, Offset: uint64(chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id2Old, Offset: uint64(2 * chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id3, Offset: uint64(3 * chunkSize), UncompressedSize: uint32(chunkSize)},
+				},
+			},
+		},
+	}
+
+	newM := &manifest.Manifest{
+		AppID:   5000,
+		DepotID: 5001,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "game.bin",
+				Size: uint64(len(newFileBytes)),
+				SHA1: newFileSHA1,
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: id0, Offset: 0, UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id1, Offset: uint64(chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id2New, Offset: uint64(2 * chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id3, Offset: uint64(3 * chunkSize), UncompressedSize: uint32(chunkSize)},
+				},
+			},
+		},
+	}
+
+	// Mock HTTP transport that serves chunk payloads and records requested chunks
+	requestedChunks := make(map[string]int)
+	chunkPayloads := map[string][]byte{
+		id0:    c0,
+		id1:    c1,
+		id2New: c2New,
+		id3:    c3,
+	}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			for cid, data := range chunkPayloads {
+				if strings.Contains(req.URL.Path, cid) {
+					requestedChunks[cid]++
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader(data)),
+						Header:     make(http.Header),
+					}, nil
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("chunk not found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	opts := DownloadOptions{
+		TargetDir:        tmpDir,
+		AppID:            5000,
+		DryRun:           false,
+		WorkerLimit:      1,
+		PreviousManifest: oldM,
+		HTTPClient:       mockClient,
+	}
+
+	res, err := DownloadOrUpdateGame(context.Background(), newM, opts)
+	if err != nil {
+		t.Fatalf("DownloadOrUpdateGame delta patch failed: %v", err)
+	}
+
+	if res.UpdatedFiles != 1 {
+		t.Errorf("expected 1 updated file, got %d", res.UpdatedFiles)
+	}
+
+	// Assert that ONLY the 1 modified chunk was requested over the network!
+	if requestedChunks[id2New] != 1 {
+		t.Errorf("expected 1 request for modified chunk %s, got %d", id2New, requestedChunks[id2New])
+	}
+	if requestedChunks[id0] != 0 || requestedChunks[id1] != 0 || requestedChunks[id3] != 0 {
+		t.Errorf("unchanged chunks were fetched over the network! requests: %v", requestedChunks)
+	}
+
+	// Assert exactly 1MB was transferred over the network
+	if res.NetworkBytes != uint64(chunkSize) {
+		t.Errorf("expected NetworkBytes == %d (1MB), got %d", chunkSize, res.NetworkBytes)
+	}
+
+	// Assert final file content matches new content exactly
+	finalBytes, err := os.ReadFile(gameBinPath)
+	if err != nil {
+		t.Fatalf("failed to read patched file: %v", err)
+	}
+	if !bytes.Equal(finalBytes, newFileBytes) {
+		t.Errorf("final patched file bytes do not match expected newFileBytes")
+	}
+	if hash(finalBytes) != newFileSHA1 {
+		t.Errorf("final file SHA1 mismatch: got %s, want %s", hash(finalBytes), newFileSHA1)
+	}
+}
+
+func TestDownload_DeltaPatching_CorruptionFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	chunkSize := 1024 * 1024 // 1 MB per chunk
+
+	c0 := bytes.Repeat([]byte("A"), chunkSize)
+	c1 := bytes.Repeat([]byte("B"), chunkSize)
+	c2Old := bytes.Repeat([]byte("C"), chunkSize)
+	c2New := bytes.Repeat([]byte("X"), chunkSize)
+	c3 := bytes.Repeat([]byte("D"), chunkSize)
+
+	hash := func(b []byte) string {
+		s := sha1.Sum(b)
+		return hex.EncodeToString(s[:])
+	}
+
+	id0 := hash(c0)
+	id1 := hash(c1)
+	id2Old := hash(c2Old)
+	id2New := hash(c2New)
+	id3 := hash(c3)
+
+	var corruptedOldBuf bytes.Buffer
+	corruptedOldBuf.Write(bytes.Repeat([]byte("Z"), chunkSize)) // Corrupted chunk 0!
+	corruptedOldBuf.Write(c1)
+	corruptedOldBuf.Write(c2Old)
+	corruptedOldBuf.Write(c3)
+
+	var newFileBuf bytes.Buffer
+	newFileBuf.Write(c0)
+	newFileBuf.Write(c1)
+	newFileBuf.Write(c2New)
+	newFileBuf.Write(c3)
+	newFileBytes := newFileBuf.Bytes()
+	newFileSHA1 := hash(newFileBytes)
+
+	// Write corrupted file on disk
+	gameBinPath := filepath.Join(tmpDir, "game.bin")
+	if err := os.WriteFile(gameBinPath, corruptedOldBuf.Bytes(), 0644); err != nil {
+		t.Fatalf("failed to write initial corrupted file: %v", err)
+	}
+
+	oldM := &manifest.Manifest{
+		AppID:   5000,
+		DepotID: 5001,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "game.bin",
+				Size: uint64(len(newFileBytes)),
+				SHA1: "original_unmodified_sha1",
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: id0, Offset: 0, UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id1, Offset: uint64(chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id2Old, Offset: uint64(2 * chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id3, Offset: uint64(3 * chunkSize), UncompressedSize: uint32(chunkSize)},
+				},
+			},
+		},
+	}
+
+	newM := &manifest.Manifest{
+		AppID:   5000,
+		DepotID: 5001,
+		Files: []manifest.ManifestFileEntry{
+			{
+				Path: "game.bin",
+				Size: uint64(len(newFileBytes)),
+				SHA1: newFileSHA1,
+				Chunks: []manifest.ChunkInfo{
+					{ChunkID: id0, Offset: 0, UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id1, Offset: uint64(chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id2New, Offset: uint64(2 * chunkSize), UncompressedSize: uint32(chunkSize)},
+					{ChunkID: id3, Offset: uint64(3 * chunkSize), UncompressedSize: uint32(chunkSize)},
+				},
+			},
+		},
+	}
+
+	requestedChunks := make(map[string]int)
+	chunkPayloads := map[string][]byte{
+		id0:    c0,
+		id1:    c1,
+		id2New: c2New,
+		id3:    c3,
+	}
+
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			for cid, data := range chunkPayloads {
+				if strings.Contains(req.URL.Path, cid) {
+					requestedChunks[cid]++
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader(data)),
+						Header:     make(http.Header),
+					}, nil
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("chunk not found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	opts := DownloadOptions{
+		TargetDir:        tmpDir,
+		AppID:            5000,
+		DryRun:           false,
+		WorkerLimit:      1,
+		PreviousManifest: oldM,
+		HTTPClient:       mockClient,
+	}
+
+	_, err := DownloadOrUpdateGame(context.Background(), newM, opts)
+	if err != nil {
+		t.Fatalf("DownloadOrUpdateGame failed during fallback: %v", err)
+	}
+
+	// Because chunk 0 on disk was corrupted, SHA1 verification failed after delta patch,
+	// triggering the full redownload fallback!
+	if requestedChunks[id0] == 0 {
+		t.Errorf("expected chunk 0 to be downloaded during fallback")
+	}
+
+	finalBytes, err := os.ReadFile(gameBinPath)
+	if err != nil {
+		t.Fatalf("failed to read recovered file: %v", err)
+	}
+	if !bytes.Equal(finalBytes, newFileBytes) {
+		t.Errorf("recovered file bytes do not match expected newFileBytes")
 	}
 }
 

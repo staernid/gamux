@@ -9,8 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/util"
@@ -19,9 +23,15 @@ import (
 
 // App is the Go backend adapter exposed to the Wails frontend.
 type App struct {
-	ctx    context.Context
-	Config *config.Config
-	Engine *engine.Engine
+	ctx           context.Context
+	Config        *config.Config
+	Engine        *engine.Engine
+	targetMu      sync.Mutex
+	pendingTarget string
+	trayMgr       *TrayManager
+	gamesMu       sync.RWMutex
+	cachedGames   []*domain.Game
+	isQuitting    atomic.Bool
 }
 
 // NewApp creates a new App instance with configuration and services initialized.
@@ -39,6 +49,26 @@ func NewApp(cfg *config.Config) *App {
 		Config: cfg,
 		Engine: eng,
 	}
+}
+
+// HandleOpenTarget handles an incoming open target request (URL or AppID) from IPC or CLI.
+func (a *App) HandleOpenTarget(target string) {
+	a.targetMu.Lock()
+	defer a.targetMu.Unlock()
+	if a.ctx == nil {
+		a.pendingTarget = target
+		return
+	}
+	safeEmit(a.ctx, "gamux:open-target", target)
+}
+
+// GetInitialTarget returns and clears any initial target passed on cold start.
+func (a *App) GetInitialTarget() string {
+	a.targetMu.Lock()
+	defer a.targetMu.Unlock()
+	t := a.pendingTarget
+	a.pendingTarget = ""
+	return t
 }
 
 func safeEmit(ctx context.Context, eventName string, data ...any) {
@@ -114,15 +144,23 @@ func (a *App) Startup(ctx context.Context) {
 				a.handleGameLaunchWindow(true)
 			}
 			if ev.Type == events.EventGameExited {
+				ps := parseMetaInt64(ev.Metadata, "playtime_seconds")
+				lp := parseMetaInt64(ev.Metadata, "last_played")
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
 					"gameDir":         ev.GameDir,
 					"isRunning":       false,
 					"pid":             0,
 					"sessionSeconds":  parseMetaInt64(ev.Metadata, "session_seconds"),
-					"playtimeSeconds": parseMetaInt64(ev.Metadata, "playtime_seconds"),
-					"lastPlayed":      parseMetaInt64(ev.Metadata, "last_played"),
+					"playtimeSeconds": ps,
+					"lastPlayed":      lp,
 				})
 				a.handleGameLaunchWindow(false)
+				if ev.GameDir != "" {
+					if lp <= 0 {
+						lp = time.Now().Unix()
+					}
+					a.RecordGamePlayed(ev.GameDir, lp, ps)
+				}
 			}
 			if ev.Type == events.EventTaskProgress && ev.Metadata != nil && ev.Metadata["step"] != "" {
 				safeEmit(a.ctx, "gamux:step-progress", map[string]any{
@@ -152,6 +190,16 @@ func (a *App) Startup(ctx context.Context) {
 			}
 		}
 	}
+
+	// Pre-warm game cache for tray menu and fast lookups
+	go func() {
+		dirs := a.getLibraryDirs()
+		if len(dirs) > 0 && a.Engine != nil {
+			if games, err := a.Engine.BatchInspectLibraries(context.Background(), dirs); err == nil && len(games) > 0 {
+				a.UpdateCachedGames(games)
+			}
+		}
+	}()
 
 	slog.Info("Gamux GUI backend initialized")
 }
@@ -188,8 +236,19 @@ func (a *App) handleGameLaunchWindow(launched bool) {
 	}
 }
 
+// IsQuitting returns whether an application shutdown was explicitly requested.
+func (a *App) IsQuitting() bool {
+	return a.isQuitting.Load()
+}
+
+// SetQuitting marks the application as explicitly shutting down.
+func (a *App) SetQuitting(quitting bool) {
+	a.isQuitting.Store(quitting)
+}
+
 // Quit unconditionally terminates the GUI application.
 func (a *App) Quit() {
+	a.SetQuitting(true)
 	if a.ctx != nil {
 		wailsRuntime.Quit(a.ctx)
 	}
@@ -252,3 +311,132 @@ func (a *App) AssetHandler() http.Handler {
 		http.NotFound(w, r)
 	})
 }
+
+// SetTrayManager registers the TrayManager with the application so menu items stay updated.
+func (a *App) SetTrayManager(tray *TrayManager) {
+	a.trayMgr = tray
+	if tray != nil {
+		tray.SetRecentGames(a.GetRecentGames(3))
+	}
+}
+
+// UpdateCachedGames refreshes the in-memory cache of games and pushes updates to the system tray.
+func (a *App) UpdateCachedGames(games []*domain.Game) {
+	if len(games) == 0 {
+		return
+	}
+	a.gamesMu.Lock()
+	a.cachedGames = games
+	a.gamesMu.Unlock()
+
+	if a.trayMgr != nil {
+		a.trayMgr.SetRecentGames(a.GetRecentGames(3))
+	}
+}
+
+// UpdateCachedGame updates or inserts a single game into the in-memory cache and updates the tray.
+func (a *App) UpdateCachedGame(game *domain.Game) {
+	if game == nil || game.GameDir == "" {
+		return
+	}
+	cDir := util.CanonicalPath(game.GameDir)
+	a.gamesMu.Lock()
+	found := false
+	for i, g := range a.cachedGames {
+		if g != nil && util.CanonicalPath(g.GameDir) == cDir {
+			a.cachedGames[i] = game
+			found = true
+			break
+		}
+	}
+	if !found {
+		a.cachedGames = append(a.cachedGames, game)
+	}
+	a.gamesMu.Unlock()
+
+	if a.trayMgr != nil {
+		a.trayMgr.SetRecentGames(a.GetRecentGames(3))
+	}
+}
+
+// RecordGamePlayed updates the last played and playtime timestamps for a game in the cache.
+func (a *App) RecordGamePlayed(gameDir string, lastPlayed int64, playtimeSeconds int64) {
+	if gameDir == "" {
+		return
+	}
+	cDir := util.CanonicalPath(gameDir)
+	a.gamesMu.Lock()
+	found := false
+	for _, g := range a.cachedGames {
+		if g != nil && util.CanonicalPath(g.GameDir) == cDir {
+			found = true
+			if g.LaunchProfile == nil {
+				g.LaunchProfile = &domain.LaunchProfile{GameDir: g.GameDir}
+			}
+			g.LaunchProfile.LastPlayed = lastPlayed
+			g.LastPlayed = lastPlayed
+			if playtimeSeconds > 0 {
+				g.LaunchProfile.PlaytimeSeconds = playtimeSeconds
+				g.PlaytimeSeconds = playtimeSeconds
+			}
+			break
+		}
+	}
+	a.gamesMu.Unlock()
+
+	if !found && a.Engine != nil {
+		if st, err := a.Engine.InspectStatus(context.Background(), cDir); err == nil && st != nil {
+			a.gamesMu.Lock()
+			a.cachedGames = append(a.cachedGames, st)
+			a.gamesMu.Unlock()
+		}
+	}
+
+	if a.trayMgr != nil {
+		a.trayMgr.SetRecentGames(a.GetRecentGames(3))
+	}
+}
+
+// GetRecentGames returns up to limit games sorted by least time since last play session to most.
+func (a *App) GetRecentGames(limit int) []TrayGame {
+	a.gamesMu.RLock()
+	cached := make([]*domain.Game, len(a.cachedGames))
+	copy(cached, a.cachedGames)
+	a.gamesMu.RUnlock()
+
+	if len(cached) == 0 && a.Engine != nil {
+		dirs := a.getLibraryDirs()
+		if len(dirs) > 0 {
+			if games, err := a.Engine.BatchInspectLibraries(context.Background(), dirs); err == nil && len(games) > 0 {
+				a.gamesMu.Lock()
+				a.cachedGames = games
+				a.gamesMu.Unlock()
+				cached = games
+			}
+		}
+	}
+
+	return FilterAndSortRecentGames(cached, limit)
+}
+
+func (a *App) getLibraryDirs() []string {
+	var dirs []string
+	if a.Config != nil && len(a.Config.LibraryPaths) > 0 {
+		for _, p := range a.Config.LibraryPaths {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				dirs = append(dirs, trimmed)
+			}
+		}
+	}
+	if len(dirs) == 0 {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			defaultGames := filepath.Join(home, "Games")
+			if util.FileExists(defaultGames) {
+				dirs = append(dirs, defaultGames)
+			}
+		}
+	}
+	return dirs
+}
+

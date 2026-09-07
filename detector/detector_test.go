@@ -569,3 +569,45 @@ func TestDetect_LaunchProfileStub(t *testing.T) {
 	}
 }
 
+func TestDetect_DLCCountAndBuildID(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "Dysmantle")
+	if err := os.MkdirAll(filepath.Join(gameDir, "steam_settings"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	acfContent := `"AppState"
+{
+	"appid" "846770"
+	"name" "DYSMANTLE"
+	"buildid" "142857"
+	"LastUpdated" "1700000000"
+}`
+	if err := os.WriteFile(filepath.Join(gameDir, "appmanifest_846770.acf"), []byte(acfContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	iniContent := `[app::dlcs]
+unlock_all=0
+101=Underworld
+102=Doomsday
+103=Pets
+`
+	if err := os.WriteFile(filepath.Join(gameDir, "steam_settings", "configs.app.ini"), []byte(iniContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := Detect(context.Background(), gameDir)
+	if err != nil {
+		t.Fatalf("Detect failed: %v", err)
+	}
+
+	if info.BuildID != "142857" {
+		t.Errorf("expected BuildID '142857', got %q", info.BuildID)
+	}
+	if info.DLCCount != 3 {
+		t.Errorf("expected DLCCount 3, got %d", info.DLCCount)
+	}
+}
+
+

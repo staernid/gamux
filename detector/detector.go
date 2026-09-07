@@ -13,6 +13,7 @@ import (
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/ini"
 	"github.com/staernid/gamux/util"
 )
 
@@ -310,6 +311,31 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	info.ManifestID = state.manifestID
 	info.RawDepotLayout = state.rawDepotLayout
 
+	// Count configured DLCs from configs.app.ini
+	dlcCandidateFiles := make([]string, 0, len(state.settingsDirs)+2)
+	for _, sDir := range state.settingsDirs {
+		dlcCandidateFiles = append(dlcCandidateFiles, filepath.Join(sDir, "configs.app.ini"))
+	}
+	dlcCandidateFiles = append(dlcCandidateFiles,
+		filepath.Join(absPath, "steam_settings", "configs.app.ini"),
+		filepath.Join(absPath, ".gamux", "configs.app.ini"),
+	)
+	for _, iniFile := range dlcCandidateFiles {
+		if f, err := ini.LoadFile(iniFile); err == nil {
+			sec := f.Section("app::dlcs")
+			count := 0
+			for _, k := range sec.Keys() {
+				if k != "unlock_all" && strings.TrimSpace(sec.GetString(k, "")) != "" {
+					count++
+				}
+			}
+			if count > 0 {
+				info.DLCCount = count
+				break
+			}
+		}
+	}
+
 	// Baseline install timestamp from directory stat
 	if dirFi, err := os.Stat(absPath); err == nil {
 		info.InstalledAt = dirFi.ModTime().Unix()
@@ -322,6 +348,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		info.InstallDir = state.manifestACFData.InstallDir
 		if state.manifestACFData.LastUpdated > 0 {
 			info.InstalledAt = state.manifestACFData.LastUpdated
+		}
+		if state.manifestACFData.BuildID != "" {
+			info.ManifestStatus.BuildID = state.manifestACFData.BuildID
 		}
 
 		if len(state.manifestACFData.LaunchOptions) > 0 {

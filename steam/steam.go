@@ -105,6 +105,7 @@ type AppDetails struct {
 	ReleaseDate         ReleaseDate    `json:"release_date"`
 	Platforms           AppPlatforms   `json:"platforms"`
 	PriceOverview       *PriceOverview `json:"price_overview,omitempty"`
+	DLC                 []uint32       `json:"dlc,omitempty"`
 }
 
 // AppPlatforms holds platform availability flags.
@@ -431,7 +432,113 @@ func SearchAppIDCandidates(ctx context.Context, query string) ([]AppSearchResult
 	return results, nil
 }
 
-// FetchDLCs fetches DLCs for a given AppID.
+// DiscoverDLCIDs returns a deduplicated list of DLC AppIDs for a given Steam AppID.
+// It prioritizes official structured JSON from the Steam Store API (Tier 1),
+// falling back to AJAX recommendations scraping (Tier 3).
+func DiscoverDLCIDs(ctx context.Context, appID string) ([]string, error) {
+	if appID == "" || appID == "0" {
+		return nil, fmt.Errorf("invalid appID %q", appID)
+	}
+
+	// Tier 1: Query official Store API AppDetails
+	if details, err := FetchAppDetails(ctx, appID); err == nil && details != nil && len(details.DLC) > 0 {
+		seen := make(map[string]struct{})
+		var ids []string
+		for _, dlcID := range details.DLC {
+			idStr := fmt.Sprintf("%d", dlcID)
+			if _, exists := seen[idStr]; !exists {
+				seen[idStr] = struct{}{}
+				ids = append(ids, idStr)
+			}
+		}
+		if len(ids) > 0 {
+			slog.Info("Discovered DLCs via official Steam Store API", "appID", appID, "count", len(ids))
+			return ids, nil
+		}
+	}
+
+	// Tier 3 (Fallback): Query Steam Store AJAX recommendations endpoint
+	dlcURL := fmt.Sprintf("https://store.steampowered.com/dlc/%s/random/ajaxgetfilteredrecommendations/?query&count=10000", appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlcURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dlc request: %w", err)
+	}
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch DLCs: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch DLCs: HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	re := regexp.MustCompile(`data-ds-appid=\\?"(\d+)`)
+	matches := re.FindAllStringSubmatch(string(body), -1)
+
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{})
+	var ids []string
+	for _, m := range matches {
+		id := m[1]
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	slog.Info("Discovered DLCs via AJAX fallback scraper", "appID", appID, "count", len(ids))
+	return ids, nil
+}
+
+// DiscoverDLCs resolves both IDs and names for all DLCs belonging to a Steam AppID.
+func DiscoverDLCs(ctx context.Context, appID string) ([]domain.DLCItem, error) {
+	ids, err := DiscoverDLCIDs(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var mu sync.Mutex
+	items := make([]domain.DLCItem, 0, len(ids))
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(10) // Limit concurrency to 10 workers
+
+	for _, idStr := range ids {
+		id := idStr
+		g.Go(func() error {
+			name, nErr := FetchAppName(gCtx, id)
+			if nErr != nil {
+				slog.Warn("Failed to get name for DLC", "dlcID", id, "error", nErr)
+				name = fmt.Sprintf("DLC %s", id)
+			}
+			mu.Lock()
+			items = append(items, domain.DLCItem{AppID: id, Name: name})
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to fetch DLC names: %w", err)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].AppID < items[j].AppID
+	})
+	return items, nil
+}
+
+// FetchDLCs fetches DLCs for a given AppID and configures them in steam_settings/configs.app.ini.
 func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) error {
 	slog.Info("Fetching DLCs", "appID", appID, "libraryPath", libraryPath)
 
@@ -455,66 +562,17 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 	}
 	configsAppIniPath := filepath.Join(steamSettingsDir, "configs.app.ini")
 
-	// Fetch DLCs
-	dlcURL := fmt.Sprintf("https://store.steampowered.com/dlc/%s/random/ajaxgetfilteredrecommendations/?query&count=10000", appID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlcURL, nil)
+	dlcItems, err := DiscoverDLCs(ctx, appID)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return err
 	}
-	resp, err := HTTPClientFromContext(ctx).Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch DLCs: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch DLCs: HTTP %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	re := regexp.MustCompile(`data-ds-appid=\\?"(\d+)`)
-	matches := re.FindAllStringSubmatch(string(body), -1)
-
-	if len(matches) == 0 {
+	if len(dlcItems) == 0 {
 		slog.Warn("No DLCs found", "appID", appID)
 		return nil
 	}
 
-	uniqueDLCs := make(map[string]struct{})
-	for _, m := range matches {
-		uniqueDLCs[m[1]] = struct{}{}
-	}
-
-	var mu sync.Mutex
-	dlcNames := make(map[string]string)
-	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(10) // Limit concurrency to 10 workers
-
-	for dlcID := range uniqueDLCs {
-		id := dlcID
-		g.Go(func() error {
-			name, err := FetchAppName(gCtx, id)
-			if err != nil {
-				slog.Warn("Failed to get name for DLC", "dlcID", id, "error", err)
-				return nil // Don't fail the whole process if one DLC fails
-			}
-			mu.Lock()
-			dlcNames[id] = name
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("failed to fetch DLC names: %w", err)
-	}
-
 	if dryRun {
-		slog.Info("[DRY RUN] Would write DLC configuration", "path", configsAppIniPath, "count", len(dlcNames))
+		slog.Info("[DRY RUN] Would write DLC configuration", "path", configsAppIniPath, "count", len(dlcItems))
 	} else {
 		f, err := ini.LoadFile(configsAppIniPath)
 		if err != nil {
@@ -524,21 +582,15 @@ func FetchDLCs(ctx context.Context, appID, libraryPath string, dryRun bool) erro
 		sec := f.Section("app::dlcs")
 		sec.Set("unlock_all", "0")
 
-		// Sort IDs for deterministic output
-		ids := make([]string, 0, len(dlcNames))
-		for id := range dlcNames {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		for _, id := range ids {
-			sec.Set(id, dlcNames[id])
+		for _, item := range dlcItems {
+			sec.Set(item.AppID, item.Name)
 		}
 
 		if err := f.SaveFile(configsAppIniPath); err != nil {
 			return fmt.Errorf("failed to save configs.app.ini: %w", err)
 		}
 
-		slog.Info("Wrote DLC configuration", "path", configsAppIniPath, "count", len(dlcNames))
+		slog.Info("Wrote DLC configuration", "path", configsAppIniPath, "count", len(dlcItems))
 	}
 
 	return nil
@@ -685,3 +737,68 @@ func StripHTML(htmlStr string) string {
 	s = strings.ReplaceAll(s, "&gt;", ">")
 	return strings.TrimSpace(s)
 }
+
+type cachedPlayerCount struct {
+	count     int
+	fetchedAt time.Time
+}
+
+var (
+	playerCountMu    sync.RWMutex
+	playerCountCache = make(map[uint32]cachedPlayerCount)
+)
+
+// FetchCurrentPlayers queries Steam Web API ISteamUserStats/GetNumberOfCurrentPlayers/v1.
+// Returns real-time concurrent player count cached for 5 minutes in-memory.
+func FetchCurrentPlayers(ctx context.Context, appID uint32) (int, error) {
+	if appID == 0 {
+		return 0, fmt.Errorf("invalid appID 0")
+	}
+
+	playerCountMu.RLock()
+	if entry, ok := playerCountCache[appID]; ok {
+		if time.Since(entry.fetchedAt) < 5*time.Minute {
+			playerCountMu.RUnlock()
+			return entry.count, nil
+		}
+	}
+	playerCountMu.RUnlock()
+
+	apiURL := fmt.Sprintf("%s/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=%d", DefaultSteamWebAPI, appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return 0, fmt.Errorf("create current players request: %w", err)
+	}
+
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("fetch current players: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("current players HTTP status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Response struct {
+			PlayerCount int `json:"player_count"`
+			Result      int `json:"result"`
+		} `json:"response"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, fmt.Errorf("decode current players JSON: %w", err)
+	}
+
+	count := payload.Response.PlayerCount
+	playerCountMu.Lock()
+	playerCountCache[appID] = cachedPlayerCount{
+		count:     count,
+		fetchedAt: time.Now(),
+	}
+	playerCountMu.Unlock()
+
+	return count, nil
+}
+

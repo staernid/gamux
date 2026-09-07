@@ -108,7 +108,7 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 			ww := opts.WindowWidth
 			wh := opts.WindowHeight
 			if ww <= 0 || wh <= 0 {
-				ww, wh, _, _ = CalculateSplitGeometry(opts.Layout, opts.SeatID, opts.WindowWidth, opts.WindowHeight)
+				ww, wh, _, _ = CalculateSplitGeometry(opts.Layout, opts.SeatID, 0, 0)
 			}
 			// For split layouts, default render resolution to window resolution for 1:1 pixel mapping
 			if tw <= 0 || th <= 0 {
@@ -149,6 +149,9 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 
 	if opts.TargetFPS > 0 {
 		args = append(args, "-r", fmt.Sprintf("%d", opts.TargetFPS))
+		if opts.Mode != SeatModeStream {
+			args = append(args, "-o", fmt.Sprintf("%d", opts.TargetFPS))
+		}
 	}
 
 	if opts.ForceGrabCursor {

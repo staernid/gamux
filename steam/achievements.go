@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -206,3 +207,67 @@ func FetchAchievementSchema(ctx context.Context, appID uint32, apiKey string, la
 
 	return result, nil
 }
+
+// GlobalAchievementPercentagesResponse represents the Steam Web API response structure for achievement percentages.
+type GlobalAchievementPercentagesResponse struct {
+	AchievementPercentages struct {
+		Achievements []struct {
+			Name    string  `json:"name"`
+			Percent float64 `json:"percent"`
+		} `json:"achievements"`
+	} `json:"achievementpercentages"`
+}
+
+// FetchGlobalAchievementPercentages queries Steam Web API ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2.
+// Returns a map of achievement internal name -> global unlock percentage (0.0 - 100.0).
+func FetchGlobalAchievementPercentages(ctx context.Context, appID uint32) (map[string]float64, error) {
+	if appID == 0 {
+		return nil, fmt.Errorf("invalid appID 0")
+	}
+
+	appIDStr := fmt.Sprintf("%d", appID)
+	// 1. Check cache first
+	if cachedBytes, ok := cache.GetAchievementPercentages(appIDStr); ok && len(cachedBytes) > 0 {
+		var res map[string]float64
+		if err := json.Unmarshal(cachedBytes, &res); err == nil && len(res) > 0 {
+			return res, nil
+		}
+	}
+
+	apiURL := fmt.Sprintf("https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?gameid=%d", appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create achievement percentages request: %w", err)
+	}
+
+	resp, err := HTTPClientFromContext(ctx).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch achievement percentages: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("achievement percentages HTTP status %d", resp.StatusCode)
+	}
+
+	var payload GlobalAchievementPercentagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode achievement percentages JSON: %w", err)
+	}
+
+	result := make(map[string]float64, len(payload.AchievementPercentages.Achievements))
+	for _, a := range payload.AchievementPercentages.Achievements {
+		if a.Name != "" {
+			result[a.Name] = a.Percent
+		}
+	}
+
+	if len(result) > 0 {
+		if encoded, err := json.Marshal(result); err == nil {
+			cache.SaveAchievementPercentages(appIDStr, encoded)
+		}
+	}
+
+	return result, nil
+}
+

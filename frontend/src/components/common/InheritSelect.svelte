@@ -42,9 +42,9 @@
 
 {#if stacked}
   <div
-    class="flex flex-col justify-between gap-2.5 p-3 rounded-xl transition-all h-full
-      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
-      {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
+    class="flex flex-col justify-between gap-2.5 p-3 rounded-lg transition-all h-full
+      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card/60 hover:border-surface-borderHighlight'}
+      {isOverridden ? 'bg-surface-card/70 border border-neutral-500' : 'bg-surface-card/30 border border-surface-border/50'}"
   >
     <!-- Top: Header with Label and Override Indicator -->
     <div class="space-y-1 min-w-0">
@@ -112,9 +112,9 @@
   </div>
 {:else}
   <div
-    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all
-      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card'}
-      {isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border'}"
+    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg transition-all
+      {disabled ? 'opacity-40 pointer-events-none' : 'hover:bg-surface-card/60 hover:border-surface-borderHighlight'}
+      {isOverridden ? 'bg-surface-card/70 border border-neutral-500' : 'bg-surface-card/30 border border-surface-border/50'}"
   >
     <!-- Left Side: Label & Description with Override Dot -->
     <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">

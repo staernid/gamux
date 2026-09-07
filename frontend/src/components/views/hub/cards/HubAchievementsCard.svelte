@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
-  import { formatLastPlayed } from '../../../utils/game.js';
+  import { AppAPI } from '../../../../api/app.js';
+  import { formatLastPlayed } from '../../../../utils/game.js';
 
   export let gameDir = '';
 
@@ -10,14 +10,22 @@
   let error = '';
   let loadedGameDir = '';
   let filterMode = 'all'; // 'all' | 'unlocked' | 'locked'
+  let sortBy = 'default'; // 'default' | 'rarest'
 
   $: unlockedCount = achievements.filter(a => a.unlocked).length;
   $: totalCount = achievements.length;
   $: lockedCount = totalCount - unlockedCount;
   $: percent = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
 
-  // Completed first (sorted by most recent unlock time desc), then locked
+  // Sorting: rarest first or default (unlocked first desc, then locked)
   $: sortedAchievements = [...achievements].sort((a, b) => {
+    if (sortBy === 'rarest') {
+      const pctA = typeof a.global_percent === 'number' && a.global_percent > 0 ? a.global_percent : 100.1;
+      const pctB = typeof b.global_percent === 'number' && b.global_percent > 0 ? b.global_percent : 100.1;
+      if (pctA !== pctB) {
+        return pctA - pctB;
+      }
+    }
     if (a.unlocked !== b.unlocked) {
       return a.unlocked ? -1 : 1;
     }
@@ -86,29 +94,45 @@
         <p class="text-xs text-slate-400 mt-0.5">{percent}% completed</p>
       </div>
 
-      <!-- Filter Pills -->
-      <div class="flex items-center space-x-1.5 bg-[#171724] p-1 rounded-xl border border-[#28283c]">
-        <button
-          type="button"
-          on:click={() => { filterMode = 'all'; }}
-          class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'all' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
-        >
-          All <span class="font-mono text-2xs opacity-75">({totalCount})</span>
-        </button>
-        <button
-          type="button"
-          on:click={() => { filterMode = 'unlocked'; }}
-          class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'unlocked' ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/50 shadow-sm font-bold' : 'text-slate-400 hover:text-emerald-300'}"
-        >
-          Unlocked <span class="font-mono text-2xs opacity-75">({unlockedCount})</span>
-        </button>
-        <button
-          type="button"
-          on:click={() => { filterMode = 'locked'; }}
-          class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'locked' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
-        >
-          Locked <span class="font-mono text-2xs opacity-75">({lockedCount})</span>
-        </button>
+      <!-- Filter & Sort Pills -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center space-x-1.5 bg-[#171724] p-1 rounded-xl border border-[#28283c]">
+          <button
+            type="button"
+            on:click={() => { filterMode = 'all'; }}
+            class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'all' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
+          >
+            All <span class="font-mono text-2xs opacity-75">({totalCount})</span>
+          </button>
+          <button
+            type="button"
+            on:click={() => { filterMode = 'unlocked'; }}
+            class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'unlocked' ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/50 shadow-sm font-bold' : 'text-slate-400 hover:text-emerald-300'}"
+          >
+            Unlocked <span class="font-mono text-2xs opacity-75">({unlockedCount})</span>
+          </button>
+          <button
+            type="button"
+            on:click={() => { filterMode = 'locked'; }}
+            class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'locked' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
+          >
+            Locked <span class="font-mono text-2xs opacity-75">({lockedCount})</span>
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-1.5 bg-[#171724] p-1 rounded-xl border border-[#28283c]">
+          <button
+            type="button"
+            on:click={() => { sortBy = sortBy === 'default' ? 'rarest' : 'default'; }}
+            class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 {sortBy === 'rarest' ? 'bg-[#26263e] text-white shadow-sm font-bold' : 'text-slate-400 hover:text-slate-200'}"
+            title="Toggle sorting between default and rarest first"
+          >
+            <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+            </svg>
+            <span>{sortBy === 'rarest' ? 'Rarest First' : 'Default Order'}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -141,7 +165,23 @@
           <!-- Metadata -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
-              <h5 class="text-xs font-bold truncate {ach.unlocked ? 'text-emerald-300' : 'text-slate-200'}">{ach.name || ach.id}</h5>
+              <div class="flex items-center gap-1.5 min-w-0">
+                <h5 class="text-xs font-bold truncate {ach.unlocked ? 'text-emerald-300' : 'text-slate-200'}">{ach.name || ach.id}</h5>
+                {#if typeof ach.global_percent === 'number' && ach.global_percent > 0}
+                  <span
+                    class="text-4xs font-mono font-bold px-1.5 py-0.5 rounded border tracking-wider uppercase flex-shrink-0 {
+                      ach.rarity === 'ultra_rare'
+                        ? 'bg-neutral-800 text-amber-200 border-amber-400/40'
+                        : ach.rarity === 'rare'
+                        ? 'bg-neutral-800 text-neutral-200 border-neutral-600'
+                        : 'bg-[#18181c] text-neutral-400 border-[#2b2b32]'
+                    }"
+                    title="{ach.rarity ? ach.rarity.replace('_', ' ') : 'rarity'}"
+                  >
+                    {ach.global_percent.toFixed(1)}%
+                  </span>
+                {/if}
+              </div>
               {#if ach.unlocked && ach.unlock_time > 0}
                 <span class="text-3xs font-mono text-emerald-400/80 flex-shrink-0">{formatLastPlayed(ach.unlock_time)}</span>
               {/if}

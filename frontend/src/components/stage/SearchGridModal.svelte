@@ -9,11 +9,14 @@
 
   const dispatch = createEventDispatcher();
 
+  export let initialQuery = '';
+  export let initialMode = 'library';
+
   let searchInputEl;
-  let query = '';
+  let query = initialQuery || '';
   let focusedIndex = 0;
   let gridContainerEl;
-  let searchMode = 'library'; // 'library' | 'store'
+  let searchMode = initialMode || 'library'; // 'library' | 'store'
   let storeResults = [];
   let isSearchingStore = false;
   let storeSearchTimeout = null;

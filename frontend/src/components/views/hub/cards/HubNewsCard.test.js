@@ -1,8 +1,8 @@
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
-import DrawerNewsTab from './DrawerNewsTab.svelte';
+import HubNewsCard from './HubNewsCard.svelte';
 
-describe('DrawerNewsTab Component', () => {
+describe('HubNewsCard Component', () => {
   const mockNews = [
     {
       title: 'Patch 2.13 Available Now',
@@ -23,7 +23,7 @@ describe('DrawerNewsTab Component', () => {
   ];
 
   it('renders loading state when isLoadingNews is true', () => {
-    render(DrawerNewsTab, {
+    render(HubNewsCard, {
       props: {
         isLoadingNews: true,
         newsItems: []
@@ -35,7 +35,7 @@ describe('DrawerNewsTab Component', () => {
 
   it('renders error message with retry button when newsError occurs', async () => {
     const refreshSpy = vi.fn();
-    render(DrawerNewsTab, {
+    render(HubNewsCard, {
       props: {
         isLoadingNews: false,
         newsError: 'Failed to fetch Steam news',
@@ -51,7 +51,7 @@ describe('DrawerNewsTab Component', () => {
   });
 
   it('renders news items with titles, author, date, and feed badges', () => {
-    render(DrawerNewsTab, {
+    render(HubNewsCard, {
       props: {
         isLoadingNews: false,
         newsItems: mockNews,
@@ -67,7 +67,7 @@ describe('DrawerNewsTab Component', () => {
   });
 
   it('expands article contents and parses BBCode formatted text', () => {
-    render(DrawerNewsTab, {
+    render(HubNewsCard, {
       props: {
         isLoadingNews: false,
         newsItems: mockNews,
@@ -81,7 +81,7 @@ describe('DrawerNewsTab Component', () => {
 
   it('calls onToggleExpand when title or expand button is clicked', async () => {
     const toggleSpy = vi.fn();
-    render(DrawerNewsTab, {
+    render(HubNewsCard, {
       props: {
         isLoadingNews: false,
         newsItems: mockNews,

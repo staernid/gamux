@@ -5,8 +5,10 @@ import (
 	"log/slog"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/gbe"
+	"github.com/staernid/gamux/steam"
 )
 
 // -----------------------------------------------------------------------------
@@ -63,3 +65,13 @@ func (a *App) SaveGSEUserConfig(cfg *gbe.GSEUserConfig) error {
 	}
 	return a.Engine.SaveGSEUserConfig(cfg)
 }
+
+// ResolveSteamProfile resolves a Steam vanity handle, profile URL, or SteamID into a SteamProfile.
+func (a *App) ResolveSteamProfile(identifier string) (*domain.SteamProfile, error) {
+	apiKey := ""
+	if a.Config != nil {
+		apiKey = a.Config.SteamWebAPIKey
+	}
+	return steam.ResolveSteamProfile(a.getContext(), apiKey, identifier)
+}
+

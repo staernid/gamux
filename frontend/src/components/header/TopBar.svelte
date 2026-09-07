@@ -16,25 +16,6 @@
   const views = ['library', 'tasks', 'settings'];
 
   function navigateWithGuard(targetView, onProceed = null) {
-    if ($activeView === 'settings' && $isSettingsDirty && targetView !== 'settings') {
-      modalStore.open('confirm', {
-        title: 'Unsaved Changes',
-        message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
-        confirmLabel: 'Discard Changes',
-        cancelLabel: 'Keep Editing',
-        danger: true,
-        onConfirm: () => {
-          configStore.setDirty(false);
-          if (typeof onProceed === 'function') {
-            onProceed();
-          } else {
-            $activeView = targetView;
-          }
-        }
-      });
-      return;
-    }
-
     if (typeof onProceed === 'function') {
       onProceed();
     } else {
@@ -89,21 +70,10 @@
         class="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' || $activeView === 'game-hub' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title={$activeView === 'game-hub' ? 'Back to Shelf (B / Esc)' : 'Shelf (1)'}
       >
-        {#if $activeView === 'game-hub'}
-          <!-- Game Hub Symbolic Icon (Gamepad / Hub) -->
-          <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5 text-current" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="6" width="20" height="12" rx="4" />
-            <path d="M6 12h4" />
-            <path d="M8 10v4" />
-            <line x1="15" y1="11" x2="15.01" y2="11" />
-            <line x1="18" y1="13" x2="18.01" y2="13" />
-          </svg>
-        {:else}
-          <!-- Shelf / Library Grid Icon -->
-          <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-          </svg>
-        {/if}
+        <!-- Consistent Library Grid Icon -->
+        <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
       </button>
 
       <!-- Tasks (2) -->

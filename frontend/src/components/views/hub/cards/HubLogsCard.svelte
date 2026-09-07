@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
-  import { notificationStore } from '../../../stores/notifications.js';
+  import { AppAPI } from '../../../../api/app.js';
+  import { notificationStore } from '../../../../stores/notifications.js';
 
   export let game = null;
 

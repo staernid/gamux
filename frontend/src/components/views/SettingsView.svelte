@@ -178,7 +178,22 @@
     }
   }
 
-  async function handleSave() {
+  let autoSaveTimeout = null;
+
+  function triggerAutoSave() {
+    if (!initialCfgJSON || !initialUserCfgJSON) return;
+    if (!isDirty || isSaving) return;
+    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => {
+      handleSave(true);
+    }, 800);
+  }
+
+  $: if (isDirty) {
+    triggerAutoSave();
+  }
+
+  async function handleSave(silent = false) {
     if (!cfgDraft || !isDirty) return;
     isSaving = true;
     try {
@@ -192,20 +207,23 @@
       if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
       saveSuccessTimer = setTimeout(() => {
         saveSuccess = false;
-      }, 3000);
+      }, 2500);
 
-      notificationStore.items.add({
-        type: 'success',
-        title: 'Settings Saved',
-        message: 'System and player configuration updated successfully.'
-      });
-      configStore.reload();
+      if (!silent) {
+        notificationStore.items.add({
+          type: 'success',
+          title: 'Settings Saved',
+          message: 'System configuration and persona preferences updated.'
+        });
+      }
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Save Failed',
-        message: err?.message || String(err)
-      });
+      if (!silent) {
+        notificationStore.items.add({
+          type: 'error',
+          title: 'Save Failed',
+          message: err?.message || String(err)
+        });
+      }
     } finally {
       isSaving = false;
     }
@@ -385,14 +403,29 @@
 <svelte:window on:keydown={handleWindowKeyDown} />
 
 <div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-4 sm:px-8 pb-20 max-w-4xl mx-auto w-full space-y-4 text-xs sm:text-sm animate-fade-in custom-scrollbar">
-  <!-- Minimalist Title & Save Bar -->
+  <!-- Clean Title & Live Status Bar -->
   <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-surface-border">
-    <div class="flex items-center space-x-2.5">
+    <div class="flex items-center space-x-3">
       <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
         System Settings
       </h2>
-      {#if isDirty}
-        <span class="px-2 py-0.5 rounded-full text-3xs font-mono font-bold bg-neutral-800 text-neutral-200 border border-neutral-700 animate-fade-in">
+      {#if isSaving}
+        <span class="text-xs font-mono text-neutral-400 flex items-center space-x-1.5 animate-pulse">
+          <svg class="animate-spin w-3 h-3 text-neutral-400" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span>Saving...</span>
+        </span>
+      {:else if saveSuccess}
+        <span class="text-xs font-mono font-semibold text-emerald-400 flex items-center space-x-1 animate-fade-in">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Saved</span>
+        </span>
+      {:else if isDirty}
+        <span class="px-2 py-0.5 rounded-full text-3xs font-mono font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">
           Unsaved Changes
         </span>
       {/if}
@@ -400,39 +433,24 @@
 
     <!-- Header Actions -->
     <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-      {#if saveSuccess}
-        <span class="text-xs font-mono font-bold text-emerald-400 flex items-center space-x-1 animate-fade-in pr-2">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
-          <span>Saved</span>
-        </span>
+      {#if isDirty}
+        <button
+          type="button"
+          on:click={handleDiscard}
+          disabled={isSaving}
+          class="px-3 py-1.5 rounded-lg border border-surface-border font-medium text-xs text-neutral-400 hover:text-white hover:bg-surface-card transition cursor-pointer"
+        >
+          Discard
+        </button>
       {/if}
 
       <button
         type="button"
-        on:click={handleDiscard}
+        on:click={() => handleSave(false)}
         disabled={isSaving || !isDirty}
-        class="px-3.5 py-1.5 rounded-xl border font-bold text-xs transition cursor-pointer {isDirty ? 'bg-surface-card hover:bg-surface-cardHover border-surface-border text-neutral-300 hover:text-white' : 'bg-transparent border-surface-border text-neutral-600 opacity-40 cursor-not-allowed'}"
+        class="font-semibold px-4 py-1.5 rounded-lg transition text-xs shadow flex items-center space-x-1.5 cursor-pointer {isDirty ? 'bg-white hover:bg-neutral-200 text-black shadow-sm' : 'bg-surface-card text-neutral-600 border border-surface-border opacity-40 cursor-not-allowed'}"
       >
-        Discard
-      </button>
-
-      <button
-        type="button"
-        on:click={handleSave}
-        disabled={isSaving || !isDirty}
-        class="font-black px-5 py-1.5 rounded-xl transition text-xs shadow flex items-center space-x-1.5 cursor-pointer {isDirty ? 'bg-white hover:bg-neutral-200 text-black shadow-md' : 'bg-surface-card text-neutral-500 border border-surface-border opacity-50 cursor-not-allowed'}"
-      >
-        {#if isSaving}
-          <svg class="animate-spin w-3.5 h-3.5 text-black" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-          </svg>
-          <span>Saving...</span>
-        {:else}
-          <span>Save Changes</span>
-        {/if}
+        <span>Save Changes</span>
       </button>
     </div>
   </div>

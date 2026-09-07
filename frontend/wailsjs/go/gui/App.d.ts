@@ -22,6 +22,8 @@ export function AssetHandler():Promise<http.Handler>;
 
 export function CancelTask(arg1:string):Promise<void>;
 
+export function CheckGameUpdates(arg1:string):Promise<domain.VersionStatus>;
+
 export function ClearFinishedTasks():Promise<void>;
 
 export function CreateGameStub(arg1:string,arg2:string,arg3:string,arg4:string):Promise<domain.Game>;
@@ -31,6 +33,8 @@ export function CreateSaveBackup(arg1:string,arg2:string):Promise<saves.BackupIn
 export function DeleteSaveBackup(arg1:string,arg2:string):Promise<void>;
 
 export function DetectGame(arg1:string):Promise<domain.Game>;
+
+export function FetchDLCs(arg1:string):Promise<void>;
 
 export function FetchNews(arg1:string,arg2:number):Promise<Array<domain.NewsItem>>;
 
@@ -52,6 +56,10 @@ export function GetGameAchievements(arg1:string):Promise<Array<domain.Achievemen
 
 export function GetGameBackups(arg1:string):Promise<Array<saves.BackupInfo>>;
 
+export function GetGameCurrentPlayers(arg1:string):Promise<number>;
+
+export function GetGameDLCs(arg1:string):Promise<Array<domain.DLCItem>>;
+
 export function GetGameDepots(arg1:string):Promise<Array<domain.DepotSummary>>;
 
 export function GetGameLog(arg1:string):Promise<string>;
@@ -59,6 +67,8 @@ export function GetGameLog(arg1:string):Promise<string>;
 export function GetGameMetadata(arg1:string,arg2:string):Promise<gui.GameMetadataDetails>;
 
 export function GetGameSaveLocations(arg1:string):Promise<saves.SaveLocationsResult>;
+
+export function GetInitialTarget():Promise<string>;
 
 export function GetLaunchProfile(arg1:string):Promise<domain.LaunchProfile>;
 
@@ -68,6 +78,8 @@ export function GetMultiseatSessionStatus(arg1:string):Promise<multiseat.Multise
 
 export function GetPatchNote(arg1:string,arg2:number):Promise<domain.NewsItem>;
 
+export function GetRecentGames(arg1:number):Promise<Array<gui.TrayGame>>;
+
 export function GetRunningGames():Promise<Array<string>>;
 
 export function GetTask(arg1:string):Promise<tasks.Task|boolean>;
@@ -76,6 +88,8 @@ export function GetToolsStatus():Promise<Array<tools.ToolStatus>>;
 
 export function GetTransferSpeedLimit():Promise<number>;
 
+export function HandleOpenTarget(arg1:string):Promise<void>;
+
 export function InspectGame(arg1:string,arg2:number):Promise<domain.Game>;
 
 export function InspectLibraries(arg1:Array<string>):Promise<Array<domain.Game>>;
@@ -83,6 +97,8 @@ export function InspectLibraries(arg1:Array<string>):Promise<Array<domain.Game>>
 export function IsGameRunning(arg1:string):Promise<boolean>;
 
 export function IsMultiseatSessionRunning(arg1:string):Promise<boolean>;
+
+export function IsQuitting():Promise<boolean>;
 
 export function LaunchGame(arg1:domain.LaunchProfile):Promise<void>;
 
@@ -106,6 +122,8 @@ export function QuickPlay(arg1:domain.LaunchProfile):Promise<void>;
 
 export function Quit():Promise<void>;
 
+export function RecordGamePlayed(arg1:string,arg2:number,arg3:number):Promise<void>;
+
 export function RemoveTask(arg1:string):Promise<void>;
 
 export function ReorderTasks(arg1:Array<string>):Promise<void>;
@@ -113,6 +131,8 @@ export function ReorderTasks(arg1:Array<string>):Promise<void>;
 export function ResetLaunchProfile(arg1:string):Promise<domain.Game>;
 
 export function ResolveArtwork(arg1:string):Promise<domain.GameArtwork>;
+
+export function ResolveSteamProfile(arg1:string):Promise<domain.SteamProfile>;
 
 export function RestoreSaveBackup(arg1:string,arg2:string):Promise<void>;
 
@@ -130,7 +150,11 @@ export function SelectDirectory(arg1:string,arg2:string):Promise<string>;
 
 export function SelectFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function SetQuitting(arg1:boolean):Promise<void>;
+
 export function SetTransferSpeedLimit(arg1:number):Promise<void>;
+
+export function SetTrayManager(arg1:gui.TrayManager):Promise<void>;
 
 export function Shutdown(arg1:context.Context):Promise<void>;
 
@@ -161,6 +185,10 @@ export function SwitchGamePlatform(arg1:string,arg2:string):Promise<domain.Game>
 export function UninstallDepot(arg1:string,arg2:number):Promise<domain.Game>;
 
 export function UnlinkGameMetadata(arg1:string):Promise<domain.Game>;
+
+export function UpdateCachedGame(arg1:domain.Game):Promise<void>;
+
+export function UpdateCachedGames(arg1:Array<domain.Game>):Promise<void>;
 
 export function UpdateSaveManifest():Promise<void>;
 

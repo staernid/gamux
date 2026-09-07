@@ -66,8 +66,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="flex items-start sm:items-center justify-between gap-3 select-none
-    {isCompact ? 'p-0 bg-transparent border-0' : 'p-2.5 sm:p-3 rounded-xl transition-all ' + (isOverridden ? 'bg-surface-card border border-neutral-600' : 'bg-[#101013] border border-surface-border')}
-    {disabled ? 'opacity-40 pointer-events-none' : (isCompact ? '' : 'hover:bg-surface-card')}"
+    {isCompact ? 'p-0 bg-transparent border-0' : 'p-3 rounded-lg transition-all cursor-pointer ' + (isOverridden ? 'bg-surface-card/70 border border-neutral-500' : 'bg-surface-card/30 border border-surface-border/50')}
+    {disabled ? 'opacity-40 pointer-events-none' : (isCompact ? '' : 'hover:bg-surface-card/60 hover:border-surface-borderHighlight')}"
   role="switch"
   tabindex="0"
   aria-checked={effectiveValue}
