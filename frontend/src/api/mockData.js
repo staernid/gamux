@@ -422,3 +422,30 @@ export const MOCK_BACKUPS = [
   }
 ];
 
+export const MOCK_CONFIG_SCHEMA = [
+  { key: 'library_paths', label: 'Library Folders', description: 'Directories where Gamux scans and discovers installed game directories.', type: 'path_list', category: 'Paths', scope: 'global', default: [] },
+  { key: 'gbe_dir', label: 'Goldberg Emulator Directory', description: 'Path to Goldberg Steam Emulator binaries and overlay libraries.', type: 'path', category: 'Paths', scope: 'global', default: '' },
+  { key: 'artwork_dir', label: 'Artwork Cache Directory', description: 'Directory where downloaded posters, banners, and grid artwork are stored.', type: 'path', category: 'Paths', scope: 'global', default: '' },
+  { key: 'steam_web_api_key', label: 'Steam Web API Key', description: 'API key used to query the official Steam Web API.', type: 'string', category: 'API Keys', scope: 'global', default: '' },
+  { key: 'hubcap_api_key', label: 'Hubcap API Key', description: 'API key used to retrieve community manifests and metadata via Hubcap.', type: 'string', category: 'API Keys', scope: 'global', default: '' },
+  { key: 'steamgriddb_api_key', label: 'SteamGridDB API Key', description: 'API key for SteamGridDB to fetch custom high-res box art.', type: 'string', category: 'API Keys', scope: 'global', default: '' },
+  { key: 'rawg_api_key', label: 'RAWG API Key', description: 'API key for RAWG Video Games Database.', type: 'string', category: 'API Keys', scope: 'global', default: '' },
+  { key: 'enable_launch_notify', label: 'Launch Notifications', description: 'Display a desktop notification when a game process launches or exits.', type: 'boolean', category: 'Lifecycle', scope: 'global', default: true },
+  { key: 'launch_window_behavior', label: 'Launch Window Behavior', description: 'Action taken with the Gamux main window when a game is launched.', type: 'select', category: 'Lifecycle', scope: 'global', default: 'keep', options: [{ value: 'keep', label: 'Keep Window Open' }, { value: 'minimize', label: 'Minimize to Taskbar' }, { value: 'hide', label: 'Hide Window' }] },
+  { key: 'close_to_tray', label: 'Close to System Tray', description: 'Minimize application to system tray when the main window is closed.', type: 'boolean', category: 'Lifecycle', scope: 'global', default: false },
+  { key: 'operating_mode', label: 'Operating Mode', description: 'Default integration method for applying Goldberg emulator hooks.', type: 'select', category: 'Operational', scope: 'both', default: 'loader', options: [{ value: 'loader', label: 'Loader Mode' }, { value: 'portable', label: 'Portable Mode' }, { value: 'none', label: 'None' }] },
+  { key: 'language', label: 'Game Language', description: 'Game language reported to the Goldberg emulator.', type: 'select', category: 'Operational', scope: 'both', default: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'english', label: 'English' }] },
+  { key: 'runner', label: 'Runner Layer', description: 'Execution environment used to run this title.', type: 'select', category: 'Runtime', scope: 'game', default: 'umu', inherits_from: 'default_runner', options: [{ value: 'umu', label: 'UMU / Proton' }, { value: 'wine', label: 'Wine Direct' }, { value: 'proton', label: 'Proton' }, { value: 'linux', label: 'Linux Native' }] },
+  { key: 'dll_overrides', label: 'DLL Overrides', description: 'Custom native/builtin DLL loading rules.', type: 'string', category: 'Runtime', scope: 'game', default: '' },
+  { key: 'disable_overlay', label: 'Disable In-Game Overlay', description: 'Disable Goldberg overlay hooks and telemetry.', type: 'boolean', category: 'Operational', scope: 'both', default: false },
+  { key: 'offline_mode', label: 'Offline Mode', description: 'Force offline mode across all emulated Steam interfaces.', type: 'boolean', category: 'Operational', scope: 'both', default: false },
+  { key: 'achievements', label: 'Achievement Tracking', description: 'Capture and display in-game achievement unlocks.', type: 'boolean', category: 'Operational', scope: 'both', default: true },
+  { key: 'steamless', label: 'Automatic DRM Unpacking', description: 'Run Steamless on main executables during pipeline scan.', type: 'boolean', category: 'Operational', scope: 'both', default: true },
+  { key: 'normalize', label: 'Normalize Game Folders', description: 'Clean and standardize directory layout.', type: 'boolean', category: 'Operational', scope: 'both', default: true },
+  { key: 'transfer_speed_limit', label: 'Transfer Speed Limit', description: 'Maximum transfer speed limit in bytes per second.', type: 'number', category: 'Operational', scope: 'global', default: 0 },
+  { key: 'default_runner', label: 'Default Runner', description: 'Default compatibility runner used to execute Windows PE titles.', type: 'select', category: 'Runtime', scope: 'both', default: 'umu', options: [{ value: 'umu', label: 'UMU / Proton' }, { value: 'wine', label: 'Wine Direct' }] },
+  { key: 'wine_prefix', label: 'Wine Prefix', description: 'Path to custom WINEPREFIX container directory.', type: 'path', category: 'Runtime', scope: 'both', default: '' },
+  { key: 'mangohud', label: 'MangoHud Overlay', description: 'Render Vulkan / OpenGL HUD with FPS and hardware metrics.', type: 'boolean', category: 'Graphics', scope: 'both', default: false },
+  { key: 'auto_backup_saves', label: 'Auto-Backup Saves', description: 'Automatically create a zip snapshot backup before launching.', type: 'boolean', category: 'Saves & Backups', scope: 'both', default: false },
+  { key: 'backup_retention_count', label: 'Backup Retention Limit', description: 'Maximum number of rolling backup snapshots to retain.', type: 'number', category: 'Saves & Backups', scope: 'both', default: 5, min: 1, max: 50, step: 1 }
+];

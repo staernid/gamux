@@ -1,82 +1,40 @@
 import { render, fireEvent, screen } from '@testing-library/svelte';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SearchGridModal from './SearchGridModal.svelte';
-import { games, selectedGame } from '../../stores/library.js';
+import CatalogModal from './CatalogModal.svelte';
+import { games, selectedGame, activeView } from '../../stores/library.js';
 import { normalizeGame } from '../../utils/game.js';
 
-describe('SearchGridModal Component', () => {
+describe('CatalogModal / SearchGridModal Component', () => {
   const mockGames = [
-    { name: 'Astroneer', app_id: '361420', store: 'Steam', game_dir: '/games/astroneer' },
-    { name: 'Balatro', app_id: '2379780', store: 'Steam', game_dir: '/games/balatro' },
-    { name: 'Cyberpunk 2077', app_id: '', store: 'GOG', game_dir: '/games/cyberpunk' },
+    { name: 'Astroneer', app_id: '361420', store: 'Steam', game_dir: '/games/astroneer', is_installed: true },
+    { name: 'Balatro', app_id: '2379780', store: 'Steam', game_dir: '/games/balatro', is_installed: true },
+    { name: 'Cyberpunk 2077', app_id: '', store: 'GOG', gog_id: '1091500', game_dir: '/games/cyberpunk', is_installed: false },
   ].map(normalizeGame);
 
   beforeEach(() => {
     games.set(mockGames);
     selectedGame.set(mockGames[0]);
+    activeView.set('library');
   });
 
-  it('renders all games and search input', () => {
-    render(SearchGridModal);
+  it('renders catalog header with wireframe globe icon, online discovery state, and search input', () => {
+    render(CatalogModal);
 
-    expect(screen.getByPlaceholderText(/Type to filter.*titles/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Astroneer').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Balatro').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Cyberpunk 2077').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Online Catalog/i)).toBeInTheDocument();
+    expect(screen.getByText(/Steam · GOG · RAWG/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Online Store Catalog Discovery/i)).toBeInTheDocument();
   });
 
-  it('filters titles based on search query', async () => {
-    render(SearchGridModal);
-
-    const input = screen.getByPlaceholderText(/Type to filter.*titles/i);
-    await fireEvent.input(input, { target: { value: 'Bala' } });
-
-    expect(screen.getAllByText('Balatro').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Astroneer')).not.toBeInTheDocument();
-  });
-
-  it('selects game on item click', async () => {
-    render(SearchGridModal);
-
-    const balatroBtn = screen.getAllByText('Balatro')[0];
-    await fireEvent.click(balatroBtn);
-
-    let current = null;
-    selectedGame.subscribe(v => current = v)();
-    expect(current?.name).toBe('Balatro');
-
-    let currentView = null;
-    const { activeView } = await import('../../stores/library.js');
-    activeView.subscribe(v => currentView = v)();
-    expect(currentView).toBe('game-hub');
-  });
-
-  it('renders sort chips and updates sort order on click', async () => {
-    render(SearchGridModal);
-
-    const playtimeChip = screen.getByText('Playtime');
-    expect(playtimeChip).toBeInTheDocument();
-    await fireEvent.click(playtimeChip);
-
-    let currentSort = null;
-    const { sortBy } = await import('../../stores/library.js');
-    sortBy.subscribe(v => currentSort = v)();
-    expect(currentSort).toBe('playtime_desc');
-  });
-
-  it('switches to Store Catalog mode and searches online titles', async () => {
+  it('performs debounced online store search and renders store results', async () => {
     const { AppAPI } = await import('../../api/app.js');
     const searchSpy = vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
       { id: '1145350', name: 'Hades II', store: 'steam', release_date: '2024' },
-      { id: '1091500', name: 'Cyberpunk 2077', store: 'steam', release_date: '2020' },
+      { id: '2379780', name: 'Balatro', store: 'steam', release_date: '2024' },
     ]);
 
-    render(SearchGridModal);
-
-    const storeTab = screen.getByText(/Store Catalog/i);
-    await fireEvent.click(storeTab);
-
-    expect(screen.getByText(/Online Store Catalog Discovery/i)).toBeInTheDocument();
+    render(CatalogModal);
 
     const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
     await fireEvent.input(input, { target: { value: 'Hades' } });
@@ -88,58 +46,77 @@ describe('SearchGridModal Component', () => {
     const hadesItems = await screen.findAllByText('Hades II');
     expect(hadesItems.length).toBeGreaterThan(0);
 
-    await fireEvent.click(hadesItems[0]);
+    const balatroItems = await screen.findAllByText('Balatro');
+    expect(balatroItems.length).toBeGreaterThan(0);
+
+    // Balatro matches local library and is installed
+    expect(screen.getByText(/Installed/i)).toBeInTheDocument();
+  });
+
+  it('selects virtual store title and navigates to game-hub on click', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '1145350', name: 'Hades II', store: 'steam', release_date: '2024' },
+    ]);
+
+    const closeSpy = vi.fn();
+    render(CatalogModal, { props: { onclose: closeSpy } });
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Hades' } });
+
+    await new Promise(r => setTimeout(r, 300));
+    const hadesBtn = (await screen.findAllByText('Hades II'))[0];
+    await fireEvent.click(hadesBtn);
 
     let current = null;
     selectedGame.subscribe(v => current = v)();
     expect(current?.name).toBe('Hades II');
     expect(current?.appId).toBe('1145350');
     expect(current?.isVirtual).toBe(true);
-    expect(current?.isInstalled).toBe(false);
 
     let currentView = null;
-    const { activeView } = await import('../../stores/library.js');
     activeView.subscribe(v => currentView = v)();
     expect(currentView).toBe('game-hub');
+    expect(closeSpy).toHaveBeenCalled();
   });
 
-  it('switches to dedicated command mode when query starts with >', async () => {
-    render(SearchGridModal);
+  it('selects matching local title if store result matches installed library game', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '2379780', name: 'Balatro', store: 'steam', release_date: '2024' },
+    ]);
 
-    const input = screen.getByPlaceholderText(/Type to filter.*titles/i);
-    await fireEvent.input(input, { target: { value: '>' } });
+    render(CatalogModal);
 
-    expect(screen.getByText(/Commands & Actions/i)).toBeInTheDocument();
-    expect(screen.getByText('Go to Settings')).toBeInTheDocument();
-    expect(screen.getByText('Scan Library Folders')).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Balatro' } });
 
-    // Filter to a specific command
-    await fireEvent.input(input, { target: { value: '>settings' } });
-    const settingsBtn = screen.getByText('Go to Settings');
-    await fireEvent.click(settingsBtn);
+    await new Promise(r => setTimeout(r, 300));
+    const balatroBtn = (await screen.findAllByText('Balatro'))[0];
+    await fireEvent.click(balatroBtn);
 
-    let currentView = null;
-    const { activeView } = await import('../../stores/library.js');
-    activeView.subscribe(v => currentView = v)();
-    expect(currentView).toBe('settings');
+    let current = null;
+    selectedGame.subscribe(v => current = v)();
+    expect(current?.name).toBe('Balatro');
+    expect(current?.gameDir).toBe('/games/balatro');
+    expect(current?.isVirtual).toBeFalsy();
   });
 
-  it('shows suggested commands when search query matches command keywords', async () => {
+  it('dispatches close event on close button click or escape key', async () => {
+    const closeSpy = vi.fn();
+    render(CatalogModal, { props: { onclose: closeSpy } });
+
+    const closeBtn = screen.getByRole('button', { name: /Esc Close/i });
+    await fireEvent.click(closeBtn);
+    expect(closeSpy).toHaveBeenCalled();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(closeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('supports backwards compatibility via SearchGridModal wrapper', () => {
     render(SearchGridModal);
-
-    const input = screen.getByPlaceholderText(/Type to filter.*titles/i);
-    await fireEvent.input(input, { target: { value: 'tasks' } });
-
-    expect(screen.getByText(/Suggested Commands/i)).toBeInTheDocument();
-    const tasksCmdBtn = screen.getByText('Go to Tasks');
-    await fireEvent.click(tasksCmdBtn);
-
-    let currentView = null;
-    const { activeView } = await import('../../stores/library.js');
-    activeView.subscribe(v => currentView = v)();
-    expect(currentView).toBe('tasks');
+    expect(screen.getByText(/Online Catalog/i)).toBeInTheDocument();
   });
 });
-
-
-

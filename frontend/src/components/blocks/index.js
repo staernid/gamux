@@ -1,0 +1,15 @@
+export { default as GameHeroBackdrop } from './GameHeroBackdrop.svelte';
+export { default as GameLogo } from './GameLogo.svelte';
+export { default as GameSynopsis } from './GameSynopsis.svelte';
+export { default as GenrePillGroup } from './GenrePillGroup.svelte';
+export { default as LiveCommunityBadge } from './LiveCommunityBadge.svelte';
+export { default as PlayActionCluster } from './PlayActionCluster.svelte';
+export { default as MultiseatStatusPill } from './MultiseatStatusPill.svelte';
+export { default as CloudSaveIndicator } from './CloudSaveIndicator.svelte';
+export { default as AchievementRibbon } from './AchievementRibbon.svelte';
+export { default as PatchNotesFeed } from './PatchNotesFeed.svelte';
+export { default as CoverCard } from './CoverCard.svelte';
+export { default as CompactGameRow } from './CompactGameRow.svelte';
+export { default as SearchFilterBar } from './SearchFilterBar.svelte';
+export { default as TaskStatusBar } from './TaskStatusBar.svelte';
+export { default as CarouselShelf } from './CarouselShelf.svelte';

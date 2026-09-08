@@ -93,7 +93,7 @@
 
   function openSearchGrid() {
     playNav();
-    modalStore.open('search-grid');
+    modalStore.open('catalog');
   }
 
   function stepGameSelection(dir) {
@@ -300,7 +300,7 @@
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if ($modalStore && $modalStore.type === 'search-grid') {
+        if ($modalStore && ($modalStore.type === 'catalog' || $modalStore.type === 'search-grid')) {
           playBack();
           modalStore.close();
         } else {

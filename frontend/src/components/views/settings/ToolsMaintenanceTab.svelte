@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
+  import { openExternalUrl } from '../../../utils/navigation.js';
   import { activeView } from '../../../stores/library.js';
   import { modalStore } from '../../../stores/modal.js';
   import { configStore } from '../../../stores/config.js';
@@ -175,7 +176,7 @@
             {#if tool.release_url}
               <button
                 type="button"
-                on:click={() => AppAPI.openURL(tool.release_url)}
+                on:click={() => openExternalUrl(tool.release_url, { title: tool.name || 'GitHub Release' })}
                 class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-surface-border bg-surface-input transition-colors cursor-pointer"
                 title="Open GitHub Release"
               >

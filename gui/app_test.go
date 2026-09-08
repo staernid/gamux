@@ -96,6 +96,52 @@ func TestApp_GetAndSaveConfig(t *testing.T) {
 	}
 }
 
+func TestApp_GetConfigSchema(t *testing.T) {
+	app := NewApp(nil)
+	schema := app.GetConfigSchema()
+	if len(schema) == 0 {
+		t.Fatalf("expected non-empty schema from App.GetConfigSchema(), got 0 items")
+	}
+	foundKey := false
+	for _, prop := range schema {
+		if prop.Key == "operating_mode" {
+			foundKey = true
+			if prop.Type != "select" {
+				t.Errorf("operating_mode expected type 'select', got %q", prop.Type)
+			}
+			break
+		}
+	}
+	if !foundKey {
+		t.Errorf("expected operating_mode to be present in schema")
+	}
+}
+
+func TestApp_GetGameConfigSchema(t *testing.T) {
+	app := NewApp(nil)
+	schema := app.GetGameConfigSchema()
+	if len(schema) == 0 {
+		t.Fatalf("expected non-empty schema from App.GetGameConfigSchema(), got 0 items")
+	}
+	foundRunner := false
+	for _, prop := range schema {
+		if prop.Key == "runner" {
+			foundRunner = true
+			if prop.Type != "select" {
+				t.Errorf("runner expected type 'select', got %q", prop.Type)
+			}
+			if prop.Scope != "game" {
+				t.Errorf("runner expected scope 'game', got %q", prop.Scope)
+			}
+			break
+		}
+	}
+	if !foundRunner {
+		t.Errorf("expected runner to be present in game schema")
+	}
+}
+
+
 func TestApp_SaveConfig_UpdatesStateAndDisk(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgDir := filepath.Join(tmpDir, "gamux")

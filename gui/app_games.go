@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"os/exec"
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
@@ -71,6 +72,18 @@ func (a *App) VerifyIntegrity(gamePath string) (*manifest.IntegrityReport, error
 		return nil, err
 	}
 	return a.Engine.VerifyIntegrity(a.getContext(), path)
+}
+
+// VerifyGameIntegrity alias for VerifyIntegrity to support deep deck operations.
+func (a *App) VerifyGameIntegrity(gamePath string) (*manifest.IntegrityReport, error) {
+	return a.VerifyIntegrity(gamePath)
+}
+
+// KillAllWine forces termination of any running wine processes or wineserver instances.
+func (a *App) KillAllWine() error {
+	_ = exec.Command("wineserver", "-k").Run()
+	_ = exec.Command("pkill", "-9", "-f", "wineserver|wine|proton").Run()
+	return nil
 }
 
 // -----------------------------------------------------------------------------

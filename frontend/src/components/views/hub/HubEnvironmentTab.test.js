@@ -132,6 +132,6 @@ describe('HubEnvironmentTab Component', () => {
     });
 
     expect(screen.getByText('Operating Mode')).toBeInTheDocument();
-    expect(screen.getByText(/Loader Mode/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Loader Mode/i).length).toBeGreaterThan(0);
   });
 });

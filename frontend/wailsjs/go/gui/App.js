@@ -54,6 +54,10 @@ export function GetConfig() {
   return window['go']['gui']['App']['GetConfig']();
 }
 
+export function GetConfigSchema() {
+  return window['go']['gui']['App']['GetConfigSchema']();
+}
+
 export function GetConnectedGamepads() {
   return window['go']['gui']['App']['GetConnectedGamepads']();
 }
@@ -80,6 +84,10 @@ export function GetGameAchievements(arg1) {
 
 export function GetGameBackups(arg1) {
   return window['go']['gui']['App']['GetGameBackups'](arg1);
+}
+
+export function GetGameConfigSchema() {
+  return window['go']['gui']['App']['GetGameConfigSchema']();
 }
 
 export function GetGameCurrentPlayers(arg1) {
@@ -170,6 +178,10 @@ export function IsQuitting() {
   return window['go']['gui']['App']['IsQuitting']();
 }
 
+export function KillAllWine() {
+  return window['go']['gui']['App']['KillAllWine']();
+}
+
 export function LaunchGame(arg1) {
   return window['go']['gui']['App']['LaunchGame'](arg1);
 }
@@ -188,6 +200,10 @@ export function ListMetadataProviders() {
 
 export function ListTasks() {
   return window['go']['gui']['App']['ListTasks']();
+}
+
+export function NormalizeGameDirectory(arg1) {
+  return window['go']['gui']['App']['NormalizeGameDirectory'](arg1);
 }
 
 export function OpenDirectory(arg1) {
@@ -236,6 +252,10 @@ export function ResolveArtwork(arg1) {
 
 export function ResolveSteamProfile(arg1) {
   return window['go']['gui']['App']['ResolveSteamProfile'](arg1);
+}
+
+export function RestoreGameBackup(arg1, arg2) {
+  return window['go']['gui']['App']['RestoreGameBackup'](arg1, arg2);
 }
 
 export function RestoreSaveBackup(arg1, arg2) {
@@ -356,6 +376,10 @@ export function UpdateSaveManifest() {
 
 export function UpdateTool(arg1) {
   return window['go']['gui']['App']['UpdateTool'](arg1);
+}
+
+export function VerifyGameIntegrity(arg1) {
+  return window['go']['gui']['App']['VerifyGameIntegrity'](arg1);
 }
 
 export function VerifyIntegrity(arg1) {

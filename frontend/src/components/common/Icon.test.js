@@ -17,5 +17,11 @@ describe('Icon Component', () => {
 
     const { container: c2 } = render(Icon, { props: { name: 'search' } });
     expect(c2.querySelector('svg')).toBeInTheDocument();
+
+    const { container: c3 } = render(Icon, { props: { name: 'globe' } });
+    expect(c3.querySelector('svg')).toBeInTheDocument();
+
+    const { container: c4 } = render(Icon, { props: { name: 'shelf' } });
+    expect(c4.querySelector('svg')).toBeInTheDocument();
   });
 });

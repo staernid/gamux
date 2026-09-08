@@ -3,23 +3,18 @@
   import { drawerDraft } from '../../../stores/drawerDraft.js';
   import SettingSection from '../../common/SettingSection.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
-  import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
-  import GhostInput from '../../common/GhostInput.svelte';
   import EnvDiffEditor from '../../common/EnvDiffEditor.svelte';
   import HubActionToolbar from './HubActionToolbar.svelte';
-  import { RUNNER_OPTIONS, OPERATING_MODE_OPTIONS, PLATFORM_OPTIONS, LANGUAGE_OPTIONS } from '../../../constants/options.js';
+  import PropertySheet from '../../schema/PropertySheet.svelte';
+  import { PLATFORM_OPTIONS } from '../../../constants/options.js';
 
   export let game = {};
   export let globalCfg = {};
   export let overrideCount = 0;
   export let isSaving = false;
   export let saveSuccess = false;
-  export let runnerOptions = RUNNER_OPTIONS;
-  export let operatingModeOptions = OPERATING_MODE_OPTIONS;
-  export let gameLanguageOptions = LANGUAGE_OPTIONS;
 
   const platformOptions = PLATFORM_OPTIONS;
-
   const dispatch = createEventDispatcher();
 
   function handleSave() {
@@ -73,78 +68,36 @@
               </span>
             </div>
           {:else}
-            <InheritSelect
-              label="Runner Layer"
-              bind:value={$drawerDraft.runner}
-              globalValue={game?.runner || globalCfg?.default_runner || 'umu'}
-              options={runnerOptions}
-            />
-
-            {#if isWine}
-              <GhostInput
-                label="Wine Prefix"
-                description="Custom isolated Wine bottle location"
-                bind:value={$drawerDraft.winePrefix}
-                globalPlaceholder={globalCfg?.wine_prefix || "Isolated: steam_settings/pfx"}
-                mono={true}
-              />
-            {/if}
-
-            <GhostInput
-              label="DLL Overrides"
-              description="Custom native/builtin DLL loading rules (WINEDLLOVERRIDES)"
-              bind:value={$drawerDraft.dllOverrides}
-              globalPlaceholder="e.g. version=n,b;dinput8=n,b;dxgi=n,b"
-              mono={true}
+            <PropertySheet
+              includeKeys={isWine ? ['runner', 'wine_prefix', 'dll_overrides'] : ['runner', 'dll_overrides']}
+              scope="game"
+              groupByCategory={false}
+              bind:values={$drawerDraft}
+              inheritedValues={globalCfg}
             />
           {/if}
         </div>
       </SettingSection>
 
       <SettingSection title="Graphics & Overlays">
-        <div class="space-y-2.5">
-          <SeamlessSwitch
-            label="MangoHud Overlay"
-            description="Display real-time FPS, frame timing, and GPU/CPU telemetry HUD"
-            bind:value={$drawerDraft.mangoHud}
-            inheritedValue={Boolean(globalCfg?.mangohud)}
-          />
-        </div>
+        <PropertySheet
+          includeKeys={['mangohud']}
+          scope="game"
+          groupByCategory={false}
+          bind:values={$drawerDraft}
+          inheritedValues={globalCfg}
+        />
       </SettingSection>
 
       {#if isSteamGame}
         <SettingSection title="Steam Emulation">
-          <div class="space-y-2.5">
-            <InheritSelect
-              label="Operating Mode"
-              bind:value={$drawerDraft.operatingMode}
-              globalValue={globalCfg?.operating_mode || 'loader'}
-              options={operatingModeOptions}
-            />
-
-            <InheritSelect
-              label="Game Language"
-              bind:value={$drawerDraft.language}
-              globalValue={globalCfg?.language || 'auto'}
-              options={gameLanguageOptions}
-            />
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-surface-border">
-              <SeamlessSwitch
-                label="Offline Mode"
-                description="Report disconnected offline status in Steamworks emulation"
-                bind:value={$drawerDraft.offlineMode}
-                inheritedValue={Boolean(globalCfg?.offline_mode)}
-              />
-
-              <SeamlessSwitch
-                label="Disable In-Game Overlay"
-                description="Disable Goldberg Steam overlay hooks and telemetry"
-                bind:value={$drawerDraft.disableOverlay}
-                inheritedValue={Boolean(globalCfg?.disable_overlay)}
-              />
-            </div>
-          </div>
+          <PropertySheet
+            includeKeys={['operating_mode', 'language', 'offline_mode', 'disable_overlay']}
+            scope="game"
+            groupByCategory={false}
+            bind:values={$drawerDraft}
+            inheritedValues={globalCfg}
+          />
         </SettingSection>
       {/if}
 

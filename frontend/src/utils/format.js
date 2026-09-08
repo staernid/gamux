@@ -148,3 +148,17 @@ export function formatNewsHTML(raw) {
 
   return s;
 }
+
+export function formatDate(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp > 1e11 ? timestamp : timestamp * 1000);
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+export function formatSpeed(bps) {
+  return `${formatBytes(bps)}/s`;
+}

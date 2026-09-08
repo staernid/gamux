@@ -3,6 +3,8 @@
   import { get } from 'svelte/store';
   import PosterArt from '../common/PosterArt.svelte';
   import Carousel3D from '../stage/Carousel3D.svelte';
+  import CoverCard from '../blocks/CoverCard.svelte';
+  import SearchFilterBar from '../blocks/SearchFilterBar.svelte';
   import {
     games,
     filteredGames,
@@ -119,44 +121,15 @@
     <div class="flex-1 flex flex-col min-h-0 pt-16 sm:pt-20 px-6 sm:px-10 pb-6 max-w-7xl mx-auto w-full animate-fade-in">
       <!-- Toolbar: Search, Filters, Sorters & View Switcher -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-surface-border">
-        <!-- Left: Search input + Game Count -->
-        <div class="flex items-center space-x-3 flex-1 max-w-md">
-          <div class="relative flex-1">
-            <input
-              bind:this={searchInputEl}
-              bind:value={$searchQuery}
-              on:focus={() => { isSearchFocused = true; }}
-              on:blur={() => { isSearchFocused = false; }}
-              type="text"
-              placeholder="Search library by title, appid, platform..."
-              class="w-full bg-surface-card border border-surface-border focus:border-neutral-400 rounded-xl pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder-neutral-500 outline-none transition-all shadow-inner"
-            />
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            {#if $searchQuery}
-              <button
-                type="button"
-                on:click={() => { $searchQuery = ''; searchInputEl?.focus(); }}
-                class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                title="Clear search"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            {/if}
-          </div>
-
-          <div class="hidden sm:flex items-center space-x-1.5 text-xs text-neutral-400 font-mono flex-shrink-0">
-            <span class="font-bold text-white">{$filteredGames.length}</span>
-            <span class="text-neutral-600">/</span>
-            <span>{$games.length}</span>
-            <span class="text-neutral-500">titles</span>
-          </div>
-        </div>
+        <!-- Left: Search Filter Bar -->
+        <SearchFilterBar
+          bind:this={searchInputEl}
+          bind:query={$searchQuery}
+          placeholder="Search library by title, appid, platform..."
+          totalCount={$games.length}
+          filteredCount={$filteredGames.length}
+          className="flex-1 max-w-md"
+        />
 
         <!-- Middle: Status Filter Chips -->
         <div class="flex items-center space-x-1.5 overflow-x-auto py-0.5">
@@ -273,63 +246,22 @@
           <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
             {#each $filteredGames as game, index (game.gameDir || index)}
               {@const pColors = getPlatformColors(game)}
-              <button
-                type="button"
-                on:click={() => openGameHub(game)}
-                on:keydown={(e) => handleCardKeydown(e, game, index)}
-                class="group cursor-pointer flex flex-col items-center text-left transition-all duration-150 transform hover:-translate-y-1 bg-transparent border-0 p-0"
-              >
-                <!-- Poster Art Container -->
-                <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden shadow-md group-hover:shadow-xl border border-surface-border group-hover:border-neutral-400 transition-all">
-                  <PosterArt
-                    appId={game.appId}
-                    name={game.name}
-                    posterUrl={game.coverUrl}
-                    localCoverUrl={game.localCoverUrl}
-                    className="w-full h-full object-cover"
-                  />
-
-                  <!-- Top Left Badge: Platform / Stub -->
-                  <div
-                    class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider text-neutral-200 bg-neutral-900/85 border border-neutral-700/80 shadow-md backdrop-blur-md"
-                  >
-                    {game.isStub ? 'STUB' : pColors.label}
-                  </div>
-
-                  <!-- Top Right Status Signifier: Setup Required if unpatched -->
-                  {#if !game.isReady && !game.isPatched && !game.isStub}
-                    <div
-                      class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md backdrop-blur-md flex items-center space-x-1"
-                      title="Setup Required (Unpatched)"
-                    >
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                      <span>Setup</span>
-                    </div>
-                  {/if}
-
-                  <!-- Bottom Gradient Overlay with Playtime -->
-                  {#if game.playtimeSeconds > 0}
-                    <div class="absolute inset-x-0 bottom-0 pt-6 pb-2 px-2.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-end justify-between text-4xs font-mono text-neutral-300">
-                      <span>{formatPlaytime(game.playtimeSeconds)}</span>
-                      {#if game.lastPlayed > 0}
-                        <span class="text-neutral-400">{formatLastPlayed(game.lastPlayed)}</span>
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
-
-                <!-- Title & Technical Details -->
-                <div class="w-full mt-2 space-y-0.5 min-w-0">
-                  <h4 class="text-xs font-semibold text-neutral-200 group-hover:text-white truncate transition-colors" title={game.name}>
-                    {game.name}
-                  </h4>
-                  <div class="flex items-center space-x-1.5 text-3xs font-mono text-neutral-500 truncate">
-                    <span>{formatBytes(game.diskSizeBytes)}</span>
-                    <span>·</span>
-                    <span class="truncate">{game.runner || 'UMU'}</span>
-                  </div>
-                </div>
-              </button>
+              <CoverCard
+                appId={game.appId}
+                name={game.name}
+                coverUrl={game.coverUrl}
+                localCoverUrl={game.localCoverUrl}
+                platform={game.isStub ? 'STUB' : pColors.label}
+                isRunning={game.isRunning}
+                isReady={game.isReady || game.isPatched}
+                isStub={game.isStub}
+                playtimeSeconds={game.playtimeSeconds}
+                lastPlayed={game.lastPlayed}
+                diskSizeBytes={game.diskSizeBytes}
+                size="full"
+                className="w-full"
+                onclick={() => openGameHub(game)}
+              />
             {/each}
           </div>
         {/if}

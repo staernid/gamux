@@ -81,6 +81,92 @@ function createNotificationStore() {
     }
   }
 
+  const undoQueue = writable([]);
+
+  function clearAllUndo() {
+    undoQueue.update(list => {
+      list.forEach(item => {
+        if (item._interval) clearInterval(item._interval);
+        if (item._timeout) clearTimeout(item._timeout);
+      });
+      return [];
+    });
+  }
+
+  function pushUndo({ message, action, onCommit, duration = 6000 }) {
+    const id = generateId('undo');
+    const remaining = Math.ceil(duration / 1000);
+
+    const item = {
+      id,
+      message,
+      action,
+      onCommit,
+      remaining,
+      _interval: null,
+      _timeout: null
+    };
+
+    const intervalId = setInterval(() => {
+      undoQueue.update(list => {
+        return list.map(it => {
+          if (it.id === id) {
+            return { ...it, remaining: it.remaining - 1 };
+          }
+          return it;
+        });
+      });
+    }, 1000);
+
+    const timeoutId = setTimeout(() => {
+      clearInterval(intervalId);
+      undoQueue.update(list => list.filter(it => it.id !== id));
+      if (typeof onCommit === 'function') onCommit();
+    }, duration);
+
+    item._interval = intervalId;
+    item._timeout = timeoutId;
+
+    undoQueue.update(list => [item, ...list]);
+    return item;
+  }
+
+  function undo(message, action, onCommit, duration = 6000) {
+    return pushUndo({ message, action, onCommit, duration });
+  }
+
+  function triggerUndo(id) {
+    let triggered = null;
+    undoQueue.update(list => {
+      const found = list.find(it => it.id === id);
+      if (found) {
+        triggered = found;
+        if (found._interval) clearInterval(found._interval);
+        if (found._timeout) clearTimeout(found._timeout);
+      }
+      return list.filter(it => it.id !== id);
+    });
+    if (triggered && typeof triggered.action === 'function') {
+      triggered.action();
+    }
+  }
+
+  function dismissUndo(id) {
+    let dismissed = null;
+    undoQueue.update(list => {
+      const found = list.find(it => it.id === id);
+      if (found) {
+        dismissed = found;
+        if (found._interval) clearInterval(found._interval);
+        if (found._timeout) clearTimeout(found._timeout);
+      }
+      return list.filter(it => it.id !== id);
+    });
+    if (dismissed && typeof dismissed.onCommit === 'function') {
+      dismissed.onCommit();
+    }
+  }
+
   return {
     items: {
       subscribe: items.subscribe,
@@ -103,6 +189,14 @@ function createNotificationStore() {
         toasts.update(t => t.filter(x => x.id !== id));
       }
     },
+    undoQueue: {
+      subscribe: undoQueue.subscribe,
+      clearAll: clearAllUndo
+    },
+    pushUndo,
+    undo,
+    triggerUndo,
+    dismissUndo,
     unreadCount: derived(items, $items => $items.filter(i => !i.read).length),
 
     // Fast transient HUD on-screen display (OSD) pill

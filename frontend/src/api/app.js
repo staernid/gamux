@@ -230,6 +230,8 @@ const DEFAULT_MOCKS = {
   restoreSaveBackup: (path, id) => Promise.resolve(),
   deleteSaveBackup: (path, id) => Promise.resolve(),
   updateSaveManifest: () => Promise.resolve(),
+  getConfigSchema: () => Promise.resolve(mockData.MOCK_CONFIG_SCHEMA || []),
+  getGameConfigSchema: () => Promise.resolve((mockData.MOCK_CONFIG_SCHEMA || []).filter(p => p.scope === 'game' || p.scope === 'both')),
 };
 
 function toPascalCase(str) {

@@ -92,7 +92,7 @@ describe('GameHeroBanner Component', () => {
     await fireEvent.click(coopOption);
 
     // Button updates to 2-Player Session
-    expect(screen.getByText('Launch 2-Player Session')).toBeInTheDocument();
+    expect(screen.getByText('Play Now (Co-Op)')).toBeInTheDocument();
     expect(screen.getByText('2P')).toBeInTheDocument();
 
     // Reset store

@@ -2,7 +2,7 @@
   import { modalStore } from '../../stores/modal.js';
   import { selectedGame, refreshGame } from '../../stores/library.js';
 
-  import SearchGridModal from '../stage/SearchGridModal.svelte';
+  import CatalogModal from '../stage/CatalogModal.svelte';
   import MetadataArtworkModal from '../stage/MetadataArtworkModal.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
 
@@ -23,8 +23,8 @@
 </script>
 
 {#if $modalStore}
-  {#if $modalStore.type === 'search-grid'}
-    <SearchGridModal
+  {#if $modalStore.type === 'catalog' || $modalStore.type === 'search-grid'}
+    <CatalogModal
       {...$modalStore.props}
       on:close={handleClose}
     />

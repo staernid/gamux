@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
 import SettingsView from './SettingsView.svelte';
 import { AppAPI } from '../../api/app.js';
@@ -110,18 +110,27 @@ describe('SettingsView Component', () => {
     await fireEvent.click(softwareCursorSwitch);
     expect(softwareCursorSwitch.getAttribute('aria-checked')).toBe('false');
 
-    // Save changes
-    const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
-    await fireEvent.click(saveBtn);
-
-    expect(saveSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        multiseat: expect.objectContaining({
-          seat2_show_cursor: false,
-          seat2_compositor: 'auto'
+    // Changes are auto-saved with debounce
+    await waitFor(() => {
+      expect(saveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          multiseat: expect.objectContaining({
+            seat2_show_cursor: false,
+            seat2_compositor: 'auto'
+          })
         })
-      })
-    );
+      );
+    }, { timeout: 1500 });
+  });
+
+  it('switches to All Options schema tab and renders dynamic declarative configuration engine', async () => {
+    render(SettingsView);
+
+    const schemaTab = screen.getByRole('tab', { name: /All Options/i });
+    expect(schemaTab).toBeInTheDocument();
+    await fireEvent.click(schemaTab);
+
+    expect(screen.getByText('Declarative Configuration Engine')).toBeInTheDocument();
   });
 });
 

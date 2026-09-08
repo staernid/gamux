@@ -14,6 +14,7 @@
   import { AppAPI } from '../../../../api/app.js';
   import { modalStore } from '../../../../stores/modal.js';
   import { getMetadataInfo, isSteamApp, getGameSource } from '../../../../utils/game.js';
+  import { GameSynopsis, GenrePillGroup } from '../../../blocks/index.js';
 
   export let game = null;
 
@@ -114,55 +115,17 @@
         <div class="h-3 bg-neutral-800/60 rounded w-5/6"></div>
       </div>
     {:else if summaryText}
-      <!-- Synopsis / Story Lore -->
-      <div class="space-y-2">
-        <p class="text-sm text-neutral-200 leading-relaxed font-normal select-text">
-          {summaryText}
-        </p>
-      </div>
+      <GameSynopsis
+        description={summaryText}
+        {developers}
+        {publishers}
+        {releaseDate}
+        buildId={game?.buildId}
+      />
 
-      <!-- Compact Game Facts (Developer, Publisher, Release Date, Genres) -->
-      {#if developers.length > 0 || publishers.length > 0 || releaseDate || genres.length > 0}
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 border-t border-surface-border text-xs text-neutral-400">
-          {#if developers.length > 0}
-            <div class="flex items-center space-x-1.5">
-              <span class="text-neutral-500">Developer:</span>
-              <span class="text-neutral-200 font-medium">{developers.join(', ')}</span>
-            </div>
-          {/if}
-
-          {#if publishers.length > 0 && publishers.join(',') !== developers.join(',')}
-            <div class="flex items-center space-x-1.5">
-              <span class="text-neutral-500">Publisher:</span>
-              <span class="text-neutral-200 font-medium">{publishers.join(', ')}</span>
-            </div>
-          {/if}
-
-          {#if releaseDate}
-            <div class="flex items-center space-x-1.5">
-              <span class="text-neutral-500">Released:</span>
-              <span class="text-neutral-200 font-medium">{releaseDate}</span>
-            </div>
-          {/if}
-
-          {#if game?.buildId && game.buildId !== '0'}
-            <div class="flex items-center space-x-1.5 font-mono">
-              <span class="text-neutral-500">Build:</span>
-              <span class="text-neutral-200 font-medium">{game.buildId}</span>
-            </div>
-          {/if}
-
-          {#if genres.length > 0}
-            <div class="flex items-center space-x-1.5 ml-auto">
-              <div class="flex flex-wrap items-center gap-1.5">
-                {#each genres.slice(0, 4) as g}
-                  <span class="px-2 py-0.5 rounded-md bg-surface-header border border-surface-border text-2xs font-medium text-neutral-300">
-                    {g}
-                  </span>
-                {/each}
-              </div>
-            </div>
-          {/if}
+      {#if genres.length > 0}
+        <div class="pt-2 border-t border-surface-border">
+          <GenrePillGroup {genres} maxPills={6} />
         </div>
       {/if}
     {:else}

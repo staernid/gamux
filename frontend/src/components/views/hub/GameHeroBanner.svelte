@@ -14,6 +14,10 @@
   import PosterArt from '../../common/PosterArt.svelte';
   import { multiseatStore, getActiveSession } from '../../../stores/multiseat.js';
   import { AppAPI } from '../../../api/app.js';
+  import GameHeroBackdrop from '../../blocks/GameHeroBackdrop.svelte';
+  import GameLogo from '../../blocks/GameLogo.svelte';
+  import LiveCommunityBadge from '../../blocks/LiveCommunityBadge.svelte';
+  import MultiseatStatusPill from '../../blocks/MultiseatStatusPill.svelte';
 
   export let game = null;
   export let isGameRunning = false;
@@ -109,7 +113,7 @@
     : !isInstalled
     ? 'Download'
     : isReady
-    ? (isCoop ? 'Launch 2-Player Session' : 'Play Now')
+    ? (isCoop ? 'Play Now (Co-Op)' : 'Play Now')
     : 'Setup & Play';
 
   function handleReturnToShelf() {
@@ -129,48 +133,15 @@
 
 <!-- Hero Banner Background & Vignette -->
 <div class="relative w-full h-96 sm:h-[420px] flex-shrink-0 overflow-hidden select-none">
-  <!-- Background Image with dynamic blur -->
-  <div class="absolute inset-0 bg-[#07070a]">
-    {#if game?.localCoverUrl || game?.coverUrl}
-      <img
-        src={game.localCoverUrl || game.coverUrl}
-        alt=""
-        class="absolute inset-0 w-full h-full object-cover opacity-25 filter blur-lg scale-110 pointer-events-none"
-      />
-    {/if}
-
-    {#if heroBackdropUrl && !heroFailed}
-      <img
-        src={heroBackdropUrl}
-        alt=""
-        class="w-full h-full object-cover object-top opacity-70 filter blur-[0.5px] scale-105 transition-opacity duration-700"
-        on:error={() => { heroFailed = true; }}
-      />
-    {:else}
-      <!-- Art-Poor Fallback: Dynamic Ambient Grid & Subtle Watermark -->
-      <div class="absolute inset-0 bg-gradient-to-br from-[#0e0f18] via-[#09090e] to-[#040407]">
-        <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 24px 24px;"></div>
-        <div class="absolute -right-10 -bottom-12 text-[10rem] font-black text-white/[0.03] select-none pointer-events-none font-mono tracking-tighter">
-          {game?.name ? game.name.slice(0, 3).toUpperCase() : 'GMX'}
-        </div>
-      </div>
-    {/if}
-    <!-- Ambient Radial Color Glow (Top Left) -->
-    <div
-      class="absolute -top-20 -left-20 w-[600px] h-[350px] rounded-full opacity-20 filter blur-2xl pointer-events-none"
-      style="background-color: {pColors.glow || 'rgba(255,255,255,0.05)'};"
-    ></div>
-    <!-- Ambient Secondary Glow (Bottom Right) -->
-    <div
-      class="absolute -bottom-10 right-10 w-[450px] h-[250px] rounded-full opacity-10 filter blur-2xl pointer-events-none"
-      style="background-color: {pColors.border || 'rgba(255,255,255,0.03)'};"
-    ></div>
+  <!-- Hero Backdrop Component -->
+  <div class="absolute inset-0">
+    <GameHeroBackdrop
+      heroUrl={heroBackdropUrl}
+      localHeroUrl={game?.localHeroUrl}
+      glowColor={pColors.glow || 'rgba(255,255,255,0.05)'}
+      accentColor={pColors.border || 'rgba(255,255,255,0.03)'}
+    />
   </div>
-
-  <!-- Ambient Vignette & Gradient Overlays -->
-  <div class="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/50 to-transparent"></div>
-  <div class="absolute inset-0 bg-gradient-to-r from-[#09090b]/80 via-transparent to-[#09090b]/60"></div>
-  <div class="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent pointer-events-none"></div>
 
   <!-- Top Nav Breadcrumb -->
   <div class="absolute top-4 left-6 z-20 flex items-center space-x-3">
@@ -238,20 +209,11 @@
             {/if}
           </div>
 
-          {#if (game.localLogoUrl || game.logoUrl) && !logoFailed}
-            <div class="py-1">
-              <img
-                src={game.localLogoUrl || game.logoUrl}
-                alt={game.name}
-                class="max-h-20 sm:max-h-24 md:max-h-28 max-w-[280px] sm:max-w-[360px] md:max-w-[420px] object-contain object-left drop-shadow-2xl"
-                on:error={() => { logoFailed = true; }}
-              />
-            </div>
-          {:else}
-            <h1 class="text-2xl sm:text-4xl font-black text-white tracking-tight drop-shadow-md truncate max-w-2xl">
-              {game.name}
-            </h1>
-          {/if}
+          <!-- Title & Logo Component -->
+          <GameLogo
+            logoUrl={game.localLogoUrl || game.logoUrl}
+            title={game.name}
+          />
 
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-neutral-400 font-mono">
             {#if isInstalled && game.diskSizeBytes > 0}
@@ -292,10 +254,7 @@
             {/if}
             {#if livePlayerCount > 0}
               <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300 flex items-center space-x-1.5 font-mono">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>{livePlayerCount.toLocaleString()} playing</span>
-              </span>
+              <LiveCommunityBadge playerCount={livePlayerCount} label="playing" />
             {/if}
             {#if versionStatus && !versionStatus.is_up_to_date}
               <span class="text-neutral-500">·</span>

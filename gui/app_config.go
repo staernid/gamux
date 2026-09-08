@@ -23,6 +23,17 @@ func (a *App) GetConfig() (*config.Config, error) {
 	return a.Config, nil
 }
 
+// GetConfigSchema returns the server-driven property descriptor schema for all configuration fields.
+func (a *App) GetConfigSchema() []config.PropertyDescriptor {
+	return config.GetConfigSchema()
+}
+
+// GetGameConfigSchema returns the server-driven property descriptor schema for game-level overrides.
+func (a *App) GetGameConfigSchema() []config.PropertyDescriptor {
+	return config.GetGameConfigSchema()
+}
+
+
 // SaveConfig validates, merges, and saves new configuration settings.
 func (a *App) SaveConfig(newCfg *config.Config) error {
 	if newCfg == nil {

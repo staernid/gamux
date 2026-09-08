@@ -31,6 +31,11 @@ func (a *App) SubmitNormalize(gamePath string) (string, error) {
 	return a.Engine.SubmitNormalize(path)
 }
 
+// NormalizeGameDirectory alias for SubmitNormalize to support deep deck operations.
+func (a *App) NormalizeGameDirectory(gamePath string) (string, error) {
+	return a.SubmitNormalize(gamePath)
+}
+
 // SubmitRollback enqueues an asynchronous game rollback task.
 func (a *App) SubmitRollback(gamePath string, dryRun bool) (string, error) {
 	path, err := requireGamePath(gamePath)

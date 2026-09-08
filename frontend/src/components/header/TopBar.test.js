@@ -71,17 +71,30 @@ describe('TopBar Component', () => {
     runningGames.set(new Set());
   });
 
-  it('renders search and command palette button and opens search-grid modal on click', async () => {
+  it('renders catalog button and opens catalog modal on click', async () => {
     const { modalStore } = await import('../../stores/modal.js');
     const openSpy = vi.spyOn(modalStore, 'open');
 
     render(TopBar);
 
-    const searchBtn = screen.getByTitle(/Search & Commands \(Ctrl\+K\)/i);
-    expect(searchBtn).toBeInTheDocument();
+    const catalogBtn = screen.getByTitle(/^Catalog$/i);
+    expect(catalogBtn).toBeInTheDocument();
 
-    await fireEvent.click(searchBtn);
-    expect(openSpy).toHaveBeenCalledWith('search-grid');
+    await fireEvent.click(catalogBtn);
+    expect(openSpy).toHaveBeenCalledWith('catalog');
+  });
+
+  it('does not render visible text labels like "Back to Shelf" or "Ctrl+K" in navigation', () => {
+    render(TopBar);
+    expect(screen.queryByText('Back to Shelf')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shelf')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Search')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ctrl\+K/i)).not.toBeInTheDocument();
+
+    activeView.set('game-hub');
+    expect(screen.queryByText('Back to Shelf')).not.toBeInTheDocument();
   });
 });
 

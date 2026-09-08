@@ -42,6 +42,8 @@ export function GetAvailableRunners():Promise<Array<string>>;
 
 export function GetConfig():Promise<config.Config>;
 
+export function GetConfigSchema():Promise<Array<config.PropertyDescriptor>>;
+
 export function GetConnectedGamepads():Promise<Array<multiseat.InputDevice>>;
 
 export function GetConnectedKeyboards():Promise<Array<multiseat.InputDevice>>;
@@ -55,6 +57,8 @@ export function GetGSEUserConfig():Promise<gbe.GSEUserConfig>;
 export function GetGameAchievements(arg1:string):Promise<Array<domain.AchievementItem>>;
 
 export function GetGameBackups(arg1:string):Promise<Array<saves.BackupInfo>>;
+
+export function GetGameConfigSchema():Promise<Array<config.PropertyDescriptor>>;
 
 export function GetGameCurrentPlayers(arg1:string):Promise<number>;
 
@@ -100,6 +104,8 @@ export function IsMultiseatSessionRunning(arg1:string):Promise<boolean>;
 
 export function IsQuitting():Promise<boolean>;
 
+export function KillAllWine():Promise<void>;
+
 export function LaunchGame(arg1:domain.LaunchProfile):Promise<void>;
 
 export function LaunchMultiseatSession(arg1:multiseat.MultiseatSessionConfig):Promise<void>;
@@ -109,6 +115,8 @@ export function LinkGameMetadata(arg1:string,arg2:string,arg3:string):Promise<do
 export function ListMetadataProviders():Promise<Array<store.ProviderDescriptor>>;
 
 export function ListTasks():Promise<Array<tasks.Task>>;
+
+export function NormalizeGameDirectory(arg1:string):Promise<string>;
 
 export function OpenDirectory(arg1:string):Promise<void>;
 
@@ -133,6 +141,8 @@ export function ResetLaunchProfile(arg1:string):Promise<domain.Game>;
 export function ResolveArtwork(arg1:string):Promise<domain.GameArtwork>;
 
 export function ResolveSteamProfile(arg1:string):Promise<domain.SteamProfile>;
+
+export function RestoreGameBackup(arg1:string,arg2:string):Promise<void>;
 
 export function RestoreSaveBackup(arg1:string,arg2:string):Promise<void>;
 
@@ -193,5 +203,7 @@ export function UpdateCachedGames(arg1:Array<domain.Game>):Promise<void>;
 export function UpdateSaveManifest():Promise<void>;
 
 export function UpdateTool(arg1:string):Promise<string>;
+
+export function VerifyGameIntegrity(arg1:string):Promise<manifest.IntegrityReport>;
 
 export function VerifyIntegrity(arg1:string):Promise<manifest.IntegrityReport>;

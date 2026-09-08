@@ -6,8 +6,10 @@
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
   import { AppAPI } from '../../../api/app.js';
-  import { generateRandomSteamID as createRandomSteamID } from '../../../utils/steam.js';
   import SteamPersonaCard from './SteamPersonaCard.svelte';
+  import CoopDiagnosticsCard from './cards/CoopDiagnosticsCard.svelte';
+  import GamepadDiagnosticsCard from './cards/GamepadDiagnosticsCard.svelte';
+  import { generateRandomSteamID as createRandomSteamID } from '../../../utils/steam.js';
 
   export let cfgDraft = {
     multiseat: {
@@ -161,89 +163,7 @@
 
 <div class="space-y-6">
   <!-- 1. System Capabilities & Diagnostics -->
-  <SettingSection title="System Diagnostics & Isolation Tools">
-    <div class="space-y-3">
-      <p class="text-xs text-neutral-400">
-        Host system tools used for sandboxing, screen composition, audio partitioning, and networking.
-      </p>
-
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">Bubblewrap</div>
-            <div class="text-3xs text-neutral-400 font-mono">bwrap</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasBwrap ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasBwrap ? 'Available' : 'Missing'}
-          </span>
-        </div>
-
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">Pasta (NetNS)</div>
-            <div class="text-3xs text-neutral-400 font-mono">pasta</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasPasta ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasPasta ? 'Available' : 'Missing'}
-          </span>
-        </div>
-
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">Gamescope</div>
-            <div class="text-3xs text-neutral-400 font-mono">gamescope</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasGamescope ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasGamescope ? 'Available' : 'Missing'}
-          </span>
-        </div>
-
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">Cage (Wayland)</div>
-            <div class="text-3xs text-neutral-400 font-mono">cage</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasCage ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasCage ? 'Available' : 'Optional'}
-          </span>
-        </div>
-
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">Sunshine</div>
-            <div class="text-3xs text-neutral-400 font-mono">sunshine</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasSunshine ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasSunshine ? 'Available' : 'Optional'}
-          </span>
-        </div>
-
-        <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-neutral-200">PipeWire</div>
-            <div class="text-3xs text-neutral-400 font-mono">pactl</div>
-          </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasPipewire ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-neutral-800 text-neutral-400 border border-neutral-700'}">
-            {hasPipewire ? 'Available' : 'Missing'}
-          </span>
-        </div>
-      </div>
-
-      {#if !hasBwrap || !hasPasta}
-        <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start space-x-2.5">
-          <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div class="space-y-1">
-            <div class="font-bold text-amber-200">Recommended Packages Missing</div>
-            <div class="text-2xs text-amber-300/90 leading-relaxed">
-              Install <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded">{[!hasBwrap && 'bubblewrap', !hasPasta && 'passt'].filter(Boolean).join(' and ')}</code> via your package manager for complete filesystem sandboxing and rootless network isolation between player seats.
-            </div>
-          </div>
-        </div>
-      {/if}
-    </div>
-  </SettingSection>
+  <CoopDiagnosticsCard />
 
   <!-- 2. Player 2 (Guest Persona) Profile -->
   <SettingSection title="Player 2 Profile (Co-op Guest)">
@@ -395,115 +315,7 @@
   </SettingSection>
 
   <!-- 4. Controller & Gamepad Diagnostics -->
-  <SettingSection title="Host Controllers & Gamepads">
-    <div class="space-y-4">
-      <div class="flex items-center justify-between pb-2 border-b border-surface-border/50">
-        <p class="text-xs text-neutral-400">
-          Detected gamepads on host system. In Co-Op mode, controllers are dynamically masked and allocated to ensure zero input bleed between instances.
-        </p>
-        <button
-          type="button"
-          on:click={() => multiseatStore.refreshGamepads()}
-          class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
-          title="Rescan host input devices"
-        >
-          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Rescan</span>
-        </button>
-      </div>
-
-      <!-- Controller Allocation Selectors -->
-      <div class="grid grid-cols-2 gap-3 p-3 bg-surface-card border border-surface-border rounded-xl">
-        <div class="space-y-1.5">
-          <label for="seat1-gamepad-select" class="block text-2xs font-bold text-neutral-300">Player 1 Controller</label>
-          <select
-            id="seat1-gamepad-select"
-            bind:value={cfgDraft.multiseat.seat1_gamepad}
-            on:change={() => { cfgDraft = { ...cfgDraft }; }}
-            class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
-          >
-            {#each gamepadOptions as opt}
-              <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
-            {/each}
-          </select>
-          <p class="text-3xs text-neutral-400 leading-relaxed">
-            {#if cfgDraft.multiseat.seat1_gamepad === 'none'}
-              Forces Keyboard &amp; Mouse. All host gamepads are masked from Player 1.
-            {:else if cfgDraft.multiseat.seat1_gamepad === 'auto'}
-              Auto-allocates controller if available; falls back to Keyboard &amp; Mouse.
-            {:else}
-              Assigned to selected controller.
-            {/if}
-          </p>
-        </div>
-
-        <div class="space-y-1.5">
-          <label for="seat2-gamepad-select" class="block text-2xs font-bold text-neutral-300">Player 2 Controller</label>
-          <select
-            id="seat2-gamepad-select"
-            bind:value={cfgDraft.multiseat.seat2_gamepad}
-            on:change={() => { cfgDraft = { ...cfgDraft }; }}
-            class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
-          >
-            {#each gamepadOptions as opt}
-              <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
-            {/each}
-          </select>
-          <p class="text-3xs text-neutral-400 leading-relaxed">
-            {#if cfgDraft.multiseat.seat2_gamepad === 'none'}
-              Forces Keyboard &amp; Mouse. All host gamepads are masked from Player 2.
-            {:else if cfgDraft.multiseat.seat2_gamepad === 'auto'}
-              Auto-allocates dedicated controller to Player 2.
-            {:else}
-              Assigned to selected controller.
-            {/if}
-          </p>
-        </div>
-      </div>
-
-      <!-- Detected Gamepads List -->
-      {#if gamepads && gamepads.length > 0}
-        <div class="space-y-2">
-          {#each gamepads as pad}
-            {@const isP1 = gamepadAssignments.p1Dev === pad.dev_node}
-            {@const isP2 = gamepadAssignments.p2Dev === pad.dev_node}
-            <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
-              <div class="flex items-center space-x-2.5">
-                <svg class="w-4 h-4 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                </svg>
-                <div class="space-y-0.5">
-                  <div class="text-xs font-bold text-neutral-200">{pad.name}</div>
-                  <div class="text-3xs text-neutral-400 font-mono">{pad.dev_node} ({pad.bus})</div>
-                </div>
-              </div>
-              <div>
-                {#if isP1}
-                  <span class="text-3xs font-mono font-bold px-2 py-0.5 rounded bg-white text-black">
-                    Player 1{cfgDraft.multiseat.seat1_gamepad === 'auto' ? ' (Auto)' : ''}
-                  </span>
-                {:else if isP2}
-                  <span class="text-3xs font-mono font-bold px-2 py-0.5 rounded bg-white text-black">
-                    Player 2{cfgDraft.multiseat.seat2_gamepad === 'auto' ? ' (Auto)' : ''}
-                  </span>
-                {:else}
-                  <span class="text-3xs font-mono font-bold px-2 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400">
-                    Unassigned
-                  </span>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div class="p-3 bg-surface-card/60 border border-surface-border rounded-xl text-2xs text-neutral-400">
-          No physical gamepads detected. Connect USB or Bluetooth controllers before launching co-op sessions to isolate player inputs.
-        </div>
-      {/if}
-    </div>
-  </SettingSection>
+  <GamepadDiagnosticsCard bind:cfgDraft {gamepadOptions} {gamepadAssignments} {gamepads} />
 
   <!-- 5. Dual Keyboards & Mice (Games Without Gamepad Support) -->
   <SettingSection title="Dual Keyboards & Mice (Experimental)">

@@ -69,6 +69,11 @@ func (a *App) RestoreSaveBackup(gamePath, backupID string) error {
 	return svc.RestoreBackup(a.getContext(), path, backupID)
 }
 
+// RestoreGameBackup restores a snapshot archive to the game's active save locations.
+func (a *App) RestoreGameBackup(gamePath, backupID string) error {
+	return a.RestoreSaveBackup(gamePath, backupID)
+}
+
 // DeleteSaveBackup removes a snapshot archive from disk.
 func (a *App) DeleteSaveBackup(gamePath, backupID string) error {
 	path, err := requireGamePath(gamePath)

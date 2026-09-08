@@ -12,6 +12,7 @@
   import CredentialsTab from './settings/CredentialsTab.svelte';
   import ToolsMaintenanceTab from './settings/ToolsMaintenanceTab.svelte';
   import LogsTab from './settings/LogsTab.svelte';
+  import PropertySheet from '../schema/PropertySheet.svelte';
   import { RUNNER_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS } from '../../constants/options.js';
 
   let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'persona' | 'coop' | 'credentials' | 'tools' | 'logs'
@@ -93,7 +94,7 @@
     configStore.setDirty(false);
   });
 
-  const tabOrder = ['general', 'storage', 'compatibility', 'persona', 'coop', 'credentials', 'tools', 'logs'];
+  const tabOrder = ['general', 'storage', 'compatibility', 'persona', 'coop', 'credentials', 'tools', 'logs', 'schema'];
 
   function handleTabKeyDown(e, currentIndex) {
     if (e.key === 'ArrowRight') {
@@ -186,7 +187,7 @@
     if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
     autoSaveTimeout = setTimeout(() => {
       handleSave(true);
-    }, 800);
+    }, 350);
   }
 
   $: if (isDirty) {
@@ -424,34 +425,7 @@
           </svg>
           <span>Saved</span>
         </span>
-      {:else if isDirty}
-        <span class="px-2 py-0.5 rounded-full text-3xs font-mono font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">
-          Unsaved Changes
-        </span>
       {/if}
-    </div>
-
-    <!-- Header Actions -->
-    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-      {#if isDirty}
-        <button
-          type="button"
-          on:click={handleDiscard}
-          disabled={isSaving}
-          class="px-3 py-1.5 rounded-lg border border-surface-border font-medium text-xs text-neutral-400 hover:text-white hover:bg-surface-card transition cursor-pointer"
-        >
-          Discard
-        </button>
-      {/if}
-
-      <button
-        type="button"
-        on:click={() => handleSave(false)}
-        disabled={isSaving || !isDirty}
-        class="font-semibold px-4 py-1.5 rounded-lg transition text-xs shadow flex items-center space-x-1.5 cursor-pointer {isDirty ? 'bg-white hover:bg-neutral-200 text-black shadow-sm' : 'bg-surface-card text-neutral-600 border border-surface-border opacity-40 cursor-not-allowed'}"
-      >
-        <span>Save Changes</span>
-      </button>
     </div>
   </div>
 
@@ -577,6 +551,22 @@
       </svg>
       <span>Logs</span>
     </button>
+
+    <!-- 8. All Options (Schema Engine) Tab -->
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'schema'}
+      on:click={() => { activeTab = 'schema'; }}
+      on:keydown={(e) => handleTabKeyDown(e, 8)}
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'schema' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      title="Dynamic declarative settings schema"
+    >
+      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+      <span>All Options</span>
+    </button>
   </div>
 
   <!-- Tab Contents -->
@@ -629,45 +619,18 @@
       />
     {:else if activeTab === 'logs'}
       <LogsTab />
+    {:else if activeTab === 'schema'}
+      <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
+        <div class="border-b border-surface-border pb-3">
+          <h3 class="text-sm font-bold text-white">Declarative Configuration Engine</h3>
+          <p class="text-xs text-neutral-400 mt-0.5 leading-relaxed">All settings defined in the Go backend schema are automatically discovered and rendered here.</p>
+        </div>
+        <PropertySheet
+          bind:values={cfgDraft}
+          scope="global"
+          groupByCategory={true}
+        />
+      </div>
     {/if}
   {/if}
 </div>
-
-<!-- Floating / Sticky Save Bar when dirty -->
-{#if isDirty}
-  <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in pointer-events-auto max-w-sm sm:max-w-md w-full px-4">
-    <div class="flex items-center justify-between gap-3 bg-[#12121a]/95 border border-sky-500/70 px-4 py-2.5 rounded-2xl shadow-2xl shadow-sky-950/30">
-      <div class="flex items-center space-x-2 min-w-0">
-        <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0"></span>
-        <span class="text-xs font-bold text-white truncate">Unsaved Changes</span>
-      </div>
-      <div class="flex items-center space-x-2 flex-shrink-0">
-        <button
-          type="button"
-          on:click={handleDiscard}
-          disabled={isSaving}
-          class="px-3 py-1 rounded-xl border border-[#242436] bg-[#14141e] hover:bg-[#1e1e2c] font-bold text-xs text-slate-300 hover:text-white transition cursor-pointer"
-        >
-          Discard
-        </button>
-        <button
-          type="button"
-          on:click={handleSave}
-          disabled={isSaving}
-          class="font-black px-4 py-1 rounded-xl transition text-xs bg-white hover:bg-neutral-200 text-black shadow flex items-center space-x-1.5 cursor-pointer"
-        >
-          {#if isSaving}
-            <svg class="animate-spin w-3.5 h-3.5 text-black" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-            </svg>
-            <span>Saving...</span>
-          {:else}
-            <span>Save</span>
-            <span class="text-3xs opacity-60 font-mono hidden sm:inline">(Ctrl+S)</span>
-          {/if}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}

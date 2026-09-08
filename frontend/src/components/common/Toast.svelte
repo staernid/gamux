@@ -5,6 +5,7 @@
   import { configStore } from '../../stores/config.js';
 
   const toasts = notificationStore.toasts;
+  const undoQueue = notificationStore.undoQueue;
 
   $: topCenterToasts = $toasts.filter(t => t.position === 'top-center');
   $: bottomCenterToasts = $toasts.filter(t => t.position === 'bottom-center');
@@ -122,3 +123,34 @@
     {/each}
   </div>
 {/if}
+
+<!-- Bottom Center: Undo Snackbars (Reversible mutations with countdown) -->
+{#if $undoQueue && $undoQueue.length > 0}
+  <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none" data-testid="undo-snackbar-container">
+    {#each $undoQueue as item (item.id)}
+      <div class="pointer-events-auto bg-[#18181b]/95 border border-[#3f3f46] text-white shadow-2xl px-4 py-2.5 rounded-2xl flex items-center space-x-3 text-xs animate-fade-in backdrop-blur-md">
+        <span class="text-neutral-200 font-medium">{item.message}</span>
+        <button
+          type="button"
+          data-testid="undo-action-btn"
+          on:click={() => notificationStore.triggerUndo(item.id)}
+          class="px-2.5 py-1 rounded-xl bg-white text-neutral-950 hover:bg-neutral-200 font-black text-2xs transition shadow cursor-pointer flex items-center space-x-1"
+        >
+          <span>Undo ({item.remaining}s)</span>
+        </button>
+        <button
+          type="button"
+          data-testid="dismiss-undo-btn"
+          on:click={() => notificationStore.dismissUndo(item.id)}
+          class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+          aria-label="Dismiss undo"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    {/each}
+  </div>
+{/if}
+

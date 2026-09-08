@@ -1,6 +1,5 @@
 <script>
-  import { AppAPI } from '../../../api/app.js';
-  import { notificationStore } from '../../../stores/notifications.js';
+  import { openExternalUrl as openLink, copyToClipboard as copyLink } from '../../../utils/navigation.js';
   import { isSteamApp } from '../../../utils/game.js';
 
   export let game = null;
@@ -28,32 +27,6 @@
   $: hltbUrl = `https://howlongtobeat.com/?q=${encodeURIComponent(name)}`;
   $: nexusModsUrl = `https://www.nexusmods.com/search/?gsearch=${encodeURIComponent(name)}`;
   $: wineHqUrl = `https://appdb.winehq.org/objectManager.php?sClass=application&sTitle=${encodeURIComponent(name)}`;
-
-  async function openLink(url, title) {
-    if (!url) return;
-    try {
-      if (typeof AppAPI.openURL === 'function') {
-        await AppAPI.openURL(url);
-      } else if (typeof window !== 'undefined' && window.runtime?.BrowserOpenURL) {
-        window.runtime.BrowserOpenURL(url);
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-      notificationStore.info('Opening Link', `Launched ${title} in web browser`);
-    } catch (err) {
-      notificationStore.error('Failed to open link', err?.message || String(err));
-    }
-  }
-
-  async function copyLink(url, title) {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      notificationStore.info('Link Copied', `Copied ${title} URL to clipboard`);
-    } catch (err) {
-      notificationStore.error('Copy Failed', 'Could not copy URL to clipboard');
-    }
-  }
 </script>
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
