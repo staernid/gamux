@@ -1,12 +1,16 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { isSteamApp } from '../../../utils/game.js';
   import HubDLCCard from './cards/HubDLCCard.svelte';
   import HubIntegrityCard from './cards/HubIntegrityCard.svelte';
   import HubLogsCard from './cards/HubLogsCard.svelte';
+  import HubBetasTab from './HubBetasTab.svelte';
 
   export let game = null;
+  export let activeSubTab = 'depots'; // 'depots' | 'branch' | 'integrity' | 'logs'
   export let isGameRunning = false;
   export let isTaskActive = false;
+  export let activeGameTask = null;
   export let isCheckingIntegrity = false;
   export let isNormalizing = false;
   export let integrityError = '';
@@ -14,14 +18,27 @@
 
   const dispatch = createEventDispatcher();
 
-  let activeFilesSubTab = 'depots'; // 'depots' | 'integrity' | 'logs'
+  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
+    ? String(game.appId).trim()
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
+  $: isSteam = Boolean(effectiveAppId);
+
+  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
+
+  let activeFilesSubTab = activeSubTab || (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots'));
+  let prevActiveSubTab = activeSubTab;
+
+  $: if (activeSubTab !== prevActiveSubTab) {
+    prevActiveSubTab = activeSubTab;
+    activeFilesSubTab = activeSubTab || 'depots';
+  }
 
   function handleRunIntegrityCheck() {
     dispatch('runIntegrityCheck');
   }
 
-  function handleUpdateGame() {
-    dispatch('updateGame');
+  function handleUpdateGame(e) {
+    dispatch('updateGame', e?.detail);
   }
 
   function handleNormalizeDirectory() {
@@ -42,6 +59,24 @@
       </svg>
       <span>DLC & Depots</span>
     </button>
+
+    {#if isSteam}
+      <button
+        type="button"
+        on:click={() => { activeFilesSubTab = 'branch'; }}
+        class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'branch' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      >
+        <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v10M8 7a3 3 0 100-6 3 3 0 000 6zm0 10a3 3 0 100 6 3 3 0 000-6zm8-6a3 3 0 100-6 3 3 0 000 6zm-8 4h3a5 5 0 005-5V7" />
+        </svg>
+        <span>Branch</span>
+        {#if game?.branch && game.branch !== 'public'}
+          <span class="px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-200 text-3xs font-mono border border-neutral-700">
+            {game.branch}
+          </span>
+        {/if}
+      </button>
+    {/if}
 
     <button
       type="button"
@@ -70,7 +105,27 @@
   </div>
 
   <!-- Files Sub-View Content -->
-  {#if activeFilesSubTab === 'depots'}
+  {#if activeFilesSubTab === 'branch'}
+    <HubBetasTab
+      {game}
+      {isTaskActive}
+      {activeGameTask}
+      on:updateGame={handleUpdateGame}
+    />
+  {:else if !isInstalled}
+    <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
+    <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">
+      <div class="w-10 h-10 rounded-xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      </div>
+      <h3 class="font-bold text-white text-sm">Game Files Not Installed</h3>
+      <p class="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
+        Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs.
+      </p>
+    </div>
+  {:else if activeFilesSubTab === 'depots'}
     <HubDLCCard {game} />
   {:else if activeFilesSubTab === 'integrity'}
     <HubIntegrityCard

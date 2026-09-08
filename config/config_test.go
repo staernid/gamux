@@ -275,4 +275,24 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	}
 }
 
+func TestConfig_ResolvedLibraryDirs(t *testing.T) {
+	// Explicit library paths
+	cfg := &Config{
+		LibraryPaths: []string{"/games/steam", "  ", "/games/gog"},
+	}
+	resolved := cfg.ResolvedLibraryDirs()
+	if len(resolved) != 2 || resolved[0] != "/games/steam" || resolved[1] != "/games/gog" {
+		t.Errorf("expected trimmed configured dirs [/games/steam, /games/gog], got %v", resolved)
+	}
+
+	// Empty config falls back cleanly
+	emptyCfg := &Config{}
+	emptyResolved := emptyCfg.ResolvedLibraryDirs()
+	// Should not panic and return either empty or existing ~/Games
+	if emptyResolved == nil {
+		emptyResolved = []string{}
+	}
+	_ = emptyResolved
+}
+
 

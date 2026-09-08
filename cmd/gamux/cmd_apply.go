@@ -8,7 +8,6 @@ import (
 
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
-	"github.com/staernid/gamux/pipeline"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -61,22 +60,8 @@ var applyCommand = &cli.Command{
 		}
 
 		ui.RenderStep(1, 1, "Applying configuration for "+opts.Path)
-		gameName := ""
-		if status != nil {
-			gameName = status.Name
-		}
-		targetGame := status
-		if targetGame == nil {
-			targetGame = domain.NewGame(gameName, opts.Path, "", "")
-		}
-		pctx := &pipeline.Context{
-			Options:  opts,
-			Game:     targetGame,
-			Config:   eng.Config,
-			EventBus: eng.EventBus,
-		}
-		applyOp := pipeline.NewSetupOperation(gameName, opts.Path, pctx)
-		err := eng.Tasks.RunSyncOp(c.Context, applyOp)
+
+		res, err := eng.ApplyGame(c.Context, opts)
 		if err != nil {
 			renderCLIError(err, "Check directory path", "Verify file permissions")
 			return err
@@ -88,8 +73,8 @@ var applyCommand = &cli.Command{
 		}
 
 		successName := opts.Path
-		if pctx.Game != nil && pctx.Game.Name != "" {
-			successName = pctx.Game.Name
+		if res != nil && res.Info != nil && res.Info.Name != "" {
+			successName = res.Info.Name
 		}
 		ui.RenderSuccess("Setup applied successfully for "+successName, "", nextSteps)
 		return nil

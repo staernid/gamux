@@ -26,7 +26,7 @@ export function CheckGameUpdates(arg1:string):Promise<domain.VersionStatus>;
 
 export function ClearFinishedTasks():Promise<void>;
 
-export function CreateGameStub(arg1:string,arg2:string,arg3:string,arg4:string):Promise<domain.Game>;
+export function CreateGameStub(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<domain.Game>;
 
 export function CreateSaveBackup(arg1:string,arg2:string):Promise<saves.BackupInfo>;
 
@@ -85,6 +85,8 @@ export function GetPatchNote(arg1:string,arg2:number):Promise<domain.NewsItem>;
 export function GetRecentGames(arg1:number):Promise<Array<gui.TrayGame>>;
 
 export function GetRunningGames():Promise<Array<string>>;
+
+export function GetSteamBranches(arg1:number):Promise<Array<domain.SteamBranch>>;
 
 export function GetTask(arg1:string):Promise<tasks.Task|boolean>;
 
@@ -159,6 +161,8 @@ export function SearchStoreGames(arg1:string):Promise<Array<store.SearchResult>>
 export function SelectDirectory(arg1:string,arg2:string):Promise<string>;
 
 export function SelectFile(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function SetGameBranch(arg1:string,arg2:string,arg3:string):Promise<domain.Game>;
 
 export function SetQuitting(arg1:boolean):Promise<void>;
 

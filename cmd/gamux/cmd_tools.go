@@ -9,6 +9,7 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/engine"
+	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
 )
@@ -231,7 +232,13 @@ var notifyLaunchCommand = &cli.Command{
 			return nil
 		}
 		eng := engine.New(activeConfig)
-		eng.Notifier = ui.NotifyIssue
+		if eng.EventBus != nil {
+			eng.EventBus.SubscribeFunc(func(ev events.Event) {
+				if ev.Type == events.EventNotification {
+					_ = ui.NotifyIssue(c.Context, ev.Stage, ev.Details)
+				}
+			}, events.EventNotification)
+		}
 		return eng.NotifyLaunch(c.Context, targetPath)
 	},
 }

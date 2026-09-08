@@ -10,6 +10,7 @@ import (
 
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
+	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
@@ -157,7 +158,13 @@ var launchCommand = &cli.Command{
 		}
 		targetPath := extractPath(c)
 		eng := engine.New(activeConfig)
-		eng.Notifier = ui.NotifyIssue
+		if eng.EventBus != nil {
+			eng.EventBus.SubscribeFunc(func(ev events.Event) {
+				if ev.Type == events.EventNotification {
+					_ = ui.NotifyIssue(c.Context, ev.Stage, ev.Details)
+				}
+			}, events.EventNotification)
+		}
 		if !c.Bool("no-notify") {
 			if err := eng.NotifyLaunch(c.Context, targetPath); err != nil {
 				slog.Warn("Pre-launch notification check failed", "error", err)

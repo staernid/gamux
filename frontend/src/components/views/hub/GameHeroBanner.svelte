@@ -252,6 +252,20 @@
               <span class="text-neutral-500">·</span>
               <span class="text-neutral-500">#{game.appId}</span>
             {/if}
+            {#if game.appId && isSteamApp(game.appId)}
+              <span class="text-neutral-500">·</span>
+              <button
+                type="button"
+                on:click={() => { dispatch('openBranchTab'); dispatch('openBetasTab'); }}
+                class="hover:text-neutral-200 transition-colors flex items-center gap-1 cursor-pointer"
+                title="Manage Steam Beta branch"
+              >
+                <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v10M8 7a3 3 0 100-6 3 3 0 000 6zm0 10a3 3 0 100 6 3 3 0 000-6zm8-6a3 3 0 100-6 3 3 0 000 6zm-8 4h3a5 5 0 005-5V7" />
+                </svg>
+                <span>Branch: {game.branch || 'public'}</span>
+              </button>
+            {/if}
             {#if livePlayerCount > 0}
               <span class="text-neutral-500">·</span>
               <LiveCommunityBadge playerCount={livePlayerCount} label="playing" />

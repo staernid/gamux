@@ -351,6 +351,10 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		}
 		if state.manifestACFData.BuildID != "" {
 			info.ManifestStatus.BuildID = state.manifestACFData.BuildID
+			info.BuildID = state.manifestACFData.BuildID
+		}
+		if state.manifestACFData.BetaKey != "" {
+			info.Branch = state.manifestACFData.BetaKey
 		}
 
 		if len(state.manifestACFData.LaunchOptions) > 0 {

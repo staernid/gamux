@@ -27,46 +27,7 @@ import (
 
 // ProcessGame processes a game directory according to the supplied options.
 func (eng *Engine) ProcessGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
-	ctx = eng.WrapContext(ctx)
-	targetPath := opts.Path
-	if targetPath == "" {
-		targetPath = "."
-	}
-	targetPath = util.CanonicalPath(targetPath)
-
-	game := domain.NewGame("", targetPath, "", "")
-	pctx := &pipeline.Context{
-		Options:  opts,
-		Game:     game,
-		Config:   eng.Config,
-		EventBus: eng.EventBus,
-		Reporter: opts.Reporter,
-	}
-
-	pipe := pipeline.NewDefault()
-	pipeErr := pipe.Execute(ctx, pctx)
-
-	pctx.Game.RecomputeState()
-	cache.InvalidateGameCache(pctx.Game.GameDir)
-	if targetPath != pctx.Game.GameDir {
-		cache.InvalidateGameCache(targetPath)
-	}
-
-	res := &ProcessResult{
-		Info:                pctx.Game,
-		Patched:             pctx.Results.Patched,
-		SteamlessUnpacked:   pctx.Results.SteamlessUnpacked,
-		ManifestsMoved:      true,
-		DirectoryNormalized: pctx.Results.DirectoryNormalized,
-		ACFSynthesized:      pctx.Results.ACFSynthesized,
-		Errors:              pctx.Results.Errors,
-	}
-
-	if pipeErr != nil {
-		return res, pipeErr
-	}
-
-	return res, nil
+	return eng.ApplyGame(ctx, opts)
 }
 
 // BatchProcess scans a parent directory containing multiple game folders and processes each discovered game.
@@ -109,16 +70,53 @@ func (eng *Engine) BatchProcess(ctx context.Context, parentDir string, opts Proc
 
 // ApplyGame performs the end-to-end One-Shot lifecycle: Inspect -> ACF -> GBE Setup.
 func (eng *Engine) ApplyGame(ctx context.Context, opts ProcessOptions) (*ProcessResult, error) {
-	status, err := eng.InspectStatus(ctx, opts.Path)
-	if err != nil {
-		slog.Warn("Apply inspection warning", "error", err)
+	ctx = eng.WrapContext(ctx)
+	targetPath := opts.Path
+	if targetPath == "" {
+		targetPath = "."
+	}
+	targetPath = util.CanonicalPath(targetPath)
+	opts.Path = targetPath
+
+	gameName := eng.resolveGameName(ctx, targetPath)
+	game := domain.NewGame(gameName, targetPath, "", "")
+	pctx := &pipeline.Context{
+		Options:  opts,
+		Game:     game,
+		Config:   eng.Config,
+		EventBus: eng.EventBus,
+		Reporter: opts.Reporter,
 	}
 
-	if status != nil && status.HasUpdate {
-		slog.Info("Apply detected available Steam depot update", "title", status.Name, "localManifest", status.ManifestID)
+	applyOp := pipeline.NewSetupOperation(gameName, targetPath, pctx)
+	var pipeErr error
+	if eng.Tasks != nil {
+		pipeErr = eng.Tasks.RunSyncOp(ctx, applyOp)
+	} else {
+		pipeErr = applyOp.Pipeline.Execute(ctx, pctx)
 	}
 
-	return eng.ProcessGame(ctx, opts)
+	pctx.Game.RecomputeState()
+	cache.InvalidateGameCache(pctx.Game.GameDir)
+	if targetPath != pctx.Game.GameDir {
+		cache.InvalidateGameCache(targetPath)
+	}
+
+	res := &ProcessResult{
+		Info:                pctx.Game,
+		Patched:             pctx.Results.Patched,
+		SteamlessUnpacked:   pctx.Results.SteamlessUnpacked,
+		ManifestsMoved:      true,
+		DirectoryNormalized: pctx.Results.DirectoryNormalized,
+		ACFSynthesized:      pctx.Results.ACFSynthesized,
+		Errors:              pctx.Results.Errors,
+	}
+
+	if pipeErr != nil {
+		return res, pipeErr
+	}
+
+	return res, nil
 }
 
 // Rollback restores original backup files and cleans up generated configuration files in a game directory via Rollback pipeline recipe.
@@ -129,18 +127,24 @@ func (eng *Engine) Rollback(ctx context.Context, targetPath string, dryRun bool)
 		targetPath = "."
 	}
 
+	gameName := eng.resolveGameName(ctx, targetPath)
 	pctx := &pipeline.Context{
 		Options: pipeline.Options{
 			Path:   targetPath,
 			DryRun: dryRun,
 		},
-		Game:     domain.NewGame("", targetPath, "", ""),
+		Game:     domain.NewGame(gameName, targetPath, "", ""),
 		Config:   eng.Config,
 		EventBus: eng.EventBus,
 	}
 
-	pipe := pipeline.NewRollback()
-	err := pipe.Execute(ctx, pctx)
+	rollbackOp := pipeline.NewRollbackOperation(gameName, targetPath, pctx)
+	var err error
+	if eng.Tasks != nil {
+		err = eng.Tasks.RunSyncOp(ctx, rollbackOp)
+	} else {
+		err = rollbackOp.Pipeline.Execute(ctx, pctx)
+	}
 	cache.InvalidateGameCache(targetPath)
 	return err
 }
@@ -184,21 +188,8 @@ func (eng *Engine) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOp
 				ExePath:       opts.ExePath,
 				ExeArgs:       opts.ExeArgs,
 			}
-			pctx := &pipeline.Context{
-				Options:  applyOpts,
-				Game:     domain.NewGame(status.Name, opts.GameDir, "", ""),
-				Config:   eng.Config,
-				EventBus: eng.EventBus,
-			}
-			applyOp := pipeline.NewSetupOperation(status.Name, opts.GameDir, pctx)
-			if eng.Tasks != nil {
-				if err := eng.Tasks.RunSyncOp(ctx, applyOp); err != nil {
-					return nil, fmt.Errorf("auto-apply before launch failed: %w", err)
-				}
-			} else {
-				if _, applyErr := eng.ApplyGame(ctx, applyOpts); applyErr != nil {
-					return nil, fmt.Errorf("auto-apply before launch failed: %w", applyErr)
-				}
+			if _, applyErr := eng.ApplyGame(ctx, applyOpts); applyErr != nil {
+				return nil, fmt.Errorf("auto-apply before launch failed: %w", applyErr)
 			}
 		}
 	}
@@ -260,23 +251,8 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 
 	// Trigger binary DRM application if the operating mode transitioned, or if the game is not yet configured for the selected mode
 	if newMode != "" && (!strings.EqualFold(newMode, prevMode) || !isConfigured) {
-		gameName := ""
-		if game != nil {
-			gameName = game.Name
-		}
 		if newMode == domain.ModeNone || newMode == domain.ModeStandalone {
-			pctx := &pipeline.Context{
-				Options: pipeline.Options{
-					Path: opts.GameDir,
-				},
-				Game:     domain.NewGame(gameName, opts.GameDir, "", ""),
-				Config:   eng.Config,
-				EventBus: eng.EventBus,
-			}
-			if eng.Tasks != nil {
-				return eng.Tasks.RunSyncOp(ctx, pipeline.NewRollbackOperation(gameName, opts.GameDir, pctx))
-			}
-			return pipeline.NewRollback().Execute(ctx, pctx)
+			return eng.Rollback(ctx, opts.GameDir, false)
 		}
 
 		applyOpts := ProcessOptions{
@@ -286,16 +262,8 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 			ExePath:       opts.ExePath,
 			ExeArgs:       opts.ExeArgs,
 		}
-		pctx := &pipeline.Context{
-			Options:  applyOpts,
-			Game:     domain.NewGame(gameName, opts.GameDir, "", ""),
-			Config:   eng.Config,
-			EventBus: eng.EventBus,
-		}
-		if eng.Tasks != nil {
-			return eng.Tasks.RunSyncOp(ctx, pipeline.NewSetupOperation(gameName, opts.GameDir, pctx))
-		}
-		return pipeline.NewSetup().Execute(ctx, pctx)
+		_, err := eng.ApplyGame(ctx, applyOpts)
+		return err
 	}
 
 	return nil
@@ -378,23 +346,8 @@ func (eng *Engine) ResetLaunchProfile(ctx context.Context, gameDir string) error
 	if err := compat.ResetProfile(gameDir); err != nil {
 		return err
 	}
-	game, _ := eng.InspectLocal(ctx, gameDir)
-	gameName := ""
-	if game != nil {
-		gameName = game.Name
-	}
-	pctx := &pipeline.Context{
-		Options: ProcessOptions{
-			Path: gameDir,
-		},
-		Game:     domain.NewGame(gameName, gameDir, "", ""),
-		Config:   eng.Config,
-		EventBus: eng.EventBus,
-	}
-	if eng.Tasks != nil {
-		return eng.Tasks.RunSyncOp(ctx, pipeline.NewSetupOperation(gameName, gameDir, pctx))
-	}
-	return pipeline.NewSetup().Execute(ctx, pctx)
+	_, err := eng.ApplyGame(ctx, ProcessOptions{Path: gameDir})
+	return err
 }
 
 // NotifyLaunch inspects a game directory for updates or configuration issues, and triggers a console/desktop notification if found.
@@ -590,6 +543,13 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		}
 		if _, err := eng.ProcessGame(ctx, applyOpts); err != nil {
 			slog.Warn("Auto-apply setup failed following download", "targetDir", opts.TargetDir, "error", err)
+		}
+	}
+
+	if opts.Branch != "" && opts.Branch != "public" {
+		if p, lErr := compat.LoadProfile(opts.TargetDir); lErr == nil && p != nil {
+			p.Branch = opts.Branch
+			_ = compat.SaveProfile(p)
 		}
 	}
 

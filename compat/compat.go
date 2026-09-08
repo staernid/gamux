@@ -7,7 +7,6 @@ import (
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
-	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/util"
 )
 
@@ -93,48 +92,21 @@ func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *
 		candidateExes = append(candidateExes, game.CandidateExes()...)
 	}
 
-	// 3. Apply or revert DRM according to operating mode
-	switch opMode {
-	case domain.ModePortable:
-		if err := gbe.Apply(ctx, gbe.Options{
-			Config:        cfg,
-			TargetDir:     gameDir,
-			Platform:      platform,
-			AppID:         appID,
-			Language:      profile.Language,
-			Portable:      true,
-			WinePrefix:    profile.WinePrefix,
-			ExePath:       exePath,
-			CandidateExes: candidateExes,
-			DryRun:        dryRun,
-		}); err != nil {
-			slog.Warn("Failed to apply portable DRM", "dir", gameDir, "error", err)
-			return err
-		}
-	case domain.ModeLoader:
-		if err := gbe.Apply(ctx, gbe.Options{
-			Config:        cfg,
-			TargetDir:     gameDir,
-			Platform:      platform,
-			AppID:         appID,
-			Language:      profile.Language,
-			Portable:      false,
-			WinePrefix:    profile.WinePrefix,
-			ExePath:       exePath,
-			CandidateExes: candidateExes,
-			DryRun:        dryRun,
-		}); err != nil {
-			slog.Warn("Failed to apply loader DRM", "dir", gameDir, "error", err)
-			return err
-		}
-	case domain.ModeNone, domain.ModeStandalone:
-		if _, err := gbe.Revert(gameDir, dryRun); err != nil {
-			slog.Warn("Failed to revert DRM for ModeNone", "dir", gameDir, "error", err)
-			return err
-		}
-		if profile != nil && !dryRun {
-			_ = SaveProfileDirect(profile)
-		}
+	strategy := ResolveStrategy(opMode)
+	err := strategy.Apply(ctx, ModeParams{
+		Config:        cfg,
+		GameDir:       gameDir,
+		Platform:      platform,
+		AppID:         appID,
+		Language:      profile.Language,
+		WinePrefix:    profile.WinePrefix,
+		ExePath:       exePath,
+		CandidateExes: candidateExes,
+		DryRun:        dryRun,
+	}, profile)
+	if err != nil {
+		slog.Warn("Failed to apply operating mode strategy", "mode", strategy.Mode(), "dir", gameDir, "error", err)
+		return err
 	}
 
 	return nil
@@ -142,5 +114,5 @@ func Apply(ctx context.Context, cfg *config.Config, game *domain.Game, profile *
 
 // Revert restores original backups and removes all Goldberg emulator artifacts.
 func Revert(ctx context.Context, gameDir string, dryRun bool) (int, error) {
-	return gbe.Revert(gameDir, dryRun)
+	return ResolveStrategy(domain.ModeNone).Revert(ctx, gameDir, dryRun)
 }

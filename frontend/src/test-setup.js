@@ -27,9 +27,10 @@ beforeEach(() => {
         GetSteamlessStatus: vi.fn().mockResolvedValue({ has_update: false }),
         SelectDirectory: vi.fn().mockResolvedValue('/home/staernid/Games'),
         GetInitialTarget: vi.fn().mockResolvedValue(''),
-        CreateGameStub: vi.fn().mockImplementation((lib, id, name, store) => Promise.resolve({
+        CreateGameStub: vi.fn().mockImplementation((lib, id, name, store, branch = 'public') => Promise.resolve({
           name: name || `Game ${id}`,
           app_id: id,
+          branch: branch || 'public',
           game_dir: `${lib}/${name || id}`,
           store: store || 'Steam',
           file_count: 0,
@@ -37,6 +38,20 @@ beforeEach(() => {
           is_installed: false,
           is_stub: true,
           is_ready: false,
+        })),
+        GetSteamBranches: vi.fn().mockResolvedValue([
+          { name: 'public', description: 'Default / Public release', build_id: '10180494', time_updated: 1671497797, pwd_required: false },
+          { name: 'beta', description: 'Beta branch for testing new content and risky fixes. Unstable', build_id: '10174821', time_updated: 1671497193, pwd_required: false },
+          { name: 'v1.0', description: 'Legacy 2019-23-01', build_id: '3495375', time_updated: 1562010477, pwd_required: false },
+        ]),
+        SetGameBranch: vi.fn().mockImplementation((dir, branch, password) => Promise.resolve({
+          name: 'Game',
+          game_dir: dir,
+          branch: branch || 'public',
+          launch_profile: {
+            branch: branch || 'public',
+            branch_password: password || '',
+          },
         })),
       }
     }

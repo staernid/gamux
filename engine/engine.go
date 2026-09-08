@@ -29,8 +29,6 @@ type Engine struct {
 	ArtworkService *store.ArtworkService
 	Saves          *saves.Service
 	Multiseat      *multiseat.Supervisor
-	Notifier       func(ctx context.Context, title, message string) error
-	StepReporter   func(ctx context.Context, prog StepProgress)
 	toolManager    *tools.Manager
 }
 

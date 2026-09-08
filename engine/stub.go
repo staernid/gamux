@@ -14,8 +14,8 @@ import (
 
 // CreateGameStub creates a skeleton game directory with launch_profile.json
 // in the target library folder without downloading binaries, allowing uninstalled
-// catalog games to be tracked in the library.
-func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name, storeName string) (*domain.Game, error) {
+// catalog games to be tracked in the library with branch preferences.
+func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name, storeName, branch string) (*domain.Game, error) {
 	ctx = eng.WrapContext(ctx)
 
 	libCanonical := util.CanonicalPath(libraryPath)
@@ -44,10 +44,16 @@ func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name,
 		storeLower = "steam"
 	}
 
+	cleanBranch := strings.TrimSpace(branch)
+	if cleanBranch == "" {
+		cleanBranch = "public"
+	}
+
 	profile := &domain.LaunchProfile{
 		GameDir:          gameDir,
 		AppID:            strings.TrimSpace(appID),
 		StoreAppID:       strings.TrimSpace(appID),
+		Branch:           cleanBranch,
 		Name:             cleanName,
 		Store:            storeLower,
 		MetadataProvider: storeLower,

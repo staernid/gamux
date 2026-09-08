@@ -20,6 +20,7 @@ type ACFData struct {
 	InstallDir    string
 	BuildID       string
 	Language      string
+	BetaKey       string
 	LastUpdated   int64
 	SizeOnDisk    int64
 	LaunchOptions []LaunchCandidate
@@ -41,12 +42,24 @@ func ParseACF(r io.Reader) (*ACFData, error) {
 		sizeOnDisk, _ = strconv.ParseInt(node.GetString("sizeondisk"), 10, 64)
 	}
 
+	betaKey := node.GetString("UserConfig/BetaKey")
+	if betaKey == "" {
+		betaKey = node.GetString("UserConfig/betakey")
+	}
+	if betaKey == "" {
+		betaKey = node.GetString("betakey")
+	}
+	if betaKey == "" {
+		betaKey = node.GetString("BetaKey")
+	}
+
 	data := &ACFData{
 		AppID:       node.GetString("appid"),
 		Name:        node.GetString("name"),
 		InstallDir:  node.GetString("installdir"),
 		BuildID:     node.GetString("buildid"),
 		Language:    node.GetString("UserConfig/language"),
+		BetaKey:     betaKey,
 		LastUpdated: lastUpdated,
 		SizeOnDisk:  sizeOnDisk,
 	}
@@ -125,7 +138,12 @@ func GenerateACFContent(data *ACFData) string {
 	fmt.Fprintf(&sb, "\t\"installdir\"\t\t\"%s\"\n", installDir)
 	fmt.Fprintf(&sb, "\t\"StateFlags\"\t\t\"4\"\n")
 	fmt.Fprintf(&sb, "\t\"buildid\"\t\t\"%s\"\n", buildID)
-	fmt.Fprintf(&sb, "\t\"UserConfig\"\n\t{\n\t\t\"language\"\t\t\"%s\"\n\t}\n", lang)
+	sb.WriteString("\t\"UserConfig\"\n\t{\n")
+	fmt.Fprintf(&sb, "\t\t\"language\"\t\t\"%s\"\n", lang)
+	if data.BetaKey != "" && data.BetaKey != "public" {
+		fmt.Fprintf(&sb, "\t\t\"BetaKey\"\t\t\"%s\"\n", data.BetaKey)
+	}
+	sb.WriteString("\t}\n")
 
 	if len(data.LaunchOptions) > 0 {
 		sb.WriteString("\t\"config\"\n\t{\n\t\t\"launch\"\n\t\t{\n")

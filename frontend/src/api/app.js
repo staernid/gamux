@@ -107,10 +107,11 @@ const DEFAULT_MOCKS = {
   switchGamePlatform: (path, plat) => Promise.resolve({ ...mockData.MOCK_GAMES[0], platform: plat }),
   uninstallDepot: (path, depotId) => Promise.resolve({ ...mockData.MOCK_GAMES[0] }),
   openDirectory: () => Promise.resolve(),
-  createGameStub: (libraryPath, appID, name, storeName) => Promise.resolve({
+  createGameStub: (libraryPath, appID, name, storeName, branch = 'public') => Promise.resolve({
     ...mockData.MOCK_GAMES[0],
     name: name || `Game ${appID}`,
     app_id: appID,
+    branch: branch || 'public',
     game_dir: `${libraryPath || '/home/staernid/Games'}/${name || appID}`,
     store: storeName || 'Steam',
     file_count: 0,
@@ -118,6 +119,21 @@ const DEFAULT_MOCKS = {
     is_installed: false,
     is_stub: true,
     is_ready: false
+  }),
+  getSteamBranches: (appId) => Promise.resolve([
+    { name: 'public', description: 'Default / Public release', build_id: '10180494', time_updated: 1671497797, pwd_required: false },
+    { name: 'beta', description: 'Beta branch for testing new content and risky fixes. Unstable', build_id: '10174821', time_updated: 1671497193, pwd_required: false },
+    { name: 'v1.0', description: 'Legacy 2019-23-01', build_id: '3495375', time_updated: 1562010477, pwd_required: false },
+  ]),
+  setGameBranch: (gameDir, branch, password) => Promise.resolve({
+    ...mockData.MOCK_GAMES[0],
+    game_dir: gameDir,
+    branch: branch || 'public',
+    launch_profile: {
+      ...mockData.MOCK_GAMES[0].launch_profile,
+      branch: branch || 'public',
+      branch_password: password || '',
+    }
   }),
 
 

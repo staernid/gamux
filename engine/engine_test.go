@@ -1183,6 +1183,56 @@ func TestEngine_BatchInspect_IgnoresPrefixesAndUtilityDirs(t *testing.T) {
 	}
 }
 
+func TestCreateGameStubAndSetBranch(t *testing.T) {
+	cache.SetDisabled(true)
+	defer cache.SetDisabled(false)
+
+	tmpLib := t.TempDir()
+	eng := New(config.DefaultConfig())
+
+	// 1. Create stub with branch "vulkan"
+	game, err := eng.CreateGameStub(context.Background(), tmpLib, "646570", "Slay the Spire", "steam", "vulkan")
+	if err != nil {
+		t.Fatalf("CreateGameStub failed: %v", err)
+	}
+
+	if game.Branch != "vulkan" {
+		t.Errorf("expected branch 'vulkan', got %q", game.Branch)
+	}
+	if game.LaunchProfile == nil || game.LaunchProfile.Branch != "vulkan" {
+		t.Errorf("expected profile branch 'vulkan', got %+v", game.LaunchProfile)
+	}
+	if !game.IsStub {
+		t.Errorf("expected game to be marked as stub")
+	}
+
+	// 2. Set game branch to "beta" with password
+	updated, err := eng.SetGameBranch(context.Background(), game.GameDir, "beta", "secret123")
+	if err != nil {
+		t.Fatalf("SetGameBranch failed: %v", err)
+	}
+
+	if updated.Branch != "beta" {
+		t.Errorf("expected branch 'beta', got %q", updated.Branch)
+	}
+	if updated.LaunchProfile == nil || updated.LaunchProfile.Branch != "beta" {
+		t.Errorf("expected profile branch 'beta', got %+v", updated.LaunchProfile)
+	}
+	if updated.LaunchProfile.BranchPassword != "secret123" {
+		t.Errorf("expected profile password 'secret123', got %q", updated.LaunchProfile.BranchPassword)
+	}
+
+	// 3. Set branch back to public (empty should normalize to public)
+	publicGame, err := eng.SetGameBranch(context.Background(), game.GameDir, "", "")
+	if err != nil {
+		t.Fatalf("SetGameBranch public failed: %v", err)
+	}
+	if publicGame.Branch != "public" {
+		t.Errorf("expected branch 'public', got %q", publicGame.Branch)
+	}
+}
+
+
 
 
 

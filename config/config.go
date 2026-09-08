@@ -305,3 +305,25 @@ func InitConfig(customPath string) error {
 	return err
 }
 
+// ResolvedLibraryDirs returns all configured non-empty library paths, falling back to ~/Games if none configured and ~/Games exists.
+func (cfg *Config) ResolvedLibraryDirs() []string {
+	var dirs []string
+	if cfg != nil && len(cfg.LibraryPaths) > 0 {
+		for _, p := range cfg.LibraryPaths {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				dirs = append(dirs, trimmed)
+			}
+		}
+	}
+	if len(dirs) == 0 {
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			defaultGames := filepath.Join(home, "Games")
+			if util.FileExists(defaultGames) {
+				dirs = append(dirs, defaultGames)
+			}
+		}
+	}
+	return dirs
+}
+

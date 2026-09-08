@@ -17,7 +17,7 @@
   import { drawerDraft } from '../../stores/drawerDraft.js';
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
   import { AppAPI } from '../../api/app.js';
-  import { isSamePath, countOverrides, normalizeGame } from '../../utils/game.js';
+  import { isSamePath, countOverrides, normalizeGame, isSteamApp } from '../../utils/game.js';
   import HubSavesCard from './hub/cards/HubSavesCard.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
   import GameTaskHud from './hub/GameTaskHud.svelte';
@@ -33,6 +33,7 @@
   let activeTab = 'overview';
   let communitySubTab = 'achievements';
   let communityNewsIndex = 0;
+  let filesSubTab = 'depots';
 
   let globalCfg = {};
   let userCfg = null;
@@ -121,7 +122,7 @@
     if (!game) return;
     const lib = $libraryPath || '/home/staernid/Games';
     try {
-      const stub = await AppAPI.createGameStub(lib, game.appId, game.name, game.store || 'Steam');
+      const stub = await AppAPI.createGameStub(lib, game.appId, game.name, game.store || 'Steam', game.branch || 'public');
       if (stub) {
         const normalized = updateGameInStore(stub);
         if (normalized) {
@@ -182,7 +183,7 @@
       // If it's a virtual store title or lacks a directory, register the stub in the library first
       if (!dest || game.isVirtual) {
         try {
-          const stub = await AppAPI.createGameStub(lib, String(appID), game.name, game.store || 'Steam');
+          const stub = await AppAPI.createGameStub(lib, String(appID), game.name, game.store || 'Steam', game.branch || 'public');
           if (stub) {
             const normalized = updateGameInStore(stub);
             if (normalized) {
@@ -207,6 +208,7 @@
           platform: game.platform || 'win64',
           auto_apply: true,
           store_type: (game.store || 'steam').toLowerCase(),
+          branch: game.branch || 'public',
         });
       } catch (err) {
         notificationStore.items.add({
@@ -368,8 +370,9 @@
     }
   }
 
-  async function handleUpdateGame() {
+  async function handleUpdateGame(e) {
     if (!game?.gameDir) return;
+    const branchToUpdate = e?.detail?.branch || game.branch || 'public';
     if (game.appId && game.appId !== '0') {
       try {
         await tasksStore.start({
@@ -378,12 +381,13 @@
           target_dir: game.gameDir,
           platform: 'win64',
           auto_apply: true,
-          store_type: game.store || 'steam'
+          store_type: game.store || 'steam',
+          branch: branchToUpdate,
         });
         notificationStore.items.add({
           type: 'info',
           title: 'Update Enqueued',
-          message: `Update task started for ${game.name}`,
+          message: `Update task started for ${game.name}${branchToUpdate !== 'public' ? ` (${branchToUpdate})` : ''}`,
           gameName: game.name
         });
       } catch (err) {
@@ -412,12 +416,14 @@
     }
   }
 
+  $: isSteam = Boolean((game?.appId && isSteamApp(game.appId)) || ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId)));
   const primaryTabs = ['overview', 'community', 'resources', 'general', 'environment', 'saves', 'files'];
 
   function handleNavigateTab(e) {
     const { tab, subTab, newsIndex } = e.detail || {};
     if (tab) activeTab = tab;
-    if (subTab) communitySubTab = subTab;
+    if (subTab && tab === 'community') communitySubTab = subTab;
+    if (subTab && tab === 'files') filesSubTab = subTab;
     if (newsIndex !== undefined) communityNewsIndex = newsIndex;
   }
 
@@ -468,16 +474,18 @@
       on:addToLibrary={handleAddToLibrary}
       on:openDirectory={openDirectory}
       on:stopSeat={handleStopSeat}
+      on:openBranchTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
+      on:openBetasTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
     />
 
-    <!-- Main Content & 7-Tab Section -->
+    <!-- Main Content & Consolidated Tabs Section -->
     <div class="max-w-6xl w-full mx-auto px-6 py-4 flex-1 flex flex-col space-y-4">
       <!-- Live Task Progress HUD -->
       {#if activeGameTask}
         <GameTaskHud task={activeGameTask} />
       {/if}
 
-      <!-- 7 Primary Navigation Tabs -->
+      <!-- Primary Navigation Tabs -->
       <div class="flex items-center space-x-2 border-b border-surface-border pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->
         <button
@@ -579,6 +587,21 @@
           />
         {:else if activeTab === 'resources'}
           <HubResourcesTab {game} />
+        {:else if activeTab === 'files'}
+          <HubFilesTab
+            {game}
+            activeSubTab={filesSubTab}
+            {isGameRunning}
+            {isTaskActive}
+            {activeGameTask}
+            {isCheckingIntegrity}
+            {isNormalizing}
+            {integrityError}
+            {integrityReport}
+            on:runIntegrityCheck={runIntegrityCheck}
+            on:updateGame={handleUpdateGame}
+            on:normalizeDirectory={handleNormalizeDirectory}
+          />
         {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
           <!-- Uninstalled State Placeholder for Technical Tabs -->
           <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
@@ -627,19 +650,6 @@
           <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">
             <HubSavesCard {game} />
           </div>
-        {:else if activeTab === 'files'}
-          <HubFilesTab
-            {game}
-            {isGameRunning}
-            {isTaskActive}
-            {isCheckingIntegrity}
-            {isNormalizing}
-            {integrityError}
-            {integrityReport}
-            on:runIntegrityCheck={runIntegrityCheck}
-            on:updateGame={handleUpdateGame}
-            on:normalizeDirectory={handleNormalizeDirectory}
-          />
         {/if}
       </div>
     </div>

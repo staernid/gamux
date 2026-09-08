@@ -141,7 +141,3 @@ func (c *Controller) UpdateStage(stage, details string) {
 func (c *Controller) UpdateProgress(percent float64, currentBytes int64, currentItems, totalItems, totalBytes int64, speed float64, eta int) {
 	c.ReportProgress(currentBytes, totalBytes, int(currentItems), int(totalItems), speed, eta, percent)
 }
-
-func (c *Controller) UpdateStep(step, total int, stage, details string) {
-	c.ReportStep(step, total, stage, details)
-}

@@ -202,21 +202,6 @@ func (eng *Engine) SubmitWorkshop(itemURLOrID, targetDir string, dryRun bool) (s
 	})
 }
 
-func (eng *Engine) getLibraryDirs() []string {
-	var dirs []string
-	if eng.Config != nil && len(eng.Config.LibraryPaths) > 0 {
-		dirs = append(dirs, eng.Config.LibraryPaths...)
-	}
-	if len(dirs) == 0 {
-		home, _ := os.UserHomeDir()
-		defaultGames := filepath.Join(home, "Games")
-		if util.FileExists(defaultGames) {
-			dirs = append(dirs, defaultGames)
-		}
-	}
-	return dirs
-}
-
 // SubmitBatchLibraryOp schedules an asynchronous batch library operation.
 // Supported kinds: "achievements", "artwork", "normalize", "verify".
 func (eng *Engine) SubmitBatchLibraryOp(kind string) (string, error) {
@@ -234,7 +219,7 @@ func (eng *Engine) SubmitBatchLibraryOp(kind string) (string, error) {
 
 // newBatchLibraryOp constructs a BatchLibraryOperation for the given kind.
 func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error) {
-	dirs := eng.getLibraryDirs()
+	dirs := eng.Config.ResolvedLibraryDirs()
 
 	switch strings.ToLower(kind) {
 	case "achievements":

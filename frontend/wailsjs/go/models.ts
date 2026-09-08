@@ -420,6 +420,8 @@ export namespace domain {
 	    working_dir?: string;
 	    store?: string;
 	    store_app_id?: string;
+	    branch?: string;
+	    branch_password?: string;
 	    source_override?: string;
 	    metadata_provider?: string;
 	    metadata_id?: string;
@@ -464,6 +466,8 @@ export namespace domain {
 	        this.working_dir = source["working_dir"];
 	        this.store = source["store"];
 	        this.store_app_id = source["store_app_id"];
+	        this.branch = source["branch"];
+	        this.branch_password = source["branch_password"];
 	        this.source_override = source["source_override"];
 	        this.metadata_provider = source["metadata_provider"];
 	        this.metadata_id = source["metadata_id"];
@@ -507,6 +511,7 @@ export namespace domain {
 	    store: string;
 	    source: string;
 	    platform: string;
+	    branch?: string;
 	    steam_appid?: number;
 	    gog_id?: string;
 	    epic_app?: string;
@@ -595,6 +600,7 @@ export namespace domain {
 	        this.store = source["store"];
 	        this.source = source["source"];
 	        this.platform = source["platform"];
+	        this.branch = source["branch"];
 	        this.steam_appid = source["steam_appid"];
 	        this.gog_id = source["gog_id"];
 	        this.epic_app = source["epic_app"];
@@ -740,6 +746,26 @@ export namespace domain {
 	}
 	
 	
+	export class SteamBranch {
+	    name: string;
+	    description?: string;
+	    build_id?: string;
+	    time_updated?: number;
+	    pwd_required?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamBranch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.build_id = source["build_id"];
+	        this.time_updated = source["time_updated"];
+	        this.pwd_required = source["pwd_required"];
+	    }
+	}
 	export class SteamProfile {
 	    steam_id: string;
 	    persona_name: string;
@@ -769,6 +795,7 @@ export namespace engine {
 	    app_id: number;
 	    target_dir: string;
 	    platform: string;
+	    branch?: string;
 	    lua_path: string;
 	    dry_run: boolean;
 	    worker_limit?: number;
@@ -784,6 +811,7 @@ export namespace engine {
 	        this.app_id = source["app_id"];
 	        this.target_dir = source["target_dir"];
 	        this.platform = source["platform"];
+	        this.branch = source["branch"];
 	        this.lua_path = source["lua_path"];
 	        this.dry_run = source["dry_run"];
 	        this.worker_limit = source["worker_limit"];

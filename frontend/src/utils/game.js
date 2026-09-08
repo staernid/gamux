@@ -85,6 +85,8 @@ export function normalizeGame(g) {
     exeArgs: lp?.exe_args || lp?.exeArgs || lp?.ExeArgs || g.exe_args || g.exeArgs || g.ExeArgs || '',
     launchCandidates,
     launchProfile: lp,
+    branch: g.branch || g.Branch || lp?.branch || lp?.Branch || 'public',
+    branchPassword: lp?.branch_password || lp?.branchPassword || '',
     isInstalled,
     isStub,
     isVirtual,

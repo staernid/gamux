@@ -174,26 +174,9 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	if a.Engine != nil {
-		// Bind desktop/toast notifications to EventBus
-		a.Engine.Notifier = func(nCtx context.Context, title, message string) error {
-			if a.Engine != nil && a.Engine.EventBus != nil {
-				a.Engine.EventBus.Publish(events.NewNotification(title, message))
-			}
-			return nil
-		}
-
-		// Bind step progress updates to EventBus
-		a.Engine.StepReporter = func(sCtx context.Context, prog engine.StepProgress) {
-			if a.Engine != nil && a.Engine.EventBus != nil {
-				a.Engine.EventBus.Publish(events.NewStepProgress(prog.Step, prog.Total, prog.Title, prog.Details))
-			}
-		}
-	}
-
 	// Pre-warm game cache for tray menu and fast lookups
 	go func() {
-		dirs := a.getLibraryDirs()
+		dirs := a.Config.ResolvedLibraryDirs()
 		if len(dirs) > 0 && a.Engine != nil {
 			if games, err := a.Engine.BatchInspectLibraries(context.Background(), dirs); err == nil && len(games) > 0 {
 				a.UpdateCachedGames(games)
@@ -405,7 +388,7 @@ func (a *App) GetRecentGames(limit int) []TrayGame {
 	a.gamesMu.RUnlock()
 
 	if len(cached) == 0 && a.Engine != nil {
-		dirs := a.getLibraryDirs()
+		dirs := a.Config.ResolvedLibraryDirs()
 		if len(dirs) > 0 {
 			if games, err := a.Engine.BatchInspectLibraries(context.Background(), dirs); err == nil && len(games) > 0 {
 				a.gamesMu.Lock()
@@ -417,26 +400,5 @@ func (a *App) GetRecentGames(limit int) []TrayGame {
 	}
 
 	return FilterAndSortRecentGames(cached, limit)
-}
-
-func (a *App) getLibraryDirs() []string {
-	var dirs []string
-	if a.Config != nil && len(a.Config.LibraryPaths) > 0 {
-		for _, p := range a.Config.LibraryPaths {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				dirs = append(dirs, trimmed)
-			}
-		}
-	}
-	if len(dirs) == 0 {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			defaultGames := filepath.Join(home, "Games")
-			if util.FileExists(defaultGames) {
-				dirs = append(dirs, defaultGames)
-			}
-		}
-	}
-	return dirs
 }
 

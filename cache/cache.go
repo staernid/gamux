@@ -44,6 +44,10 @@ var (
 	// In-memory thread-safe cache for Steam version and update statuses
 	versionsMu          sync.RWMutex
 	versionsMemoryCache = make(map[string][]byte)
+
+	// In-memory thread-safe cache for Steam branches
+	branchesMu          sync.RWMutex
+	branchesMemoryCache = make(map[uint32][]byte)
 )
 
 // IsDisabled reports whether caching is globally disabled (useful for testing or forced refresh).
@@ -69,6 +73,7 @@ var cacheSubdirs = []string{
 	"games",
 	"achievements",
 	"versions",
+	"branches",
 }
 
 // subdirTTLs maps each cache subdirectory to its canonical TTL.
@@ -85,6 +90,7 @@ var subdirTTLs = map[string]time.Duration{
 	"revobd":       30 * 24 * time.Hour,
 	"achievements": 7 * 24 * time.Hour,
 	"versions":     30 * time.Minute,
+	"branches":     6 * time.Hour,
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -122,6 +128,10 @@ func SetCacheDir(dir string) {
 	versionsMu.Lock()
 	versionsMemoryCache = make(map[string][]byte)
 	versionsMu.Unlock()
+
+	branchesMu.Lock()
+	branchesMemoryCache = make(map[uint32][]byte)
+	branchesMu.Unlock()
 }
 
 func getCacheDir() string {
@@ -507,6 +517,53 @@ func SaveVersionStatus(key string, data []byte) {
 	}
 	cleanKey := strings.ReplaceAll(key, ":", "_")
 	path := filepath.Join(dir, "versions", fmt.Sprintf("%s.json", cleanKey))
+	_ = writeTTLFile(path, data)
+}
+
+// GetSteamBranches retrieves cached Steam branches JSON if less than 6 hours old.
+func GetSteamBranches(appID uint32) ([]byte, bool) {
+	if disableCache.Load() || appID == 0 {
+		return nil, false
+	}
+
+	// 1. In-memory cache check
+	branchesMu.RLock()
+	if cached, ok := branchesMemoryCache[appID]; ok && len(cached) > 0 {
+		branchesMu.RUnlock()
+		return cached, true
+	}
+	branchesMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "branches", fmt.Sprintf("%d.json", appID))
+	if data, ok := readTTLFile(path, 6*time.Hour); ok {
+		branchesMu.Lock()
+		branchesMemoryCache[appID] = data
+		branchesMu.Unlock()
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveSteamBranches caches Steam branches to in-memory and disk cache for 6 hours.
+func SaveSteamBranches(appID uint32, data []byte) {
+	if disableCache.Load() || appID == 0 || len(data) == 0 {
+		return
+	}
+
+	branchesMu.Lock()
+	branchesMemoryCache[appID] = data
+	branchesMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "branches", fmt.Sprintf("%d.json", appID))
 	_ = writeTTLFile(path, data)
 }
 

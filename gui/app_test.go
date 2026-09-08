@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/engine"
+	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/runner"
@@ -312,13 +314,21 @@ func TestApp_StartupAndNotifier(t *testing.T) {
 	// Verify Startup doesn't panic
 	app.Startup(context.Background())
 
-	if app.Engine.Notifier == nil {
-		t.Fatal("Engine.Notifier not configured after Startup")
+	ch, unsub := app.Engine.EventBus.Subscribe(events.EventNotification)
+	defer unsub()
+
+	// Calling Notify publishes to EventBus
+	if err := app.Engine.Notify(context.Background(), "Test Alert", "Sample Message"); err != nil {
+		t.Errorf("app.Engine.Notify returned error: %v", err)
 	}
 
-	// Calling notifier with dummy ctx should not fail
-	if err := app.Engine.Notifier(context.Background(), "Test Alert", "Sample Message"); err != nil {
-		t.Errorf("app.Engine.Notifier returned error: %v", err)
+	select {
+	case ev := <-ch:
+		if ev.Stage != "Test Alert" {
+			t.Errorf("expected stage 'Test Alert', got %s", ev.Stage)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Errorf("timeout waiting for notification on EventBus")
 	}
 }
 

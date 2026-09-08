@@ -43,111 +43,42 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ---
 
-Hint: Better Steam Web API documentation can be found at https://steamwebapi.azurewebsites.net/
+## Core Tenets
+
+1. **Opinionated Simplicity**: Minimal user decisions; sensible defaults over toggles. Discard legacy launcher conventions freely.
+2. **Unified Lifecycle**: Previews, stubs, and installed titles share one entity model. Degrade missing features gracefully; never lock users out of metadata or configuration.
+3. **Single Path Forward**: Migrate schemas and configs directly. No legacy fallbacks, shims, or dual execution paths.
+4. **Absence is Not an Error**: Treat `0`, `""`, and `unknown` as absence, not failure. Never show mismatch alerts on unpopulated sentinels.
+5. **Idempotent & Reversible**: Pipeline stages must not overwrite user config. Always back up files before patching (`util.BackupAndReplace`).
 
 ---
 
-## Core Conventions
+## Conventions
 
-1. **Logging Strategy**:
-   - Use `log/slog` structured logging (`slog.Info`, `slog.Warn`, `slog.Error`).
-   - Do not use `fmt.Println` or standard `log` package in library modules.
-
-2. **Error Handling**:
-   - Wrap errors with context: `fmt.Errorf("...: %w", err)`.
-
-3. **Concurrency & Rate Limits**:
-   - Use `golang.org/x/sync/errgroup` with worker caps (e.g. `g.SetLimit(10)`) when querying external APIs.
-   - Pass `context.Context` through all async/network chains.
-
-4. **File Safety**:
-   - Always back up libraries before patching (`util.BackupAndReplace`).
-   - Respect `--dry-run` flags; log mutations with `[DRY RUN]` without modifying the filesystem.
-
-5. **Testing**:
-   - All Go unit tests must run cleanly under `go test -race ./...`.
-   - Clean up temporary files with `defer os.RemoveAll(tmpDir)`.
-   - Frontend tests use Vitest (`npm test` in `frontend/`).
-
-6. **No Legacy Compatibility Hacks**:
-   - Do not preserve legacy fallback code or redundant dual paths when breaking changes occur.
-   - Always migrate local configuration files and game setups directly to the single current standard.
+- **Logging**: Use `log/slog` structured logging (`slog.Info`, `slog.Warn`, `slog.Error`). No `fmt.Println` or stdlib `log` in library modules.
+- **Errors**: Wrap with context: `fmt.Errorf("...: %w", err)`.
+- **Concurrency**: Use `golang.org/x/sync/errgroup` with worker limits (`g.SetLimit(10)`). Pass `context.Context` through async/network chains.
+- **Testing**: All Go unit tests must pass under `go test -race ./...`. Clean up temp files with `defer os.RemoveAll(tmpDir)`. Frontend tests use Vitest (`npm test` in `frontend/`).
+- **UI Design**: Monochrome dark surfaces (`#09090b` to `#3f3f46`). Semantic color only (active/destructive states). Game cover art provides organic color.
+- **Typography & Layout**: Never hardcode pixel font sizes. Use Tailwind `rem` tokens (`text-xs`, `text-2xs`). Never truncate descriptions; allow natural wrapping (`leading-relaxed`).
 
 ---
 
-## GUI & Frontend Development Protocol
+## Diagnostics & Verification
 
-When touching anything under `frontend/` or the Wails bridge in `gui/`:
+### Inspection & Diagnostics
+- `make gui-dump` — Dump GUI store state, event timeline, and invariant report as JSON.
+- `make gui-trace` — Run lifecycle trace scenario in headless browser and print event table.
+- `make gui-audit` — Run automated GUI store and event invariant audit.
 
-### UI & Design Guidelines
-
-Keep the design serious, high-contrast, and monochrome:
-
-1. **Monochrome Palette**:
-   - Stick to neutral dark surfaces (`#09090b`, `#121214`, `#18181b`, `#222225`, `#27272a`, `#3f3f46`) and clean whites/grays.
-   - **No neon aesthetic**: avoid cyan, purple, or pastel gradients, glows, and rainbow tab colors.
-   - Color is reserved strictly for meaningful semantic states (e.g. green for active processes, red for destructive actions). Game cover art provides all organic color.
-
-2. **Scalable Typography (`rem`)**:
-   - **Never hardcode pixel font sizes** (e.g. `text-[10px]`, `text-[11px]`).
-   - Always use `rem`-based Tailwind tokens (`text-xs`, `text-2xs`, `text-3xs`, `text-4xs`) so typography scales with the user's UI scale setting.
-
-3. **Readability & Wrapping**:
-   - Never truncate setting descriptions or helper copy with `truncate`. Allow text to wrap naturally (`leading-relaxed`) with readable contrast (`text-neutral-400` or lighter).
-
----
-
-### The Mandatory 4-Stage GUI Diagnostic Gate
-
-Before making code edits on GUI bugs or async lifecycle issues:
-
-1. **Phase 1: Trace Before Touch**:
-   - Try not to guess or blindly edit code.
-   - Run `npm run gui:dump` (or `make gui-dump`) to inspect current store snapshots and event timelines.
-   - Run `npm run gui:trace -- <scenario>` (or `make gui-trace`) to simulate the failing lifecycle and view the step-by-step event reduction table.
-   - Evaluate expressions interactively via `npm run gui:eval -- "window.__GAMUX_DEV__.<expr>"`.
-
-2. **Phase 2: Invariant Audit**:
-   - Run `npm run gui:audit` (or `make gui-audit`).
-   - Isolate whether the issue originates in:
-     - Go backend event dispatch (`events.Bus` / `jobs.Manager`)
-     - Wails bridge event routing (`gui/app.go` $\leftrightarrow$ `frontend/src/api/app.js`)
-     - Svelte store state reducer (`frontend/src/stores/`)
-     - Component-level reactivity or styling.
-
-3. **Phase 3: Targeted Fix & Scenario Unit Test**:
-   - Apply the minimal, targeted patch.
-   - Add or update scenario/store tests in `frontend/src/debug/debug.test.js` or `frontend/src/**/*.test.js`.
-
-4. **Phase 4: Visual & Invariant Verification Gate**:
-     - **Check**: `cd frontend && npm run check` (Svelte type & syntax validation).
-     - **Audit & Test**: `make test-frontend` (Vitest test suite + automated invariant audit).
-     - **Build**: `make build-gui` (Full asset bundling and Go WebKit binary compilation).
-
----
-
-## Development Workflow
-
-### One-Command Full Verification
-
+### Full Verification
 ```bash
-make check             # Runs linters, Go race tests, Svelte check, Vitest suite, GUI invariant audit, and builds binaries
+make check             # Runs linters, Go race tests, svelte-check, Vitest suite, GUI invariant audit, and builds binaries
 ```
 
-### Diagnostic & Inspection Commands
+### Individual Commands
+- `make test-go` — Run Go tests with race detection (`go test -race ./...`).
+- `make test-frontend` — Run Vitest suite and GUI invariant audit.
+- `make lint` — Run `go vet` and `svelte-check`.
+- `make build` — Compile `bin/gamux` and `bin/gamux-gui`.
 
-```bash
-make gui-audit         # Run automated GUI store and event invariant audit
-make gui-trace         # Run lifecycle trace scenario in headless browser and print event table
-make gui-dump          # Dump entire GUI store state, timeline, and audit report as JSON
-```
-
-### Individual Target Commands
-
-```bash
-make test              # Run both Go and Frontend unit tests (including GUI invariant audit)
-make test-go           # Run Go tests with race detection (go test -race ./...)
-make test-frontend     # Run frontend Vitest suite and GUI invariant audit
-make lint              # Run go vet and svelte-check
-make build             # Compile bin/gamux and bin/gamux-gui
-```

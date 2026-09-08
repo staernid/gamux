@@ -40,7 +40,7 @@ describe('GameHubView Component', () => {
     expect(screen.getAllByText(/#1091500/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Play Now')).toBeInTheDocument();
 
-    // 7 primary tabs
+    // 7 consolidated primary tabs
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Community$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Resources$/i })).toBeInTheDocument();
@@ -370,7 +370,7 @@ describe('GameHubView Component', () => {
     const downloadBtn = screen.getByText('Download');
     await fireEvent.click(downloadBtn);
 
-    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam');
+    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam', 'public');
     expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({
       app_id: 1145350,
       game_name: 'Hades II',
@@ -410,7 +410,7 @@ describe('GameHubView Component', () => {
     const addBtn = screen.getByText('Add to Library');
     await fireEvent.click(addBtn);
 
-    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam');
+    expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam', 'public');
   });
 });
 

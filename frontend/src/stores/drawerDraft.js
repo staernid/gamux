@@ -39,6 +39,7 @@ const SPECIAL_SNAKE_TO_CAMEL = {
   custom_logo_url: 'customLogoUrl',
   custom_icon_url: 'customIconUrl',
   locked_artwork: 'lockedArtwork',
+  branch_password: 'branchPassword',
 };
 
 const SPECIAL_CAMEL_TO_SNAKE = {
@@ -69,6 +70,7 @@ const SPECIAL_CAMEL_TO_SNAKE = {
   customLogoUrl: 'custom_logo_url',
   customIconUrl: 'custom_icon_url',
   lockedArtwork: 'locked_artwork',
+  branchPassword: 'branch_password',
 };
 
 export function snakeToCamelKey(key) {
@@ -107,6 +109,8 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     gamescopeHeight: 0,
     gamescopeFps: 0,
     workingDir: '',
+    branch: 'public',
+    branchPassword: '',
     optNormalize: globalCfg.normalize ?? true,
     optSteamless: globalCfg.steamless ?? true,
     optAchievements: globalCfg.achievements ?? true,
@@ -129,6 +133,8 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     appId: lp.app_id || lp.appId || '',
     exePath: baseExe,
     exeArgs: lp.exe_args || lp.exeArgs || '',
+    branch: game.branch || lp.branch || 'public',
+    branchPassword: game.branchPassword || lp.branch_password || lp.branchPassword || '',
   };
 
   // Dynamically map all profile fields from lp to camelCase in draft

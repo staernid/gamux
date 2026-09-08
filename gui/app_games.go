@@ -392,10 +392,30 @@ func (a *App) GetPatchNote(gamePath string, itemIndex int) (*steam.NewsItem, str
 }
 
 // CreateGameStub creates a skeleton game directory in the library path without downloading game files.
-func (a *App) CreateGameStub(libraryPath, appID, name, storeName string) (*domain.Game, error) {
+func (a *App) CreateGameStub(libraryPath, appID, name, storeName, branch string) (*domain.Game, error) {
 	if a.Engine == nil {
 		return nil, fmt.Errorf("engine not initialized")
 	}
-	return a.Engine.CreateGameStub(a.getContext(), libraryPath, appID, name, storeName)
+	return a.Engine.CreateGameStub(a.getContext(), libraryPath, appID, name, storeName, branch)
+}
+
+// GetSteamBranches returns available official and beta branches for a Steam AppID.
+func (a *App) GetSteamBranches(appID uint32) ([]domain.SteamBranch, error) {
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.GetSteamBranches(a.getContext(), appID)
+}
+
+// SetGameBranch updates the configured branch for a game directory.
+func (a *App) SetGameBranch(gameDir, branch, password string) (*domain.Game, error) {
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	res, err := a.Engine.SetGameBranch(a.getContext(), gameDir, branch, password)
+	if err == nil && res != nil {
+		a.UpdateCachedGame(res)
+	}
+	return res, err
 }
 

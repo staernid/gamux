@@ -177,7 +177,6 @@ func (f Filter) Matches(t *Task) bool {
 type ProgressReporter interface {
 	UpdateStage(stage, details string)
 	UpdateProgress(percent float64, currentBytes int64, currentItems, totalItems, totalBytes int64, speed float64, eta int)
-	UpdateStep(step, total int, stage, details string)
 	ReportStep(step, total int, stage, details string)
 }
 

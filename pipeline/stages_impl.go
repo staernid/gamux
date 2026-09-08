@@ -197,11 +197,16 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 				}
 			}
 
+			buildID := pctx.Game.BuildID
+			if buildID == "" {
+				buildID = "0"
+			}
 			acfData := &detector.ACFData{
 				AppID:         pctx.Game.AppID,
 				Name:          pctx.Game.Name,
 				InstallDir:    installDir,
-				BuildID:       "0",
+				BuildID:       buildID,
+				BetaKey:       pctx.Game.Branch,
 				LaunchOptions: launchOpts,
 			}
 

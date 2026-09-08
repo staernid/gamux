@@ -468,3 +468,30 @@ func TestArbitraryNestedSteamSettingsAndLoaderMode(t *testing.T) {
 	}
 }
 
+func TestResolveStrategy(t *testing.T) {
+	loader := compat.ResolveStrategy(domain.ModeLoader)
+	if loader.Mode() != domain.ModeLoader {
+		t.Errorf("expected ModeLoader, got %s", loader.Mode())
+	}
+
+	portable := compat.ResolveStrategy(domain.ModePortable)
+	if portable.Mode() != domain.ModePortable {
+		t.Errorf("expected ModePortable, got %s", portable.Mode())
+	}
+
+	standalone := compat.ResolveStrategy(domain.ModeStandalone)
+	if standalone.Mode() != domain.ModeStandalone && standalone.Mode() != domain.ModeNone {
+		t.Errorf("expected ModeStandalone or ModeNone, got %s", standalone.Mode())
+	}
+
+	none := compat.ResolveStrategy(domain.ModeNone)
+	if none.Mode() != domain.ModeNone {
+		t.Errorf("expected ModeNone, got %s", none.Mode())
+	}
+
+	fallback := compat.ResolveStrategy("unknown_mode")
+	if fallback.Mode() != domain.ModeLoader {
+		t.Errorf("expected default fallback to ModeLoader, got %s", fallback.Mode())
+	}
+}
+

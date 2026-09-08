@@ -211,12 +211,6 @@ func (s *stageReporterWrapper) UpdateProgress(percent float64, currentBytes int6
 	}
 }
 
-func (s *stageReporterWrapper) UpdateStep(step, total int, stage, details string) {
-	if s.parent != nil {
-		s.parent.UpdateStep(s.step, s.total, stage, details)
-	}
-}
-
 func (s *stageReporterWrapper) ReportStep(step, total int, stage, details string) {
 	if s.parent != nil {
 		s.parent.ReportStep(s.step, s.total, stage, details)

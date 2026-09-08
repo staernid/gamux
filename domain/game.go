@@ -133,6 +133,15 @@ type DLCItem struct {
 	Name  string `json:"name"`
 }
 
+// SteamBranch represents an official release or beta content branch for a Steam game.
+type SteamBranch struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	BuildID     string `json:"build_id,omitempty"`
+	TimeUpdated int64  `json:"time_updated,omitempty"`
+	PwdRequired bool   `json:"pwd_required,omitempty"`
+}
+
 
 // ArtworkOption represents a selectable artwork asset candidate discovered from a metadata provider.
 type ArtworkOption struct {
@@ -252,6 +261,7 @@ type GameRecord struct {
 	Store              string            `json:"store"`  // "Steam", "GOG", "Epic", "Itch", "Standalone", "Custom"
 	Source             GameSource        `json:"source"` // Canonical distribution source
 	Platform           string            `json:"platform"` // "linux", "win64", "win32"
+	Branch             string            `json:"branch,omitempty"`
 	ExternalIDs        `json:",inline"`
 	DiskSizeBytes      int64             `json:"disk_size_bytes"`
 	FileCount          int               `json:"file_count"`
@@ -304,6 +314,8 @@ type LaunchProfile struct {
 	// Store & Metadata bindings
 	Store            string `json:"store,omitempty"`
 	StoreAppID       string `json:"store_app_id,omitempty"`
+	Branch           string `json:"branch,omitempty"`
+	BranchPassword   string `json:"branch_password,omitempty"`
 	SourceOverride   string `json:"source_override,omitempty"`
 	MetadataProvider string `json:"metadata_provider,omitempty"`
 	MetadataID       string `json:"metadata_id,omitempty"`
@@ -452,6 +464,12 @@ func (p *LaunchProfile) MergeMetadataAndStatsFrom(other *LaunchProfile) {
 	}
 	if !p.LockedArtwork && other.LockedArtwork {
 		p.LockedArtwork = true
+	}
+	if p.Branch == "" {
+		p.Branch = other.Branch
+	}
+	if p.BranchPassword == "" {
+		p.BranchPassword = other.BranchPassword
 	}
 }
 
@@ -619,6 +637,9 @@ func (g *Game) ApplyProfile(profile *LaunchProfile, launchProfileExists bool) {
 	}
 	g.PlaytimeSeconds = profile.PlaytimeSeconds
 	g.LastPlayed = profile.LastPlayed
+	if profile.Branch != "" {
+		g.Branch = profile.Branch
+	}
 }
 
 // EffectiveExePath returns the resolved executable path (profile override taking priority over detected binary).

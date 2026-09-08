@@ -24,14 +24,10 @@ func (eng *Engine) WrapContext(ctx context.Context) context.Context {
 	return ctx
 }
 
-// Notify publishes a system notification event to the EventBus and calls
-// the Notifier callback if configured.
+// Notify publishes a system notification event to the EventBus.
 func (eng *Engine) Notify(ctx context.Context, title, message string) error {
 	if eng.EventBus != nil {
 		eng.EventBus.Publish(events.NewNotification(title, message))
-	}
-	if eng.Notifier != nil {
-		return eng.Notifier(ctx, title, message)
 	}
 	return nil
 }
@@ -60,13 +56,5 @@ func (eng *Engine) GetToolsStatus(ctx context.Context) ([]tools.ToolStatus, erro
 func (eng *Engine) reportStep(ctx context.Context, step, total int, title, details string) {
 	if eng.EventBus != nil {
 		eng.EventBus.Publish(events.NewStepProgress(step, total, title, details))
-	}
-	if eng.StepReporter != nil {
-		eng.StepReporter(ctx, StepProgress{
-			Step:    step,
-			Total:   total,
-			Title:   title,
-			Details: details,
-		})
 	}
 }
