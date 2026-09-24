@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -100,15 +102,17 @@ func RunCmd(name string, args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// GetSHA1Hash returns the SHA1 hash of a file.
+// GetSHA1Hash returns the SHA1 hash of a file using buffered streaming to prevent memory ballooning on large files.
 func GetSHA1Hash(filePath string) (string, error) {
-	data, err := os.ReadFile(filePath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 
 	h := sha1.New()
-	if _, err := h.Write(data); err != nil {
+	buf := make([]byte, 256*1024)
+	if _, err := io.CopyBuffer(h, f, buf); err != nil {
 		return "", err
 	}
 
@@ -604,6 +608,16 @@ func IsSteamChunkCompressed(data []byte) bool {
 	return false
 }
 
+var zstdDecoderPool = sync.Pool{
+	New: func() any {
+		dec, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+		if err != nil {
+			return nil
+		}
+		return dec
+	},
+}
+
 // DecompressChunkSlice decompresses a single Steam Pipe chunk slice (up to 1MB) matching any Steam Pipe stream format.
 func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 	if len(chunk) < 2 {
@@ -615,17 +629,26 @@ func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 		if len(chunk) < 8 {
 			return nil, fmt.Errorf("invalid VSZa chunk header length %d", len(chunk))
 		}
-		zr, err := zstd.NewReader(bytes.NewReader(chunk[8:]))
-		if err != nil {
-			return nil, fmt.Errorf("zstd reader init for VSZa chunk: %w", err)
+		dec, ok := zstdDecoderPool.Get().(*zstd.Decoder)
+		if !ok || dec == nil {
+			var err error
+			dec, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+			if err != nil {
+				return nil, fmt.Errorf("zstd reader init for VSZa chunk: %w", err)
+			}
 		}
-		defer zr.Close()
+		defer zstdDecoderPool.Put(dec)
+
+		if err := dec.Reset(bytes.NewReader(chunk[8:])); err != nil {
+			return nil, fmt.Errorf("zstd reset for VSZa chunk: %w", err)
+		}
 
 		var uncomp []byte
+		var err error
 		if expectedSize > 0 {
-			uncomp, err = io.ReadAll(io.LimitReader(zr, int64(expectedSize)))
+			uncomp, err = io.ReadAll(io.LimitReader(dec, int64(expectedSize)))
 		} else {
-			uncomp, err = io.ReadAll(zr)
+			uncomp, err = io.ReadAll(dec)
 		}
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return nil, fmt.Errorf("zstd decode for VSZa chunk: %w", err)
@@ -684,13 +707,21 @@ func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 
 	// 4. Raw Zstandard frame (0x28B52FFD)
 	if len(chunk) >= 4 && binary.LittleEndian.Uint32(chunk[:4]) == 0x28B52FFD {
-		zr, err := zstd.NewReader(bytes.NewReader(chunk))
-		if err != nil {
-			return nil, fmt.Errorf("raw zstd reader init: %w", err)
+		dec, ok := zstdDecoderPool.Get().(*zstd.Decoder)
+		if !ok || dec == nil {
+			var err error
+			dec, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
+			if err != nil {
+				return nil, fmt.Errorf("raw zstd reader init: %w", err)
+			}
 		}
-		uncomp, err := io.ReadAll(zr)
-		zr.Close()
-		if err != nil {
+		defer zstdDecoderPool.Put(dec)
+
+		if err := dec.Reset(bytes.NewReader(chunk)); err != nil {
+			return nil, fmt.Errorf("raw zstd reset: %w", err)
+		}
+		uncomp, err := io.ReadAll(dec)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return nil, fmt.Errorf("raw zstd decode: %w", err)
 		}
 		return uncomp, nil
@@ -733,7 +764,10 @@ func DecompressVSZaData(data []byte) ([]byte, error) {
 // Returns true if the file was compressed and decompressed successfully.
 func DecompressVSZaFile(filePath string) (bool, error) {
 	fi, err := os.Stat(filePath)
-	if err != nil || fi.IsDir() || fi.Size() < 2 {
+	if err != nil || fi.IsDir() || fi.Size() < 4 {
+		return false, nil
+	}
+	if fi.Size() > 512*1024*1024 {
 		return false, nil
 	}
 
@@ -746,7 +780,7 @@ func DecompressVSZaFile(filePath string) (bool, error) {
 	n, readErr := f.Read(header)
 	f.Close()
 
-	if readErr != nil || n < 2 || !IsSteamChunkCompressed(header[:n]) {
+	if readErr != nil || n < 4 || !IsVSZaCompressed(header[:n]) {
 		return false, nil
 	}
 
@@ -993,6 +1027,31 @@ func ParseColdClientLoaderExe(gameDir string) string {
 		return JoinPaths(gameDir, rawExe)
 	}
 	return CanonicalPath(rawExe)
+}
+
+// PreallocateFile attempts to preallocate contiguous disk space for a file using fallocate (Linux) or truncate fallback.
+// If disk space is exhausted (ENOSPC), it returns syscall.ENOSPC immediately.
+func PreallocateFile(f *os.File, size int64) error {
+	if f == nil {
+		return fmt.Errorf("preallocate file: nil file pointer")
+	}
+	if size <= 0 {
+		return nil
+	}
+
+	// Try fallocate on Linux (system call)
+	err := syscall.Fallocate(int(f.Fd()), 0, 0, size)
+	if err == nil {
+		return nil
+	}
+
+	// If disk is full, return ENOSPC immediately without masking it
+	if errors.Is(err, syscall.ENOSPC) {
+		return fmt.Errorf("disk full (ENOSPC) preallocating %d bytes: %w", size, err)
+	}
+
+	// If fallocate is not supported on this filesystem (e.g. ENOSYS, EOPNOTSUPP, EINVAL on some mounts), fall back to Truncate
+	return f.Truncate(size)
 }
 
 

@@ -459,5 +459,40 @@ Exe = "game_special.exe"
 	}
 }
 
+func TestPreallocateFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test_prealloc.bin")
+
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("open file failed: %v", err)
+	}
+	defer f.Close()
+
+	// Preallocate 10 MB
+	const size = 10 * 1024 * 1024
+	if err := PreallocateFile(f, size); err != nil {
+		t.Fatalf("PreallocateFile failed: %v", err)
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if fi.Size() != size {
+		t.Errorf("expected size %d, got %d", size, fi.Size())
+	}
+
+	// Nil file pointer check
+	if err := PreallocateFile(nil, 100); err == nil {
+		t.Errorf("expected error on nil file pointer")
+	}
+
+	// Zero or negative size no-op
+	if err := PreallocateFile(f, 0); err != nil {
+		t.Errorf("expected no-op on zero size, got %v", err)
+	}
+}
+
 
 

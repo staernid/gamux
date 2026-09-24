@@ -179,13 +179,15 @@ type ExternalIDs struct {
 
 // DepotSummary encapsulates metadata and disk installation state for a single Steam content depot.
 type DepotSummary struct {
-	DepotID    uint32 `json:"depot_id"`
-	Name       string `json:"name"`
-	Category   string `json:"category"` // "common", "windows", "linux", "macos", "soundtrack"
-	Installed  bool   `json:"installed"`
-	Size       uint64 `json:"size"`
-	FileCount  int    `json:"file_count"`
-	ManifestID uint64 `json:"manifest_id"`
+	DepotID         uint32 `json:"depot_id"`
+	Name            string `json:"name"`
+	Category        string `json:"category"` // "common", "windows", "linux", "macos", "soundtrack"
+	ContentCategory string `json:"content_category,omitempty"` // "core", "locale:<language>", "soundtrack", "optional_hd"
+	Language        string `json:"language,omitempty"`          // e.g. "french", "german", "english"
+	Installed       bool   `json:"installed"`
+	Size            uint64 `json:"size"`
+	FileCount       int    `json:"file_count"`
+	ManifestID      uint64 `json:"manifest_id"`
 }
 
 // ManifestStatus holds depot manifest and file integrity state.
@@ -310,6 +312,7 @@ type LaunchProfile struct {
 	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
 	CustomEnv         map[string]string `json:"custom_env,omitempty"`
 	WorkingDir        string            `json:"working_dir,omitempty"`
+	ProfileID         string            `json:"profile_id,omitempty"`
 
 	// Store & Metadata bindings
 	Store            string `json:"store,omitempty"`
@@ -398,6 +401,9 @@ func (p *LaunchProfile) MergeFrom(other *LaunchProfile) {
 	if p.WorkingDir == "" {
 		p.WorkingDir = other.WorkingDir
 	}
+	if p.ProfileID == "" {
+		p.ProfileID = other.ProfileID
+	}
 	if p.SourceOverride == "" {
 		p.SourceOverride = other.SourceOverride
 	}
@@ -471,6 +477,55 @@ func (p *LaunchProfile) MergeMetadataAndStatsFrom(other *LaunchProfile) {
 	if p.BranchPassword == "" {
 		p.BranchPassword = other.BranchPassword
 	}
+}
+
+// Clone returns a deep copy of the LaunchProfile.
+func (p *LaunchProfile) Clone() *LaunchProfile {
+	if p == nil {
+		return nil
+	}
+	cp := *p
+	if p.CustomEnv != nil {
+		cp.CustomEnv = make(map[string]string, len(p.CustomEnv))
+		for k, v := range p.CustomEnv {
+			cp.CustomEnv[k] = v
+		}
+	}
+	return &cp
+}
+
+// Clone returns a deep copy of the Game aggregate.
+func (g *Game) Clone() *Game {
+	if g == nil {
+		return nil
+	}
+	cp := *g
+	if g.LaunchProfile != nil {
+		cp.LaunchProfile = g.LaunchProfile.Clone()
+	}
+	if g.VersionStatus != nil {
+		vs := *g.VersionStatus
+		cp.VersionStatus = &vs
+	}
+	if g.LaunchCandidates != nil {
+		cp.LaunchCandidates = append([]LaunchCandidate(nil), g.LaunchCandidates...)
+	}
+	if g.Depots != nil {
+		cp.Depots = append([]DepotSummary(nil), g.Depots...)
+	}
+	if g.AvailablePlatforms != nil {
+		cp.AvailablePlatforms = append([]string(nil), g.AvailablePlatforms...)
+	}
+	if g.SupportedLanguages != nil {
+		cp.SupportedLanguages = append([]string(nil), g.SupportedLanguages...)
+	}
+	if g.OriginalBackups != nil {
+		cp.OriginalBackups = append([]string(nil), g.OriginalBackups...)
+	}
+	if g.SettingsDirs != nil {
+		cp.SettingsDirs = append([]string(nil), g.SettingsDirs...)
+	}
+	return &cp
 }
 
 // ---------------------------------------------------------------------------

@@ -5,19 +5,14 @@
   import InheritSelect from '../../common/InheritSelect.svelte';
   import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
+  import { profilesStore } from '../../../stores/profiles.js';
   import { AppAPI } from '../../../api/app.js';
-  import SteamPersonaCard from './SteamPersonaCard.svelte';
   import CoopDiagnosticsCard from './cards/CoopDiagnosticsCard.svelte';
   import GamepadDiagnosticsCard from './cards/GamepadDiagnosticsCard.svelte';
-  import { generateRandomSteamID as createRandomSteamID } from '../../../utils/steam.js';
 
   export let cfgDraft = {
     multiseat: {
-      player2_account_name: 'PlayerTwo',
-      player2_account_steamid: '76561198998877665',
-      player2_language: 'english',
-      player2_ip_country: 'US',
-      player2_wine_prefix: '',
+      player2_profile_id: 'p2',
       default_seat1_mode: 'local',
       default_seat2_mode: 'local',
       default_layout: 'dual_monitor',
@@ -39,25 +34,12 @@
     }
   };
 
-  export let userCfgDraft = {
-    account_name: 'GamuxPlayer',
-    account_steamid: '76561197960287930',
-    language: 'english',
-    ip_country: 'US'
-  };
-
-  export let languagesList = [];
-  export let countriesList = [];
 
   // Ensure nested multiseat defaults exist
   $: if (!cfgDraft.multiseat) {
     cfgDraft.multiseat = {};
   }
-  $: if (cfgDraft.multiseat.player2_account_name === undefined) cfgDraft.multiseat.player2_account_name = 'PlayerTwo';
-  $: if (cfgDraft.multiseat.player2_account_steamid === undefined) cfgDraft.multiseat.player2_account_steamid = '76561198998877665';
-  $: if (cfgDraft.multiseat.player2_language === undefined) cfgDraft.multiseat.player2_language = 'english';
-  $: if (cfgDraft.multiseat.player2_ip_country === undefined) cfgDraft.multiseat.player2_ip_country = 'US';
-  $: if (cfgDraft.multiseat.player2_wine_prefix === undefined) cfgDraft.multiseat.player2_wine_prefix = '';
+  $: if (cfgDraft.multiseat.player2_profile_id === undefined) cfgDraft.multiseat.player2_profile_id = 'p2';
   $: if (cfgDraft.multiseat.default_seat1_mode === undefined) cfgDraft.multiseat.default_seat1_mode = 'local';
   $: if (cfgDraft.multiseat.default_seat2_mode === undefined) cfgDraft.multiseat.default_seat2_mode = 'local';
   $: if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
@@ -137,95 +119,29 @@
     { value: 'windowed', label: 'Windowed (Floating Windows)' }
   ];
 
-  function quickSetupPlayer2() {
-    cfgDraft.multiseat = {
-      ...cfgDraft.multiseat,
-      player2_account_name: (userCfgDraft?.account_name || 'Player') + '-Coop',
-      player2_account_steamid: createRandomSteamID(),
-      player2_language: userCfgDraft?.language || 'english',
-      player2_ip_country: userCfgDraft?.ip_country || 'US'
-    };
-    cfgDraft = { ...cfgDraft };
-  }
-
-  async function handleBrowsePlayer2WinePrefix() {
-    try {
-      const selected = await AppAPI.selectDirectory('Select Player 2 Wine Prefix Directory', cfgDraft.multiseat?.player2_wine_prefix || '');
-      if (selected) {
-        cfgDraft.multiseat.player2_wine_prefix = selected;
-        cfgDraft = { ...cfgDraft };
-      }
-    } catch (err) {
-      console.warn('Failed to select directory:', err);
-    }
-  }
+  $: profileOptions = ($profilesStore.profiles || []).map(p => ({
+    value: p.id,
+    label: `${p.name} (${p.is_main ? 'Primary Host' : `~/Games/umu-p${p.index}`})`
+  }));
 </script>
 
 <div class="space-y-6">
   <!-- 1. System Capabilities & Diagnostics -->
   <CoopDiagnosticsCard />
 
-  <!-- 2. Player 2 (Guest Persona) Profile -->
-  <SettingSection title="Player 2 Profile (Co-op Guest)">
+  <!-- 2. Seat 2 Profile Selection -->
+  <SettingSection title="Seat 2 Profile (Co-op Guest)">
     <div class="space-y-3">
-      <div class="flex items-center justify-between pb-2 border-b border-surface-border/50">
-        <p class="text-xs text-neutral-400">
-          Distinct profile injected into Player 2's isolated Bubblewrap sandbox with separate save files, achievements, and Steamworks identity.
-        </p>
-        <button
-          type="button"
-          on:click={quickSetupPlayer2}
-          class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
-          title="Clone Player 1 locale with a distinct SteamID and Guest nickname"
-        >
-          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <span>Quick Setup</span>
-        </button>
-      </div>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Select which player profile occupies Seat 2 for split-screen and streaming sessions. Persona and language settings are configured in the Profiles tab.
+      </p>
 
-      <SteamPersonaCard
-        bind:accountName={cfgDraft.multiseat.player2_account_name}
-        bind:accountSteamId={cfgDraft.multiseat.player2_account_steamid}
-        bind:language={cfgDraft.multiseat.player2_language}
-        bind:ipCountry={cfgDraft.multiseat.player2_ip_country}
-        collisionSteamId={userCfgDraft?.account_steamid || ''}
-        nameLabel="Guest Display Name"
-        nameDescription="Persona nickname for the second player in split-screen or streaming sessions"
-        namePlaceholder="PlayerTwo"
-        langLabel="Guest Language"
-        langDescription="Language injected into Player 2's Goldberg Steamworks emulation"
-        steamidLabel="Guest Steam ID (64-Bit)"
-        steamidDescription="Must differ from Player 1 to avoid Steamworks lobby collisions"
-        steamidPlaceholder="76561198998877665"
-        countryLabel="Guest Country Code"
-        countryDescription="Two-letter ISO country code reported by Player 2's emulator"
-        syncTitle="Auto-Sync Player 2 Profile"
-        syncSubtitle="Enter Player 2's Steam vanity URL or SteamID64 to sync co-op persona and avatar"
-        {languagesList}
-        {countriesList}
-        on:change={() => { cfgDraft = { ...cfgDraft }; }}
-      >
-        <div class="space-y-1">
-          <GhostInput
-            label="Guest Wine Prefix"
-            description="Default isolated Wine/Proton prefix directory for Player 2 (defaults to ~/Games/umu-p2)"
-            bind:value={cfgDraft.multiseat.player2_wine_prefix}
-            placeholder="~/Games/umu-p2"
-          >
-            <button
-              slot="action"
-              type="button"
-              on:click={handleBrowsePlayer2WinePrefix}
-              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
-              title="Browse for custom Player 2 Wine prefix directory"
-            >
-              <span>Browse</span>
-            </button>
-          </GhostInput>
-        </div>
-      </SteamPersonaCard>
+      <InheritSelect
+        label="Seat 2 Player Profile"
+        description="Assigned profile for Seat 2 during 2-player sessions"
+        bind:value={cfgDraft.multiseat.player2_profile_id}
+        options={profileOptions.length > 0 ? profileOptions : [{ value: 'p2', label: 'PlayerTwo (~/Games/umu-p2)' }]}
+      />
     </div>
   </SettingSection>
 

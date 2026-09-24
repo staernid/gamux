@@ -217,6 +217,9 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "config.json")
 
 	cfg := DefaultConfig()
+	if cfg.Multiseat.Player2ProfileID != "p2" {
+		t.Errorf("expected default Player2ProfileID to be 'p2', got %q", cfg.Multiseat.Player2ProfileID)
+	}
 	if !cfg.Multiseat.Seat2ShowCursor {
 		t.Errorf("expected default Seat2ShowCursor to be true, got false")
 	}
@@ -225,6 +228,7 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	}
 
 	// Mutate to non-default values (including boolean false for Seat2ShowCursor)
+	cfg.Multiseat.Player2ProfileID = "p3"
 	cfg.Multiseat.Seat2ShowCursor = false
 	cfg.Multiseat.Seat2ForceGrabCursor = true
 	cfg.Multiseat.Seat2GrabKeyboard = true
@@ -261,6 +265,9 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
+	if loaded.Multiseat.Player2ProfileID != "p3" {
+		t.Errorf("expected loaded.Multiseat.Player2ProfileID 'p3', got %q", loaded.Multiseat.Player2ProfileID)
+	}
 	if loaded.Multiseat.Seat2ShowCursor != false {
 		t.Errorf("expected loaded.Multiseat.Seat2ShowCursor to be false, got %v", loaded.Multiseat.Seat2ShowCursor)
 	}

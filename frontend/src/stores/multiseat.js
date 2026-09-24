@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { AppAPI } from '../api/app.js';
 import { configStore } from './config.js';
+import { profilesStore } from './profiles.js';
 import { isSamePath } from '../utils/game.js';
 
 export function getActiveSession(sessions, gameDir) {
@@ -261,18 +262,32 @@ function createMultiseatStore() {
         }
       }
 
+      const allProfs = get(profilesStore.profiles) || [];
+      const activeProf = get(profilesStore.activeProfile);
+
+      const p1Prof = activeProf || { name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US' };
+
+      const p2Id = state.staging?.seat2?.profile_id || mCfg.player2_profile_id || 'p2';
+      const p2Prof = allProfs.find(p => p.id === p2Id) || allProfs.find(p => !p.is_main) || {
+        id: 'p2',
+        name: 'PlayerTwo',
+        steam_id: '76561198998877665',
+        language: 'english',
+        ip_country: 'US',
+      };
+
       const player1Profile = {
-        account_name: effectiveUserCfg?.account_name || 'GamuxPlayer',
-        account_steamid: effectiveUserCfg?.account_steamid || '76561197960287930',
-        language: effectiveUserCfg?.language || 'english',
-        ip_country: effectiveUserCfg?.ip_country || 'US',
+        account_name: p1Prof.name || 'GamuxPlayer',
+        account_steamid: p1Prof.steam_id || '76561197960287930',
+        language: p1Prof.language || 'english',
+        ip_country: p1Prof.ip_country || 'US',
       };
 
       const player2Profile = {
-        account_name: mCfg.player2_account_name || 'PlayerTwo',
-        account_steamid: mCfg.player2_account_steamid || '76561198998877665',
-        language: mCfg.player2_language || 'english',
-        ip_country: mCfg.player2_ip_country || 'US',
+        account_name: p2Prof.name || 'PlayerTwo',
+        account_steamid: p2Prof.steam_id || '76561198998877665',
+        language: p2Prof.language || 'english',
+        ip_country: p2Prof.ip_country || 'US',
       };
 
       // Check connected gamepads for intelligent assignment if not assigned explicitly
@@ -319,19 +334,22 @@ function createMultiseatStore() {
       const seat2NestCage = state.staging?.seat2?.nest_cage ?? mCfg.seat2_nest_cage ?? false;
       const seat2ShowCursor = state.staging?.seat2?.show_cursor ?? mCfg.seat2_show_cursor ?? true;
 
+      const isNative = game.platform === 'linux';
       const sessionConfig = {
         game_dir: game.gameDir,
         name: game.name,
         app_id: game.appId || '',
+        platform: game.platform || 'win64',
         exe_path: game.exePath || '',
         exe_args: game.exeArgs || '',
-        runner: game.runner || cfg?.default_runner || 'umu',
+        runner: isNative ? 'linux' : (game.runner || cfg?.default_runner || 'umu'),
         layout,
         enable_broadcast_relay: enableRelay,
         sunshine_port_p1: sunPortP1,
         sunshine_port_p2: sunPortP2,
         seat1: {
           seat_id: 'p1',
+          profile_id: p1Prof.id || 'main',
           player: player1Profile,
           mode: seat1Mode,
           display_index: seat1Display,
@@ -343,6 +361,7 @@ function createMultiseatStore() {
         },
         seat2: {
           seat_id: 'p2',
+          profile_id: p2Prof.id || 'p2',
           player: player2Profile,
           mode: seat2Mode,
           display_index: seat2Display,

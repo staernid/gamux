@@ -26,8 +26,16 @@ export function CreateGameStub(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['gui']['App']['CreateGameStub'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function CreateProfile(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['gui']['App']['CreateProfile'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function CreateSaveBackup(arg1, arg2) {
   return window['go']['gui']['App']['CreateSaveBackup'](arg1, arg2);
+}
+
+export function DeleteProfile(arg1) {
+  return window['go']['gui']['App']['DeleteProfile'](arg1);
 }
 
 export function DeleteSaveBackup(arg1, arg2) {
@@ -44,6 +52,14 @@ export function FetchDLCs(arg1) {
 
 export function FetchNews(arg1, arg2) {
   return window['go']['gui']['App']['FetchNews'](arg1, arg2);
+}
+
+export function GetActiveProfile() {
+  return window['go']['gui']['App']['GetActiveProfile']();
+}
+
+export function GetAppDepots(arg1) {
+  return window['go']['gui']['App']['GetAppDepots'](arg1);
 }
 
 export function GetAvailableRunners() {
@@ -132,6 +148,10 @@ export function GetMultiseatSessionStatus(arg1) {
 
 export function GetPatchNote(arg1, arg2) {
   return window['go']['gui']['App']['GetPatchNote'](arg1, arg2);
+}
+
+export function GetProfiles() {
+  return window['go']['gui']['App']['GetProfiles']();
 }
 
 export function GetRecentGames(arg1) {
@@ -282,6 +302,10 @@ export function SaveLaunchProfile(arg1, arg2) {
   return window['go']['gui']['App']['SaveLaunchProfile'](arg1, arg2);
 }
 
+export function SaveProfile(arg1) {
+  return window['go']['gui']['App']['SaveProfile'](arg1);
+}
+
 export function SearchStoreGames(arg1) {
   return window['go']['gui']['App']['SearchStoreGames'](arg1);
 }
@@ -292,6 +316,10 @@ export function SelectDirectory(arg1, arg2) {
 
 export function SelectFile(arg1, arg2, arg3) {
   return window['go']['gui']['App']['SelectFile'](arg1, arg2, arg3);
+}
+
+export function SetActiveProfile(arg1) {
+  return window['go']['gui']['App']['SetActiveProfile'](arg1);
 }
 
 export function SetGameBranch(arg1, arg2, arg3) {
@@ -316,6 +344,10 @@ export function Shutdown(arg1) {
 
 export function StartDownloadTransfer(arg1) {
   return window['go']['gui']['App']['StartDownloadTransfer'](arg1);
+}
+
+export function StartVerifyGameTask(arg1) {
+  return window['go']['gui']['App']['StartVerifyGameTask'](arg1);
 }
 
 export function Startup(arg1) {

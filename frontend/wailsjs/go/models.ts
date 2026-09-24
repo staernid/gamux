@@ -1,11 +1,7 @@
 export namespace config {
 	
 	export class MultiseatConfig {
-	    player2_account_name?: string;
-	    player2_account_steamid?: string;
-	    player2_language?: string;
-	    player2_ip_country?: string;
-	    player2_wine_prefix?: string;
+	    player2_profile_id?: string;
 	    default_seat1_mode?: string;
 	    default_seat2_mode?: string;
 	    default_layout?: string;
@@ -32,11 +28,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.player2_account_name = source["player2_account_name"];
-	        this.player2_account_steamid = source["player2_account_steamid"];
-	        this.player2_language = source["player2_language"];
-	        this.player2_ip_country = source["player2_ip_country"];
-	        this.player2_wine_prefix = source["player2_wine_prefix"];
+	        this.player2_profile_id = source["player2_profile_id"];
 	        this.default_seat1_mode = source["default_seat1_mode"];
 	        this.default_seat2_mode = source["default_seat2_mode"];
 	        this.default_layout = source["default_layout"];
@@ -324,6 +316,8 @@ export namespace domain {
 	    depot_id: number;
 	    name: string;
 	    category: string;
+	    content_category?: string;
+	    language?: string;
 	    installed: boolean;
 	    size: number;
 	    file_count: number;
@@ -338,6 +332,8 @@ export namespace domain {
 	        this.depot_id = source["depot_id"];
 	        this.name = source["name"];
 	        this.category = source["category"];
+	        this.content_category = source["content_category"];
+	        this.language = source["language"];
 	        this.installed = source["installed"];
 	        this.size = source["size"];
 	        this.file_count = source["file_count"];
@@ -418,6 +414,7 @@ export namespace domain {
 	    dll_overrides?: string;
 	    custom_env?: Record<string, string>;
 	    working_dir?: string;
+	    profile_id?: string;
 	    store?: string;
 	    store_app_id?: string;
 	    branch?: string;
@@ -464,6 +461,7 @@ export namespace domain {
 	        this.dll_overrides = source["dll_overrides"];
 	        this.custom_env = source["custom_env"];
 	        this.working_dir = source["working_dir"];
+	        this.profile_id = source["profile_id"];
 	        this.store = source["store"];
 	        this.store_app_id = source["store_app_id"];
 	        this.branch = source["branch"];
@@ -746,6 +744,32 @@ export namespace domain {
 	}
 	
 	
+	export class Profile {
+	    id: string;
+	    index: number;
+	    name: string;
+	    steam_id: string;
+	    language: string;
+	    ip_country: string;
+	    avatar_url?: string;
+	    is_main: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.index = source["index"];
+	        this.name = source["name"];
+	        this.steam_id = source["steam_id"];
+	        this.language = source["language"];
+	        this.ip_country = source["ip_country"];
+	        this.avatar_url = source["avatar_url"];
+	        this.is_main = source["is_main"];
+	    }
+	}
 	export class SteamBranch {
 	    name: string;
 	    description?: string;
@@ -795,6 +819,10 @@ export namespace engine {
 	    app_id: number;
 	    target_dir: string;
 	    platform: string;
+	    language?: string;
+	    included_depots?: number[];
+	    excluded_depots?: number[];
+	    include_optional?: boolean;
 	    branch?: string;
 	    lua_path: string;
 	    dry_run: boolean;
@@ -811,6 +839,10 @@ export namespace engine {
 	        this.app_id = source["app_id"];
 	        this.target_dir = source["target_dir"];
 	        this.platform = source["platform"];
+	        this.language = source["language"];
+	        this.included_depots = source["included_depots"];
+	        this.excluded_depots = source["excluded_depots"];
+	        this.include_optional = source["include_optional"];
 	        this.branch = source["branch"];
 	        this.lua_path = source["lua_path"];
 	        this.dry_run = source["dry_run"];
@@ -1004,6 +1036,7 @@ export namespace multiseat {
 	export class SeatConfig {
 	    seat_id: string;
 	    player: PlayerProfile;
+	    profile_id?: string;
 	    mode: string;
 	    display_index: number;
 	    target_width?: number;
@@ -1036,6 +1069,7 @@ export namespace multiseat {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.seat_id = source["seat_id"];
 	        this.player = this.convertValues(source["player"], PlayerProfile);
+	        this.profile_id = source["profile_id"];
 	        this.mode = source["mode"];
 	        this.display_index = source["display_index"];
 	        this.target_width = source["target_width"];

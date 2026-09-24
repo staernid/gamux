@@ -1430,6 +1430,50 @@ func TestPrepareLinuxSteamEnvironment(t *testing.T) {
 	}
 }
 
+func TestPrepareLinuxSteamEnvironment_SecondaryProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, ".local", "share"))
+
+	p2Home := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home")
+	_ = os.MkdirAll(p2Home, 0755)
+
+	gbeDir := filepath.Join(tmpDir, "gbe")
+	x64Dir := filepath.Join(gbeDir, "linux_release", "experimental", "x64")
+	_ = os.MkdirAll(x64Dir, 0755)
+	_ = os.WriteFile(filepath.Join(x64Dir, "steamclient.so"), []byte("gbe_so_64"), 0755)
+
+	gameDir := filepath.Join(tmpDir, "game")
+	_ = os.MkdirAll(filepath.Join(gameDir, "steam_settings"), 0755)
+
+	cfg := &config.Config{GbeDir: gbeDir}
+	opts := LaunchOptions{
+		GameDir:       gameDir,
+		Platform:      "linux",
+		OperatingMode: ModeLoader,
+		ProfileID:     "p2",
+	}
+
+	cleanup, err := PrepareLinuxSteamEnvironment(cfg, opts)
+	if err != nil {
+		t.Fatalf("PrepareLinuxSteamEnvironment failed: %v", err)
+	}
+	defer cleanup()
+
+	// Verify steamclient.so symlink exists in P2's home, NOT host home
+	p2SteamDir := filepath.Join(p2Home, ".steam")
+	p2Sdk64Client := filepath.Join(p2SteamDir, "sdk64", "steamclient.so")
+	if !util.FileExists(p2Sdk64Client) {
+		t.Errorf("expected sdk64/steamclient.so in p2 home at %s", p2Sdk64Client)
+	}
+
+	// Verify host home was untouched
+	hostSteamSdk := filepath.Join(tmpDir, ".steam", "sdk64", "steamclient.so")
+	if util.FileExists(hostSteamSdk) {
+		t.Errorf("host home should NOT have received steamclient.so when running as p2")
+	}
+}
+
 func TestGenerateLaunchScript_MatchesBuildCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "MatchGame")
@@ -1804,11 +1848,48 @@ func TestManager_LingeringDaemonCleanup(t *testing.T) {
 	}
 }
 
+func TestBuildLaunchSpec_SecondaryProfileIsolation(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, ".local", "share"))
 
+	p2Home := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home")
+	_ = os.MkdirAll(p2Home, 0755)
 
+	gameDir := filepath.Join(tmpDir, "Torchlight2")
+	_ = os.MkdirAll(gameDir, 0755)
+	exePath := filepath.Join(gameDir, "Torchlight2.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
 
+	cfg := config.DefaultConfig()
+	opts := LaunchOptions{
+		GameDir:       gameDir,
+		ExePath:       "Torchlight2.exe",
+		AppID:         "200710",
+		Name:          "Torchlight II",
+		Platform:      "win32",
+		OperatingMode: "portable",
+		Runner:        RunnerWine,
+		ProfileID:     "p2",
+	}
 
+	spec, err := BuildLaunchSpec(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildLaunchSpec failed: %v", err)
+	}
 
-
-
-
+	expectedPrefix := filepath.Join(tmpDir, "Games", "umu-p2", "200710")
+	if spec.Env["WINEPREFIX"] != expectedPrefix {
+		t.Errorf("expected WINEPREFIX %s, got %s", expectedPrefix, spec.Env["WINEPREFIX"])
+	}
+	if spec.Env["STEAM_COMPAT_DATA_PATH"] != expectedPrefix {
+		t.Errorf("expected STEAM_COMPAT_DATA_PATH %s, got %s", expectedPrefix, spec.Env["STEAM_COMPAT_DATA_PATH"])
+	}
+	if spec.Env["HOME"] != p2Home {
+		t.Errorf("expected HOME %s, got %s", p2Home, spec.Env["HOME"])
+	}
+	expectedXdgData := filepath.Join(p2Home, ".local", "share")
+	if spec.Env["XDG_DATA_HOME"] != expectedXdgData {
+		t.Errorf("expected XDG_DATA_HOME %s, got %s", expectedXdgData, spec.Env["XDG_DATA_HOME"])
+	}
+}

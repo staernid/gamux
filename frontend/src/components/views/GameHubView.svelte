@@ -16,6 +16,7 @@
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
+  import { profilesStore } from '../../stores/profiles.js';
   import { AppAPI } from '../../api/app.js';
   import { isSamePath, countOverrides, normalizeGame, isSteamApp } from '../../utils/game.js';
   import HubSavesCard from './hub/cards/HubSavesCard.svelte';
@@ -59,6 +60,30 @@
     return false;
   });
   $: isTaskActive = Boolean(activeGameTask);
+
+  $: {
+    const vTask = ($allTasks || []).find(t => {
+      if (t.type !== 'verify' && t.operation !== 'verify') return false;
+      if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
+      if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
+      return false;
+    });
+    if (vTask) {
+      if (vTask.status === 'completed') {
+        if (isCheckingIntegrity) isCheckingIntegrity = false;
+        if (vTask.metadata?.integrity_report && !integrityReport) {
+          try {
+            integrityReport = JSON.parse(vTask.metadata.integrity_report);
+          } catch (_) {}
+        }
+      } else if (vTask.status === 'failed') {
+        if (isCheckingIntegrity) {
+          isCheckingIntegrity = false;
+          integrityError = vTask.error || 'Integrity check failed.';
+        }
+      }
+    }
+  }
 
   $: overrideCount = countOverrides($drawerDraft, game, globalCfg);
 
@@ -226,17 +251,26 @@
       return;
     }
 
+    const targetExe = game.exePath || $drawerDraft?.exePath || '';
+    if (!targetExe) {
+      notificationStore.warn('No Target Executable', 'Please configure or browse for a target executable in the General tab before launching.');
+      return;
+    }
+
     try {
       if ($multiseatStore.isCoopEnabled) {
         await multiseatStore.launchSession(game, userCfg || {});
       } else {
+        const isNative = game.platform === 'linux';
         await AppAPI.launchGame({
           name: game.name,
           game_dir: game.gameDir,
           app_id: game.appId,
-          runner: game.runner || globalCfg?.default_runner || 'umu',
-          exe_path: game.exePath || $drawerDraft?.exePath || '',
+          platform: game.platform || 'win64',
+          runner: isNative ? 'linux' : (game.runner || globalCfg?.default_runner || 'umu'),
+          exe_path: targetExe,
           exe_args: game.exeArgs || $drawerDraft?.exeArgs || '',
+          profile_id: $profilesStore.activeProfile?.id || '',
         });
       }
       setGameRunning(game.gameDir, true);
@@ -337,11 +371,17 @@
     if (!game?.gameDir) return;
     isCheckingIntegrity = true;
     integrityError = '';
+    integrityReport = null;
     try {
-      integrityReport = await AppAPI.verifyGameIntegrity(game.gameDir);
+      await AppAPI.startVerifyGameTask(game.gameDir);
+      notificationStore.items.add({
+        type: 'info',
+        title: 'Integrity Verification Started',
+        message: `Scanning files for ${game.name}...`,
+        gameName: game.name
+      });
     } catch (err) {
-      integrityError = err?.message || 'Integrity check failed.';
-    } finally {
+      integrityError = err?.message || 'Failed to start integrity verification.';
       isCheckingIntegrity = false;
     }
   }

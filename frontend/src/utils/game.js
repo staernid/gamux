@@ -15,7 +15,14 @@ export function normalizePath(p) {
 export function isSamePath(pathA, pathB) {
   if (!pathA && !pathB) return true;
   if (!pathA || !pathB) return false;
-  return normalizePath(pathA) === normalizePath(pathB);
+  const a = normalizePath(pathA);
+  const b = normalizePath(pathB);
+  if (a === b) return true;
+  const aLower = a.toLowerCase();
+  const bLower = b.toLowerCase();
+  if (aLower === bLower) return true;
+  if (aLower.endsWith('/' + bLower) || bLower.endsWith('/' + aLower)) return true;
+  return false;
 }
 
 export function filterLaunchCandidates(candidates = []) {
@@ -212,6 +219,11 @@ export function countOverrides(draft, game = null, globalCfg = {}) {
   const defaultExe = game?.launchCandidates?.[0]?.executable || game?.exePath || '';
   const defaultArgs = game?.launchCandidates?.[0]?.arguments || '';
 
+  const defaultOperatingMode = globalCfg?.operating_mode || 'loader';
+  const defaultRunner = globalCfg?.default_runner || 'umu';
+  const defaultLanguage = globalCfg?.language || 'auto';
+  const defaultMetadataProvider = (game?.store || game?.source || (isSteamApp(game?.appId) ? 'steam' : 'none')).toLowerCase();
+
   const fieldRules = [
     // 1. Title Override
     () => Boolean(draft.name?.trim() && draft.name.trim() !== (game?.name || '').trim()),
@@ -222,9 +234,9 @@ export function countOverrides(draft, game = null, globalCfg = {}) {
     // 4. Executable Arguments Override
     () => Boolean(draft.exeArgs?.trim() && draft.exeArgs.trim() !== defaultArgs.trim()),
     // 5. Operating Mode Override
-    () => Boolean(draft.operatingMode?.trim()),
+    () => Boolean(draft.operatingMode?.trim() && draft.operatingMode !== defaultOperatingMode),
     // 6. Runner Layer Override
-    () => Boolean(draft.runner?.trim() && draft.runner !== (globalCfg?.default_runner || 'umu')),
+    () => Boolean(draft.runner?.trim() && draft.runner !== defaultRunner),
     // 7. Wine Prefix Override
     () => Boolean(draft.winePrefix?.trim()),
     // 8. Proton Path Override
@@ -238,11 +250,11 @@ export function countOverrides(draft, game = null, globalCfg = {}) {
     // 12. Offline Mode Override
     () => draft.offlineMode !== null && draft.offlineMode !== undefined && draft.offlineMode !== Boolean(globalCfg?.offline_mode),
     // 13. Game Language Override
-    () => Boolean(draft.language?.trim() && draft.language !== 'auto' && draft.language !== (globalCfg?.language || 'auto')),
+    () => Boolean(draft.language?.trim() && draft.language !== 'auto' && draft.language !== defaultLanguage),
     // 14. Physical Installation Source Override
     () => Boolean(draft.sourceOverride?.trim()),
     // 15. Store Metadata Provider Override
-    () => Boolean(draft.metadataProvider?.trim() && draft.metadataProvider !== 'none'),
+    () => Boolean(draft.metadataProvider?.trim() && draft.metadataProvider.toLowerCase() !== 'none' && draft.metadataProvider.toLowerCase() !== defaultMetadataProvider),
     // 16. Gamescope & Display Overrides
     () => draft.gamescope !== null && draft.gamescope !== undefined && draft.gamescope !== Boolean(globalCfg?.gamescope),
     () => Boolean(draft.gamescopeWidth && draft.gamescopeWidth !== (globalCfg?.gamescope_width || 0)),

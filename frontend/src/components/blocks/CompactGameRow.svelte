@@ -56,7 +56,7 @@
       <span class="w-16 uppercase text-neutral-500 truncate">{game.platform || 'win64'}</span>
       <span class="w-20 text-right">{game.diskSizeBytes ? formatBytes(game.diskSizeBytes) : '—'}</span>
       <span class="w-24 text-right">{game.playtimeSeconds ? formatPlaytime(game.playtimeSeconds) : '—'}</span>
-      <span class="w-24 text-right text-neutral-500 truncate">{game.runner || 'UMU'}</span>
+      <span class="w-24 text-right text-neutral-500 truncate">{game.platform === 'linux' ? 'Linux Native' : (game.runner || 'UMU')}</span>
 
       <!-- Fast Play Trigger Button -->
       <button

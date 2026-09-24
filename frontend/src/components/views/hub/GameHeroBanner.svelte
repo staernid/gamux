@@ -105,7 +105,7 @@
         ? 'Queued...'
         : (activeGameTask?.type === 'download' || activeGameTask?.operation === 'download')
         ? (typeof activeGameTask?.percent === 'number' && activeGameTask.percent > 0
-            ? `Downloading... ${activeGameTask.percent}%`
+            ? `Downloading... ${Math.round(activeGameTask.percent)}%`
             : 'Downloading...')
         : 'Task in Progress...')
     : isGameRunning
@@ -226,7 +226,7 @@
               <span class="text-neutral-300 font-bold">Online Store Title</span>
               <span class="text-neutral-500">·</span>
             {/if}
-            <span class="truncate max-w-sm">{game.runner || globalCfg?.default_runner || 'UMU'}</span>
+            <span class="truncate max-w-sm">{game.platform === 'linux' ? 'Linux Native' : (game.runner || globalCfg?.default_runner || 'UMU')}</span>
             {#if isInstalled && !game.isReady}
               <span class="text-neutral-500">·</span>
               <span class="text-amber-400">Setup Required</span>

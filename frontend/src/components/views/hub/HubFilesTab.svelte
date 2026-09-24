@@ -112,6 +112,22 @@
       {activeGameTask}
       on:updateGame={handleUpdateGame}
     />
+  {:else if activeFilesSubTab === 'depots'}
+    {#if !isInstalled}
+      <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
+      <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">
+        <div class="w-10 h-10 rounded-xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <h3 class="font-bold text-white text-sm">Game Files Not Installed</h3>
+        <p class="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
+          Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs. You can inspect available content depots and select language packs below.
+        </p>
+      </div>
+    {/if}
+    <HubDLCCard {game} />
   {:else if !isInstalled}
     <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
     <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">
@@ -125,10 +141,9 @@
         Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs.
       </p>
     </div>
-  {:else if activeFilesSubTab === 'depots'}
-    <HubDLCCard {game} />
   {:else if activeFilesSubTab === 'integrity'}
     <HubIntegrityCard
+      {activeGameTask}
       {isCheckingIntegrity}
       {isNormalizing}
       isUpdating={isTaskActive}

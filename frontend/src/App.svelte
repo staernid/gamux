@@ -32,6 +32,7 @@
   import { notificationStore } from './stores/notifications.js';
   import { configStore } from './stores/config.js';
   import { multiseatStore } from './stores/multiseat.js';
+  import { profilesStore } from './stores/profiles.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
   import { formatBytes } from './utils/format.js';
   import {
@@ -207,6 +208,7 @@
     const savedScale = localStorage.getItem('gamux_ui_scale') || '18';
     configStore.setScale(savedScale);
     configStore.load();
+    profilesStore.load();
 
     // 2. Setup runtime event bridges
     function handleEventWithStoreSync(ev) {

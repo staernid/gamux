@@ -8,6 +8,7 @@ import (
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/engine"
+	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/ui"
 	"github.com/urfave/cli/v2"
@@ -93,11 +94,32 @@ var downloadCommand = &cli.Command{
 			applyOpts = &opts
 		}
 
+		var includedDepots []uint32
+		for _, d := range c.UintSlice("depot") {
+			includedDepots = append(includedDepots, uint32(d))
+		}
+		var excludedDepots []uint32
+		for _, d := range c.UintSlice("exclude-depot") {
+			excludedDepots = append(excludedDepots, uint32(d))
+		}
+
+		language := c.String("lang")
+		if language == "" && activeConfig != nil {
+			language = activeConfig.Language
+		}
+		if language == "" || language == "auto" {
+			language = manifest.ResolveSystemLanguage()
+		}
+
 		dlOpts := engine.DownloadGameOptions{
 			TargetDir:        targetDir,
 			AppID:            appID,
 			LuaPath:          luaPath,
 			Platform:         platform,
+			Language:         language,
+			IncludedDepots:   includedDepots,
+			ExcludedDepots:   excludedDepots,
+			IncludeOptional:  c.Bool("include-optional"),
 			DryRun:           c.Bool("dry-run"),
 			AutoApply:        c.Bool("setup"),
 			ApplyOptions:     applyOpts,

@@ -69,13 +69,13 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
       default: 4
     },
     {
-      key: 'multiseat.player2_account_name',
-      label: 'Player 2 Name',
+      key: 'multiseat.player2_profile_id',
+      label: 'Seat 2 Profile',
       description: 'Display persona for player 2.',
       type: 'string',
       category: 'Multi-Seat',
       scope: 'global',
-      default: 'PlayerTwo'
+      default: 'p2'
     }
   ];
 
@@ -90,7 +90,7 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
           custom_library_folders: ['/mnt/games1', '/mnt/games2'],
           custom_env_vars: { WINE_DEBUG: 'warn' },
           max_threads: 8,
-          multiseat: { player2_account_name: 'Gamer2' }
+          multiseat: { player2_profile_id: 'p2' }
         }
       }
     });
@@ -120,7 +120,7 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
 
     // 5. Number and string controls
     expect(screen.getByTestId('control-number-max_threads')).toBeInTheDocument();
-    expect(screen.getByTestId('control-text-multiseat.player2_account_name')).toBeInTheDocument();
+    expect(screen.getByTestId('control-text-multiseat.player2_profile_id')).toBeInTheDocument();
   });
 
   it('handles SwitchControl interaction and emits change event', async () => {
@@ -246,13 +246,13 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
     expect(changeEvent.value).toEqual({ NEW_VAR: 'abc' });
   });
 
-  it('updates nested dot properties like multiseat.player2_account_name', async () => {
+  it('updates nested dot properties like multiseat.player2_profile_id', async () => {
     let changeEvent = null;
     render(PropertySheet, {
       props: {
         schema: sampleSchema,
         values: {
-          multiseat: { player2_account_name: 'PlayerTwo' }
+          multiseat: { player2_profile_id: 'p2' }
         },
         onChange: (detail) => {
           changeEvent = detail;
@@ -260,12 +260,12 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
       }
     });
 
-    const textInput = screen.getByLabelText(/Player 2 Name/i);
-    await fireEvent.input(textInput, { target: { value: 'CoopPartner' } });
+    const textInput = screen.getByLabelText(/Seat 2 Profile/i);
+    await fireEvent.input(textInput, { target: { value: 'p3' } });
 
-    expect(changeEvent.key).toBe('multiseat.player2_account_name');
-    expect(changeEvent.value).toBe('CoopPartner');
-    expect(changeEvent.values.multiseat.player2_account_name).toBe('CoopPartner');
+    expect(changeEvent.key).toBe('multiseat.player2_profile_id');
+    expect(changeEvent.value).toBe('p3');
+    expect(changeEvent.values.multiseat.player2_profile_id).toBe('p3');
   });
 
   it('filters by category when category prop is specified', () => {
@@ -445,6 +445,51 @@ describe('PropertySheet Component (Server-Driven Dynamic Configuration Engine)',
     const input = container.querySelector('input');
     expect(input.value).toBe('/pfx/custom');
   });
+
+  it('does not mark boolean as overridden when matching inherited false, and resets properly', async () => {
+    let resetDetail = null;
+    const schema = [
+      {
+        key: 'disable_overlay',
+        label: 'Disable Steam Overlay',
+        type: 'boolean',
+        category: 'Emulation',
+        scope: 'game',
+        default: false,
+        inherits_from: 'disable_overlay'
+      }
+    ];
+
+    // 1. Initial render with matching false value -> NOT overridden
+    const { rerender } = render(PropertySheet, {
+      props: {
+        schema,
+        scope: 'game',
+        values: { disableOverlay: false },
+        inheritedValues: { disable_overlay: false },
+        onReset: (detail) => {
+          resetDetail = detail;
+        }
+      }
+    });
+
+    expect(screen.getByTestId('property-pill-inherited-disable_overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('property-pill-overridden-disable_overlay')).not.toBeInTheDocument();
+
+    // 2. Update to true -> OVERRIDDEN
+    await rerender({ values: { disableOverlay: true } });
+    expect(screen.getByTestId('property-pill-overridden-disable_overlay')).toBeInTheDocument();
+    const resetBtn = screen.getByTestId('property-reset-btn-disable_overlay');
+    expect(resetBtn).toBeInTheDocument();
+
+    // 3. Click Reset -> resets and removes overridden indicator
+    await fireEvent.click(resetBtn);
+    expect(resetDetail).not.toBeNull();
+    expect(resetDetail.key).toBe('disable_overlay');
+    expect(screen.queryByTestId('property-pill-overridden-disable_overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('property-pill-inherited-disable_overlay')).toBeInTheDocument();
+  });
 });
+
 
 

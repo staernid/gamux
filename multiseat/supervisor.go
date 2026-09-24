@@ -307,12 +307,22 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 
 	// 1. Prepare Seat Profiles (Player 1 uses real host home; Player 2 uses isolated profile)
 	p1Dir := filepath.Join(profilesBase, "player1")
-	p2Dir := filepath.Join(profilesBase, "player2")
+	p2DirName := "player2"
+	if sessionCfg.Seat2.ProfileID != "" {
+		p2DirName = sessionCfg.Seat2.ProfileID
+	}
+	p2Dir := filepath.Join(profilesBase, p2DirName)
 
-	_ = os.MkdirAll(filepath.Join(p1Dir, "logs"), 0755)
 	if err := EnsureSeatProfile(p2Dir, sessionCfg.Seat2.Player); err != nil {
 		return fmt.Errorf("prepare seat 2 profile: %w", err)
 	}
+
+	// Single source of truth: ensure Seat 2 prefix AppData/Roaming/GSE Saves symlinks to isolated GSE Saves
+	seat2GSEDir := filepath.Join(p2Dir, "home", ".local", "share", "GSE Saves")
+	if sessionCfg.Seat2.WinePrefix != "" {
+		_ = compat.EnsurePrefixGSESymlink(sessionCfg.Seat2.WinePrefix, seat2GSEDir)
+	}
+	_ = compat.EnsurePrefixGSESymlink(compat.DefaultPrefixesDirForSeat("p2"), seat2GSEDir)
 
 	// 2. Audio Sinks (PipeWire null sinks)
 	var sinkP1, sinkP2 *VirtualSink
@@ -662,12 +672,22 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	}
 
 	numAppID, _ := util.ParseAppID(sessionCfg.AppID)
+	operatingMode := domain.ModeLoader
+	if profile, err := compat.LoadProfile(sessionCfg.GameDir); err == nil && profile != nil && profile.OperatingMode != "" {
+		operatingMode = domain.NormalizeOperatingMode(profile.OperatingMode)
+	} else if s.cfg != nil && s.cfg.OperatingMode != "" {
+		operatingMode = domain.NormalizeOperatingMode(s.cfg.OperatingMode)
+	}
+
 	gameStub := &domain.Game{
 		GameRecord: domain.GameRecord{
 			Name:         sessionCfg.Name,
 			AppID:        sessionCfg.AppID,
 			NumericAppID: numAppID,
 			GameDir:      sessionCfg.GameDir,
+		},
+		LaunchProfile: &domain.LaunchProfile{
+			OperatingMode: operatingMode,
 		},
 	}
 
@@ -678,6 +698,11 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	}
 
 	// 1. Build base game launch specification via runner
+	effectiveProfileID := seatID
+	if seatCfg.ProfileID != "" {
+		effectiveProfileID = seatCfg.ProfileID
+	}
+
 	launchOpts := runner.LaunchOptions{
 		GameDir:       sessionCfg.GameDir,
 		Name:          sessionCfg.Name,
@@ -685,7 +710,8 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 		ExePath:       sessionCfg.ExePath,
 		ExeArgs:       sessionCfg.ExeArgs,
 		Runner:        sessionCfg.Runner,
-		OperatingMode: "loader",
+		OperatingMode: operatingMode,
+		ProfileID:     effectiveProfileID,
 		WinePrefix:    pfxPath,
 		CustomEnv:     make(map[string]string),
 	}

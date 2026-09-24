@@ -24,16 +24,18 @@ type upToDateResponse struct {
 	} `json:"response"`
 }
 
-// CheckGameVersion performs a multi-tiered version verification for a Steam AppID.
+// CheckGameVersion performs authoritative version verification for a Steam AppID.
 // Tier 1: Queries official Steam API ISteamApps/UpToDateCheck/v1 when a numeric build ID is available.
-// Tier 3: Falls back to analyzing recent store patch notes & community announcements timestamps
-// against the local game installation date (with a 24-hour grace buffer).
+// Tier 2: Queries SteamCMD AppInfo branches for the authoritative public release buildid.
+// Tier 3: When local build ID is unpopulated ("0", ""), absence is treated as non-failure (AGENTS.md Core Tenet 4),
+// and news/announcements are kept informational without triggering false update alerts.
 func CheckGameVersion(ctx context.Context, appID uint32, localBuildID string, installedTime int64) (*domain.VersionStatus, error) {
 	if appID == 0 {
 		return nil, fmt.Errorf("invalid appID 0")
 	}
 
-	cacheKey := fmt.Sprintf("%d_%s_%d", appID, localBuildID, installedTime)
+	cleanBuildID := strings.TrimSpace(localBuildID)
+	cacheKey := fmt.Sprintf("v2_%d_%s", appID, cleanBuildID)
 
 	// 0. Check cache
 	if cachedBytes, ok := cache.GetVersionStatus(cacheKey); ok && len(cachedBytes) > 0 {
@@ -50,95 +52,148 @@ func CheckGameVersion(ctx context.Context, appID uint32, localBuildID string, in
 		return status, nil
 	}
 
+	// Case A: Unpopulated sentinel build ID ("" or "0").
+	// Per AGENTS.md Core Tenet 4 ("Absence is Not an Error"), unpopulated sentinels must never
+	// trigger false update alerts. We attempt to fetch the latest public build ID and patch info
+	// for informational display, but keep IsUpToDate = true and Checked = false.
+	if cleanBuildID == "" || cleanBuildID == "0" {
+		latestBuildID := ""
+		if branches, err := FetchAppBranches(ctx, appID); err == nil && len(branches) > 0 {
+			for _, b := range branches {
+				if b.Name == "public" && b.BuildID != "" {
+					latestBuildID = b.BuildID
+					break
+				}
+			}
+			if latestBuildID == "" && branches[0].BuildID != "" {
+				latestBuildID = branches[0].BuildID
+			}
+		}
+
+		status := &domain.VersionStatus{
+			Checked:        false,
+			IsUpToDate:     true,
+			CurrentBuildID: cleanBuildID,
+			LatestBuildID:  latestBuildID,
+			Message:        "Version check unavailable (unpopulated BuildID)",
+		}
+
+		// Attach recent patch note metadata for UI display if available
+		if items, err := FetchAppNewsItems(ctx, fmt.Sprintf("%d", appID), 5); err == nil && len(items) > 0 {
+			status.LatestPatchDate = items[0].Date
+			status.LatestPatchTitle = items[0].Title
+		}
+
+		slog.Info("Handled unpopulated build ID sentinel without false alarm", "appID", appID, "latestBuildID", latestBuildID)
+		return saveAndReturn(status)
+	}
+
+	// Case B: Valid local build ID is present.
 	// Tier 1: Try official ISteamApps/UpToDateCheck/v1
-	cleanBuildID := strings.TrimSpace(localBuildID)
-	if cleanBuildID != "" && cleanBuildID != "0" {
-		if versionNum, err := strconv.ParseUint(cleanBuildID, 10, 32); err == nil && versionNum > 0 {
-			apiURL := fmt.Sprintf("%s/ISteamApps/UpToDateCheck/v1/?appid=%d&version=%d", DefaultSteamWebAPI, appID, versionNum)
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-			if err == nil {
-				req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Steam Game Manager)")
-				if resp, err := HTTPClientFromContext(ctx).Do(req); err == nil {
-					defer resp.Body.Close()
-					if resp.StatusCode == http.StatusOK {
-						var uRes upToDateResponse
-						if err := json.NewDecoder(resp.Body).Decode(&uRes); err == nil && uRes.Response.Success {
-							reqVerStr := ""
-							if uRes.Response.RequiredVersion > 0 {
-								reqVerStr = fmt.Sprintf("%d", uRes.Response.RequiredVersion)
-							}
-							msg := uRes.Response.Message
-							if !uRes.Response.UpToDate && msg == "" && reqVerStr != "" {
-								msg = fmt.Sprintf("New version available: %s", reqVerStr)
-							} else if uRes.Response.UpToDate && msg == "" {
-								msg = "Game is up to date"
-							}
-							status := &domain.VersionStatus{
-								Checked:        true,
-								IsUpToDate:     uRes.Response.UpToDate,
-								CurrentBuildID: cleanBuildID,
-								LatestBuildID:  reqVerStr,
-								Message:        msg,
-							}
-							slog.Info("Verified game version via ISteamApps/UpToDateCheck", "appID", appID, "upToDate", status.IsUpToDate)
-							return saveAndReturn(status)
+	if versionNum, err := strconv.ParseUint(cleanBuildID, 10, 32); err == nil && versionNum > 0 {
+		apiURL := fmt.Sprintf("%s/ISteamApps/UpToDateCheck/v1/?appid=%d&version=%d", DefaultSteamWebAPI, appID, versionNum)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if err == nil {
+			req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Steam Game Manager)")
+			if resp, err := HTTPClientFromContext(ctx).Do(req); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var uRes upToDateResponse
+					if err := json.NewDecoder(resp.Body).Decode(&uRes); err == nil && uRes.Response.Success {
+						reqVerStr := ""
+						if uRes.Response.RequiredVersion > 0 {
+							reqVerStr = fmt.Sprintf("%d", uRes.Response.RequiredVersion)
 						}
+						msg := uRes.Response.Message
+						if !uRes.Response.UpToDate && msg == "" && reqVerStr != "" {
+							msg = fmt.Sprintf("New version available: %s", reqVerStr)
+						} else if uRes.Response.UpToDate && msg == "" {
+							msg = "Game is up to date"
+						}
+						status := &domain.VersionStatus{
+							Checked:        true,
+							IsUpToDate:     uRes.Response.UpToDate,
+							CurrentBuildID: cleanBuildID,
+							LatestBuildID:  reqVerStr,
+							Message:        msg,
+						}
+						slog.Info("Verified game version via ISteamApps/UpToDateCheck", "appID", appID, "upToDate", status.IsUpToDate)
+						return saveAndReturn(status)
 					}
 				}
 			}
 		}
 	}
 
-	// Tier 3: Heuristic Patch Notes & Announcements Timestamp Check
-	items, err := FetchAppNewsItems(ctx, fmt.Sprintf("%d", appID), 5)
-	if err == nil && len(items) > 0 {
-		var candidatePatch *domain.NewsItem
-		for i := range items {
-			titleLower := strings.ToLower(items[i].Title)
-			feedLower := strings.ToLower(items[i].FeedLabel)
-			if strings.Contains(titleLower, "patch") ||
-				strings.Contains(titleLower, "update") ||
-				strings.Contains(titleLower, "hotfix") ||
-				strings.Contains(titleLower, "version") ||
-				strings.Contains(titleLower, "release") ||
-				strings.Contains(titleLower, "notes") ||
-				strings.Contains(titleLower, "changelog") ||
-				strings.Contains(feedLower, "community announcements") {
-				candidatePatch = &items[i]
+	// Tier 2: Check SteamCMD AppInfo branches for authoritative public release buildid
+	if branches, err := FetchAppBranches(ctx, appID); err == nil && len(branches) > 0 {
+		var publicBranch *domain.SteamBranch
+		for i := range branches {
+			if branches[i].Name == "public" && branches[i].BuildID != "" {
+				publicBranch = &branches[i]
 				break
 			}
 		}
-		if candidatePatch == nil {
-			candidatePatch = &items[0]
+		if publicBranch == nil {
+			for i := range branches {
+				if branches[i].BuildID != "" {
+					publicBranch = &branches[i]
+					break
+				}
+			}
 		}
 
-		isUpToDate := true
-		msg := "Game is up to date"
-		// If installed timestamp exists and the latest patch was published > 24 hours after install
-		const graceBufferSeconds = 86400 // 24 hours
-		if installedTime > 0 && candidatePatch.Date > (installedTime+graceBufferSeconds) {
-			isUpToDate = false
-			msg = fmt.Sprintf("Update released: %s", candidatePatch.Title)
-		}
+		if publicBranch != nil && publicBranch.BuildID != "" {
+			localNum, lErr := strconv.ParseUint(cleanBuildID, 10, 64)
+			remoteNum, rErr := strconv.ParseUint(publicBranch.BuildID, 10, 64)
 
-		status := &domain.VersionStatus{
-			Checked:          true,
-			IsUpToDate:       isUpToDate,
-			CurrentBuildID:   cleanBuildID,
-			LatestPatchDate:  candidatePatch.Date,
-			LatestPatchTitle: candidatePatch.Title,
-			Message:          msg,
+			isUpToDate := true
+			msg := "Game is up to date"
+
+			if lErr == nil && rErr == nil {
+				if localNum < remoteNum {
+					isUpToDate = false
+					msg = fmt.Sprintf("New build available: %s", publicBranch.BuildID)
+				} else {
+					isUpToDate = true
+					msg = "Game is up to date"
+				}
+			} else {
+				if cleanBuildID != publicBranch.BuildID {
+					isUpToDate = false
+					msg = fmt.Sprintf("New build available: %s", publicBranch.BuildID)
+				} else {
+					isUpToDate = true
+					msg = "Game is up to date"
+				}
+			}
+
+			status := &domain.VersionStatus{
+				Checked:        true,
+				IsUpToDate:     isUpToDate,
+				CurrentBuildID: cleanBuildID,
+				LatestBuildID:  publicBranch.BuildID,
+				Message:        msg,
+			}
+			if items, err := FetchAppNewsItems(ctx, fmt.Sprintf("%d", appID), 1); err == nil && len(items) > 0 {
+				status.LatestPatchDate = items[0].Date
+				status.LatestPatchTitle = items[0].Title
+			}
+			slog.Info("Verified game version via SteamCMD branches", "appID", appID, "localBuildID", cleanBuildID, "remoteBuildID", publicBranch.BuildID, "upToDate", isUpToDate)
+			return saveAndReturn(status)
 		}
-		slog.Info("Verified game version via patch timestamp heuristic", "appID", appID, "upToDate", status.IsUpToDate, "patchDate", candidatePatch.Date)
-		return saveAndReturn(status)
 	}
 
-	// Fallback when both tiers cannot determine version
+	// Fallback when authoritative build IDs cannot be resolved
 	status := &domain.VersionStatus{
 		Checked:        false,
 		IsUpToDate:     true,
 		CurrentBuildID: cleanBuildID,
 		Message:        "Version check unavailable",
 	}
-	return status, nil
+	if items, err := FetchAppNewsItems(ctx, fmt.Sprintf("%d", appID), 1); err == nil && len(items) > 0 {
+		status.LatestPatchDate = items[0].Date
+		status.LatestPatchTitle = items[0].Title
+	}
+	return saveAndReturn(status)
 }

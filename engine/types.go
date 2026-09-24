@@ -46,6 +46,10 @@ type DownloadGameOptions struct {
 	AppID                uint32                                                                             `json:"app_id"`
 	TargetDir            string                                                                             `json:"target_dir"`
 	Platform             string                                                                             `json:"platform"`
+	Language             string                                                                             `json:"language,omitempty"`
+	IncludedDepots       []uint32                                                                           `json:"included_depots,omitempty"`
+	ExcludedDepots       []uint32                                                                           `json:"excluded_depots,omitempty"`
+	IncludeOptional      bool                                                                               `json:"include_optional,omitempty"`
 	Branch               string                                                                             `json:"branch,omitempty"`
 	LuaPath              string                                                                             `json:"lua_path"`
 	DryRun               bool                                                                               `json:"dry_run"`

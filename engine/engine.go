@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/multiseat"
+	"github.com/staernid/gamux/profiles"
 	"github.com/staernid/gamux/runner"
 	"github.com/staernid/gamux/saves"
 	"github.com/staernid/gamux/steam"
@@ -29,6 +31,7 @@ type Engine struct {
 	ArtworkService *store.ArtworkService
 	Saves          *saves.Service
 	Multiseat      *multiseat.Supervisor
+	Profiles       *profiles.Manager
 	toolManager    *tools.Manager
 }
 
@@ -72,6 +75,11 @@ func New(cfg *config.Config) *Engine {
 		GlobalPrefix:   cfg.WinePrefix,
 	})
 
+	profMgr, err := profiles.NewManager("", cfg)
+	if err != nil {
+		slog.Warn("Failed to initialize profile manager", "error", err)
+	}
+
 	eng := &Engine{
 		Config:         cfg,
 		HTTPClient:     httpClient,
@@ -82,6 +90,7 @@ func New(cfg *config.Config) *Engine {
 		ArtworkService: artSvc,
 		Saves:          savesSvc,
 		Multiseat:      multiseat.NewSupervisor(cfg, bus),
+		Profiles:       profMgr,
 		toolManager:    tools.NewManager(cfg),
 	}
 

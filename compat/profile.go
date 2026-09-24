@@ -159,8 +159,10 @@ func hydrateFallbacks(p *domain.LaunchProfile, gameDir string) {
 	if p.DisableOverlay == nil {
 		for _, sDir := range settingsDirs {
 			if enabled, ok := gbe.IsOverlayEnabled(sDir); ok {
-				p.DisableOverlay = util.Ptr(!enabled)
-				break
+				if !enabled {
+					p.DisableOverlay = util.Ptr(true)
+					break
+				}
 			}
 		}
 	}

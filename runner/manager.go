@@ -177,6 +177,7 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 		WinePrefix:    game.EffectiveWinePrefix(),
 	}
 	if game.LaunchProfile != nil {
+		opts.ProfileID = game.LaunchProfile.ProfileID
 		opts.MangoHud = game.LaunchProfile.MangoHud
 		opts.DisableOverlay = game.LaunchProfile.DisableOverlay
 		opts.OfflineMode = game.LaunchProfile.OfflineMode
@@ -184,6 +185,9 @@ func (m *Manager) Launch(ctx context.Context, cfg *config.Config, game *domain.G
 	}
 	if len(overrides) > 0 {
 		ov := overrides[0]
+		if ov.ProfileID != "" {
+			opts.ProfileID = ov.ProfileID
+		}
 		if ov.ExePath != "" {
 			opts.ExePath = ov.ExePath
 		}
@@ -237,6 +241,7 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 		WinePrefix:    game.EffectiveWinePrefix(),
 	}
 	if game.LaunchProfile != nil {
+		opts.ProfileID = game.LaunchProfile.ProfileID
 		opts.MangoHud = game.LaunchProfile.MangoHud
 		opts.DisableOverlay = game.LaunchProfile.DisableOverlay
 		opts.OfflineMode = game.LaunchProfile.OfflineMode
@@ -244,6 +249,9 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 	}
 	if len(overrides) > 0 {
 		ov := overrides[0]
+		if ov.ProfileID != "" {
+			opts.ProfileID = ov.ProfileID
+		}
 		if ov.ExePath != "" {
 			opts.ExePath = ov.ExePath
 		}

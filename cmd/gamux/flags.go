@@ -42,7 +42,10 @@ func commonDownloadFlags() []cli.Flag {
 		&cli.BoolFlag{Name: "no-gbe", Usage: "Disable Goldberg Emulator patching during post-download setup"},
 		&cli.BoolFlag{Name: "no-steamless", Usage: "Disable Steamless SteamStub DRM unpacking during setup"},
 		&cli.BoolFlag{Name: "achievements", Usage: "Generate GBE achievements schema during setup"},
-		&cli.StringFlag{Name: "lang", Aliases: []string{"language"}, Usage: "Force Goldberg emulator language during post-download setup"},
+		&cli.StringFlag{Name: "lang", Aliases: []string{"language"}, Usage: "Voice/audio language pack preference (defaults to config language or english)"},
+		&cli.UintSliceFlag{Name: "depot", Usage: "Explicit Steam depot ID(s) to include (repeatable)"},
+		&cli.UintSliceFlag{Name: "exclude-depot", Usage: "Explicit Steam depot ID(s) to exclude (repeatable)"},
+		&cli.BoolFlag{Name: "include-optional", Usage: "Include optional HD texture packs and bonus depots"},
 	}
 }
 

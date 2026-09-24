@@ -14,6 +14,14 @@ import (
 	"github.com/staernid/gamux/util"
 )
 
+// SeatIDFromProfileID maps a profile ID ("main", "p1", "p2", etc.) to a canonical seat identifier ("p1", "p2", etc.).
+func SeatIDFromProfileID(profileID string) string {
+	if profileID == "" || profileID == "main" || profileID == "p1" {
+		return "p1"
+	}
+	return profileID
+}
+
 // DefaultPrefixesDir returns the base directory where isolated per-game Wine prefixes are stored for Player 1.
 func DefaultPrefixesDir() string {
 	return DefaultPrefixesDirForSeat("p1")
@@ -24,8 +32,9 @@ func DefaultPrefixesDir() string {
 func DefaultPrefixesDirForSeat(seatID string) string {
 	home, err := os.UserHomeDir()
 	baseName := "umu"
-	if seatID != "" && seatID != "p1" {
-		baseName = fmt.Sprintf("umu-%s", seatID)
+	canonSeat := SeatIDFromProfileID(seatID)
+	if canonSeat != "p1" {
+		baseName = fmt.Sprintf("umu-%s", canonSeat)
 	}
 	if err != nil {
 		return filepath.Join("Games", baseName)
@@ -47,6 +56,16 @@ func IsKnownPrefixDir(path string) bool {
 	if cleanPath == "" {
 		return false
 	}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		gamesDir := util.CanonicalPath(filepath.Join(home, "Games"))
+		if filepath.Dir(cleanPath) == gamesDir {
+			base := filepath.Base(cleanPath)
+			if base == "umu" || strings.HasPrefix(base, "umu-p") {
+				return true
+			}
+		}
+	}
 	for _, dir := range DefaultPrefixDirs() {
 		if cleanPath == util.CanonicalPath(dir) {
 			return true
@@ -62,14 +81,15 @@ func DefaultCentralUserDataDir(cfg *config.Config) string {
 
 // DefaultCentralUserDataDirForSeat returns the shared central directory for user data for a seat.
 func DefaultCentralUserDataDirForSeat(cfg *config.Config, seatID string) string {
-	if (seatID == "" || seatID == "p1") && cfg != nil && cfg.SteamUserdata != "" && strings.Contains(cfg.SteamUserdata, "drive_c") {
+	canonSeat := SeatIDFromProfileID(seatID)
+	if canonSeat == "p1" && cfg != nil && cfg.SteamUserdata != "" && strings.Contains(cfg.SteamUserdata, "drive_c") {
 		return util.ExpandPath(cfg.SteamUserdata)
 	}
 
 	home, err := os.UserHomeDir()
 	baseName := "umu"
-	if seatID != "" && seatID != "p1" {
-		baseName = fmt.Sprintf("umu-%s", seatID)
+	if canonSeat != "p1" {
+		baseName = fmt.Sprintf("umu-%s", canonSeat)
 	}
 	if err != nil {
 		return filepath.Join("Games", baseName, "umu-default", "drive_c", "users", "steamuser")
@@ -109,23 +129,29 @@ func EnsurePrefix(ctx context.Context, cfg *config.Config, game *domain.Game, cu
 	return EnsureSeatPrefix(ctx, cfg, game, "p1", customPrefix)
 }
 
-// EnsureSeatPrefix resolves the effective prefix for a player seat ("p1" or "p2"), creating an isolated
+// EnsureSeatPrefix resolves the effective prefix for a player seat ("p1", "p2", etc.), creating an isolated
 // per-game Wine prefix and symlinking its user profile (drive_c/users/steamuser) to the central user data directory.
 func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game, seatID string, customPrefix string) (string, error) {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
 
+	canonSeat := SeatIDFromProfileID(seatID)
+
 	var prefixDir string
 	if customPrefix != "" {
-		prefixDir = util.CanonicalPath(util.ExpandPath(customPrefix))
-	} else if seatID == "p2" && cfg.Multiseat.Player2WinePrefix != "" {
-		prefixDir = util.CanonicalPath(util.ExpandPath(cfg.Multiseat.Player2WinePrefix))
-	} else if seatID != "p2" && cfg.WinePrefix != "" {
+		expanded := util.CanonicalPath(util.ExpandPath(customPrefix))
+		if IsKnownPrefixDir(expanded) {
+			prefixID := ResolvePrefixIdentifier(game)
+			prefixDir = filepath.Join(expanded, prefixID)
+		} else {
+			prefixDir = expanded
+		}
+	} else if canonSeat == "p1" && cfg.WinePrefix != "" {
 		prefixDir = util.CanonicalPath(util.ExpandPath(cfg.WinePrefix))
 	} else {
 		prefixID := ResolvePrefixIdentifier(game)
-		prefixBase := DefaultPrefixesDirForSeat(seatID)
+		prefixBase := DefaultPrefixesDirForSeat(canonSeat)
 		prefixDir = filepath.Join(prefixBase, prefixID)
 	}
 
@@ -135,9 +161,13 @@ func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game
 	}
 
 	// Ensure central user data directory exists (e.g. ~/Games/umu/umu-default/drive_c/users/steamuser or ~/Games/umu-p2/...)
-	centralUserDir := DefaultCentralUserDataDirForSeat(cfg, seatID)
+	centralUserDir := DefaultCentralUserDataDirForSeat(cfg, canonSeat)
 	if err := os.MkdirAll(centralUserDir, 0755); err != nil {
 		slog.Warn("Failed to create central user data directory", "path", centralUserDir, "error", err)
+	}
+	centralRoaming := filepath.Join(centralUserDir, "AppData", "Roaming")
+	if err := os.MkdirAll(centralRoaming, 0755); err != nil {
+		slog.Debug("Failed to pre-create central user AppData/Roaming", "path", centralRoaming, "error", err)
 	}
 
 	// Symlink drive_c/users/steamuser -> centralUserDir
@@ -160,8 +190,31 @@ func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game
 		}
 	}
 
+	// Ensure Goldberg GSE Saves symlinks to the profile's isolated GSE directory
+	var gseDir string
+	if canonSeat == "p1" {
+		home, _ := os.UserHomeDir()
+		gseDir = filepath.Join(home, ".local", "share", "GSE Saves")
+	} else {
+		dataHome := os.Getenv("XDG_DATA_HOME")
+		if dataHome == "" {
+			home, _ := os.UserHomeDir()
+			dataHome = filepath.Join(home, ".local", "share")
+		}
+		gseDir = filepath.Join(dataHome, "gamux", "profiles", canonSeat, "home", ".local", "share", "GSE Saves")
+	}
+	_ = EnsurePrefixGSESymlink(prefixDir, gseDir)
+	_ = EnsurePrefixGSESymlink(filepath.Join(DefaultPrefixesDirForSeat(canonSeat), "umu-default"), gseDir)
+
 	canonicalPrefix := util.CanonicalPath(prefixDir)
-	if game != nil && domain.NormalizeOperatingMode(game.EffectiveOperatingMode()) == domain.ModeLoader {
+	opMode := domain.ModeLoader
+	if game != nil && game.EffectiveOperatingMode() != "" {
+		opMode = domain.NormalizeOperatingMode(game.EffectiveOperatingMode())
+	} else if cfg != nil && cfg.OperatingMode != "" {
+		opMode = domain.NormalizeOperatingMode(cfg.OperatingMode)
+	}
+
+	if opMode == domain.ModeLoader && game != nil {
 		gbeBase := cfg.GbeDir
 		if gbeBase == "" {
 			gbeBase = config.DefaultConfig().GbeDir
@@ -180,17 +233,21 @@ func ResolveGamePrefix(cfg *config.Config, game *domain.Game, customPrefix strin
 
 // ResolveSeatGamePrefix returns the effective Wine/Proton prefix path for a seat without mutating the filesystem.
 func ResolveSeatGamePrefix(cfg *config.Config, game *domain.Game, seatID string, customPrefix string) string {
+	canonSeat := SeatIDFromProfileID(seatID)
 	if customPrefix != "" {
-		return util.CanonicalPath(util.ExpandPath(customPrefix))
+		expanded := util.CanonicalPath(util.ExpandPath(customPrefix))
+		if IsKnownPrefixDir(expanded) {
+			prefixID := ResolvePrefixIdentifier(game)
+			return filepath.Join(expanded, prefixID)
+		}
+		return expanded
 	}
-	if seatID == "p2" && cfg != nil && cfg.Multiseat.Player2WinePrefix != "" {
-		return util.CanonicalPath(util.ExpandPath(cfg.Multiseat.Player2WinePrefix))
-	} else if seatID != "p2" && cfg != nil && cfg.WinePrefix != "" {
+	if canonSeat == "p1" && cfg != nil && cfg.WinePrefix != "" {
 		return util.CanonicalPath(util.ExpandPath(cfg.WinePrefix))
 	}
 
 	prefixID := ResolvePrefixIdentifier(game)
-	prefixBase := DefaultPrefixesDirForSeat(seatID)
+	prefixBase := DefaultPrefixesDirForSeat(canonSeat)
 	gamePrefix := filepath.Join(prefixBase, prefixID)
 
 	if util.FileExists(gamePrefix) {
@@ -252,4 +309,53 @@ func DetectWineUser(winePrefix string) string {
 	}
 
 	return "steamuser"
+}
+
+// EnsurePrefixGSESymlink ensures that the GSE Saves directory inside a Wine prefix
+// (e.g. <prefix>/drive_c/users/<user>/AppData/Roaming/GSE Saves) is a symlink pointing
+// directly to targetGSEDir, ensuring a single source of truth for Goldberg configurations and saves.
+func EnsurePrefixGSESymlink(prefixDir, targetGSEDir string) error {
+	if prefixDir == "" || targetGSEDir == "" {
+		return nil
+	}
+
+	// Candidates for AppData/Roaming within this prefix or its umu-default subfolder
+	candidates := []string{
+		filepath.Join(prefixDir, "drive_c", "users"),
+		filepath.Join(prefixDir, "umu-default", "drive_c", "users"),
+	}
+
+	var roamingDir string
+	for _, usersDir := range candidates {
+		if util.FileExists(usersDir) {
+			wineUser := DetectWineUser(filepath.Dir(filepath.Dir(usersDir)))
+			targetRoaming := filepath.Join(usersDir, wineUser, "AppData", "Roaming")
+			if util.FileExists(targetRoaming) {
+				roamingDir = targetRoaming
+				break
+			}
+		}
+	}
+
+	if roamingDir == "" {
+		return nil
+	}
+
+	linkPath := filepath.Join(roamingDir, "GSE Saves")
+	fi, err := os.Lstat(linkPath)
+	if err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(linkPath)
+			if err == nil && target == targetGSEDir {
+				return nil // Already points to correct target
+			}
+			_ = os.Remove(linkPath)
+		} else {
+			// Existing directory: remove stale directory to replace with symlink
+			_ = os.RemoveAll(linkPath)
+		}
+	}
+
+	slog.Info("Symlinking prefix GSE Saves to profile directory", "prefix", prefixDir, "target", targetGSEDir)
+	return os.Symlink(targetGSEDir, linkPath)
 }

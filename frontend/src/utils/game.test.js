@@ -31,6 +31,8 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(isSamePath('/home/user/games/a', '')).toBe(false);
     expect(isSamePath('', null)).toBe(true);
     expect(isSamePath(null, null)).toBe(true);
+    expect(isSamePath('/home/user/games/How to Fish/How to Fish.exe', 'How to Fish/How to Fish.exe')).toBe(true);
+    expect(isSamePath('Binaries/Win64/game.exe', '/games/MyGame/Binaries/Win64/Game.exe')).toBe(true);
   });
 
   it('normalizes raw Go/backend game entity into canonical camelCase model', () => {
@@ -249,6 +251,15 @@ describe('Game Data Model & Normalization Helpers', () => {
       metadataProvider: '',
     };
     expect(countOverrides(cleanDraft, game, globalCfg)).toBe(0);
+
+    // Clean baseline with default operatingMode, default metadata provider, and false disableOverlay
+    const cleanWithDefaults = {
+      ...cleanDraft,
+      operatingMode: 'loader',
+      metadataProvider: 'steam',
+      disableOverlay: false,
+    };
+    expect(countOverrides(cleanWithDefaults, { ...game, store: 'Steam' }, globalCfg)).toBe(0);
 
     // Add runner, mangohud, env override, and title override
     const modifiedDraft = {

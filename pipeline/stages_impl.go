@@ -36,11 +36,6 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 		targetPath = "."
 	}
 
-	if !pctx.Options.DryRun {
-		if count, decErr := util.DecompressVSZaInDir(targetPath); decErr == nil && count > 0 {
-			slog.Info("Decompressed raw VSZa Steam depot files", "target", targetPath, "count", count)
-		}
-	}
 
 	info, err := detector.Inspect(ctx, targetPath)
 	if err != nil {
@@ -490,7 +485,17 @@ func (s *VerifyStage) Execute(ctx context.Context, pctx *Context) error {
 		return fmt.Errorf("cannot verify game without numeric Steam AppID")
 	}
 
-	report, err := manifest.ScanDepotIntegrityWithPlatform(pctx.Game.GameDir, pctx.Game.NumericAppID, pctx.Game.Platform)
+	var onProgress manifest.IntegrityProgressFunc
+	if pctx.Reporter != nil {
+		onProgress = func(p manifest.IntegrityProgress) {
+			pctx.Reporter.UpdateProgress(p.Percent, p.CheckedBytes, int64(p.CheckedFiles), int64(p.TotalFiles), p.TotalBytes, p.SpeedBps, p.ETASeconds)
+			if p.CurrentFile != "" {
+				pctx.Reporter.UpdateStage("Verifying Integrity", p.CurrentFile)
+			}
+		}
+	}
+
+	report, err := manifest.ScanDepotIntegrityWithProgress(ctx, pctx.Game.GameDir, pctx.Game.NumericAppID, pctx.Game.Platform, onProgress)
 	if err != nil {
 		return fmt.Errorf("integrity scan failed: %w", err)
 	}
@@ -514,10 +519,25 @@ func (s *UpdateStage) Execute(ctx context.Context, pctx *Context) error {
 		return fmt.Errorf("cannot update game without numeric Steam AppID")
 	}
 
+	lang := pctx.Options.Language
+	if lang == "" && pctx.Game.LaunchProfile != nil && pctx.Game.LaunchProfile.Language != "" {
+		lang = pctx.Game.LaunchProfile.Language
+	}
+	if lang == "" && pctx.Game.CurrentLanguage != "" {
+		lang = pctx.Game.CurrentLanguage
+	}
+	if lang == "" && pctx.Config != nil && pctx.Config.Language != "" {
+		lang = pctx.Config.Language
+	}
+	if lang == "" || lang == "auto" {
+		lang = manifest.ResolveSystemLanguage()
+	}
+
 	dlOpts := downloader.DownloadOptions{
 		AppID:     pctx.Game.NumericAppID,
 		TargetDir: pctx.Game.GameDir,
 		Platform:  pctx.Game.Platform,
+		Language:  lang,
 		DryRun:    pctx.Options.DryRun,
 	}
 

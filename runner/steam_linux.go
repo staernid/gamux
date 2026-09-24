@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/staernid/gamux/config"
+	"github.com/staernid/gamux/profiles"
 	"github.com/staernid/gamux/util"
 )
 
@@ -21,9 +22,13 @@ func PrepareLinuxSteamEnvironment(cfg *config.Config, resolved LaunchOptions) (f
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolve user home dir: %w", err)
+	home := profiles.ResolveProfileHome(resolved.ProfileID)
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve user home dir: %w", err)
+		}
 	}
 
 	steamBase := filepath.Join(home, ".steam")

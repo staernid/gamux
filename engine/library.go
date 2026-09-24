@@ -63,8 +63,10 @@ func (eng *Engine) InspectLocal(ctx context.Context, targetPath string) (*GameSt
 			status.AvailablePlatforms = platforms
 		}
 
-		if manifestCandidates := manifest.DiscoverManifestExecutables(status.GameDir, numAppID, status.Platform); len(manifestCandidates) > 0 {
-			status.LaunchCandidates = manifestCandidates
+		if len(status.LaunchCandidates) == 0 {
+			if manifestCandidates := manifest.DiscoverManifestExecutables(status.GameDir, numAppID, status.Platform); len(manifestCandidates) > 0 {
+				status.LaunchCandidates = manifestCandidates
+			}
 		}
 	}
 
@@ -124,6 +126,30 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 						status.RecentPatchNote = news[0].Title + ": " + news[0].Contents
 					}
 				}
+			}
+		}
+	}
+
+	// Enrich launch options from Steam if not already populated
+	if len(status.LaunchCandidates) == 0 && status.NumericAppID > 0 {
+		if steamOpts, err := steam.FetchAppLaunchOptions(ctx, status.NumericAppID, status.Platform, status.Branch); err == nil && len(steamOpts) > 0 {
+			for _, opt := range steamOpts {
+				cleanRel := util.NormalizeRelativePath(opt.Executable)
+				if cleanRel == "" {
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(status.GameDir, cleanRel)); err == nil {
+					status.LaunchCandidates = append(status.LaunchCandidates, domain.LaunchCandidate{
+						Name:        opt.Name,
+						Executable:  cleanRel,
+						Arguments:   opt.Arguments,
+						Description: opt.Description,
+					})
+				}
+			}
+			if len(status.LaunchCandidates) > 0 && status.LaunchProfile != nil && status.LaunchProfile.ExePath == "" && status.ExePath == "" {
+				status.ExePath = status.LaunchCandidates[0].Executable
+				status.ExeArgs = status.LaunchCandidates[0].Arguments
 			}
 		}
 	}

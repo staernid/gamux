@@ -632,4 +632,59 @@ unlock_all=0
 	}
 }
 
+func TestApp_Profiles(t *testing.T) {
+	app := &App{
+		Engine: engine.New(nil),
+	}
+
+	profs, err := app.GetProfiles()
+	if err != nil {
+		t.Fatalf("GetProfiles failed: %v", err)
+	}
+	if len(profs) < 1 {
+		t.Fatalf("expected at least 1 profile, got %d", len(profs))
+	}
+
+	active, err := app.GetActiveProfile()
+	if err != nil {
+		t.Fatalf("GetActiveProfile failed: %v", err)
+	}
+	if active == nil || active.ID != "main" {
+		t.Errorf("expected active profile to be main, got %+v", active)
+	}
+
+	// Create new profile
+	p3, err := app.CreateProfile("PlayerThree", "76561198000000003", "english", "US", "")
+	if err != nil {
+		t.Fatalf("CreateProfile failed: %v", err)
+	}
+	if p3.Name != "PlayerThree" {
+		t.Errorf("expected PlayerThree, got %s", p3.Name)
+	}
+
+	// Switch active profile
+	if err := app.SetActiveProfile(p3.ID); err != nil {
+		t.Fatalf("SetActiveProfile failed: %v", err)
+	}
+	active, _ = app.GetActiveProfile()
+	if active.ID != p3.ID {
+		t.Errorf("expected active profile %s, got %s", p3.ID, active.ID)
+	}
+
+	// Save profile
+	p3.Name = "UpdatedThree"
+	if err := app.SaveProfile(*p3); err != nil {
+		t.Fatalf("SaveProfile failed: %v", err)
+	}
+
+	// Delete profile
+	if err := app.DeleteProfile(p3.ID); err != nil {
+		t.Fatalf("DeleteProfile failed: %v", err)
+	}
+	active, _ = app.GetActiveProfile()
+	if active.ID != "main" {
+		t.Errorf("expected active to fall back to main, got %s", active.ID)
+	}
+}
+
 

@@ -101,28 +101,45 @@
     return undefined;
   }
 
-  function resolveInheritedVal(prop) {
+  function resolveInheritedVal(prop, inhValues = inheritedValues) {
     const inheritKey = prop.inherits_from || prop.inheritsFrom || prop.key;
-    const globalVal = getNestedVal(inheritedValues, inheritKey);
+    const globalVal = getNestedVal(inhValues, inheritKey);
     if (globalVal !== undefined && globalVal !== null) {
       return globalVal;
     }
     return prop.default;
   }
 
-  function isPropOverridden(prop, currentVal) {
+  function isPropOverridden(prop, curValues = values, inhValues = inheritedValues) {
     if (scope !== 'game') return false;
-    const valInProfile = getNestedVal(values, prop.key);
-    return valInProfile !== undefined && valInProfile !== null && valInProfile !== '';
+    const valInProfile = getNestedVal(curValues, prop.key);
+    if (valInProfile === undefined || valInProfile === null || valInProfile === '') {
+      return false;
+    }
+    const inheritedVal = resolveInheritedVal(prop, inhValues);
+    const ctrlType = resolveControlType(prop.type);
+    if (ctrlType === 'switch') {
+      return Boolean(valInProfile) !== Boolean(inheritedVal);
+    }
+    if (ctrlType === 'slider') {
+      return Number(valInProfile) !== Number(inheritedVal);
+    }
+    if (typeof valInProfile === 'string') {
+      return valInProfile.trim() !== String(inheritedVal ?? '').trim();
+    }
+    if (typeof valInProfile === 'object') {
+      return JSON.stringify(valInProfile) !== JSON.stringify(inheritedVal ?? {});
+    }
+    return valInProfile !== inheritedVal;
   }
 
-  function resolveCurrentVal(prop) {
-    const valInProfile = getNestedVal(values, prop.key);
+  function resolveCurrentVal(prop, curValues = values, inhValues = inheritedValues) {
+    const valInProfile = getNestedVal(curValues, prop.key);
     if (valInProfile !== undefined && valInProfile !== null && valInProfile !== '') {
       return valInProfile;
     }
     if (scope === 'game') {
-      return resolveInheritedVal(prop);
+      return resolveInheritedVal(prop, inhValues);
     }
     return prop.default;
   }
@@ -175,6 +192,9 @@
     } else {
       delete updatedValues[key];
       if (camel) delete updatedValues[camel];
+      if (['mangoHud', 'disableOverlay', 'offlineMode', 'gamescope'].includes(camel)) {
+        updatedValues[camel] = null;
+      }
     }
     values = updatedValues;
     const resetDetail = { key, values: updatedValues };
@@ -232,9 +252,9 @@
           <div class="space-y-2">
             {#each catProps as prop (prop.key)}
               {@const controlType = resolveControlType(prop.type)}
-              {@const currentVal = resolveCurrentVal(prop)}
-              {@const isOverridden = isPropOverridden(prop, currentVal)}
-              {@const inheritedVal = resolveInheritedVal(prop)}
+              {@const currentVal = resolveCurrentVal(prop, values, inheritedValues)}
+              {@const isOverridden = isPropOverridden(prop, values, inheritedValues)}
+              {@const inheritedVal = resolveInheritedVal(prop, inheritedValues)}
 
               <PropertyRow
                 property={prop}
@@ -301,9 +321,9 @@
     <div class="space-y-2">
       {#each filteredSchema as prop (prop.key)}
         {@const controlType = resolveControlType(prop.type)}
-        {@const currentVal = resolveCurrentVal(prop)}
-        {@const isOverridden = isPropOverridden(prop, currentVal)}
-        {@const inheritedVal = resolveInheritedVal(prop)}
+        {@const currentVal = resolveCurrentVal(prop, values, inheritedValues)}
+        {@const isOverridden = isPropOverridden(prop, values, inheritedValues)}
+        {@const inheritedVal = resolveInheritedVal(prop, inheritedValues)}
 
         <PropertyRow
           property={prop}

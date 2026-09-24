@@ -5,7 +5,7 @@
   import { games } from '../../stores/library.js';
   import { AppAPI } from '../../api/app.js';
   import GeneralTab from './settings/GeneralTab.svelte';
-  import PersonaTab from './settings/PersonaTab.svelte';
+  import ProfilesTab from './settings/ProfilesTab.svelte';
   import CoopTab from './settings/CoopTab.svelte';
   import LibraryStorageTab from './settings/LibraryStorageTab.svelte';
   import CompatibilityTab from './settings/CompatibilityTab.svelte';
@@ -43,11 +43,7 @@
     save_manifest_url: '',
     global_env: {},
     multiseat: {
-      player2_account_name: 'PlayerTwo',
-      player2_account_steamid: '76561198998877665',
-      player2_language: 'english',
-      player2_ip_country: 'US',
-      player2_wine_prefix: '',
+      player2_profile_id: 'p2',
       default_seat1_mode: 'local',
       default_seat2_mode: 'local',
       default_layout: 'dual_monitor',
@@ -94,7 +90,7 @@
     configStore.setDirty(false);
   });
 
-  const tabOrder = ['general', 'storage', 'compatibility', 'persona', 'coop', 'credentials', 'tools', 'logs', 'schema'];
+  const tabOrder = ['general', 'storage', 'compatibility', 'profiles', 'coop', 'credentials', 'tools', 'logs', 'schema'];
 
   function handleTabKeyDown(e, currentIndex) {
     if (e.key === 'ArrowRight') {
@@ -135,7 +131,7 @@
         if (['general', 'display', 'ui', 'network', 'bandwidth'].includes(tabParam)) activeTab = 'general';
         else if (['storage', 'library', 'paths'].includes(tabParam)) activeTab = 'storage';
         else if (['compatibility', 'compat', 'runner'].includes(tabParam)) activeTab = 'compatibility';
-        else if (['steam', 'persona', 'player', 'user', 'emu', 'drm'].includes(tabParam)) activeTab = 'persona';
+        else if (['profiles', 'profile', 'steam', 'persona', 'player', 'user', 'emu', 'drm'].includes(tabParam)) activeTab = 'profiles';
         else if (['coop', 'co-op', 'multiseat', 'split'].includes(tabParam)) activeTab = 'coop';
         else if (['credentials', 'media', 'api', 'apis', 'key', 'keys'].includes(tabParam)) activeTab = 'credentials';
         else if (['maintenance', 'tools', 'components'].includes(tabParam)) activeTab = 'tools';
@@ -477,19 +473,19 @@
       <span>Compatibility</span>
     </button>
 
-    <!-- 3. Steam Tab -->
+    <!-- 3. Profiles Tab -->
     <button
       type="button"
       role="tab"
-      aria-selected={activeTab === 'persona'}
-      on:click={() => { activeTab = 'persona'; }}
+      aria-selected={activeTab === 'profiles' || activeTab === 'persona'}
+      on:click={() => { activeTab = 'profiles'; }}
       on:keydown={(e) => handleTabKeyDown(e, 3)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'profiles' || activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
-      <span>Steam</span>
+      <span>Profiles</span>
     </button>
 
     <!-- 4. Co-Op Tab -->
@@ -584,18 +580,14 @@
         bind:cfgDraft
         {runnersList}
       />
-    {:else if activeTab === 'persona'}
-      <PersonaTab
-        bind:userCfgDraft
+    {:else if activeTab === 'profiles' || activeTab === 'persona'}
+      <ProfilesTab
         {languagesList}
         {countriesList}
       />
     {:else if activeTab === 'coop'}
       <CoopTab
         bind:cfgDraft
-        bind:userCfgDraft
-        {languagesList}
-        {countriesList}
       />
     {:else if activeTab === 'credentials'}
       <CredentialsTab

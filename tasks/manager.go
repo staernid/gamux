@@ -236,6 +236,14 @@ func (m *Manager) runWorker(ctx context.Context, t *Task, slot chan struct{}) {
 		if resGame := ctrl.ResultGame(); resGame != nil {
 			t.Game = resGame
 		}
+		if meta := ctrl.Metadata(); len(meta) > 0 {
+			if t.Metadata == nil {
+				t.Metadata = make(map[string]string)
+			}
+			for k, v := range meta {
+				t.Metadata[k] = v
+			}
+		}
 		taskCopy := *t
 		m.emitEvent(events.EventTaskCompleted, &taskCopy)
 	}

@@ -162,6 +162,15 @@ func (eng *Engine) LaunchGame(ctx context.Context, opts runner.LaunchOptions) (*
 	if opts.GameDir == "" && opts.ExePath == "" {
 		return nil, fmt.Errorf("game directory or executable path cannot be empty")
 	}
+	if eng.Profiles != nil {
+		active := eng.Profiles.GetActive()
+		if active != nil {
+			_ = eng.Profiles.Materialize(active.ID)
+			if opts.ProfileID == "" {
+				opts.ProfileID = active.ID
+			}
+		}
+	}
 	return eng.runnerManager().Start(ctx, eng.Config, opts)
 }
 
@@ -199,6 +208,15 @@ func (eng *Engine) EnsureAndLaunchGame(ctx context.Context, opts runner.LaunchOp
 
 // RunGame executes the game process synchronously, streaming output to stdout/stderr.
 func (eng *Engine) RunGame(ctx context.Context, opts runner.LaunchOptions) error {
+	if eng.Profiles != nil {
+		active := eng.Profiles.GetActive()
+		if active != nil {
+			_ = eng.Profiles.Materialize(active.ID)
+			if opts.ProfileID == "" {
+				opts.ProfileID = active.ID
+			}
+		}
+	}
 	return runner.Run(ctx, eng.Config, opts)
 }
 
@@ -273,11 +291,57 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.DepotSummary, error) {
 	ctx = eng.WrapContext(ctx)
 	status, err := eng.InspectLocal(ctx, gameDir)
-	if err != nil {
-		return nil, err
+	var numAppID uint32
+	if err == nil && status != nil {
+		numAppID, _ = util.ParseAppID(status.AppID)
+	} else {
+		numAppID, _ = util.ParseAppID(filepath.Base(gameDir))
 	}
-	numAppID, _ := util.ParseAppID(status.AppID)
-	return manifest.InspectGameDepots(status.GameDir, numAppID)
+
+	var metaMap map[uint32]manifest.DepotMeta
+	if numAppID > 0 {
+		if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, numAppID); sErr == nil && len(remoteDepots) > 0 {
+			metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
+			for dID, dInfo := range remoteDepots {
+				metaMap[dID] = manifest.DepotMeta{
+					DepotID:  dInfo.DepotID,
+					Name:     dInfo.Name,
+					Language: dInfo.Language,
+					OSList:   dInfo.OSList,
+					Optional: dInfo.Optional,
+				}
+			}
+		}
+	}
+
+	targetDir := gameDir
+	if status != nil && status.GameDir != "" {
+		targetDir = status.GameDir
+	}
+	return manifest.InspectGameDepotsWithMetadata(targetDir, numAppID, metaMap)
+}
+
+// GetAppDepots retrieves structured depot metadata for a Steam AppID from remote metadata.
+func (eng *Engine) GetAppDepots(ctx context.Context, appID uint32) ([]domain.DepotSummary, error) {
+	ctx = eng.WrapContext(ctx)
+	if appID == 0 {
+		return nil, fmt.Errorf("invalid Steam AppID")
+	}
+
+	var metaMap map[uint32]manifest.DepotMeta
+	if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, appID); sErr == nil && len(remoteDepots) > 0 {
+		metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
+		for dID, dInfo := range remoteDepots {
+			metaMap[dID] = manifest.DepotMeta{
+				DepotID:  dInfo.DepotID,
+				Name:     dInfo.Name,
+				Language: dInfo.Language,
+				OSList:   dInfo.OSList,
+				Optional: dInfo.Optional,
+			}
+		}
+	}
+	return manifest.InspectGameDepotsWithMetadata("", appID, metaMap)
 }
 
 // UninstallDepot removes on-disk files belonging to a specific depot ID while preserving shared assets and manifests.
@@ -495,17 +559,49 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		hubcapKey = eng.Config.HubcapAPIKey
 	}
 
+	prefLang := opts.Language
+	if prefLang == "" {
+		if prof, lErr := compat.LoadProfile(opts.TargetDir); lErr == nil && prof != nil && prof.Language != "" {
+			prefLang = prof.Language
+		}
+	}
+	if prefLang == "" && eng.Config != nil && eng.Config.Language != "" {
+		prefLang = eng.Config.Language
+	}
+	if prefLang == "" || prefLang == "auto" {
+		prefLang = manifest.ResolveSystemLanguage()
+	}
+
+	var depotMetaMap map[uint32]manifest.DepotMeta
+	if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, opts.AppID); sErr == nil && len(remoteDepots) > 0 {
+		depotMetaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
+		for dID, dInfo := range remoteDepots {
+			depotMetaMap[dID] = manifest.DepotMeta{
+				DepotID:  dInfo.DepotID,
+				Name:     dInfo.Name,
+				Language: dInfo.Language,
+				OSList:   dInfo.OSList,
+				Optional: dInfo.Optional,
+			}
+		}
+	}
+
 	req := downloader.DownloadRequest{
-		AppID:        opts.AppID,
-		TargetDir:    opts.TargetDir,
-		Platform:     opts.Platform,
-		LuaPath:      opts.LuaPath,
-		HubcapAPIKey: hubcapKey,
-		WorkerLimit:  opts.WorkerLimit,
-		DryRun:       opts.DryRun,
-		HTTPClient:   eng.HTTPClient,
-		CheckCancel:  opts.CheckCancel,
-		Throttle:     opts.Throttle,
+		AppID:            opts.AppID,
+		TargetDir:        opts.TargetDir,
+		Platform:         opts.Platform,
+		Language:         prefLang,
+		IncludedDepots:   opts.IncludedDepots,
+		ExcludedDepots:   opts.ExcludedDepots,
+		IncludeOptional:  opts.IncludeOptional,
+		DepotMetadata:    depotMetaMap,
+		LuaPath:          opts.LuaPath,
+		HubcapAPIKey:     hubcapKey,
+		WorkerLimit:      opts.WorkerLimit,
+		DryRun:           opts.DryRun,
+		HTTPClient:       eng.HTTPClient,
+		CheckCancel:      opts.CheckCancel,
+		Throttle:         opts.Throttle,
 		OnStage: func(stage, details string) {
 			eng.reportStep(ctx, 1, 3, stage, details)
 		},
@@ -586,15 +682,36 @@ func (eng *Engine) UpdateGame(ctx context.Context, gamePath string) (*GameStatus
 	return eng.InspectStatus(ctx, pctx.Game.GameDir)
 }
 
-// GetGSEUserConfig returns the global Goldberg user persona settings from configs.user.ini.
+// GetGSEUserConfig returns the Goldberg user persona settings from configs.user.ini or the active profile.
 func (eng *Engine) GetGSEUserConfig() (*gbe.GSEUserConfig, error) {
+	if eng.Profiles != nil {
+		active := eng.Profiles.GetActive()
+		if active != nil {
+			return &gbe.GSEUserConfig{
+				AccountName:    active.Name,
+				AccountSteamID: active.SteamID,
+				Language:       active.Language,
+				IPCountry:      active.IPCountry,
+			}, nil
+		}
+	}
 	return gbe.LoadGSEUserConfig()
 }
 
-// SaveGSEUserConfig persists the global Goldberg user persona settings to configs.user.ini.
+// SaveGSEUserConfig persists the Goldberg user persona settings and synchronizes them with the active profile.
 func (eng *Engine) SaveGSEUserConfig(cfg *gbe.GSEUserConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("gse user config cannot be nil")
+	}
+	if eng.Profiles != nil {
+		active := eng.Profiles.GetActive()
+		if active != nil {
+			active.Name = cfg.AccountName
+			active.SteamID = cfg.AccountSteamID
+			active.Language = cfg.Language
+			active.IPCountry = cfg.IPCountry
+			_ = eng.Profiles.Update(active)
+		}
 	}
 	return gbe.SaveGSEUserConfig(cfg)
 }

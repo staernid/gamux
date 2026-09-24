@@ -79,6 +79,11 @@ func (a *App) VerifyGameIntegrity(gamePath string) (*manifest.IntegrityReport, e
 	return a.VerifyIntegrity(gamePath)
 }
 
+// StartVerifyGameTask initiates background depot integrity verification and returns the task ID.
+func (a *App) StartVerifyGameTask(gamePath string) (string, error) {
+	return a.SubmitVerify(gamePath)
+}
+
 // KillAllWine forces termination of any running wine processes or wineserver instances.
 func (a *App) KillAllWine() error {
 	_ = exec.Command("wineserver", "-k").Run()
@@ -268,11 +273,26 @@ func (a *App) ResetLaunchProfile(gamePath string) (*engine.GameStatus, error) {
 
 // GetGameDepots retrieves structured metadata and installation state for all depots of a game.
 func (a *App) GetGameDepots(gamePath string) ([]domain.DepotSummary, error) {
+	if gamePath == "" {
+		return nil, fmt.Errorf("game path cannot be empty")
+	}
+	if parsed, ok := util.ParseAppID(gamePath); ok && parsed > 0 && !util.DirExists(gamePath) {
+		return a.Engine.GetAppDepots(a.getContext(), parsed)
+	}
 	path, err := requireGamePath(gamePath)
 	if err != nil {
 		return nil, err
 	}
 	return a.Engine.GetGameDepots(a.getContext(), path)
+}
+
+// GetAppDepots retrieves structured depot metadata for a Steam AppID from remote metadata.
+func (a *App) GetAppDepots(appID string) ([]domain.DepotSummary, error) {
+	parsed, ok := util.ParseAppID(appID)
+	if !ok || parsed == 0 {
+		return nil, fmt.Errorf("invalid appID %q", appID)
+	}
+	return a.Engine.GetAppDepots(a.getContext(), parsed)
 }
 
 // SwitchGamePlatform switches the active execution platform and runner for a game directory.

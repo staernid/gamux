@@ -2,7 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { modalStore } from '../../../stores/modal.js';
-  import { getMetadataInfo, hasMetadataMatch } from '../../../utils/game.js';
+  import { getMetadataInfo, hasMetadataMatch, isSamePath } from '../../../utils/game.js';
   import SettingSection from '../../common/SettingSection.svelte';
   import SettingRow from '../../common/SettingRow.svelte';
   import GhostInput from '../../common/GhostInput.svelte';
@@ -204,7 +204,7 @@
         {#if candidates.length > 0}
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 pb-2">
             {#each candidates as cand, idx}
-              {@const isSelected = $drawerDraft.exePath === cand.executable}
+              {@const isSelected = isSamePath($drawerDraft.exePath, cand.executable)}
               <button
                 type="button"
                 on:click={() => drawerDraft.selectCandidate(cand)}
@@ -220,6 +220,11 @@
                         Primary
                       </span>
                     {/if}
+                    {#if cand.arguments}
+                      <span class="px-1.5 py-0.2 rounded text-4xs font-mono bg-neutral-900 text-neutral-400 border border-neutral-800 truncate max-w-[120px]" title={cand.arguments}>
+                        {cand.arguments}
+                      </span>
+                    {/if}
                   </div>
                   <p class="font-mono text-3xs text-neutral-400 truncate">
                     {cand.executable}
@@ -233,6 +238,18 @@
                 </div>
               </button>
             {/each}
+          </div>
+        {:else if !$drawerDraft.exePath}
+          <div class="mb-3 p-3 rounded-lg border border-amber-900/40 bg-amber-950/20 flex items-start gap-2.5 text-amber-200/90 text-xs">
+            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div class="space-y-0.5 min-w-0">
+              <p class="font-semibold text-amber-300">No Target Executable Configured</p>
+              <p class="text-2xs text-amber-400/80 leading-relaxed">
+                Gamux could not detect an authoritative launch executable for this title. Please browse or specify the main game executable below before launching.
+              </p>
+            </div>
           </div>
         {/if}
 

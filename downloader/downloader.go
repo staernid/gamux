@@ -44,6 +44,11 @@ type DownloadRequest struct {
 	AppID            uint32
 	TargetDir        string
 	Platform         string // "win64", "linux", "all"
+	Language         string // Preferred language code (default "english")
+	IncludedDepots   []uint32
+	ExcludedDepots   []uint32
+	IncludeOptional  bool
+	DepotMetadata    map[uint32]manifest.DepotMeta
 	LuaPath          string
 	HubcapAPIKey     string
 	ManifestGIDs     map[uint32]string // Optional map of DepotID -> ManifestGID to acquire via GMRC
@@ -66,6 +71,11 @@ type DownloadOptions struct {
 	AppID                uint32
 	LuaPath              string
 	Platform             string // "win64", "linux", "all"
+	Language             string // Preferred language code (default "english")
+	IncludedDepots       []uint32
+	ExcludedDepots       []uint32
+	IncludeOptional      bool
+	DepotMetadata        map[uint32]manifest.DepotMeta
 	ManifestGIDs         map[uint32]string
 	GMRCEndpoint         string
 	DryRun               bool
@@ -195,13 +205,31 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		depotKeys[d.DepotID] = d.DecryptionKey
 	}
 
-	// 4. Load binary manifest(s) from disk or memory filtered by target platform
-	var loadedManifest *manifest.Manifest
-	if entries, readErr := os.ReadDir(manifestsDir); readErr == nil && len(entries) > 0 {
-		loadedManifest, _ = manifest.LoadManifestFromDirWithPlatform(absTargetDir, req.AppID, depotKeys, req.Platform)
+	prefLang := req.Language
+	if prefLang == "" {
+		prefLang = "english"
 	}
 
-	// Fallback to in-memory parsed manifests if disk manifests are absent (e.g. during DryRun)
+	depotFilter := manifest.DepotFilter{
+		Platform:        req.Platform,
+		Language:        prefLang,
+		IncludedDepots:  req.IncludedDepots,
+		ExcludedDepots:  req.ExcludedDepots,
+		IncludeOptional: req.IncludeOptional,
+		DepotMetadata:   req.DepotMetadata,
+	}
+
+	// 4. Load binary manifest(s) from disk or memory filtered by target platform and language options
+	var loadedManifest *manifest.Manifest
+	var localLoadErr error
+	if entries, readErr := os.ReadDir(manifestsDir); readErr == nil && len(entries) > 0 {
+		loadedManifest, localLoadErr = manifest.LoadManifestFromDirWithFilter(absTargetDir, req.AppID, depotKeys, depotFilter)
+		if localLoadErr != nil {
+			slog.Debug("Local manifest filter/load result", "dir", manifestsDir, "error", localLoadErr)
+		}
+	}
+
+	// Fallback to in-memory parsed manifests if disk manifests are absent or could not be loaded
 	if (loadedManifest == nil || len(loadedManifest.Files) == 0) && len(parsedLua.ManifestFiles) > 0 {
 		var allFiles []manifest.ManifestFileEntry
 		var firstDepotID uint32
@@ -216,12 +244,9 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 			hexKey := depotKeys[fileDepotID]
 			files, err := manifest.ParseBinaryManifestWithKey(data, hexKey)
 			if err == nil && len(files) > 0 {
-				if req.Platform != "" && req.Platform != "all" {
-					cat := manifest.ClassifyDepot(files)
-					if !manifest.MatchesPlatform(cat, req.Platform) {
-						slog.Debug("Skipping remote depot manifest not matching platform", "depotID", fileDepotID, "category", cat, "targetPlatform", req.Platform)
-						continue
-					}
+				if !manifest.ShouldIncludeDepot(fileDepotID, files, depotFilter) {
+					slog.Debug("Skipping remote depot manifest filtered out by options", "depotID", fileDepotID, "platform", req.Platform, "language", prefLang)
+					continue
 				}
 				if firstDepotID == 0 {
 					firstDepotID = fileDepotID
@@ -232,6 +257,36 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 				allFiles = append(allFiles, files...)
 			}
 		}
+
+		// If strict language filter produced 0 files, retry with relaxed language filtering (Core Tenet 2)
+		if len(allFiles) == 0 && depotFilter.Language != "" && depotFilter.Language != "all" {
+			relaxedFilter := depotFilter
+			relaxedFilter.Language = "all"
+			for filename, data := range parsedLua.ManifestFiles {
+				parts := strings.Split(filename, "_")
+				var fileDepotID uint32
+				if len(parts) >= 1 {
+					if did, err := strconv.ParseUint(parts[0], 10, 32); err == nil {
+						fileDepotID = uint32(did)
+					}
+				}
+				hexKey := depotKeys[fileDepotID]
+				files, err := manifest.ParseBinaryManifestWithKey(data, hexKey)
+				if err == nil && len(files) > 0 {
+					if !manifest.ShouldIncludeDepot(fileDepotID, files, relaxedFilter) {
+						continue
+					}
+					if firstDepotID == 0 {
+						firstDepotID = fileDepotID
+					}
+					for idx := range files {
+						files[idx].DepotID = fileDepotID
+					}
+					allFiles = append(allFiles, files...)
+				}
+			}
+		}
+
 		if len(allFiles) > 0 {
 			loadedManifest = &manifest.Manifest{
 				AppID:     req.AppID,
@@ -242,11 +297,31 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		}
 	}
 
-
 	if loadedManifest == nil || len(loadedManifest.Files) == 0 {
 		trace := parsedLua.AuditTrace
 		if entries, err := os.ReadDir(manifestsDir); err == nil {
-			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d files found, 0 valid .manifest file entries", manifestsDir, len(entries)))
+			var manifestFiles []string
+			var otherFiles []string
+			for _, e := range entries {
+				if !e.IsDir() {
+					if strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
+						manifestFiles = append(manifestFiles, e.Name())
+					} else {
+						otherFiles = append(otherFiles, e.Name())
+					}
+				}
+			}
+			if len(manifestFiles) > 0 {
+				if localLoadErr != nil {
+					trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d .manifest file(s) found (%s), but load failed: %v", manifestsDir, len(manifestFiles), strings.Join(manifestFiles, ", "), localLoadErr))
+				} else {
+					trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): %d .manifest file(s) found (%s)", manifestsDir, len(manifestFiles), strings.Join(manifestFiles, ", ")))
+				}
+			} else if len(otherFiles) > 0 {
+				trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): 0 .manifest files found (%d non-manifest files present: %s)", manifestsDir, len(otherFiles), strings.Join(otherFiles, ", ")))
+			} else {
+				trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): directory is empty", manifestsDir))
+			}
 		} else {
 			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
 		}
@@ -293,6 +368,11 @@ func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions)
 		AppID:            opts.AppID,
 		TargetDir:        opts.TargetDir,
 		Platform:         opts.Platform,
+		Language:         opts.Language,
+		IncludedDepots:   opts.IncludedDepots,
+		ExcludedDepots:   opts.ExcludedDepots,
+		IncludeOptional:  opts.IncludeOptional,
+		DepotMetadata:    opts.DepotMetadata,
 		LuaPath:          opts.LuaPath,
 		HubcapAPIKey:     hubcapKey,
 		ManifestGIDs:     opts.ManifestGIDs,
@@ -338,8 +418,21 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		return nil, fmt.Errorf("resolve target directory: %w", err)
 	}
 
+	prefLang := opts.Language
+	if prefLang == "" {
+		prefLang = "english"
+	}
+	depotFilter := manifest.DepotFilter{
+		Platform:        opts.Platform,
+		Language:        prefLang,
+		IncludedDepots:  opts.IncludedDepots,
+		ExcludedDepots:  opts.ExcludedDepots,
+		IncludeOptional: opts.IncludeOptional,
+		DepotMetadata:   opts.DepotMetadata,
+	}
+
 	if len(m.Files) == 0 {
-		loadedManifest, err := manifest.LoadManifestFromDirWithPlatform(absTargetDir, opts.AppID, m.DepotKeys, opts.Platform)
+		loadedManifest, err := manifest.LoadManifestFromDirWithFilter(absTargetDir, opts.AppID, m.DepotKeys, depotFilter)
 		if err == nil && loadedManifest != nil && len(loadedManifest.Files) > 0 {
 			m.Files = loadedManifest.Files
 			if m.DepotID == 0 {
@@ -348,17 +441,16 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			if len(m.DepotKeys) == 0 && len(loadedManifest.DepotKeys) > 0 {
 				m.DepotKeys = loadedManifest.DepotKeys
 			}
-			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID, "platform", opts.Platform)
+			slog.Info("Loaded file list from binary manifest", "count", len(m.Files), "depotID", m.DepotID, "platform", opts.Platform, "language", prefLang)
 		}
-	} else if opts.Platform != "" && opts.Platform != "all" {
+	} else {
 		depotFiles := make(map[uint32][]manifest.ManifestFileEntry)
 		for _, f := range m.Files {
 			depotFiles[f.DepotID] = append(depotFiles[f.DepotID], f)
 		}
 		var filtered []manifest.ManifestFileEntry
-		for _, files := range depotFiles {
-			cat := manifest.ClassifyDepot(files)
-			if manifest.MatchesPlatform(cat, opts.Platform) {
+		for dID, files := range depotFiles {
+			if manifest.ShouldIncludeDepot(dID, files, depotFilter) {
 				filtered = append(filtered, files...)
 			}
 		}
@@ -366,7 +458,6 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			m.Files = filtered
 		}
 	}
-
 
 	if len(m.Files) == 0 {
 		trace := opts.AuditTrace
@@ -407,6 +498,11 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		AppID:            opts.AppID,
 		TargetDir:        absTargetDir,
 		Platform:         opts.Platform,
+		Language:         opts.Language,
+		IncludedDepots:   opts.IncludedDepots,
+		ExcludedDepots:   opts.ExcludedDepots,
+		IncludeOptional:  opts.IncludeOptional,
+		DepotMetadata:    opts.DepotMetadata,
 		WorkerLimit:      opts.WorkerLimit,
 		DryRun:           opts.DryRun,
 		HTTPClient:       httpClient,
@@ -429,6 +525,22 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 
 func isDirectoryEntry(entry manifest.ManifestFileEntry) bool {
 	return (entry.Flags&0x40) != 0 || strings.HasSuffix(entry.Path, "/") || strings.HasSuffix(entry.Path, "\\")
+}
+
+func chunkKey(relPath string, chunk manifest.ChunkInfo) string {
+	return fmt.Sprintf("%s:%s@%d", manifest.NormalizePath(relPath), strings.ToLower(chunk.ChunkID), chunk.Offset)
+}
+
+func verifyFileChunksOnDisk(filePath string, chunks []manifest.ChunkInfo) bool {
+	return manifest.VerifyFileChunksOnDisk(filePath, chunks)
+}
+
+func isExecutableEntry(entry manifest.ManifestFileEntry) bool {
+	if (entry.Flags & 0x01) != 0 {
+		return true
+	}
+	p := strings.ToLower(manifest.NormalizePath(entry.Path))
+	return strings.HasSuffix(p, ".sh") || strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") || strings.HasSuffix(p, ".bin")
 }
 
 func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir string, req DownloadRequest, httpClient *http.Client, rankedHosts []string) (*Result, error) {
@@ -454,8 +566,13 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	checkpointFile := filepath.Join(manifestsDir, ".gamux-checkpoint.json")
 	cp := loadCheckpoint(checkpointFile)
 
+	var downloadSucceeded bool
 	if !req.DryRun {
-		defer cp.Flush(checkpointFile)
+		defer func() {
+			if !downloadSucceeded {
+				cp.Flush(checkpointFile)
+			}
+		}()
 		if err := os.MkdirAll(absTargetDir, 0755); err != nil {
 			return nil, fmt.Errorf("create target directory %s: %w", absTargetDir, err)
 		}
@@ -536,9 +653,14 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 
 	// Purge deleted files if not in dry-run
 	if !req.DryRun && len(deletedFiles) > 0 {
+		activePaths := make(map[string]bool, len(m.Files))
+		for _, f := range m.Files {
+			activePaths[manifest.NormalizePath(f.Path)] = true
+		}
+
 		for _, delPath := range deletedFiles {
 			normDel := manifest.NormalizePath(delPath)
-			if normDel == "" {
+			if normDel == "" || activePaths[normDel] {
 				continue
 			}
 			absDel := filepath.Join(absTargetDir, normDel)
@@ -567,10 +689,23 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	totalFiles := len(m.Files)
 	startTime := time.Now()
 
-	reportTelemetry := func(item string) {
+	var lastTelemetry time.Time
+	var telemetryMu sync.Mutex
+
+	reportTelemetry := func(item string, force ...bool) {
 		if req.OnProgress == nil {
 			return
 		}
+		telemetryMu.Lock()
+		now := time.Now()
+		isForced := len(force) > 0 && force[0]
+		if !isForced && now.Sub(lastTelemetry) < 100*time.Millisecond {
+			telemetryMu.Unlock()
+			return
+		}
+		lastTelemetry = now
+		telemetryMu.Unlock()
+
 		curr := atomic.LoadInt64(&downloadedBytes)
 		netBytes := atomic.LoadInt64(&networkTransferredBytes)
 		itemsDone := int(atomic.LoadInt32(&processedCount))
@@ -642,15 +777,8 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 						needsDownload = true
 					}
 				} else if len(entry.Chunks) > 0 {
-					allChunksDone := true
-					for _, ch := range entry.Chunks {
-						if !cp.isCompleted(ch.ChunkID) {
-							allChunksDone = false
-							break
-						}
-					}
-					if !allChunksDone {
-						slog.Debug("File chunks incomplete in checkpoint, downloading missing chunks", "path", filePath)
+					if !verifyFileChunksOnDisk(filePath, entry.Chunks) {
+						slog.Debug("File chunk verification failed on disk, downloading missing chunks", "path", filePath)
 						needsDownload = true
 					}
 				}
@@ -694,9 +822,15 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 					return fmt.Errorf("create file %s: %w", filePath, err)
 				}
 				if entry.Size > 0 {
-					_ = f.Truncate(int64(entry.Size))
+					if err := util.PreallocateFile(f, int64(entry.Size)); err != nil {
+						f.Close()
+						return fmt.Errorf("preallocate empty file %s: %w", filePath, err)
+					}
 				}
 				f.Close()
+				if isExecutableEntry(entry) {
+					_ = os.Chmod(filePath, 0755)
+				}
 				atomic.AddInt64(&downloadedBytes, int64(entry.Size))
 				reportTelemetry(entry.Path)
 			} else {
@@ -710,7 +844,10 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 				}
 
 				if !canDelta {
-					_ = f.Truncate(int64(entry.Size))
+					if err := util.PreallocateFile(f, int64(entry.Size)); err != nil {
+						f.Close()
+						return fmt.Errorf("preallocate target file %s: %w", filePath, err)
+					}
 				}
 
 				unchangedChunkIDs := make(map[string]bool)
@@ -722,6 +859,8 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 					}
 				}
 
+				var pendingChunks []manifest.ChunkInfo
+				chunkBuf := make([]byte, 1024*1024)
 				for _, chunk := range entry.Chunks {
 					if req.CheckCancel != nil {
 						if err := req.CheckCancel(); err != nil {
@@ -730,64 +869,133 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 						}
 					}
 
-					if cp.isCompleted(chunk.ChunkID) || unchangedChunkIDs[chunk.ChunkID] {
+					key := chunkKey(relPath, chunk)
+					if cp.isCompleted(key) || unchangedChunkIDs[chunk.ChunkID] {
 						slog.Debug("Chunk already present or completed in checkpoint, skipping network fetch", "chunkID", chunk.ChunkID, "path", filePath)
 						atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
 						reportTelemetry(entry.Path)
-						cp.markCompleted(checkpointFile, chunk.ChunkID)
+						cp.markCompleted(checkpointFile, key)
 						continue
 					}
 
-					depotID := entry.DepotID
-					if depotID == 0 {
-						depotID = m.DepotID
-					}
-					decKey := m.GetDecryptionKey(depotID)
-					if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, f); err != nil {
-						f.Close()
-						return fmt.Errorf("download chunk for %s (depot %d): %w", filePath, depotID, err)
-					}
-
-					if req.Throttle != nil {
-						_ = req.Throttle(int(chunk.UncompressedSize))
+					// In-place chunk repair: if file exists and chunk on disk already matches expected ChunkID, skip download
+					if fileExists && info.Size() >= int64(chunk.Offset+uint64(chunk.UncompressedSize)) {
+						if manifest.IsChunkValidOnDisk(f, chunk, chunkBuf) {
+							slog.Debug("Chunk already valid on disk, skipping network fetch", "chunkID", chunk.ChunkID, "offset", chunk.Offset, "path", filePath)
+							atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+							reportTelemetry(entry.Path)
+							cp.markCompleted(checkpointFile, key)
+							continue
+						}
 					}
 
-					atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
-					atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
-					reportTelemetry(entry.Path)
-					cp.markCompleted(checkpointFile, chunk.ChunkID)
+					pendingChunks = append(pendingChunks, chunk)
 				}
 
-				_ = f.Truncate(int64(entry.Size))
+				if len(pendingChunks) > 0 {
+					chunkWorkers := 4
+					if chunkWorkers > len(pendingChunks) {
+						chunkWorkers = len(pendingChunks)
+					}
+					cg, cgCtx := errgroup.WithContext(gCtx)
+					cg.SetLimit(chunkWorkers)
+
+					for _, ch := range pendingChunks {
+						chunk := ch
+						cg.Go(func() error {
+							if req.CheckCancel != nil {
+								if err := req.CheckCancel(); err != nil {
+									return err
+								}
+							}
+
+							key := chunkKey(relPath, chunk)
+							depotID := entry.DepotID
+							if depotID == 0 {
+								depotID = m.DepotID
+							}
+							decKey := m.GetDecryptionKey(depotID)
+							if err := downloadChunk(cgCtx, httpClient, rankedHosts, depotID, decKey, chunk, f); err != nil {
+								return fmt.Errorf("download chunk for %s (depot %d): %w", filePath, depotID, err)
+							}
+
+							if req.Throttle != nil {
+								_ = req.Throttle(int(chunk.UncompressedSize))
+							}
+
+							atomic.AddInt64(&downloadedBytes, int64(chunk.UncompressedSize))
+							atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
+							reportTelemetry(entry.Path)
+							cp.markCompleted(checkpointFile, key)
+							return nil
+						})
+					}
+
+					if err := cg.Wait(); err != nil {
+						f.Close()
+						return err
+					}
+				}
+
+				if err := f.Truncate(int64(entry.Size)); err != nil {
+					f.Close()
+					return fmt.Errorf("truncate final file %s: %w", filePath, err)
+				}
 				f.Close()
 
-				// If delta patching was performed and SHA-1 is known, verify the final file integrity
-				if canDelta && entry.SHA1 != "" {
+				if isExecutableEntry(entry) {
+					_ = os.Chmod(filePath, 0755)
+				}
+
+				// Post-download integrity verification against SHA-1 if present
+				if entry.SHA1 != "" {
 					localHash, err := util.GetSHA1Hash(filePath)
 					if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
-						slog.Warn("Delta patched file hash mismatch, falling back to full file download",
+						slog.Warn("Downloaded file hash mismatch, falling back to full file download",
 							"path", filePath, "actual", localHash, "expected", entry.SHA1)
 
 						fFull, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
 						if err != nil {
 							return fmt.Errorf("reopen file for full download %s: %w", filePath, err)
 						}
-						_ = fFull.Truncate(int64(entry.Size))
+						if err := util.PreallocateFile(fFull, int64(entry.Size)); err != nil {
+							fFull.Close()
+							return fmt.Errorf("preallocate fallback file %s: %w", filePath, err)
+						}
 
-						for _, chunk := range entry.Chunks {
-							depotID := entry.DepotID
-							if depotID == 0 {
-								depotID = m.DepotID
-							}
-							decKey := m.GetDecryptionKey(depotID)
-							if err := downloadChunk(gCtx, httpClient, rankedHosts, depotID, decKey, chunk, fFull); err != nil {
-								fFull.Close()
-								return fmt.Errorf("download chunk during fallback for %s: %w", filePath, err)
-							}
-							atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
-							cp.markCompleted(checkpointFile, chunk.ChunkID)
+						chunkWorkers := 4
+						if chunkWorkers > len(entry.Chunks) {
+							chunkWorkers = len(entry.Chunks)
+						}
+						cgFull, cgFullCtx := errgroup.WithContext(gCtx)
+						cgFull.SetLimit(chunkWorkers)
+
+						for _, ch := range entry.Chunks {
+							chunk := ch
+							cgFull.Go(func() error {
+								depotID := entry.DepotID
+								if depotID == 0 {
+									depotID = m.DepotID
+								}
+								decKey := m.GetDecryptionKey(depotID)
+								if err := downloadChunk(cgFullCtx, httpClient, rankedHosts, depotID, decKey, chunk, fFull); err != nil {
+									return fmt.Errorf("download chunk during fallback for %s: %w", filePath, err)
+								}
+								atomic.AddInt64(&networkTransferredBytes, int64(chunk.UncompressedSize))
+								cp.markCompleted(checkpointFile, chunkKey(relPath, chunk))
+								return nil
+							})
+						}
+
+						if err := cgFull.Wait(); err != nil {
+							fFull.Close()
+							return err
 						}
 						fFull.Close()
+
+						if isExecutableEntry(entry) {
+							_ = os.Chmod(filePath, 0755)
+						}
 
 						fallbackHash, err := util.GetSHA1Hash(filePath)
 						if err != nil || !strings.EqualFold(fallbackHash, entry.SHA1) {
@@ -810,13 +1018,12 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	result.UpdatedFiles = int(atomic.LoadInt32(&processedUpdated))
 	result.DownloadedBytes = uint64(atomic.LoadInt64(&downloadedBytes))
 	result.NetworkBytes = uint64(atomic.LoadInt64(&networkTransferredBytes))
+	reportTelemetry("Completed", true)
 
-	// Remove checkpoint file and sweep for any remaining VSZa compressed files on successful completion
+	// Remove checkpoint file on successful completion
 	if !req.DryRun {
+		downloadSucceeded = true
 		_ = os.Remove(checkpointFile)
-		if count, err := util.DecompressVSZaInDir(absTargetDir); err == nil && count > 0 {
-			slog.Info("Post-download VSZa file decompression completed", "count", count)
-		}
 	}
 
 	slog.Debug("Direct game download/update completed",
@@ -1066,16 +1273,19 @@ func loadCheckpoint(path string) *Checkpoint {
 	return &cp
 }
 
-func (cp *Checkpoint) isCompleted(chunkID string) bool {
+func (cp *Checkpoint) isCompleted(key string) bool {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	return cp.CompletedChunks[chunkID]
+	return cp.CompletedChunks[key]
 }
 
-func (cp *Checkpoint) markCompleted(path string, chunkID string) {
+func (cp *Checkpoint) markCompleted(path string, key string) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	cp.CompletedChunks[chunkID] = true
+	if cp.CompletedChunks[key] {
+		return
+	}
+	cp.CompletedChunks[key] = true
 	cp.dirty = true
 
 	// Throttle disk writes to at most once per second
@@ -1095,9 +1305,7 @@ func (cp *Checkpoint) Flush(path string) {
 func (cp *Checkpoint) saveLocked(path string) {
 	data, err := json.Marshal(cp)
 	if err == nil {
-		tmpPath := path + ".tmp"
-		if err := os.WriteFile(tmpPath, data, 0644); err == nil {
-			_ = os.Rename(tmpPath, path)
+		if err := util.WriteFileAtomic(path, data, 0644); err == nil {
 			cp.lastSaved = time.Now()
 			cp.dirty = false
 		}

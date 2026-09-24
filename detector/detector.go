@@ -14,6 +14,7 @@ import (
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/ini"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
@@ -364,15 +365,19 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 					if strings.Contains(baseLower, "steamclient_loader") || strings.Contains(baseLower, "coldclientloader") || strings.Contains(baseLower, "unitycrashhandler") {
 						continue
 					}
-					fullPath := util.JoinPaths(info.GameDir, option.Executable)
+					relExe := util.NormalizeRelativePath(option.Executable)
+					fullPath := filepath.Join(info.GameDir, relExe)
 					if _, err := os.Stat(fullPath); err == nil {
-						candName := option.Description
+						candName := option.Name
 						if candName == "" {
-							candName = filepath.Base(fullPath)
+							candName = option.Description
+						}
+						if candName == "" {
+							candName = filepath.Base(relExe)
 						}
 						info.LaunchCandidates = append(info.LaunchCandidates, domain.LaunchCandidate{
 							Name:        candName,
-							Executable:  fullPath,
+							Executable:  relExe,
 							Arguments:   option.Arguments,
 							Description: option.Description,
 						})
@@ -440,6 +445,28 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	// 8. Executable detection & scoring
+	// If no launch candidates from ACF, query Steam AppInfo launch options for Steam games
+	if len(info.LaunchCandidates) == 0 && info.NumericAppID > 0 {
+		if steamOpts, err := steam.FetchAppLaunchOptions(ctx, info.NumericAppID, info.Platform, info.Branch); err == nil && len(steamOpts) > 0 {
+			for _, opt := range steamOpts {
+				cleanRel := util.NormalizeRelativePath(opt.Executable)
+				if cleanRel == "" {
+					continue
+				}
+				// Verify if this binary exists in the game directory
+				if _, err := os.Stat(filepath.Join(info.GameDir, cleanRel)); err == nil {
+					info.LaunchCandidates = append(info.LaunchCandidates, domain.LaunchCandidate{
+						Name:        opt.Name,
+						Executable:  cleanRel,
+						Arguments:   opt.Arguments,
+						Description: opt.Description,
+					})
+				}
+			}
+		}
+	}
+
+	// For Steam games with no candidates yet, or for standard games: scan candidate exes
 	sort.SliceStable(state.candidateExes, func(i, j int) bool {
 		scoreI := ScoreExecutable(state.candidateExes[i], info.GameDir, info.Name)
 		scoreJ := ScoreExecutable(state.candidateExes[j], info.GameDir, info.Name)
@@ -452,12 +479,21 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	seenExes := make(map[string]bool)
 	for _, cand := range info.LaunchCandidates {
 		seenExes[cand.Executable] = true
+		if rel, err := filepath.Rel(info.GameDir, cand.Executable); err == nil && !strings.HasPrefix(rel, "..") {
+			seenExes[util.NormalizeRelativePath(rel)] = true
+		}
 	}
 
 	dirName := filepath.Base(info.GameDir)
 	for _, exe := range state.candidateExes {
 		canExe := util.CanonicalPath(exe)
-		if !seenExes[canExe] {
+		relExe, err := filepath.Rel(info.GameDir, canExe)
+		cleanRel := util.NormalizeRelativePath(relExe)
+		if err != nil || strings.HasPrefix(relExe, "..") || cleanRel == "" {
+			cleanRel = canExe
+		}
+
+		if !seenExes[canExe] && !seenExes[cleanRel] {
 			baseNoExt := strings.TrimSuffix(filepath.Base(canExe), filepath.Ext(canExe))
 			candName := baseNoExt
 			if strings.EqualFold(baseNoExt, dirName) || (info.Name != "" && strings.EqualFold(baseNoExt, info.Name)) {
@@ -465,9 +501,19 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 			}
 			info.LaunchCandidates = append(info.LaunchCandidates, domain.LaunchCandidate{
 				Name:       candName,
-				Executable: canExe,
+				Executable: cleanRel,
 			})
 			seenExes[canExe] = true
+			seenExes[cleanRel] = true
+		}
+	}
+
+	// Normalize any absolute paths in LaunchCandidates to relative paths
+	for i := range info.LaunchCandidates {
+		if filepath.IsAbs(info.LaunchCandidates[i].Executable) {
+			if rel, err := filepath.Rel(info.GameDir, info.LaunchCandidates[i].Executable); err == nil && !strings.HasPrefix(rel, "..") {
+				info.LaunchCandidates[i].Executable = util.NormalizeRelativePath(rel)
+			}
 		}
 	}
 
@@ -475,7 +521,13 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	if state.coldClientLoaderExe != "" && util.FileExists(state.coldClientLoaderExe) {
 		realLower := strings.ToLower(filepath.Base(state.coldClientLoaderExe))
 		if !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
-			info.ExePath = state.coldClientLoaderExe
+			relLoader := util.NormalizeRelativePath(state.coldClientLoaderExe)
+			if filepath.IsAbs(state.coldClientLoaderExe) {
+				if rel, err := filepath.Rel(info.GameDir, state.coldClientLoaderExe); err == nil && !strings.HasPrefix(rel, "..") {
+					relLoader = util.NormalizeRelativePath(rel)
+				}
+			}
+			info.ExePath = relLoader
 		}
 	}
 

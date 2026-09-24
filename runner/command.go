@@ -14,6 +14,7 @@ import (
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/profiles"
 	"github.com/staernid/gamux/util"
 )
 
@@ -181,6 +182,12 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 	gameEnv["SteamClientLaunch"] = "1"
 	gameEnv["SteamEnv"] = "1"
 
+	// Profile sandbox isolation (secondary profiles use isolated home & XDG directories)
+	for k, v := range profiles.ResolveProfileEnv(resolved.ProfileID) {
+		gameEnv[k] = v
+	}
+	seatID := compat.SeatIDFromProfileID(resolved.ProfileID)
+
 	// Wine / Proton prefix isolation with central Syncthing user data symlinking
 	if resolved.Platform != "linux" || resolved.Runner == RunnerWine || resolved.Runner == RunnerProton || resolved.Runner == RunnerUMU {
 		numAppID, _ := util.ParseAppID(resolved.AppID)
@@ -196,7 +203,7 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 				OperatingMode: resolved.OperatingMode,
 			},
 		}
-		prefixDir, pErr := compat.EnsurePrefix(ctx, cfg, gameStub, resolved.WinePrefix)
+		prefixDir, pErr := compat.EnsureSeatPrefix(ctx, cfg, gameStub, seatID, resolved.WinePrefix)
 		if pErr == nil && prefixDir != "" {
 			gameEnv["WINEPREFIX"] = prefixDir
 			gameEnv["STEAM_COMPAT_DATA_PATH"] = prefixDir

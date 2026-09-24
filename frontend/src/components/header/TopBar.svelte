@@ -4,6 +4,7 @@
   import { modalStore } from '../../stores/modal.js';
   import { configStore } from '../../stores/config.js';
   import Icon from '../common/Icon.svelte';
+  import TopBarProfileMenu from './TopBarProfileMenu.svelte';
   import { AppAPI } from '../../api/app.js';
   import { isSamePath } from '../../utils/game.js';
 
@@ -91,35 +92,39 @@
   </div>
 </header>
 
-<!-- Active Running Games Stack (Anchored to top-right, vertically stacked) -->
-{#if runningGameList.length > 0}
-  <aside class="absolute top-4 right-6 z-40 select-none pointer-events-none flex flex-col items-end space-y-2">
-    {#each runningGameList as rGame (rGame.gameDir)}
-      <div class="pointer-events-auto flex items-center space-x-2.5 bg-surface-header/95 border border-surface-border hover:border-surface-borderHighlight px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-colors">
-        <button
-          type="button"
-          on:click={() => navigateWithGuard('game-hub', () => { $selectedGame = rGame; $activeView = 'game-hub'; })}
-          class="flex items-center space-x-2 text-xs text-neutral-200 hover:text-white font-bold transition-colors truncate max-w-[180px] sm:max-w-[240px] cursor-pointer"
-          title="Jump to Game Hub ({rGame.name})"
-        >
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
-          <span class="truncate">{rGame.name}</span>
-        </button>
-        <button
-          type="button"
-          on:click|stopPropagation={() => {
-            AppAPI.stopGame(rGame.gameDir);
-            setGameRunning(rGame.gameDir, false);
-          }}
-          class="px-2 py-0.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-2xs font-mono font-bold border border-rose-900/40 hover:border-rose-700/60 transition-all flex items-center space-x-1 flex-shrink-0 active:scale-95 cursor-pointer shadow-sm"
-          title="Stop Process (Terminate {rGame.name})"
-        >
-          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-            <rect x="4" y="4" width="16" height="16" rx="2" />
-          </svg>
-          <span>Stop</span>
-        </button>
-      </div>
-    {/each}
-  </aside>
-{/if}
+<!-- Top Right Controls (Active Running Games & Profile Avatar) -->
+<aside class="absolute top-4 right-6 z-40 select-none pointer-events-none flex items-start space-x-2.5">
+  {#if runningGameList.length > 0}
+    <div class="flex flex-col items-end space-y-2">
+      {#each runningGameList as rGame (rGame.gameDir)}
+        <div class="pointer-events-auto flex items-center space-x-2.5 bg-surface-header/95 border border-surface-border hover:border-surface-borderHighlight px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-colors">
+          <button
+            type="button"
+            on:click={() => navigateWithGuard('game-hub', () => { $selectedGame = rGame; $activeView = 'game-hub'; })}
+            class="flex items-center space-x-2 text-xs text-neutral-200 hover:text-white font-bold transition-colors truncate max-w-[180px] sm:max-w-[240px] cursor-pointer"
+            title="Jump to Game Hub ({rGame.name})"
+          >
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+            <span class="truncate">{rGame.name}</span>
+          </button>
+          <button
+            type="button"
+            on:click|stopPropagation={() => {
+              AppAPI.stopGame(rGame.gameDir);
+              setGameRunning(rGame.gameDir, false);
+            }}
+            class="px-2 py-0.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-2xs font-mono font-bold border border-rose-900/40 hover:border-rose-700/60 transition-all flex items-center space-x-1 flex-shrink-0 active:scale-95 cursor-pointer shadow-sm"
+            title="Stop Process (Terminate {rGame.name})"
+          >
+            <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+            <span>Stop</span>
+          </button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  <TopBarProfileMenu onNavigateToProfilesSettings={() => navigateWithGuard('settings')} />
+</aside>

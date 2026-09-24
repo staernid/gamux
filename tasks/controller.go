@@ -18,6 +18,7 @@ type Controller struct {
 	pauseCond    *sync.Cond
 	mu           sync.Mutex
 	resultGame   *domain.Game
+	metadata     map[string]string
 	onProgress   func(currBytes, totalBytes int64, currItems, totalItems int, speed float64, eta int, pct float64)
 	onStage      func(stage, details string)
 	onStep       func(step, total int, stage, details string)
@@ -68,6 +69,30 @@ func (c *Controller) ResultGame() *domain.Game {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.resultGame
+}
+
+// SetMetadata associates arbitrary key-value metadata with the task.
+func (c *Controller) SetMetadata(key, val string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.metadata == nil {
+		c.metadata = make(map[string]string)
+	}
+	c.metadata[key] = val
+}
+
+// Metadata returns a copy of the attached metadata map.
+func (c *Controller) Metadata() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.metadata) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(c.metadata))
+	for k, v := range c.metadata {
+		out[k] = v
+	}
+	return out
 }
 
 // IsPaused returns true if the controller is in a paused state.

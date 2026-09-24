@@ -2,12 +2,16 @@ package manifest
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
@@ -64,6 +68,333 @@ const (
 	DepotCategoryMacOS      DepotCategory = "macos"
 	DepotCategorySoundtrack DepotCategory = "soundtrack"
 )
+
+// Content category identifiers for multi-depot and optional content filtering.
+const (
+	ContentCategoryCore         = "core"
+	ContentCategorySoundtrack   = "soundtrack"
+	ContentCategoryOptionalHD   = "optional_hd"
+	ContentCategoryLocalePrefix = "locale:"
+)
+
+// DepotMeta captures metadata about a Steam depot for classification and filtering.
+type DepotMeta struct {
+	DepotID  uint32 `json:"depot_id"`
+	Name     string `json:"name,omitempty"`
+	Language string `json:"language,omitempty"`
+	OSList   string `json:"oslist,omitempty"`
+	Optional bool   `json:"optional,omitempty"`
+}
+
+var languageAliases = map[string]string{
+	"english":                 "english",
+	"en":                      "english",
+	"french":                  "french",
+	"fr":                      "french",
+	"fr-fr":                   "french",
+	"german":                  "german",
+	"de":                      "german",
+	"de-de":                   "german",
+	"italian":                 "italian",
+	"it":                      "italian",
+	"it-it":                   "italian",
+	"spanish":                 "spanish",
+	"es":                      "spanish",
+	"es-es":                   "spanish",
+	"spanish - spain":         "spanish",
+	"spanish - latin america": "latam",
+	"latam":                   "latam",
+	"japanese":                "japanese",
+	"ja":                      "japanese",
+	"jp":                      "japanese",
+	"ja-jp":                   "japanese",
+	"korean":                  "koreana",
+	"koreana":                 "koreana",
+	"ko":                      "koreana",
+	"kr":                      "koreana",
+	"ko-kr":                   "koreana",
+	"polish":                  "polish",
+	"pl":                      "polish",
+	"pl-pl":                   "polish",
+	"russian":                 "russian",
+	"ru":                      "russian",
+	"ru-ru":                   "russian",
+	"simplified chinese":      "schinese",
+	"schinese":                "schinese",
+	"zh-cn":                   "schinese",
+	"zh-hans":                 "schinese",
+	"traditional chinese":     "tchinese",
+	"tchinese":                "tchinese",
+	"zh-tw":                   "tchinese",
+	"zh-hant":                 "tchinese",
+	"chinese":                 "schinese",
+	"zh":                      "schinese",
+	"portuguese":              "portuguese",
+	"pt":                      "portuguese",
+	"pt-pt":                   "portuguese",
+	"portuguese - brazil":     "brazilian",
+	"brazilian":               "brazilian",
+	"pt-br":                   "brazilian",
+	"arabic":                  "arabic",
+	"ar":                      "arabic",
+	"czech":                   "czech",
+	"cs":                      "czech",
+	"danish":                  "danish",
+	"da":                      "danish",
+	"dutch":                   "dutch",
+	"nl":                      "dutch",
+	"finnish":                 "finnish",
+	"fi":                      "finnish",
+	"greek":                   "greek",
+	"el":                      "greek",
+	"hungarian":               "hungarian",
+	"hu":                      "hungarian",
+	"norwegian":               "norwegian",
+	"no":                      "norwegian",
+	"swedish":                 "swedish",
+	"sv":                      "swedish",
+	"thai":                    "thai",
+	"th":                      "thai",
+	"turkish":                 "turkish",
+	"tr":                      "turkish",
+	"ukrainian":               "ukrainian",
+	"uk":                      "ukrainian",
+	"ua":                      "ukrainian",
+	"vietnamese":              "vietnamese",
+	"vi":                      "vietnamese",
+}
+
+// ResolveSystemLanguage inspects environment variables (LC_ALL, LC_MESSAGES, LANG)
+// to determine the system's preferred language, defaulting to "english".
+func ResolveSystemLanguage() string {
+	for _, env := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		val := strings.TrimSpace(os.Getenv(env))
+		if val != "" && val != "C" && val != "POSIX" {
+			if idx := strings.Index(val, "."); idx != -1 {
+				val = val[:idx]
+			}
+			val = strings.ReplaceAll(val, "_", "-")
+			norm := NormalizeLanguageCode(val)
+			if norm != "" && norm != "auto" && norm != "all" {
+				return norm
+			}
+		}
+	}
+	return "english"
+}
+
+// NormalizeLanguageCode normalizes common language names and ISO codes to canonical Steam language names.
+func NormalizeLanguageCode(lang string) string {
+	clean := strings.ToLower(strings.TrimSpace(lang))
+	if clean == "" || clean == "auto" || clean == "all" {
+		return clean
+	}
+	if canonical, ok := languageAliases[clean]; ok {
+		return canonical
+	}
+	for alias, canonical := range languageAliases {
+		if strings.EqualFold(alias, clean) || strings.HasPrefix(clean, alias) {
+			return canonical
+		}
+	}
+	return clean
+}
+
+// LanguagesMatch returns true if two language descriptors refer to the same language.
+func LanguagesMatch(lang1, lang2 string) bool {
+	l1 := NormalizeLanguageCode(lang1)
+	l2 := NormalizeLanguageCode(lang2)
+	if l1 == "" || l2 == "" || l1 == "all" || l2 == "all" {
+		return true
+	}
+	if l1 == "auto" {
+		l1 = ResolveSystemLanguage()
+	}
+	if l2 == "auto" {
+		l2 = ResolveSystemLanguage()
+	}
+	if l1 == "" || l2 == "" || l1 == "all" || l2 == "all" {
+		return true
+	}
+	if l1 == l2 {
+		return true
+	}
+	// Broad compatibility for Chinese variants and Portuguese variants
+	if (l1 == "schinese" || l1 == "tchinese") && (l2 == "schinese" || l2 == "tchinese") {
+		return true
+	}
+	if (l1 == "portuguese" || l1 == "brazilian") && (l2 == "portuguese" || l2 == "brazilian") {
+		return true
+	}
+	return false
+}
+
+// ClassifyDepotContent inspects depot metadata, depot names, and manifest file entries
+// to classify a depot into "core", "locale:<language>", "soundtrack", or "optional_hd".
+func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFileEntry, meta *DepotMeta) (string, string) {
+	// 0. Executable check: Any depot containing game executables (.exe, .so, .dylib, etc.)
+	// is definitively CORE content and must never be classified as an optional locale or soundtrack.
+	for _, f := range files {
+		if (f.Flags & 0x40) != 0 {
+			continue // directory entry
+		}
+		p := strings.ToLower(NormalizePath(f.Path))
+		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".so") || strings.HasSuffix(p, ".dylib") ||
+			strings.HasSuffix(p, ".bin.x86_64") || strings.HasSuffix(p, ".x86_64") {
+			return ContentCategoryCore, ""
+		}
+	}
+
+	// 1. External depot metadata inspection
+	// Note: Steamworks often sets config.language: "english" on the base game depot.
+	// Only treat it as an optional language pack if it is marked optional or has language pack indicators in its name,
+	// or if files are not available and it has an explicit language tag.
+	if meta != nil {
+		lowerMetaName := strings.ToLower(meta.Name)
+		if strings.Contains(lowerMetaName, "soundtrack") || strings.Contains(lowerMetaName, " ost") || strings.HasSuffix(lowerMetaName, "ost") {
+			return ContentCategorySoundtrack, ""
+		}
+		if strings.Contains(lowerMetaName, "high resolution") || strings.Contains(lowerMetaName, "4k") ||
+			strings.Contains(lowerMetaName, "hd texture") || strings.Contains(lowerMetaName, "ultra texture") ||
+			strings.Contains(lowerMetaName, "artbook") || strings.Contains(lowerMetaName, "bonus content") {
+			return ContentCategoryOptionalHD, ""
+		}
+		if meta.Language != "" {
+			isOptionalLocale := meta.Optional ||
+				strings.Contains(lowerMetaName, "voice") ||
+				strings.Contains(lowerMetaName, "audio") ||
+				strings.Contains(lowerMetaName, "speech") ||
+				strings.Contains(lowerMetaName, "language") ||
+				strings.Contains(lowerMetaName, "locale") ||
+				strings.Contains(lowerMetaName, "pack") ||
+				len(files) == 0
+
+			normLang := NormalizeLanguageCode(meta.Language)
+			if normLang != "" && isOptionalLocale {
+				return ContentCategoryLocalePrefix + normLang, normLang
+			}
+		}
+	}
+
+	// 2. Depot name string inspection
+	nameToCheck := strings.ToLower(depotName)
+	if meta != nil && meta.Name != "" {
+		nameToCheck = strings.ToLower(meta.Name)
+	}
+
+	if nameToCheck != "" {
+		if strings.Contains(nameToCheck, "soundtrack") || strings.Contains(nameToCheck, " ost") || strings.HasSuffix(nameToCheck, "ost") {
+			return ContentCategorySoundtrack, ""
+		}
+		if strings.Contains(nameToCheck, "high resolution") || strings.Contains(nameToCheck, "4k") ||
+			strings.Contains(nameToCheck, "hd texture") || strings.Contains(nameToCheck, "ultra texture") ||
+			strings.Contains(nameToCheck, "artbook") || strings.Contains(nameToCheck, "bonus content") {
+			return ContentCategoryOptionalHD, ""
+		}
+
+		// Check for language keywords in depot name
+		langKeywords := []string{
+			"french", "german", "italian", "spanish", "japanese", "korean", "koreana",
+			"polish", "russian", "chinese", "schinese", "tchinese", "brazilian",
+			"portuguese", "arabic", "turkish", "ukrainian", "czech", "dutch",
+		}
+		for _, kw := range langKeywords {
+			if strings.Contains(nameToCheck, kw) {
+				normLang := NormalizeLanguageCode(kw)
+				return ContentCategoryLocalePrefix + normLang, normLang
+			}
+		}
+	}
+
+	// 3. Manifest file entries analysis
+	if len(files) > 0 {
+		platCat := ClassifyDepot(files)
+		if platCat == DepotCategorySoundtrack {
+			return ContentCategorySoundtrack, ""
+		}
+
+		var hasExecutable bool
+		hdFileCount := 0
+		nonDirCount := 0
+		langCounts := make(map[string]int)
+
+		languages := []string{
+			"french", "german", "italian", "spanish", "japanese", "koreana",
+			"polish", "russian", "schinese", "tchinese", "brazilian", "portuguese",
+		}
+
+		for _, f := range files {
+			if (f.Flags & 0x40) != 0 {
+				continue
+			}
+			nonDirCount++
+			p := strings.ToLower(NormalizePath(f.Path))
+
+			if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".so") || strings.HasSuffix(p, ".dylib") ||
+				strings.HasSuffix(p, ".bin.x86_64") || strings.HasSuffix(p, ".x86_64") {
+				hasExecutable = true
+			}
+
+			if strings.Contains(p, "4k") || strings.Contains(p, "highres") || strings.Contains(p, "hd_textures") || strings.Contains(p, "ultrahd") {
+				hdFileCount++
+			}
+
+			// Language path checks
+			for _, lang := range languages {
+				if strings.Contains(p, "/"+lang+"/") ||
+					strings.Contains(p, "_"+lang) ||
+					strings.Contains(p, lang+"_") ||
+					strings.Contains(p, "/"+lang+".") ||
+					strings.HasPrefix(p, lang+"/") {
+					langCounts[lang]++
+				}
+			}
+
+			// Short code checks
+			if strings.Contains(p, "/fr-fr/") || strings.Contains(p, "_fr.pck") || strings.Contains(p, "_fr.pak") {
+				langCounts["french"]++
+			}
+			if strings.Contains(p, "/de-de/") || strings.Contains(p, "_de.pck") || strings.Contains(p, "_de.pak") {
+				langCounts["german"]++
+			}
+			if strings.Contains(p, "/ja-jp/") || strings.Contains(p, "_ja.pck") || strings.Contains(p, "_ja.pak") {
+				langCounts["japanese"]++
+			}
+			if strings.Contains(p, "/pl-pl/") || strings.Contains(p, "_pl.pck") || strings.Contains(p, "_pl.pak") {
+				langCounts["polish"]++
+			}
+			if strings.Contains(p, "/ru-ru/") || strings.Contains(p, "_ru.pck") || strings.Contains(p, "_ru.pak") {
+				langCounts["russian"]++
+			}
+			if strings.Contains(p, "/zh-cn/") || strings.Contains(p, "_zh.pck") || strings.Contains(p, "_zh.pak") {
+				langCounts["schinese"]++
+			}
+		}
+
+		if nonDirCount > 0 && !hasExecutable {
+			if float64(hdFileCount)/float64(nonDirCount) >= 0.5 {
+				return ContentCategoryOptionalHD, ""
+			}
+
+			// Check if any language dominates the files
+			var maxLang string
+			var maxCount int
+			for l, c := range langCounts {
+				if c > maxCount {
+					maxCount = c
+					maxLang = l
+				}
+			}
+
+			if maxCount >= 2 && (float64(maxCount)/float64(nonDirCount) >= 0.3 || maxCount >= 10) {
+				normLang := NormalizeLanguageCode(maxLang)
+				return ContentCategoryLocalePrefix + normLang, normLang
+			}
+		}
+	}
+
+	return ContentCategoryCore, ""
+}
 
 // ClassifyDepot inspects manifest file entries to determine the target OS or payload category.
 func ClassifyDepot(files []ManifestFileEntry) DepotCategory {
@@ -208,13 +539,71 @@ func IsRedistFile(relPath string) bool {
 		strings.HasPrefix(norm, "installers")
 }
 
-// ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1 mismatches.
+// IsChunkValidOnDisk checks if the chunk at the specified offset in f matches the expected ChunkID.
+func IsChunkValidOnDisk(f io.ReaderAt, chunk ChunkInfo, buf []byte) bool {
+	if chunk.UncompressedSize == 0 {
+		return true
+	}
+	if len(chunk.ChunkID) != 40 {
+		return false
+	}
+	slice := buf
+	if len(slice) < int(chunk.UncompressedSize) {
+		slice = make([]byte, chunk.UncompressedSize)
+	} else {
+		slice = slice[:chunk.UncompressedSize]
+	}
+	if _, err := f.ReadAt(slice, int64(chunk.Offset)); err != nil {
+		return false
+	}
+	sum := sha1.Sum(slice)
+	return strings.EqualFold(hex.EncodeToString(sum[:]), chunk.ChunkID)
+}
+
+// VerifyFileChunksOnDisk checks if all chunks of a file on disk match their expected chunk hashes.
+func VerifyFileChunksOnDisk(filePath string, chunks []ChunkInfo) bool {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	buf := make([]byte, 1024*1024)
+	for _, ch := range chunks {
+		if !IsChunkValidOnDisk(f, ch, buf) {
+			return false
+		}
+	}
+	return true
+}
+
+// IntegrityProgress reports quantitative telemetry during depot integrity verification.
+type IntegrityProgress struct {
+	CurrentFile  string  `json:"current_file"`
+	CheckedFiles int     `json:"checked_files"`
+	TotalFiles   int     `json:"total_files"`
+	CheckedBytes int64   `json:"checked_bytes"`
+	TotalBytes   int64   `json:"total_bytes"`
+	SpeedBps     float64 `json:"speed_bps"`
+	ETASeconds   int     `json:"eta_seconds"`
+	Percent      float64 `json:"percent"`
+}
+
+// IntegrityProgressFunc is a callback invoked with progress updates during integrity scanning.
+type IntegrityProgressFunc func(IntegrityProgress)
+
+// ScanDepotIntegrity compares files on disk against official manifest entries for size/SHA1/chunk mismatches.
 func ScanDepotIntegrity(gameDir string, appID uint32) (*IntegrityReport, error) {
 	return ScanDepotIntegrityWithPlatform(gameDir, appID, "")
 }
 
 // ScanDepotIntegrityWithPlatform compares files on disk against official manifest entries matching a target platform.
 func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform string) (*IntegrityReport, error) {
+	return ScanDepotIntegrityWithProgress(context.Background(), gameDir, appID, platform, nil)
+}
+
+// ScanDepotIntegrityWithProgress compares files on disk against official manifest entries with streaming progress telemetry.
+func ScanDepotIntegrityWithProgress(ctx context.Context, gameDir string, appID uint32, platform string, onProgress IntegrityProgressFunc) (*IntegrityReport, error) {
 	manifest, _ := LoadManifestFromDirWithPlatform(gameDir, appID, nil, platform)
 
 	// Check if manifest files are missing or encrypted
@@ -230,7 +619,7 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 
 	if needsKeyOrManifest {
 		chain := NewDefaultProviderChain("", "")
-		res, err := chain.Resolve(context.Background(), appID)
+		res, err := chain.Resolve(ctx, appID)
 		if err == nil && res != nil && len(res.Depots) > 0 {
 			depotKeys := make(map[uint32]string)
 			for _, pair := range res.Depots {
@@ -297,6 +686,7 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 	officialMap := make(map[string]ManifestFileEntry, len(manifest.Files))
 	foundMap := make(map[string]bool, len(manifest.Files))
 	officialCount := 0
+	var totalBytes int64
 
 	for _, f := range manifest.Files {
 		// Ignore directory manifest nodes from official file count & verification
@@ -306,15 +696,68 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 		norm := strings.ToLower(NormalizePath(f.Path))
 		officialMap[norm] = f
 		officialCount++
+		totalBytes += int64(f.Size)
 	}
 
 	report := &IntegrityReport{
 		OfficialCount: officialCount,
 	}
 
-	_ = filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
+	var checkedFiles int
+	var checkedBytes int64
+	startTime := time.Now()
+	var lastReport time.Time
+
+	reportProgress := func(currentFile string, force bool) {
+		if onProgress == nil {
+			return
+		}
+		now := time.Now()
+		if !force && now.Sub(lastReport) < 100*time.Millisecond {
+			return
+		}
+		lastReport = now
+
+		elapsed := now.Sub(startTime).Seconds()
+		speed := float64(0)
+		eta := 0
+		if elapsed > 0.5 {
+			speed = float64(checkedBytes) / elapsed
+			if speed > 0 && totalBytes > checkedBytes {
+				eta = int(float64(totalBytes-checkedBytes) / speed)
+			}
+		}
+		pct := float64(0)
+		if totalBytes > 0 {
+			pct = float64(checkedBytes) / float64(totalBytes) * 100.0
+			if pct > 100 {
+				pct = 100
+			}
+		} else if officialCount > 0 {
+			pct = float64(checkedFiles) / float64(officialCount) * 100.0
+			if pct > 100 {
+				pct = 100
+			}
+		}
+
+		onProgress(IntegrityProgress{
+			CurrentFile:  currentFile,
+			CheckedFiles: checkedFiles,
+			TotalFiles:   officialCount,
+			CheckedBytes: checkedBytes,
+			TotalBytes:   totalBytes,
+			SpeedBps:     speed,
+			ETASeconds:   eta,
+			Percent:      pct,
+		})
+	}
+
+	walkErr := filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		rel, relErr := filepath.Rel(gameDir, path)
@@ -341,10 +784,32 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 		if isOfficial {
 			foundMap[normRel] = true
 			if !d.IsDir() {
+				checkedFiles++
+				checkedBytes += int64(entry.Size)
+				reportProgress(rel, false)
+
 				if fi, err := d.Info(); err == nil {
+					lowerRel := strings.ToLower(rel)
+					isDrmWrapped := (strings.HasSuffix(lowerRel, "steam_api64.dll") || strings.HasSuffix(lowerRel, "steam_api.dll") || strings.HasSuffix(lowerRel, "libsteam_api.so")) && hasOriginalBackup(gameDir, rel)
+
+					corrupted := false
 					if uint64(fi.Size()) != entry.Size {
-						lowerRel := strings.ToLower(rel)
-						if (strings.HasSuffix(lowerRel, "steam_api64.dll") || strings.HasSuffix(lowerRel, "steam_api.dll") || strings.HasSuffix(lowerRel, "libsteam_api.so")) && hasOriginalBackup(gameDir, rel) {
+						corrupted = true
+					} else if !isDrmWrapped {
+						if entry.SHA1 != "" {
+							localHash, err := util.GetSHA1Hash(path)
+							if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
+								corrupted = true
+							}
+						} else if len(entry.Chunks) > 0 {
+							if !VerifyFileChunksOnDisk(path, entry.Chunks) {
+								corrupted = true
+							}
+						}
+					}
+
+					if corrupted {
+						if isDrmWrapped {
 							report.IntactCount++
 						} else if IsRedistFile(rel) {
 							report.RedistModified = append(report.RedistModified, rel)
@@ -374,6 +839,9 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 		}
 		return nil
 	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
 
 	for normRel, entry := range officialMap {
 		if !foundMap[normRel] {
@@ -405,6 +873,7 @@ func ScanDepotIntegrityWithPlatform(gameDir string, appID uint32, platform strin
 		}
 	}
 
+	reportProgress("Completed", true)
 	return report, nil
 }
 
@@ -428,6 +897,11 @@ func hasOriginalBackup(gameDir, rel string) bool {
 
 // InspectGameDepots inspects local manifests to produce a structured inventory of all game depots.
 func InspectGameDepots(gameDir string, appID uint32) ([]domain.DepotSummary, error) {
+	return InspectGameDepotsWithMetadata(gameDir, appID, nil)
+}
+
+// InspectGameDepotsWithMetadata inspects local manifests enriched with optional remote metadata to produce a structured inventory of game depots.
+func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uint32]DepotMeta) ([]domain.DepotSummary, error) {
 	manifestsDir := filepath.Join(gameDir, "[Manifests]")
 	var summaries []domain.DepotSummary
 
@@ -481,6 +955,15 @@ func InspectGameDepots(gameDir string, appID uint32) ([]domain.DepotSummary, err
 			}
 
 			cat := ClassifyDepot(files)
+			var meta *DepotMeta
+			if metaMap != nil {
+				if m, ok := metaMap[dID]; ok {
+					meta = &m
+				}
+			}
+
+			contentCat, lang := ClassifyDepotContent(dID, "", files, meta)
+
 			var totalBytes uint64
 			fileCount := 0
 			installedCount := 0
@@ -502,27 +985,80 @@ func InspectGameDepots(gameDir string, appID uint32) ([]domain.DepotSummary, err
 
 			isInstalled := fileCount > 0 && installedCount > 0 && float64(installedCount)/float64(fileCount) >= 0.5
 			depotName := fmt.Sprintf("Depot %d", dID)
-			switch cat {
-			case DepotCategoryCommon:
-				depotName = fmt.Sprintf("Base Content (%d)", dID)
-			case DepotCategoryWindows:
-				depotName = fmt.Sprintf("Windows Binaries (%d)", dID)
-			case DepotCategoryLinux:
-				depotName = fmt.Sprintf("Linux Native Binaries (%d)", dID)
-			case DepotCategoryMacOS:
-				depotName = fmt.Sprintf("macOS Bundle (%d)", dID)
-			case DepotCategorySoundtrack:
+			if meta != nil && meta.Name != "" {
+				depotName = meta.Name
+			} else if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
+				depotName = fmt.Sprintf("%s Language Pack (%d)", strings.Title(lang), dID)
+			} else if contentCat == ContentCategoryOptionalHD {
+				depotName = fmt.Sprintf("High-Resolution Assets (%d)", dID)
+			} else if contentCat == ContentCategorySoundtrack {
 				depotName = fmt.Sprintf("Official Soundtrack (%d)", dID)
+			} else {
+				switch cat {
+				case DepotCategoryCommon:
+					depotName = fmt.Sprintf("Base Content (%d)", dID)
+				case DepotCategoryWindows:
+					depotName = fmt.Sprintf("Windows Binaries (%d)", dID)
+				case DepotCategoryLinux:
+					depotName = fmt.Sprintf("Linux Native Binaries (%d)", dID)
+				case DepotCategoryMacOS:
+					depotName = fmt.Sprintf("macOS Bundle (%d)", dID)
+				case DepotCategorySoundtrack:
+					depotName = fmt.Sprintf("Official Soundtrack (%d)", dID)
+				}
 			}
 
 			summaries = append(summaries, domain.DepotSummary{
-				DepotID:    dID,
-				Name:       depotName,
-				Category:   string(cat),
-				Installed:  isInstalled,
-				Size:       totalBytes,
-				FileCount:  fileCount,
-				ManifestID: depotLatestManifestID[dID],
+				DepotID:         dID,
+				Name:            depotName,
+				Category:        string(cat),
+				ContentCategory: contentCat,
+				Language:        lang,
+				Installed:       isInstalled,
+				Size:            totalBytes,
+				FileCount:       fileCount,
+				ManifestID:      depotLatestManifestID[dID],
+			})
+		}
+	}
+
+	// If no local manifests found on disk, but remote metadata exists (e.g. preview or uninstalled stub)
+	if len(summaries) == 0 && len(metaMap) > 0 {
+		for dID, meta := range metaMap {
+			m := meta
+			contentCat, lang := ClassifyDepotContent(dID, m.Name, nil, &m)
+			cat := DepotCategoryCommon
+			if m.OSList == "windows" {
+				cat = DepotCategoryWindows
+			} else if m.OSList == "linux" {
+				cat = DepotCategoryLinux
+			} else if m.OSList == "macos" {
+				cat = DepotCategoryMacOS
+			}
+
+			depotName := m.Name
+			if depotName == "" {
+				if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
+					depotName = fmt.Sprintf("%s Language Pack (%d)", strings.Title(lang), dID)
+				} else if contentCat == ContentCategoryOptionalHD {
+					depotName = fmt.Sprintf("High-Resolution Assets (%d)", dID)
+				} else if contentCat == ContentCategorySoundtrack {
+					depotName = fmt.Sprintf("Official Soundtrack (%d)", dID)
+				} else {
+					depotName = fmt.Sprintf("Depot %d", dID)
+				}
+			}
+
+			summaries = append(summaries, domain.DepotSummary{
+				DepotID:         dID,
+				Name:            depotName,
+				Category:        string(cat),
+				ContentCategory: contentCat,
+				Language:        lang,
+				Installed:       false,
+				Size:            0,
+				FileCount:       0,
+				ManifestID:      0,
 			})
 		}
 	}

@@ -60,13 +60,9 @@ type Config struct {
 	Multiseat MultiseatConfig `json:"multiseat,omitempty"`
 }
 
-// MultiseatConfig holds preferences and profile info for 2-player local and streaming sessions.
+// MultiseatConfig holds preferences and layout/device options for 2-player local and streaming sessions.
 type MultiseatConfig struct {
-	Player2AccountName    string `json:"player2_account_name,omitempty"`
-	Player2AccountSteamID string `json:"player2_account_steamid,omitempty"`
-	Player2Language       string `json:"player2_language,omitempty"`
-	Player2IPCountry      string `json:"player2_ip_country,omitempty"`
-	Player2WinePrefix     string `json:"player2_wine_prefix,omitempty"`
+	Player2ProfileID      string `json:"player2_profile_id,omitempty"`
 	DefaultSeat1Mode      string `json:"default_seat1_mode,omitempty"` // "local" | "stream"
 	DefaultSeat2Mode      string `json:"default_seat2_mode,omitempty"` // "local" | "stream"
 	DefaultLayout         string `json:"default_layout,omitempty"`     // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
@@ -150,11 +146,7 @@ func DefaultConfig() *Config {
 		WinePrefix:           "",
 		MangoHud:             false,
 		Multiseat: MultiseatConfig{
-			Player2AccountName:    "PlayerTwo",
-			Player2AccountSteamID: "76561198998877665",
-			Player2Language:       "english",
-			Player2IPCountry:      "US",
-			Player2WinePrefix:     "",
+			Player2ProfileID:      "p2",
 			DefaultSeat1Mode:      "local",
 			DefaultSeat2Mode:      "local",
 			DefaultLayout:         "dual_monitor",

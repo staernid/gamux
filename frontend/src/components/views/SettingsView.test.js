@@ -11,7 +11,7 @@ describe('SettingsView Component', () => {
     expect(screen.getByRole('tab', { name: /General/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Storage/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Compatibility/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Steam/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Profiles/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Credentials/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Maintenance/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Logs/i })).toBeInTheDocument();
@@ -46,13 +46,13 @@ describe('SettingsView Component', () => {
     expect(screen.getByText(/Custom Limit \(MB\/s\):/i)).toBeInTheDocument();
   });
 
-  it('switches to Steam tab and renders persona settings with custom ISO support', async () => {
+  it('switches to Profiles tab and renders persona settings with custom ISO support', async () => {
     render(SettingsView);
 
-    const steamTab = screen.getByRole('tab', { name: /Steam/i });
-    await fireEvent.click(steamTab);
+    const profilesTab = screen.getByRole('tab', { name: /Profiles/i });
+    await fireEvent.click(profilesTab);
 
-    expect(screen.getByText('Steam & Persona Emulation')).toBeInTheDocument();
+    expect(screen.getByText('Active Profile')).toBeInTheDocument();
     expect(screen.getByText('Display Name')).toBeInTheDocument();
     expect(screen.getByText(/Steam ID/i)).toBeInTheDocument();
     expect(screen.getByText(/Region Code/i)).toBeInTheDocument();

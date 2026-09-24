@@ -78,6 +78,12 @@ func EnsureSeatProfile(profileDir string, profile PlayerProfile) error {
 	_ = os.MkdirAll(filepath.Join(homeDir, ".cache"), 0755)
 	_ = os.MkdirAll(filepath.Join(homeDir, ".config"), 0755)
 
+	// Clean up any stale compatibilitytools.d symlink so bwrap won't fail to mount on it
+	seatSteamCompat := filepath.Join(homeDir, ".local", "share", "Steam", "compatibilitytools.d")
+	if fi, err := os.Lstat(seatSteamCompat); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		_ = os.Remove(seatSteamCompat)
+	}
+
 	return nil
 }
 
@@ -231,7 +237,10 @@ func BuildBwrapArgs(opts BwrapOptions) ([]string, error) {
 			realSteamCompat := filepath.Join(realHome, ".local", "share", "Steam", "compatibilitytools.d")
 			seatSteamCompat := filepath.Join(homeDir, ".local", "share", "Steam", "compatibilitytools.d")
 			if util.FileExists(realSteamCompat) {
-				_ = os.MkdirAll(filepath.Dir(seatSteamCompat), 0755)
+				if fi, err := os.Lstat(seatSteamCompat); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+					_ = os.Remove(seatSteamCompat)
+				}
+				_ = os.MkdirAll(seatSteamCompat, 0755)
 				args = append(args, "--ro-bind-try", realSteamCompat, seatSteamCompat)
 			}
 		}

@@ -70,15 +70,48 @@ func TestEnsureSeatPrefix(t *testing.T) {
 		t.Errorf("expected p2 prefix %s, got %s", expectedP2, p2Prefix)
 	}
 
-	// 3. Seat 2 with custom configured Player2WinePrefix
+	// 3. Seat 2 with custom configured prefix
 	customP2 := filepath.Join(tmpDir, "custom-p2-prefix")
-	cfg.Multiseat.Player2WinePrefix = customP2
-	p2Custom, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", "")
+	p2Custom, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", customP2)
 	if err != nil {
 		t.Fatalf("EnsureSeatPrefix(p2 custom) failed: %v", err)
 	}
 	if p2Custom != customP2 {
 		t.Errorf("expected p2 custom prefix %s, got %s", customP2, p2Custom)
+	}
+
+	// 4. Seat 2 with prefix base directory (e.g. ~/Games/umu-p2) -> should append prefix ID (70)
+	p2Base := filepath.Join(tmpDir, "Games", "umu-p2")
+	p2ResolvedFromBase, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", p2Base)
+	if err != nil {
+		t.Fatalf("EnsureSeatPrefix(p2 base) failed: %v", err)
+	}
+	if p2ResolvedFromBase != expectedP2 {
+		t.Errorf("expected %s when passing base prefix dir, got %s", expectedP2, p2ResolvedFromBase)
+	}
+
+	// 5. SeatIDFromProfileID mapping
+	if compat.SeatIDFromProfileID("main") != "p1" {
+		t.Errorf("expected main -> p1, got %s", compat.SeatIDFromProfileID("main"))
+	}
+	if compat.SeatIDFromProfileID("p2") != "p2" {
+		t.Errorf("expected p2 -> p2, got %s", compat.SeatIDFromProfileID("p2"))
+	}
+	if compat.SeatIDFromProfileID("") != "p1" {
+		t.Errorf("expected empty -> p1, got %s", compat.SeatIDFromProfileID(""))
+	}
+
+	// 6. Pre-created AppData/Roaming in central user data directory
+	centralRoamingP2 := filepath.Join(tmpDir, "Games", "umu-p2", "umu-default", "drive_c", "users", "steamuser", "AppData", "Roaming")
+	if _, err := os.Stat(centralRoamingP2); os.IsNotExist(err) {
+		t.Errorf("expected central AppData/Roaming to exist at %s", centralRoamingP2)
+	}
+
+	// 7. GSE Saves symlink exists in prefix
+	gseLink := filepath.Join(p2Prefix, "drive_c", "users", "steamuser", "AppData", "Roaming", "GSE Saves")
+	fi, err := os.Lstat(gseLink)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("expected GSE Saves symlink to exist at %s, err: %v", gseLink, err)
 	}
 }
 

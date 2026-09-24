@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -272,12 +273,91 @@ func LoadManifestFromDir(targetDir string, appID uint32) (*Manifest, error) {
 	return LoadManifestFromDirWithPlatform(targetDir, appID, nil, "")
 }
 
+// DepotFilter defines criteria for including or excluding depots during manifest loading and chunk streaming.
+type DepotFilter struct {
+	Platform        string               `json:"platform,omitempty"`
+	Language        string               `json:"language,omitempty"`
+	IncludedDepots  []uint32             `json:"included_depots,omitempty"`
+	ExcludedDepots  []uint32             `json:"excluded_depots,omitempty"`
+	IncludeOptional bool                 `json:"include_optional,omitempty"`
+	DepotMetadata   map[uint32]DepotMeta `json:"-"`
+}
+
+// ShouldIncludeDepot tests whether a content depot matches the filtering criteria.
+func ShouldIncludeDepot(depotID uint32, files []ManifestFileEntry, filter DepotFilter) bool {
+	// 1. Explicit exclusions
+	for _, id := range filter.ExcludedDepots {
+		if id == depotID {
+			return false
+		}
+	}
+
+	// 2. Explicit inclusions override all category/language heuristics
+	for _, id := range filter.IncludedDepots {
+		if id == depotID {
+			return true
+		}
+	}
+	if len(filter.IncludedDepots) > 0 {
+		return false
+	}
+
+	// 3. Platform matching
+	if filter.Platform != "" && filter.Platform != "all" {
+		cat := ClassifyDepot(files)
+		if !MatchesPlatform(cat, filter.Platform) {
+			return false
+		}
+	}
+
+	// 4. Content Category & Language filtering
+	var meta *DepotMeta
+	if filter.DepotMetadata != nil {
+		if m, ok := filter.DepotMetadata[depotID]; ok {
+			meta = &m
+		}
+	}
+
+	contentCat, lang := ClassifyDepotContent(depotID, "", files, meta)
+
+	// Soundtracks are skipped unless explicitly requested via platform or include_optional
+	if contentCat == ContentCategorySoundtrack {
+		targetPlat := strings.ToLower(strings.TrimSpace(filter.Platform))
+		if targetPlat == "soundtrack" || targetPlat == "music" || filter.IncludeOptional {
+			return true
+		}
+		return false
+	}
+
+	// Optional HD assets
+	if contentCat == ContentCategoryOptionalHD {
+		return filter.IncludeOptional
+	}
+
+	// Localized voice / video language packs
+	if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
+		prefLang := filter.Language
+		if prefLang == "" {
+			prefLang = "english"
+		}
+		return LanguagesMatch(lang, prefLang)
+	}
+
+	// Core depots are always included
+	return true
+}
+
 func LoadManifestFromDirWithKeys(targetDir string, appID uint32, depotKeys map[uint32]string) (*Manifest, error) {
 	return LoadManifestFromDirWithPlatform(targetDir, appID, depotKeys, "")
 }
 
 // LoadManifestFromDirWithPlatform loads depot manifests matching a specific target platform from <targetDir>/[Manifests].
 func LoadManifestFromDirWithPlatform(targetDir string, appID uint32, depotKeys map[uint32]string, platform string) (*Manifest, error) {
+	return LoadManifestFromDirWithFilter(targetDir, appID, depotKeys, DepotFilter{Platform: platform})
+}
+
+// LoadManifestFromDirWithFilter loads depot manifests matching a filter from <targetDir>/[Manifests].
+func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map[uint32]string, filter DepotFilter) (*Manifest, error) {
 	manifestsDir := filepath.Join(targetDir, "[Manifests]")
 	if _, err := os.Stat(manifestsDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("manifests directory %s does not exist", manifestsDir)
@@ -312,7 +392,7 @@ func LoadManifestFromDirWithPlatform(targetDir string, appID uint32, depotKeys m
 		path       string
 	}
 
-	depotLatestManifest := make(map[uint32]manifestFileInfo)
+	depotManifests := make(map[uint32][]manifestFileInfo)
 
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
@@ -332,54 +412,105 @@ func LoadManifestFromDirWithPlatform(targetDir string, appID uint32, depotKeys m
 			}
 
 			manifestPath := filepath.Join(manifestsDir, name)
-
-			existing, exists := depotLatestManifest[fileDepotID]
-			if !exists || fileManifestID > existing.manifestID {
-				depotLatestManifest[fileDepotID] = manifestFileInfo{
-					name:       name,
-					depotID:    fileDepotID,
-					manifestID: fileManifestID,
-					path:       manifestPath,
-				}
-			}
+			depotManifests[fileDepotID] = append(depotManifests[fileDepotID], manifestFileInfo{
+				name:       name,
+				depotID:    fileDepotID,
+				manifestID: fileManifestID,
+				path:       manifestPath,
+			})
 		}
+	}
+
+	// Sort candidates for each depot by manifestID descending (newest first)
+	for dID := range depotManifests {
+		sort.Slice(depotManifests[dID], func(i, j int) bool {
+			return depotManifests[dID][i].manifestID > depotManifests[dID][j].manifestID
+		})
 	}
 
 	allFiles := make([]ManifestFileEntry, 0)
 	var resolvedDepotID uint32
 
-	for dID, info := range depotLatestManifest {
-		data, err := os.ReadFile(info.path)
-		if err != nil {
-			continue
-		}
-
+	for dID, candidates := range depotManifests {
+		var validFiles []ManifestFileEntry
 		hexKey := ""
 		if depotKeys != nil {
 			hexKey = depotKeys[dID]
 		}
+		for _, info := range candidates {
+			data, err := os.ReadFile(info.path)
+			if err != nil {
+				slog.Warn("Failed to read manifest file", "path", info.path, "error", err)
+				continue
+			}
+			files, err := ParseBinaryManifestWithKey(data, hexKey)
+			if err != nil {
+				slog.Warn("Failed to parse local manifest file, trying fallback candidate if available", "path", info.path, "depotID", dID, "error", err)
+				continue
+			}
+			if len(files) > 0 {
+				validFiles = files
+				break
+			}
+		}
 
-		files, err := ParseBinaryManifestWithKey(data, hexKey)
-		if err == nil && len(files) > 0 {
-			if platform != "" && platform != "all" {
-				cat := ClassifyDepot(files)
-				if !MatchesPlatform(cat, platform) {
-					slog.Debug("Skipping depot manifest not matching platform", "depotID", dID, "category", cat, "targetPlatform", platform)
-					continue
-				}
+		if len(validFiles) > 0 {
+			if !ShouldIncludeDepot(dID, validFiles, filter) {
+				slog.Debug("Skipping depot manifest filtered out by options", "depotID", dID, "platform", filter.Platform, "language", filter.Language)
+				continue
 			}
 			if resolvedDepotID == 0 {
 				resolvedDepotID = dID
 			}
-			for idx := range files {
-				files[idx].DepotID = dID
+			for idx := range validFiles {
+				validFiles[idx].DepotID = dID
 			}
-			allFiles = append(allFiles, files...)
+			allFiles = append(allFiles, validFiles...)
+		}
+	}
+
+	// Fallback: If strict language filter excluded all depots, retry with relaxed language filtering
+	// so the user is never locked out of downloading available depots (Core Tenet 2)
+	if len(allFiles) == 0 && filter.Language != "" && filter.Language != "all" {
+		relaxedFilter := filter
+		relaxedFilter.Language = "all"
+		for dID, candidates := range depotManifests {
+			var validFiles []ManifestFileEntry
+			hexKey := ""
+			if depotKeys != nil {
+				hexKey = depotKeys[dID]
+			}
+			for _, info := range candidates {
+				data, err := os.ReadFile(info.path)
+				if err != nil {
+					continue
+				}
+				files, err := ParseBinaryManifestWithKey(data, hexKey)
+				if err == nil && len(files) > 0 {
+					validFiles = files
+					break
+				}
+			}
+			if len(validFiles) > 0 {
+				if !ShouldIncludeDepot(dID, validFiles, relaxedFilter) {
+					continue
+				}
+				if resolvedDepotID == 0 {
+					resolvedDepotID = dID
+				}
+				for idx := range validFiles {
+					validFiles[idx].DepotID = dID
+				}
+				allFiles = append(allFiles, validFiles...)
+			}
+		}
+		if len(allFiles) > 0 {
+			slog.Info("Fallback to all language depots after language filter matched 0 depots", "depotsCount", len(depotManifests))
 		}
 	}
 
 	if len(allFiles) == 0 {
-		return nil, fmt.Errorf("no valid manifest file entries matching platform %q loaded from %s", platform, manifestsDir)
+		return nil, fmt.Errorf("no valid manifest file entries matching filter (platform=%q, lang=%q) loaded from %s", filter.Platform, filter.Language, manifestsDir)
 	}
 
 	return &Manifest{

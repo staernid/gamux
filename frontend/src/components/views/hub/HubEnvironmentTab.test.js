@@ -134,4 +134,30 @@ describe('HubEnvironmentTab Component', () => {
     expect(screen.getByText('Operating Mode')).toBeInTheDocument();
     expect(screen.getAllByText(/Loader Mode/i).length).toBeGreaterThan(0);
   });
+
+  it('renders disable_overlay and clicking reset removes overridden indicator', async () => {
+    const game = normalizeGame({
+      name: 'Cyberpunk 2077',
+      app_id: '1091500',
+      store: 'Steam',
+      platform: 'win64',
+      game_dir: '/games/cyberpunk',
+      launchProfile: {
+        disable_overlay: true
+      }
+    });
+    drawerDraft.init(game, globalCfg);
+
+    render(HubEnvironmentTab, {
+      props: {
+        game,
+        globalCfg
+      }
+    });
+
+    expect(screen.getByTestId('property-pill-overridden-disable_overlay')).toBeInTheDocument();
+    const resetBtn = screen.getByTestId('property-reset-btn-disable_overlay');
+    await fireEvent.click(resetBtn);
+    expect(screen.queryByTestId('property-pill-overridden-disable_overlay')).not.toBeInTheDocument();
+  });
 });

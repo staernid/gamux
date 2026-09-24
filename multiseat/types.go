@@ -43,6 +43,7 @@ type PlayerProfile struct {
 type SeatConfig struct {
 	SeatID          string        `json:"seat_id"` // "p1" | "p2"
 	Player          PlayerProfile `json:"player"`
+	ProfileID       string        `json:"profile_id,omitempty"` // Bound Gamux profile ID (e.g. "main", "p2", "p3")
 	Mode            SeatMode      `json:"mode"`
 	DisplayIndex    int           `json:"display_index"` // Physical monitor index for gamescope
 	TargetWidth     int           `json:"target_width,omitempty"`

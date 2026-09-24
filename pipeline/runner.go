@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -247,6 +248,11 @@ func (op *Operation) Execute(ctx context.Context, ctrl *tasks.Controller) error 
 	if err == nil {
 		if op.Context.Game != nil {
 			ctrl.SetResultGame(op.Context.Game)
+		}
+		if op.Context.Results.IntegrityReport != nil {
+			if raw, jsonErr := json.Marshal(op.Context.Results.IntegrityReport); jsonErr == nil {
+				ctrl.SetMetadata("integrity_report", string(raw))
+			}
 		}
 		ctrl.ReportStage("Completed", fmt.Sprintf("%s completed successfully", op.Spec.Title))
 		ctrl.ReportProgress(100, 100, 1, 1, 0, 0, 100)

@@ -12,6 +12,17 @@ const DEFAULT_MOCKS = {
     ip_country: 'US',
   }),
   saveGSEUserConfig: () => Promise.resolve(),
+  getProfiles: () => [
+    { id: 'main', index: 1, name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US', avatar_url: '', is_main: true },
+    { id: 'p2', index: 2, name: 'PlayerTwo', steam_id: '76561198998877665', language: 'english', ip_country: 'US', avatar_url: '', is_main: false },
+  ],
+  getActiveProfile: () => ({ id: 'main', index: 1, name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US', avatar_url: '', is_main: true }),
+  setActiveProfile: () => Promise.resolve(),
+  createProfile: (name, steamId, lang, country, avatar) => Promise.resolve({
+    id: 'p3', index: 3, name: name || 'PlayerThree', steam_id: steamId || '76561198000000003', language: lang || 'english', ip_country: country || 'US', avatar_url: avatar || '', is_main: false
+  }),
+  saveProfile: () => Promise.resolve(),
+  deleteProfile: () => Promise.resolve(),
   detectGame: (path) => mockData.MOCK_GAMES[0],
   inspectGame: (path, count = 0) => mockData.MOCK_GAMES.find(g => (g.game_dir || g.GameDir) === path) || mockData.MOCK_GAMES[0],
   inspectLibraries: (dirs) => mockData.MOCK_GAMES,
@@ -85,10 +96,19 @@ const DEFAULT_MOCKS = {
   getLaunchProfile: (path) => null,
   saveLaunchProfile: (path, p) => ({ ...mockData.MOCK_GAMES[0], launch_profile: p }),
   getGameDepots: (path) => [
-    { depot_id: 41501, name: 'Base Content (41501)', category: 'common', installed: true, size: 500000000, file_count: 120, manifest_id: 1001 },
-    { depot_id: 41502, name: 'Windows Binaries (41502)', category: 'windows', installed: true, size: 25000000, file_count: 15, manifest_id: 1002 },
-    { depot_id: 41504, name: 'Linux Native Binaries (41504)', category: 'linux', installed: false, size: 28000000, file_count: 18, manifest_id: 1003 },
-    { depot_id: 41505, name: 'Official Soundtrack (41505)', category: 'soundtrack', installed: false, size: 150000000, file_count: 24, manifest_id: 1004 },
+    { depot_id: 41501, name: 'Base Content (41501)', category: 'common', content_category: 'core', installed: true, size: 500000000, file_count: 120, manifest_id: 1001 },
+    { depot_id: 41502, name: 'Windows Binaries (41502)', category: 'windows', content_category: 'core', installed: true, size: 25000000, file_count: 15, manifest_id: 1002 },
+    { depot_id: 41503, name: 'French Audio Pack (41503)', category: 'common', content_category: 'locale:french', language: 'french', installed: false, size: 450000000, file_count: 80, manifest_id: 1003 },
+    { depot_id: 41504, name: 'Linux Native Binaries (41504)', category: 'linux', content_category: 'core', installed: false, size: 28000000, file_count: 18, manifest_id: 1004 },
+    { depot_id: 41505, name: 'Official Soundtrack (41505)', category: 'soundtrack', content_category: 'soundtrack', installed: false, size: 150000000, file_count: 24, manifest_id: 1005 },
+  ],
+  getAppDepots: (appId) => [
+    { depot_id: 41501, name: 'Base Content (41501)', category: 'common', content_category: 'core', installed: false, size: 500000000, file_count: 120, manifest_id: 1001 },
+    { depot_id: 41502, name: 'Windows Binaries (41502)', category: 'windows', content_category: 'core', installed: false, size: 25000000, file_count: 15, manifest_id: 1002 },
+    { depot_id: 41503, name: 'French Audio Pack (41503)', category: 'common', content_category: 'locale:french', language: 'french', installed: false, size: 450000000, file_count: 80, manifest_id: 1003 },
+    { depot_id: 41504, name: 'German Audio Pack (41504)', category: 'common', content_category: 'locale:german', language: 'german', installed: false, size: 430000000, file_count: 75, manifest_id: 1004 },
+    { depot_id: 41505, name: 'High-Resolution 4K Textures (41505)', category: 'common', content_category: 'optional_hd', installed: false, size: 1200000000, file_count: 200, manifest_id: 1005 },
+    { depot_id: 41506, name: 'Official Soundtrack (41506)', category: 'soundtrack', content_category: 'soundtrack', installed: false, size: 150000000, file_count: 24, manifest_id: 1006 },
   ],
   checkGameUpdates: (path) => Promise.resolve({
     is_up_to_date: true,

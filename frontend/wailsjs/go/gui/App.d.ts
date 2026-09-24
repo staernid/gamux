@@ -28,7 +28,11 @@ export function ClearFinishedTasks():Promise<void>;
 
 export function CreateGameStub(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<domain.Game>;
 
+export function CreateProfile(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<domain.Profile>;
+
 export function CreateSaveBackup(arg1:string,arg2:string):Promise<saves.BackupInfo>;
+
+export function DeleteProfile(arg1:string):Promise<void>;
 
 export function DeleteSaveBackup(arg1:string,arg2:string):Promise<void>;
 
@@ -37,6 +41,10 @@ export function DetectGame(arg1:string):Promise<domain.Game>;
 export function FetchDLCs(arg1:string):Promise<void>;
 
 export function FetchNews(arg1:string,arg2:number):Promise<Array<domain.NewsItem>>;
+
+export function GetActiveProfile():Promise<domain.Profile>;
+
+export function GetAppDepots(arg1:string):Promise<Array<domain.DepotSummary>>;
 
 export function GetAvailableRunners():Promise<Array<string>>;
 
@@ -81,6 +89,8 @@ export function GetMultiseatCapabilities():Promise<multiseat.SystemCapabilities>
 export function GetMultiseatSessionStatus(arg1:string):Promise<multiseat.MultiseatSessionStatus>;
 
 export function GetPatchNote(arg1:string,arg2:number):Promise<domain.NewsItem>;
+
+export function GetProfiles():Promise<Array<domain.Profile>>;
 
 export function GetRecentGames(arg1:number):Promise<Array<gui.TrayGame>>;
 
@@ -156,11 +166,15 @@ export function SaveGSEUserConfig(arg1:gbe.GSEUserConfig):Promise<void>;
 
 export function SaveLaunchProfile(arg1:string,arg2:domain.LaunchProfile):Promise<domain.Game>;
 
+export function SaveProfile(arg1:domain.Profile):Promise<void>;
+
 export function SearchStoreGames(arg1:string):Promise<Array<store.SearchResult>>;
 
 export function SelectDirectory(arg1:string,arg2:string):Promise<string>;
 
 export function SelectFile(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function SetActiveProfile(arg1:string):Promise<void>;
 
 export function SetGameBranch(arg1:string,arg2:string,arg3:string):Promise<domain.Game>;
 
@@ -173,6 +187,8 @@ export function SetTrayManager(arg1:gui.TrayManager):Promise<void>;
 export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function StartDownloadTransfer(arg1:engine.DownloadGameOptions):Promise<string>;
+
+export function StartVerifyGameTask(arg1:string):Promise<string>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 

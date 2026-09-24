@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -1055,7 +1056,11 @@ func TestEngine_NestedDepotInspectionAndSetup(t *testing.T) {
 		t.Errorf("expected AppID 4001890, got %s", status.AppID)
 	}
 
-	expectedExe := dummyExe
+	relExe, err := filepath.Rel(tmpGameDir, dummyExe)
+	if err != nil {
+		t.Fatalf("Rel failed: %v", err)
+	}
+	expectedExe := util.NormalizeRelativePath(relExe)
 	if status.ExePath != expectedExe {
 		t.Errorf("expected ExePath %s, got %s", expectedExe, status.ExePath)
 	}
@@ -1066,13 +1071,13 @@ func TestEngine_NestedDepotInspectionAndSetup(t *testing.T) {
 
 	found := false
 	for _, c := range status.LaunchCandidates {
-		if c.Executable == dummyExe {
+		if c.Executable == expectedExe {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected LaunchCandidates to contain %s, got %+v", dummyExe, status.LaunchCandidates)
+		t.Errorf("expected LaunchCandidates to contain %s, got %+v", expectedExe, status.LaunchCandidates)
 	}
 }
 
@@ -1232,8 +1237,111 @@ func TestCreateGameStubAndSetBranch(t *testing.T) {
 	}
 }
 
+func TestEngine_GetGameDepots_LanguageAndContentClassification(t *testing.T) {
+	eng := New(config.DefaultConfig())
+	tmpDir := t.TempDir()
 
+	// Create a mock game directory with AppID 1091500
+	acfContent := "\"AppState\"\n{\n\t\"appid\"\t\"1091500\"\n\t\"name\"\t\"Cyberpunk 2077\"\n}"
+	_ = os.WriteFile(filepath.Join(tmpDir, "appmanifest_1091500.acf"), []byte(acfContent), 0644)
 
+	// Populate cache with Steam depot metadata so it doesn't query the network
+	mockDepots := map[uint32]steam.SteamDepotInfo{
+		1091501: {DepotID: 1091501, Name: "Cyberpunk 2077 Content", OSList: "windows"},
+		1091504: {DepotID: 1091504, Name: "Cyberpunk 2077 French", Language: "french", OSList: "windows"},
+		1091506: {DepotID: 1091506, Name: "Cyberpunk 2077 German", Language: "german", OSList: "windows"},
+	}
+	data, _ := json.Marshal(mockDepots)
+	cache.SaveSteamDepots(1091500, data)
 
+	depots, err := eng.GetGameDepots(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("GetGameDepots failed: %v", err)
+	}
+	if len(depots) != 3 {
+		t.Fatalf("expected 3 depots, got %d", len(depots))
+	}
 
+	for _, d := range depots {
+		if d.DepotID == 1091504 {
+			if d.ContentCategory != "locale:french" || d.Language != "french" {
+				t.Errorf("expected french localization tagging, got %+v", d)
+			}
+		}
+		if d.DepotID == 1091506 {
+			if d.ContentCategory != "locale:german" || d.Language != "german" {
+				t.Errorf("expected german localization tagging, got %+v", d)
+			}
+		}
+	}
+}
 
+func TestEngine_LaunchGame_SecondaryProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, ".local", "share"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+
+	cfg := config.DefaultConfig()
+	eng := New(cfg)
+
+	// Set active profile to p2
+	if eng.Profiles != nil {
+		if err := eng.Profiles.SetActive("p2"); err != nil {
+			t.Fatalf("SetActive(p2) failed: %v", err)
+		}
+	} else {
+		t.Fatalf("eng.Profiles is nil")
+	}
+
+	gameDir := filepath.Join(tmpDir, "Torchlight2")
+	_ = os.MkdirAll(gameDir, 0755)
+	dummyScript := filepath.Join(gameDir, "Torchlight2.sh")
+	_ = os.WriteFile(dummyScript, []byte("#!/bin/sh\nexit 0\n"), 0755)
+
+	opts := runner.LaunchOptions{
+		GameDir:  gameDir,
+		ExePath:  dummyScript,
+		AppID:    "200710",
+		Name:     "Torchlight II",
+		Platform: "linux",
+		Runner:   runner.RunnerLinux,
+	}
+
+	cmd, err := eng.LaunchGame(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("LaunchGame failed: %v", err)
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+
+	// Verify p2 Goldberg files were materialized
+	p2Ini := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", ".local", "share", "GSE Saves", "settings", "configs.user.ini")
+	if !util.FileExists(p2Ini) {
+		t.Errorf("expected p2 configs.user.ini to exist at %s", p2Ini)
+	}
+
+	// Verify Windows/Wine game launch resolves to ~/Games/umu-p2/200710 and isolates HOME
+	winOpts := runner.LaunchOptions{
+		GameDir:       gameDir,
+		ExePath:       dummyScript,
+		AppID:         "200710",
+		Name:          "Torchlight II",
+		Platform:      "win32",
+		OperatingMode: "portable",
+		Runner:        runner.RunnerLinux, // mock script execution
+	}
+	cmdWin, errWin := eng.LaunchGame(context.Background(), winOpts)
+	if errWin != nil {
+		t.Fatalf("LaunchGame(winOpts) failed: %v", errWin)
+	}
+	if cmdWin != nil && cmdWin.Process != nil {
+		_ = cmdWin.Process.Kill()
+	}
+
+	expectedPrefix := filepath.Join(tmpDir, "Games", "umu-p2", "200710")
+	if !util.FileExists(expectedPrefix) {
+		t.Errorf("expected game prefix %s to exist", expectedPrefix)
+	}
+}

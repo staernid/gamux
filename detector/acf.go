@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/util"
 )
 
 // LaunchCandidate aliases the canonical domain type.
@@ -73,16 +75,40 @@ func ParseACF(r io.Reader) (*ACFData, error) {
 		if sub := launchNode.Get("launch"); sub != nil {
 			for _, child := range sub.Children {
 				exe := child.GetString("executable")
+				if exe == "" {
+					continue
+				}
+				cleanExe := util.NormalizeRelativePath(exe)
+				if cleanExe == "" {
+					continue
+				}
+
 				args := child.GetString("arguments")
 				desc := child.GetString("description")
-				if exe != "" {
-					data.LaunchOptions = append(data.LaunchOptions, LaunchCandidate{
-						Name:        child.Key,
-						Executable:  exe,
-						Arguments:   args,
-						Description: desc,
-					})
+				if desc == "" {
+					desc = child.GetString("description_loc/english")
 				}
+				typ := child.GetString("type")
+
+				candName := desc
+				if candName == "" {
+					if strings.EqualFold(typ, "default") || len(data.LaunchOptions) == 0 {
+						candName = "Play"
+					} else {
+						base := filepath.Base(cleanExe)
+						clean := strings.TrimSuffix(base, filepath.Ext(base))
+						candName = fmt.Sprintf("Play (%s)", clean)
+					}
+				} else if !strings.HasPrefix(strings.ToLower(candName), "play ") {
+					candName = fmt.Sprintf("Play (%s)", candName)
+				}
+
+				data.LaunchOptions = append(data.LaunchOptions, LaunchCandidate{
+					Name:        candName,
+					Executable:  cleanExe,
+					Arguments:   args,
+					Description: desc,
+				})
 			}
 		}
 	}

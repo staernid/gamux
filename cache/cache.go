@@ -48,6 +48,14 @@ var (
 	// In-memory thread-safe cache for Steam branches
 	branchesMu          sync.RWMutex
 	branchesMemoryCache = make(map[uint32][]byte)
+
+	// In-memory thread-safe cache for Steam depots
+	depotsMu          sync.RWMutex
+	depotsMemoryCache = make(map[uint32][]byte)
+
+	// In-memory thread-safe cache for Steam launch options
+	launchMu          sync.RWMutex
+	launchMemoryCache = make(map[uint32][]byte)
 )
 
 // IsDisabled reports whether caching is globally disabled (useful for testing or forced refresh).
@@ -74,6 +82,8 @@ var cacheSubdirs = []string{
 	"achievements",
 	"versions",
 	"branches",
+	"depots",
+	"launch",
 }
 
 // subdirTTLs maps each cache subdirectory to its canonical TTL.
@@ -91,6 +101,8 @@ var subdirTTLs = map[string]time.Duration{
 	"achievements": 7 * 24 * time.Hour,
 	"versions":     30 * time.Minute,
 	"branches":     6 * time.Hour,
+	"depots":       6 * time.Hour,
+	"launch":       6 * time.Hour,
 }
 
 // SetCacheDir overrides the cache root directory (useful for test isolation).
@@ -132,6 +144,10 @@ func SetCacheDir(dir string) {
 	branchesMu.Lock()
 	branchesMemoryCache = make(map[uint32][]byte)
 	branchesMu.Unlock()
+
+	launchMu.Lock()
+	launchMemoryCache = make(map[uint32][]byte)
+	launchMu.Unlock()
 }
 
 func getCacheDir() string {
@@ -567,6 +583,100 @@ func SaveSteamBranches(appID uint32, data []byte) {
 	_ = writeTTLFile(path, data)
 }
 
+// GetSteamDepots retrieves cached Steam depots metadata JSON if less than 6 hours old.
+func GetSteamDepots(appID uint32) ([]byte, bool) {
+	if disableCache.Load() || appID == 0 {
+		return nil, false
+	}
+
+	// 1. In-memory cache check
+	depotsMu.RLock()
+	if cached, ok := depotsMemoryCache[appID]; ok && len(cached) > 0 {
+		depotsMu.RUnlock()
+		return cached, true
+	}
+	depotsMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "depots", fmt.Sprintf("%d.json", appID))
+	if data, ok := readTTLFile(path, 6*time.Hour); ok {
+		depotsMu.Lock()
+		depotsMemoryCache[appID] = data
+		depotsMu.Unlock()
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveSteamDepots caches Steam depots metadata to in-memory and disk cache for 6 hours.
+func SaveSteamDepots(appID uint32, data []byte) {
+	if disableCache.Load() || appID == 0 || len(data) == 0 {
+		return
+	}
+
+	depotsMu.Lock()
+	depotsMemoryCache[appID] = data
+	depotsMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "depots", fmt.Sprintf("%d.json", appID))
+	_ = writeTTLFile(path, data)
+}
+
+// GetSteamLaunch retrieves cached Steam launch options JSON if less than 6 hours old.
+func GetSteamLaunch(appID uint32) ([]byte, bool) {
+	if disableCache.Load() || appID == 0 {
+		return nil, false
+	}
+
+	// 1. In-memory cache check
+	launchMu.RLock()
+	if cached, ok := launchMemoryCache[appID]; ok && len(cached) > 0 {
+		launchMu.RUnlock()
+		return cached, true
+	}
+	launchMu.RUnlock()
+
+	// 2. Disk cache check
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, "launch", fmt.Sprintf("%d.json", appID))
+	if data, ok := readTTLFile(path, 6*time.Hour); ok {
+		launchMu.Lock()
+		launchMemoryCache[appID] = data
+		launchMu.Unlock()
+		return data, true
+	}
+	return nil, false
+}
+
+// SaveSteamLaunch caches Steam launch options to in-memory and disk cache for 6 hours.
+func SaveSteamLaunch(appID uint32, data []byte) {
+	if disableCache.Load() || appID == 0 || len(data) == 0 {
+		return
+	}
+
+	launchMu.Lock()
+	launchMemoryCache[appID] = data
+	launchMu.Unlock()
+
+	dir := getCacheDir()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, "launch", fmt.Sprintf("%d.json", appID))
+	_ = writeTTLFile(path, data)
+}
+
 // ==========================================
 // 4. Hubcap & RevoBD Manifest ZIP Cache (30 Days)
 // ==========================================
@@ -829,8 +939,9 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 	gamesMu.RLock()
 	if cached, ok := gamesMemoryCache[gameDir]; ok {
 		if cached.DirMtime == dirMtime && cached.ProfileMtime == profileMtime && cached.Game != nil {
+			cloned := cached.Game.Clone()
 			gamesMu.RUnlock()
-			return cached.Game, true
+			return cloned, true
 		}
 	}
 	gamesMu.RUnlock()
@@ -852,7 +963,7 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 			gamesMu.Lock()
 			gamesMemoryCache[gameDir] = rec
 			gamesMu.Unlock()
-			return rec.Game, true
+			return rec.Game.Clone(), true
 		}
 	}
 	return nil, false
@@ -867,7 +978,7 @@ func SaveCachedGame(gameDir string, dirMtime int64, profileMtime int64, game *do
 	rec := CachedGameRecord{
 		DirMtime:     dirMtime,
 		ProfileMtime: profileMtime,
-		Game:         game,
+		Game:         game.Clone(),
 	}
 
 	gamesMu.Lock()

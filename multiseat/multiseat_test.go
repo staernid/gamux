@@ -253,6 +253,46 @@ func TestBuildBwrapArgs(t *testing.T) {
 	}
 }
 
+func TestBuildBwrapArgs_CompatibilityToolsSymlinkProtection(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	realCompat := filepath.Join(tmpDir, ".local", "share", "Steam", "compatibilitytools.d")
+	_ = os.MkdirAll(realCompat, 0755)
+
+	profileDir := filepath.Join(tmpDir, "profile_p2")
+	seatHome := filepath.Join(profileDir, "home")
+	seatCompat := filepath.Join(seatHome, ".local", "share", "Steam", "compatibilitytools.d")
+	_ = os.MkdirAll(filepath.Dir(seatCompat), 0755)
+	_ = os.Symlink(realCompat, seatCompat)
+
+	opts := BwrapOptions{
+		SeatID:        "p2",
+		ProfileDir:    profileDir,
+		GameDir:       tmpDir,
+		WinePrefix:    filepath.Join(tmpDir, "prefix"),
+		Command:       []string{"wine", "game.exe"},
+		DieWithParent: true,
+	}
+
+	_, err := BuildBwrapArgs(opts)
+	if err != nil {
+		t.Fatalf("BuildBwrapArgs failed: %v", err)
+	}
+
+	// Verify that the symlink was removed and is now a directory so bwrap doesn't fail
+	fi, err := os.Lstat(seatCompat)
+	if err != nil {
+		t.Fatalf("stat seatCompat failed: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("expected seatCompat to NOT be a symlink")
+	}
+	if !fi.IsDir() {
+		t.Errorf("expected seatCompat to be a directory")
+	}
+}
+
 func TestBuildBwrapArgs_Player1_RealHome(t *testing.T) {
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "games", "MyGame")
