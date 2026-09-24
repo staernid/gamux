@@ -49,7 +49,7 @@ clean:
 	rm -rf bin/ gamux
 
 clean-all: clean
-	rm -rf frontend/dist frontend/node_modules
+	rm -rf frontend/dist/* frontend/node_modules
 
 test-go:
 	go test -race ./...
