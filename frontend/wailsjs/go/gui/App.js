@@ -242,6 +242,10 @@ export function PauseTask(arg1) {
   return window['go']['gui']['App']['PauseTask'](arg1);
 }
 
+export function PreviewGameLaunch(arg1) {
+  return window['go']['gui']['App']['PreviewGameLaunch'](arg1);
+}
+
 export function QueryArtworkOptions(arg1) {
   return window['go']['gui']['App']['QueryArtworkOptions'](arg1);
 }

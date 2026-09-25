@@ -11,6 +11,7 @@ import {gui} from '../models';
 import {tasks} from '../models';
 import {tools} from '../models';
 import {store} from '../models';
+import {runner} from '../models';
 import {context} from '../models';
 import {engine} from '../models';
 import {pipeline} from '../models';
@@ -135,6 +136,8 @@ export function OpenDirectory(arg1:string):Promise<void>;
 export function OpenURL(arg1:string):Promise<void>;
 
 export function PauseTask(arg1:string):Promise<void>;
+
+export function PreviewGameLaunch(arg1:string):Promise<runner.LaunchPreview>;
 
 export function QueryArtworkOptions(arg1:domain.ArtworkQuery):Promise<Array<domain.ArtworkOption>>;
 

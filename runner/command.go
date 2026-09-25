@@ -138,7 +138,130 @@ type LaunchSpec struct {
 	Args          []string          // Command line arguments including executable: [binary/wrapper, ...args]
 	OperatingMode string            // Active operating mode (loader, portable, none, etc.)
 	Platform      string            // Platform identifier (linux, win64, etc.)
+	Runner        string            // Resolved runner identifier (umu, wine, proton, linux)
 	GbeDir        string            // GBE directory path
+}
+
+// LaunchPreview represents the dry-run inspection of how a game will execute.
+type LaunchPreview struct {
+	Command       string            `json:"command"`
+	TargetExe     string            `json:"target_exe"`
+	Args          []string          `json:"args"`
+	Env           map[string]string `json:"env"`
+	WorkingDir    string            `json:"working_dir"`
+	Runner        string            `json:"runner"`
+	OperatingMode string            `json:"operating_mode"`
+	Platform      string            `json:"platform"`
+	Overrides     []string          `json:"overrides"`
+}
+
+// FormatCommandLine renders a human-readable shell string of the launch command with key env vars.
+func FormatCommandLine(spec *LaunchSpec) string {
+	if spec == nil || len(spec.Args) == 0 {
+		return ""
+	}
+	var envParts []string
+	keyEnvVars := []string{
+		"WINEPREFIX", "PROTONPATH", "PROTON_VERB", "WINEDLLOVERRIDES", "MANGOHUD", "LD_PRELOAD",
+	}
+	for _, k := range keyEnvVars {
+		if v, ok := spec.Env[k]; ok && v != "" {
+			if strings.ContainsAny(v, " \t\n$\"'\\") {
+				envParts = append(envParts, fmt.Sprintf("%s=%q", k, v))
+			} else {
+				envParts = append(envParts, fmt.Sprintf("%s=%s", k, v))
+			}
+		}
+	}
+	for k, v := range spec.Env {
+		isKey := false
+		for _, ke := range keyEnvVars {
+			if k == ke {
+				isKey = true
+				break
+			}
+		}
+		if isKey || strings.HasPrefix(k, "Steam") || k == "GAMEID" || k == "UMU_ID" || k == "STORE" || strings.HasPrefix(k, "WINE") || strings.HasPrefix(k, "PROTON") {
+			continue
+		}
+		if strings.ContainsAny(v, " \t\n$\"'\\") {
+			envParts = append(envParts, fmt.Sprintf("%s=%q", k, v))
+		} else {
+			envParts = append(envParts, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+	sort.Strings(envParts)
+
+	var cmdParts []string
+	for _, arg := range spec.Args {
+		if strings.ContainsAny(arg, " \t\n$\"'\\") {
+			cmdParts = append(cmdParts, fmt.Sprintf("%q", arg))
+		} else {
+			cmdParts = append(cmdParts, arg)
+		}
+	}
+
+	if len(envParts) > 0 {
+		return strings.Join(envParts, " ") + " " + strings.Join(cmdParts, " ")
+	}
+	return strings.Join(cmdParts, " ")
+}
+
+// DetectOverrides inspects a game's LaunchProfile and identifies fields that explicitly override global configuration.
+func DetectOverrides(p *domain.LaunchProfile, cfg *config.Config) []string {
+	if p == nil {
+		return nil
+	}
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	var overrides []string
+
+	if p.Name != "" {
+		overrides = append(overrides, "name")
+	}
+	if p.Runner != "" && p.Runner != cfg.DefaultRunner {
+		overrides = append(overrides, "runner")
+	}
+	if p.WinePrefix != "" && p.WinePrefix != cfg.WinePrefix {
+		overrides = append(overrides, "wine_prefix")
+	}
+	if p.ProtonPath != "" {
+		overrides = append(overrides, "proton_path")
+	}
+	if p.OperatingMode != "" && domain.NormalizeOperatingMode(p.OperatingMode) != domain.NormalizeOperatingMode(cfg.OperatingMode) {
+		overrides = append(overrides, "operating_mode")
+	}
+	if p.ExeArgs != "" {
+		overrides = append(overrides, "exe_args")
+	}
+	if p.DllOverrides != "" {
+		overrides = append(overrides, "dll_overrides")
+	}
+	if p.MangoHud != nil && *p.MangoHud != cfg.MangoHud {
+		overrides = append(overrides, "mangohud")
+	}
+	if p.DisableOverlay != nil && *p.DisableOverlay != cfg.DisableOverlay {
+		overrides = append(overrides, "disable_overlay")
+	}
+	if p.OfflineMode != nil && *p.OfflineMode != cfg.OfflineMode {
+		overrides = append(overrides, "offline_mode")
+	}
+	if p.Language != "" && p.Language != cfg.Language {
+		overrides = append(overrides, "language")
+	}
+	if len(p.CustomEnv) > 0 {
+		overrides = append(overrides, "custom_env")
+	}
+	if p.SourceOverride != "" {
+		overrides = append(overrides, "source_override")
+	}
+	if p.MetadataProvider != "" && p.MetadataProvider != "auto" {
+		overrides = append(overrides, "metadata_provider")
+	}
+
+	sort.Strings(overrides)
+	return overrides
 }
 
 // BuildLaunchSpec resolves all configuration, environment variables, runners, and wrappers into a LaunchSpec.
@@ -366,6 +489,7 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		Args:          finalArgs,
 		OperatingMode: domain.NormalizeOperatingMode(resolved.OperatingMode),
 		Platform:      resolved.Platform,
+		Runner:        resolved.Runner,
 		GbeDir:        cfg.GbeDir,
 	}, nil
 }

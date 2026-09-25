@@ -95,6 +95,21 @@ const DEFAULT_MOCKS = {
   }),
   getLaunchProfile: (path) => null,
   saveLaunchProfile: (path, p) => ({ ...mockData.MOCK_GAMES[0], launch_profile: p }),
+  previewGameLaunch: (path) => Promise.resolve({
+    command: 'WINEPREFIX="/home/user/Games/umu" MANGOHUD=1 umu-run /mock/game.exe -dx11',
+    target_exe: '/mock/game.exe',
+    args: ['umu-run', '/mock/game.exe', '-dx11'],
+    env: {
+      WINEPREFIX: '/home/user/Games/umu',
+      MANGOHUD: '1',
+      SteamAppId: '1091500',
+    },
+    working_dir: '/mock',
+    runner: 'umu',
+    operating_mode: 'loader',
+    platform: 'win64',
+    overrides: [],
+  }),
   getGameDepots: (path) => [
     { depot_id: 41501, name: 'Base Content (41501)', category: 'common', content_category: 'core', installed: true, size: 500000000, file_count: 120, manifest_id: 1001 },
     { depot_id: 41502, name: 'Windows Binaries (41502)', category: 'windows', content_category: 'core', installed: true, size: 25000000, file_count: 15, manifest_id: 1002 },

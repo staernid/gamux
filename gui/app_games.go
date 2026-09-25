@@ -248,6 +248,15 @@ func (a *App) mutateAndInspect(gamePath string, mutate func(cleanPath string) er
 	return st, err
 }
 
+// PreviewGameLaunch resolves and returns the dry-run execution specification and active overrides for a game.
+func (a *App) PreviewGameLaunch(gamePath string) (*runner.LaunchPreview, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	return a.Engine.PreviewLaunch(a.getContext(), path)
+}
+
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.
 func (a *App) GetLaunchProfile(gamePath string) (*runner.LaunchOptions, error) {
 	path, err := requireGamePath(gamePath)

@@ -220,6 +220,52 @@ func (eng *Engine) RunGame(ctx context.Context, opts runner.LaunchOptions) error
 	return runner.Run(ctx, eng.Config, opts)
 }
 
+// PreviewLaunch computes the effective resolved execution specification and active configuration overrides for a game.
+func (eng *Engine) PreviewLaunch(ctx context.Context, gameDir string) (*runner.LaunchPreview, error) {
+	gameDir = util.CanonicalPath(gameDir)
+	if gameDir == "" {
+		return nil, fmt.Errorf("game directory cannot be empty")
+	}
+
+	profile, err := compat.LoadProfile(gameDir)
+	if err != nil || profile == nil {
+		profile = &domain.LaunchProfile{GameDir: gameDir}
+	}
+
+	opts := runner.LaunchOptions{
+		GameDir: gameDir,
+	}
+	opts.MergeFrom(profile)
+
+	if eng.Profiles != nil {
+		active := eng.Profiles.GetActive()
+		if active != nil {
+			if opts.ProfileID == "" {
+				opts.ProfileID = active.ID
+			}
+		}
+	}
+
+	spec, err := runner.BuildLaunchSpec(ctx, eng.Config, opts)
+	if err != nil {
+		return nil, fmt.Errorf("build launch spec: %w", err)
+	}
+
+	overrides := runner.DetectOverrides(profile, eng.Config)
+
+	return &runner.LaunchPreview{
+		Command:       runner.FormatCommandLine(spec),
+		TargetExe:     spec.TargetExe,
+		Args:          spec.Args,
+		Env:           spec.Env,
+		WorkingDir:    spec.WorkingDir,
+		Runner:        spec.Runner,
+		OperatingMode: spec.OperatingMode,
+		Platform:      spec.Platform,
+		Overrides:     overrides,
+	}, nil
+}
+
 // GetLaunchProfile retrieves the custom launch configuration for a game directory.
 func (eng *Engine) GetLaunchProfile(ctx context.Context, gameDir string) (*domain.LaunchProfile, error) {
 	return compat.LoadProfile(gameDir)

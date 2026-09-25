@@ -24,13 +24,10 @@
   import GameTaskHud from './hub/GameTaskHud.svelte';
   import HubOverviewTab from './hub/HubOverviewTab.svelte';
   import HubCommunityTab from './hub/HubCommunityTab.svelte';
-  import HubGeneralTab from './hub/HubGeneralTab.svelte';
-  import HubEnvironmentTab from './hub/HubEnvironmentTab.svelte';
+  import HubConfigTab from './hub/HubConfigTab.svelte';
   import HubFilesTab from './hub/HubFilesTab.svelte';
-  import HubResourcesTab from './hub/HubResourcesTab.svelte';
-  import { RUNNER_OPTIONS, OPERATING_MODE_OPTIONS, LANGUAGE_OPTIONS } from '../../constants/options.js';
 
-  // 7 Primary Consolidated Tabs: 'overview' | 'community' | 'resources' | 'general' | 'environment' | 'saves' | 'files'
+  // 4 Primary Consolidated Surfaces: 'overview' | 'config' | 'files' | 'saves'
   let activeTab = 'overview';
   let communitySubTab = 'achievements';
   let communityNewsIndex = 0;
@@ -41,6 +38,8 @@
   let isSaving = false;
   let saveSuccess = false;
   let saveSuccessTimer = null;
+  let autoSaveTimeout = null;
+  let initialDraftJSON = '';
 
   // Integrity State
   let integrityReport = null;
@@ -87,10 +86,6 @@
 
   $: overrideCount = countOverrides($drawerDraft, game, globalCfg);
 
-  const runnerOptions = RUNNER_OPTIONS;
-  const operatingModeOptions = OPERATING_MODE_OPTIONS;
-  const gameLanguageOptions = LANGUAGE_OPTIONS;
-
   onMount(async () => {
     try {
       globalCfg = await AppAPI.getConfig();
@@ -114,18 +109,37 @@
 
     if (game) {
       drawerDraft.init(game, globalCfg);
+      initialDraftJSON = JSON.stringify($drawerDraft);
     }
   });
 
   onDestroy(() => {
     if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
+    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
   });
+
+  function triggerAutoSave() {
+    if (!game?.gameDir || !initialDraftJSON) return;
+    const currentJSON = JSON.stringify($drawerDraft);
+    if (currentJSON === initialDraftJSON || isSaving) return;
+    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => {
+      handleSaveSettings(true);
+    }, 400);
+  }
+
+  $: if ($drawerDraft && initialDraftJSON) {
+    triggerAutoSave();
+  }
 
   $: if (game && $drawerDraft) {
     if ($drawerDraft.gameDir !== game.gameDir) {
       drawerDraft.init(game, globalCfg);
+      initialDraftJSON = JSON.stringify($drawerDraft);
       integrityReport = null;
       integrityError = '';
+    } else if (!initialDraftJSON) {
+      initialDraftJSON = JSON.stringify($drawerDraft);
     }
   }
 
@@ -133,7 +147,7 @@
     $activeView = 'library';
   }
 
-  function openSettingsTab(tabName = 'general') {
+  function openSettingsTab(tabName = 'config') {
     activeTab = tabName;
   }
 
@@ -291,24 +305,27 @@
   }
 
 
-  async function handleSaveSettings() {
+  async function handleSaveSettings(silent = false) {
     if (!game?.gameDir) return;
     isSaving = true;
     try {
       const ok = await drawerDraft.save(game);
       if (ok) {
+        initialDraftJSON = JSON.stringify($drawerDraft);
         saveSuccess = true;
         if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
         saveSuccessTimer = setTimeout(() => {
           saveSuccess = false;
-        }, 3000);
+        }, 2500);
       }
     } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Save Failed',
-        message: err?.message || String(err)
-      });
+      if (!silent) {
+        notificationStore.items.add({
+          type: 'error',
+          title: 'Save Failed',
+          message: err?.message || String(err)
+        });
+      }
     } finally {
       isSaving = false;
     }
@@ -317,6 +334,7 @@
   async function handleResetSettings() {
     if (game) {
       await drawerDraft.resetDefaults(game, globalCfg);
+      initialDraftJSON = JSON.stringify($drawerDraft);
     }
   }
 
@@ -457,7 +475,7 @@
   }
 
   $: isSteam = Boolean((game?.appId && isSteamApp(game.appId)) || ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId)));
-  const primaryTabs = ['overview', 'community', 'resources', 'general', 'environment', 'saves', 'files'];
+  const primaryTabs = ['overview', 'config', 'files', 'saves'];
 
   function handleNavigateTab(e) {
     const { tab, subTab, newsIndex } = e.detail || {};
@@ -484,7 +502,7 @@
       returnToShelf();
     } else if (e.key === 'x' || e.key === 'X') {
       e.preventDefault();
-      openSettingsTab('general');
+      openSettingsTab('config');
     } else if (e.key === 'y' || e.key === 'Y') {
       e.preventDefault();
       openDirectory();
@@ -525,7 +543,7 @@
         <GameTaskHud task={activeGameTask} />
       {/if}
 
-      <!-- Primary Navigation Tabs -->
+      <!-- Primary Navigation Tabs (4 Surfaces) -->
       <div class="flex items-center space-x-2 border-b border-surface-border pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->
         <button
@@ -539,55 +557,39 @@
           <span>Overview</span>
         </button>
 
-        <!-- 2. Community Tab -->
+        <!-- 2. Configuration & Overrides Tab (Diff Lens) -->
         <button
           type="button"
-          on:click={() => { activeTab = 'community'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'community' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        >
-          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-          </svg>
-          <span>Community</span>
-        </button>
-
-        <!-- 3. Resources Tab -->
-        <button
-          type="button"
-          on:click={() => { activeTab = 'resources'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'resources' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        >
-          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-          <span>Resources</span>
-        </button>
-
-        <!-- 4. General Tab -->
-        <button
-          type="button"
-          on:click={() => { activeTab = 'general'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+          on:click={() => { activeTab = 'config'; }}
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'config' || activeTab === 'general' || activeTab === 'environment' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
-          <span>General</span>
+          <span>Configuration</span>
+          {#if overrideCount > 0}
+            <span class="px-1.5 py-0.2 rounded-full bg-neutral-800 text-neutral-200 text-3xs font-mono border border-neutral-600">
+              {overrideCount}
+            </span>
+          {/if}
         </button>
 
-        <!-- 5. Environment Tab -->
+        <!-- 3. Files & Depots Tab -->
         <button
           type="button"
-          on:click={() => { activeTab = 'environment'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'environment' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+          on:click={() => { activeTab = 'files'; }}
+          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
-          <span>Environment</span>
+          <span>Files & Depots</span>
+          {#if isGameRunning}
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Execution log active"></span>
+          {/if}
         </button>
 
-        <!-- 6. Saves Tab -->
+        <!-- 4. Saves Tab -->
         <button
           type="button"
           on:click={() => { activeTab = 'saves'; }}
@@ -598,21 +600,6 @@
           </svg>
           <span>Saves</span>
         </button>
-
-        <!-- 7. Files & Diagnostics Tab -->
-        <button
-          type="button"
-          on:click={() => { activeTab = 'files'; }}
-          class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        >
-          <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          <span>Files & Diagnostics</span>
-          {#if isGameRunning}
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Execution log active"></span>
-          {/if}
-        </button>
       </div>
 
       <!-- Tab Content Area -->
@@ -620,13 +607,20 @@
         {#if activeTab === 'overview'}
           <HubOverviewTab {game} on:navigateTab={handleNavigateTab} />
         {:else if activeTab === 'community'}
-          <HubCommunityTab
-            {game}
-            initialSubTab={communitySubTab}
-            initialNewsIndex={communityNewsIndex}
-          />
-        {:else if activeTab === 'resources'}
-          <HubResourcesTab {game} />
+          <div class="space-y-4">
+            <button
+              type="button"
+              on:click={() => { activeTab = 'overview'; }}
+              class="text-xs font-bold text-neutral-400 hover:text-white flex items-center space-x-1.5 cursor-pointer pb-1"
+            >
+              <span>← Back to Overview</span>
+            </button>
+            <HubCommunityTab
+              {game}
+              initialSubTab={communitySubTab}
+              initialNewsIndex={communityNewsIndex}
+            />
+          </div>
         {:else if activeTab === 'files'}
           <HubFilesTab
             {game}
@@ -662,29 +656,17 @@
               Download Game Now
             </button>
           </div>
-        {:else if activeTab === 'general'}
-          <HubGeneralTab
-            {game}
-            {overrideCount}
-            {isSaving}
-            {saveSuccess}
-            on:save={handleSaveSettings}
-            on:reset={handleResetSettings}
-            on:linkMeta={handleApplyMetaLink}
-            on:unlinkMeta={handleUnlinkMeta}
-          />
-        {:else if activeTab === 'environment'}
-          <HubEnvironmentTab
+        {:else if activeTab === 'config' || activeTab === 'general' || activeTab === 'environment'}
+          <HubConfigTab
             {game}
             {globalCfg}
             {overrideCount}
             {isSaving}
             {saveSuccess}
-            {runnerOptions}
-            {operatingModeOptions}
-            {gameLanguageOptions}
-            on:save={handleSaveSettings}
+            on:save={() => handleSaveSettings(false)}
             on:reset={handleResetSettings}
+            on:linkMeta={handleApplyMetaLink}
+            on:unlinkMeta={handleUnlinkMeta}
           />
         {:else if activeTab === 'saves'}
           <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">

@@ -1298,6 +1298,39 @@ export namespace pipeline {
 
 }
 
+export namespace runner {
+	
+	export class LaunchPreview {
+	    command: string;
+	    target_exe: string;
+	    args: string[];
+	    env: Record<string, string>;
+	    working_dir: string;
+	    runner: string;
+	    operating_mode: string;
+	    platform: string;
+	    overrides: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new LaunchPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.command = source["command"];
+	        this.target_exe = source["target_exe"];
+	        this.args = source["args"];
+	        this.env = source["env"];
+	        this.working_dir = source["working_dir"];
+	        this.runner = source["runner"];
+	        this.operating_mode = source["operating_mode"];
+	        this.platform = source["platform"];
+	        this.overrides = source["overrides"];
+	    }
+	}
+
+}
+
 export namespace saves {
 	
 	export class BackupInfo {

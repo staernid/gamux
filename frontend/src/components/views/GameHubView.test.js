@@ -33,21 +33,18 @@ describe('GameHubView Component', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders hero banner with game title, platform, size, and 7 consolidated primary tabs', async () => {
+  it('renders hero banner with game title, platform, size, and 4 consolidated primary tabs', async () => {
     render(GameHubView);
 
     expect(screen.getByRole('heading', { name: 'Cyberpunk 2077', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText(/#1091500/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Play Now')).toBeInTheDocument();
 
-    // 7 consolidated primary tabs
+    // 4 consolidated primary tabs
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Community$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Resources$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^General$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Environment$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Configuration$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Files & Depots$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Saves$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Files & Diagnostics$/i })).toBeInTheDocument();
   });
 
   it('renders minimal overview tab with synopsis, achievements spotlight, and latest updates', async () => {
@@ -69,9 +66,8 @@ describe('GameHubView Component', () => {
     // Latest updates in overview
     expect(await screen.findByText('Patch 2.13 Available Now')).toBeInTheDocument();
 
-    // External resources moved out of overview to Resources tab
-    expect(screen.queryByText('Game Resources & Community Hub')).not.toBeInTheDocument();
-    expect(screen.queryByText('PCGamingWiki')).not.toBeInTheDocument();
+    // Quick external resources embedded directly in Overview
+    expect(await screen.findByRole('button', { name: /PCGamingWiki/i })).toBeInTheDocument();
   });
 
   it('navigates to Community tab from Overview achievements and updates links', async () => {
@@ -127,41 +123,26 @@ describe('GameHubView Component', () => {
   it('switches between primary tabs cleanly', async () => {
     render(GameHubView);
 
-    // Switch to Resources tab
-    const resourcesBtn = screen.getByRole('button', { name: /^Resources$/i });
-    await fireEvent.click(resourcesBtn);
-    expect(screen.getByText('Game Resources & Community Hub')).toBeInTheDocument();
-    expect(screen.getByText('PCGamingWiki')).toBeInTheDocument();
-    expect(screen.getByText('ProtonDB')).toBeInTheDocument();
-    expect(screen.getByText('SteamDB')).toBeInTheDocument();
-
-    // Switch to General tab
-    const generalBtn = screen.getByRole('button', { name: /^General$/i });
-    await fireEvent.click(generalBtn);
-    expect(screen.getByText('Identity, Source & Artwork')).toBeInTheDocument();
+    // Switch to Configuration tab
+    const configBtn = screen.getByRole('button', { name: /^Configuration$/i });
+    await fireEvent.click(configBtn);
+    expect(screen.getByText('Executable & Arguments')).toBeInTheDocument();
+    expect(screen.getByText('Runtime & Compatibility')).toBeInTheDocument();
+    expect(screen.getByText(/Effective Launch Command/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Match Store|Change Store Match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Match Metadata|Change Match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open Artwork Hub/i })).toBeInTheDocument();
-    expect(screen.getByText('Target Executable')).toBeInTheDocument();
 
-    // Switch to Environment tab
-    const envBtn = screen.getByRole('button', { name: /^Environment$/i });
-    await fireEvent.click(envBtn);
-    expect(screen.getByText('Runner & Platform')).toBeInTheDocument();
-    expect(screen.getByText('MangoHud Overlay')).toBeInTheDocument();
-
-    // Switch to Community tab and test subtabs
-    const communityBtn = screen.getByRole('button', { name: /^Community$/i });
-    await fireEvent.click(communityBtn);
-    expect(screen.getByRole('button', { name: /^Achievements$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /News & Updates/i })).toBeInTheDocument();
-
-    // Switch to Files & Diagnostics
-    const filesBtn = screen.getByRole('button', { name: /^Files & Diagnostics$/i });
+    // Switch to Files & Depots
+    const filesBtn = screen.getByRole('button', { name: /^Files & Depots$/i });
     await fireEvent.click(filesBtn);
     expect(screen.getByText('DLC & Depots')).toBeInTheDocument();
     expect(screen.getByText('Integrity & Repair')).toBeInTheDocument();
     expect(screen.getByText('Execution Logs')).toBeInTheDocument();
+
+    // Switch to Saves
+    const savesBtn = screen.getByRole('button', { name: /^Saves$/i });
+    await fireEvent.click(savesBtn);
   });
 
   it('navigates back to shelf when Shelf back button is clicked', async () => {
@@ -197,7 +178,7 @@ describe('GameHubView Component', () => {
     expect(openDirSpy).toHaveBeenCalledWith('/home/user/Games/Cyberpunk 2077');
   });
 
-  it('switches to General tab when X key is pressed', async () => {
+  it('switches to Configuration tab when X key is pressed', async () => {
     render(GameHubView);
 
     await fireEvent.keyDown(window, { key: 'x' });
@@ -223,14 +204,7 @@ describe('GameHubView Component', () => {
     // Overview tab exists and shows local info + Link Metadata CTA
     expect(screen.getByRole('button', { name: /^Overview$/i })).toBeInTheDocument();
     expect(screen.getByText('Link Metadata')).toBeInTheDocument();
-    // Resources are in Resources tab, not Overview
-    expect(screen.queryByText('Game Resources & Community Hub')).not.toBeInTheDocument();
-
-    // Resources tab is accessible
-    const resBtn = screen.getByRole('button', { name: /^Resources$/i });
-    await fireEvent.click(resBtn);
-    expect(screen.getByText('Game Resources & Community Hub')).toBeInTheDocument();
-    expect(screen.getByText('PCGamingWiki')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /PCGamingWiki/i })).toBeInTheDocument();
   });
 
   it('renders live inline task progress HUD and disables primary action button when an operation is running for the active game', async () => {
@@ -264,12 +238,12 @@ describe('GameHubView Component', () => {
     expect(busyBtn).toBeDisabled();
   });
 
-  it('toggles inline Source and Metadata setup wizards in General tab', async () => {
+  it('toggles inline Source and Metadata setup wizards in Configuration tab', async () => {
     render(GameHubView);
 
-    // Navigate to General tab
-    const generalBtn = screen.getByRole('button', { name: /^General$/i });
-    await fireEvent.click(generalBtn);
+    // Navigate to Configuration tab
+    const configBtn = screen.getByRole('button', { name: /^Configuration$/i });
+    await fireEvent.click(configBtn);
 
     // Toggle Source Setup Wizard
     const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });
@@ -292,9 +266,9 @@ describe('GameHubView Component', () => {
 
     render(GameHubView);
 
-    // Navigate to General tab
-    const generalBtn = screen.getByRole('button', { name: /^General$/i });
-    await fireEvent.click(generalBtn);
+    // Navigate to Configuration tab
+    const configBtn = screen.getByRole('button', { name: /^Configuration$/i });
+    await fireEvent.click(configBtn);
 
     // Open Match Store
     const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });

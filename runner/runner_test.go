@@ -1893,3 +1893,51 @@ func TestBuildLaunchSpec_SecondaryProfileIsolation(t *testing.T) {
 		t.Errorf("expected XDG_DATA_HOME %s, got %s", expectedXdgData, spec.Env["XDG_DATA_HOME"])
 	}
 }
+
+func TestFormatCommandLine(t *testing.T) {
+	spec := &LaunchSpec{
+		Args: []string{"umu-run", "game.exe", "-dx11", "spaced arg"},
+		Env: map[string]string{
+			"WINEPREFIX": "/home/user/Games/umu",
+			"MANGOHUD":   "1",
+		},
+	}
+	formatted := FormatCommandLine(spec)
+	if !strings.Contains(formatted, "WINEPREFIX=/home/user/Games/umu") {
+		t.Errorf("expected WINEPREFIX in formatted command, got %q", formatted)
+	}
+	if !strings.Contains(formatted, "MANGOHUD=1") {
+		t.Errorf("expected MANGOHUD in formatted command, got %q", formatted)
+	}
+	if !strings.Contains(formatted, `"spaced arg"`) {
+		t.Errorf("expected quoted spaced arg, got %q", formatted)
+	}
+}
+
+func TestDetectOverrides(t *testing.T) {
+	cfg := &config.Config{
+		DefaultRunner: "umu",
+		OperatingMode: "loader",
+		WinePrefix:    "~/Games/umu",
+	}
+
+	pClean := &domain.LaunchProfile{
+		Runner:        "umu",
+		OperatingMode: "loader",
+	}
+	overridesClean := DetectOverrides(pClean, cfg)
+	if len(overridesClean) != 0 {
+		t.Errorf("expected 0 overrides for matching config, got %v", overridesClean)
+	}
+
+	pCustom := &domain.LaunchProfile{
+		Runner:    "wine",
+		ExeArgs:   "-novid",
+		CustomEnv: map[string]string{"FOO": "BAR"},
+	}
+	overridesCustom := DetectOverrides(pCustom, cfg)
+	if len(overridesCustom) != 3 {
+		t.Errorf("expected 3 overrides, got %v", overridesCustom)
+	}
+}
+
