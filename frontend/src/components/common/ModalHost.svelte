@@ -23,7 +23,7 @@
 </script>
 
 {#if $modalStore}
-  {#if $modalStore.type === 'catalog' || $modalStore.type === 'search-grid'}
+  {#if $modalStore.type === 'catalog'}
     <CatalogModal
       {...$modalStore.props}
       on:close={handleClose}

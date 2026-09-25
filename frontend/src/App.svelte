@@ -288,7 +288,7 @@
       activeView.set('game-hub');
     }
     if (urlParams.get('search') === '1' || urlParams.get('search') === 'true') {
-      modalStore.open('search-grid');
+      modalStore.open('catalog');
     }
 
     // 4. Scan library if path exists
@@ -302,7 +302,7 @@
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if ($modalStore && ($modalStore.type === 'catalog' || $modalStore.type === 'search-grid')) {
+        if ($modalStore && $modalStore.type === 'catalog') {
           playBack();
           modalStore.close();
         } else {

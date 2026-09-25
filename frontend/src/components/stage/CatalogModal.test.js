@@ -1,11 +1,10 @@
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import SearchGridModal from './SearchGridModal.svelte';
 import CatalogModal from './CatalogModal.svelte';
 import { games, selectedGame, activeView } from '../../stores/library.js';
 import { normalizeGame } from '../../utils/game.js';
 
-describe('CatalogModal / SearchGridModal Component', () => {
+describe('CatalogModal Component', () => {
   const mockGames = [
     { name: 'Astroneer', app_id: '361420', store: 'Steam', game_dir: '/games/astroneer', is_installed: true },
     { name: 'Balatro', app_id: '2379780', store: 'Steam', game_dir: '/games/balatro', is_installed: true },
@@ -113,10 +112,5 @@ describe('CatalogModal / SearchGridModal Component', () => {
 
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(closeSpy).toHaveBeenCalledTimes(2);
-  });
-
-  it('supports backwards compatibility via SearchGridModal wrapper', () => {
-    render(SearchGridModal);
-    expect(screen.getByText(/Online Catalog/i)).toBeInTheDocument();
   });
 });
