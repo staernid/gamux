@@ -445,6 +445,7 @@ export const MOCK_CONFIG_SCHEMA = [
   { key: 'transfer_speed_limit', label: 'Transfer Speed Limit', description: 'Maximum transfer speed limit in bytes per second.', type: 'number', category: 'Operational', scope: 'global', default: 0 },
   { key: 'default_runner', label: 'Default Runner', description: 'Default compatibility runner used to execute Windows PE titles.', type: 'select', category: 'Runtime', scope: 'both', default: 'umu', options: [{ value: 'umu', label: 'UMU / Proton' }, { value: 'wine', label: 'Wine Direct' }] },
   { key: 'wine_prefix', label: 'Wine Prefix', description: 'Path to custom WINEPREFIX container directory.', type: 'path', category: 'Runtime', scope: 'both', default: '' },
+  { key: 'global_env', label: 'Global Environment Variables', description: 'Key-value environment variables passed to all launched games.', type: 'env', category: 'Operational', scope: 'global', default: {} },
   { key: 'mangohud', label: 'MangoHud Overlay', description: 'Render Vulkan / OpenGL HUD with FPS and hardware metrics.', type: 'boolean', category: 'Graphics', scope: 'both', default: false },
   { key: 'auto_backup_saves', label: 'Auto-Backup Saves', description: 'Automatically create a zip snapshot backup before launching.', type: 'boolean', category: 'Saves & Backups', scope: 'both', default: false },
   { key: 'backup_retention_count', label: 'Backup Retention Limit', description: 'Maximum number of rolling backup snapshots to retain.', type: 'number', category: 'Saves & Backups', scope: 'both', default: 5, min: 1, max: 50, step: 1 }

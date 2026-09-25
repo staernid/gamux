@@ -9,13 +9,30 @@
   import CoopTab from './settings/CoopTab.svelte';
   import LibraryStorageTab from './settings/LibraryStorageTab.svelte';
   import CompatibilityTab from './settings/CompatibilityTab.svelte';
-  import CredentialsTab from './settings/CredentialsTab.svelte';
   import ToolsMaintenanceTab from './settings/ToolsMaintenanceTab.svelte';
   import LogsTab from './settings/LogsTab.svelte';
   import PropertySheet from '../schema/PropertySheet.svelte';
   import { RUNNER_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS } from '../../constants/options.js';
 
-  let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'persona' | 'coop' | 'credentials' | 'tools' | 'logs'
+  let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'profiles' | 'advanced'
+  let advancedSubtab = 'coop'; // 'coop' | 'maintenance' | 'logs' | 'schema'
+
+  // Backward compatibility alias mapper
+  $: if (activeTab === 'credentials') {
+    activeTab = 'storage';
+  } else if (activeTab === 'coop') {
+    activeTab = 'advanced';
+    advancedSubtab = 'coop';
+  } else if (activeTab === 'tools' || activeTab === 'maintenance') {
+    activeTab = 'advanced';
+    advancedSubtab = 'maintenance';
+  } else if (activeTab === 'logs') {
+    activeTab = 'advanced';
+    advancedSubtab = 'logs';
+  } else if (activeTab === 'schema') {
+    activeTab = 'advanced';
+    advancedSubtab = 'schema';
+  }
   let cfgDraft = {
     library_paths: [],
     default_runner: 'umu',
@@ -90,7 +107,7 @@
     configStore.setDirty(false);
   });
 
-  const tabOrder = ['general', 'storage', 'compatibility', 'profiles', 'coop', 'credentials', 'tools', 'logs', 'schema'];
+  const tabOrder = ['general', 'storage', 'compatibility', 'profiles', 'advanced'];
 
   function handleTabKeyDown(e, currentIndex) {
     if (e.key === 'ArrowRight') {
@@ -129,13 +146,23 @@
       const tabParam = urlParams.get('tab');
       if (tabParam) {
         if (['general', 'display', 'ui', 'network', 'bandwidth'].includes(tabParam)) activeTab = 'general';
-        else if (['storage', 'library', 'paths'].includes(tabParam)) activeTab = 'storage';
+        else if (['storage', 'library', 'paths', 'credentials', 'media', 'api', 'apis', 'key', 'keys'].includes(tabParam)) activeTab = 'storage';
         else if (['compatibility', 'compat', 'runner'].includes(tabParam)) activeTab = 'compatibility';
         else if (['profiles', 'profile', 'steam', 'persona', 'player', 'user', 'emu', 'drm'].includes(tabParam)) activeTab = 'profiles';
-        else if (['coop', 'co-op', 'multiseat', 'split'].includes(tabParam)) activeTab = 'coop';
-        else if (['credentials', 'media', 'api', 'apis', 'key', 'keys'].includes(tabParam)) activeTab = 'credentials';
-        else if (['maintenance', 'tools', 'components'].includes(tabParam)) activeTab = 'tools';
-        else if (['logs', 'log', 'activity'].includes(tabParam)) activeTab = 'logs';
+        else if (['advanced'].includes(tabParam)) activeTab = 'advanced';
+        else if (['coop', 'co-op', 'multiseat', 'split'].includes(tabParam)) {
+          activeTab = 'advanced';
+          advancedSubtab = 'coop';
+        } else if (['maintenance', 'tools', 'components'].includes(tabParam)) {
+          activeTab = 'advanced';
+          advancedSubtab = 'maintenance';
+        } else if (['logs', 'log', 'activity'].includes(tabParam)) {
+          activeTab = 'advanced';
+          advancedSubtab = 'logs';
+        } else if (['schema', 'all', 'properties'].includes(tabParam)) {
+          activeTab = 'advanced';
+          advancedSubtab = 'schema';
+        }
       }
 
       const cfg = await AppAPI.getConfig();
@@ -425,7 +452,7 @@
     </div>
   </div>
 
-  <!-- Segmented Top Tabs -->
+  <!-- Segmented Top Tabs (5 Consolidated Macro-Surfaces) -->
   <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs" role="tablist">
     <!-- 0. General Tab -->
     <button
@@ -434,7 +461,7 @@
       aria-selected={activeTab === 'general'}
       on:click={() => { activeTab = 'general'; }}
       on:keydown={(e) => handleTabKeyDown(e, 0)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -442,29 +469,29 @@
       <span>General</span>
     </button>
 
-    <!-- 1. Storage Tab -->
+    <!-- 1. Storage Tab (Library & Backups & Credentials) -->
     <button
       type="button"
       role="tab"
       aria-selected={activeTab === 'storage' || activeTab === 'library'}
       on:click={() => { activeTab = 'storage'; }}
       on:keydown={(e) => handleTabKeyDown(e, 1)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'storage' || activeTab === 'library' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'storage' || activeTab === 'library' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
       </svg>
-      <span>Storage</span>
+      <span>Storage &amp; Library</span>
     </button>
 
-    <!-- 2. Compatibility Tab -->
+    <!-- 2. Compatibility Tab (System Baseline) -->
     <button
       type="button"
       role="tab"
       aria-selected={activeTab === 'compatibility'}
       on:click={() => { activeTab = 'compatibility'; }}
       on:keydown={(e) => handleTabKeyDown(e, 2)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'compatibility' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'compatibility' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -480,7 +507,7 @@
       aria-selected={activeTab === 'profiles' || activeTab === 'persona'}
       on:click={() => { activeTab = 'profiles'; }}
       on:keydown={(e) => handleTabKeyDown(e, 3)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'profiles' || activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'profiles' || activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -488,80 +515,19 @@
       <span>Profiles</span>
     </button>
 
-    <!-- 4. Co-Op Tab -->
+    <!-- 4. Advanced Tab -->
     <button
       type="button"
       role="tab"
-      aria-selected={activeTab === 'coop'}
-      on:click={() => { activeTab = 'coop'; }}
+      aria-selected={activeTab === 'advanced'}
+      on:click={() => { activeTab = 'advanced'; }}
       on:keydown={(e) => handleTabKeyDown(e, 4)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'coop' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'advanced' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
       </svg>
-      <span>Co-Op</span>
-    </button>
-
-    <!-- 5. Credentials Tab (API Keys) -->
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'credentials'}
-      on:click={() => { activeTab = 'credentials'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 5)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'credentials' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-      </svg>
-      <span>Credentials</span>
-    </button>
-
-    <!-- 6. Maintenance Tab -->
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'tools'}
-      on:click={() => { activeTab = 'tools'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 6)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'tools' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-      </svg>
-      <span>Maintenance</span>
-    </button>
-
-    <!-- 7. Logs Tab -->
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'logs'}
-      on:click={() => { activeTab = 'logs'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 7)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-      <span>Logs</span>
-    </button>
-
-    <!-- 8. All Options (Schema Engine) Tab -->
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'schema'}
-      on:click={() => { activeTab = 'schema'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 8)}
-      class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'schema' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-      title="Dynamic declarative settings schema"
-    >
-      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-      <span>All Options</span>
+      <span>Advanced</span>
     </button>
   </div>
 
@@ -585,43 +551,102 @@
         {languagesList}
         {countriesList}
       />
-    {:else if activeTab === 'coop'}
-      <CoopTab
-        bind:cfgDraft
-      />
-    {:else if activeTab === 'credentials'}
-      <CredentialsTab
-        bind:cfgDraft
-      />
-    {:else if activeTab === 'tools'}
-      <ToolsMaintenanceTab
-        {toolStatuses}
-        {isCheckingTools}
-        {updatingTools}
-        {isSubmittingBatch}
-        gamesCount={($games || []).length}
-        unpatchedGamesCount={($games || []).filter(g => !g.is_patched && !g.isPatched).length}
-        on:checkAll={loadToolsStatus}
-        on:updateTool={handleUpdateTool}
-        on:batchAchievements={handleBatchAchievements}
-        on:batchArtwork={handleBatchArtwork}
-        on:batchApply={handleBatchApply}
-        on:batchNormalize={handleBatchNormalize}
-        on:batchVerify={handleBatchVerify}
-      />
-    {:else if activeTab === 'logs'}
-      <LogsTab />
-    {:else if activeTab === 'schema'}
-      <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
-        <div class="border-b border-surface-border pb-3">
-          <h3 class="text-sm font-bold text-white">Declarative Configuration Engine</h3>
-          <p class="text-xs text-neutral-400 mt-0.5 leading-relaxed">All settings defined in the Go backend schema are automatically discovered and rendered here.</p>
+    {:else if activeTab === 'advanced'}
+      <div class="space-y-4">
+        <!-- Advanced Segmented Sub-Navigation -->
+        <div class="flex items-center space-x-1 p-1 bg-surface-header/80 border border-surface-border rounded-xl text-xs overflow-x-auto" role="tablist">
+          <!-- Co-Op Subtab -->
+          <button
+            type="button"
+            role="tab"
+            aria-selected={advancedSubtab === 'coop'}
+            on:click={() => { advancedSubtab = 'coop'; }}
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'coop' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
+          >
+            <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span>Co-Op Multiseat</span>
+          </button>
+
+          <!-- Maintenance Subtab -->
+          <button
+            type="button"
+            role="tab"
+            aria-selected={advancedSubtab === 'maintenance'}
+            on:click={() => { advancedSubtab = 'maintenance'; }}
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'maintenance' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
+          >
+            <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+            </svg>
+            <span>Maintenance</span>
+          </button>
+
+          <!-- Logs Subtab -->
+          <button
+            type="button"
+            role="tab"
+            aria-selected={advancedSubtab === 'logs'}
+            on:click={() => { advancedSubtab = 'logs'; }}
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
+          >
+            <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>Logs</span>
+          </button>
+
+          <!-- Schema Subtab -->
+          <button
+            type="button"
+            role="tab"
+            aria-selected={advancedSubtab === 'schema'}
+            on:click={() => { advancedSubtab = 'schema'; }}
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'schema' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
+            title="Dynamic declarative settings schema"
+          >
+            <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span>All Options</span>
+          </button>
         </div>
-        <PropertySheet
-          bind:values={cfgDraft}
-          scope="global"
-          groupByCategory={true}
-        />
+
+        <!-- Advanced Subtab Content -->
+        {#if advancedSubtab === 'coop'}
+          <CoopTab bind:cfgDraft />
+        {:else if advancedSubtab === 'maintenance'}
+          <ToolsMaintenanceTab
+            {toolStatuses}
+            {isCheckingTools}
+            {updatingTools}
+            {isSubmittingBatch}
+            gamesCount={($games || []).length}
+            unpatchedGamesCount={($games || []).filter(g => !g.is_patched && !g.isPatched).length}
+            on:checkAll={loadToolsStatus}
+            on:updateTool={handleUpdateTool}
+            on:batchAchievements={handleBatchAchievements}
+            on:batchArtwork={handleBatchArtwork}
+            on:batchApply={handleBatchApply}
+            on:batchNormalize={handleBatchNormalize}
+            on:batchVerify={handleBatchVerify}
+          />
+        {:else if advancedSubtab === 'logs'}
+          <LogsTab />
+        {:else if advancedSubtab === 'schema'}
+          <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="border-b border-surface-border pb-3">
+              <h3 class="text-sm font-bold text-white">Declarative Configuration Engine</h3>
+              <p class="text-xs text-neutral-400 mt-0.5 leading-relaxed">All settings defined in the Go backend schema are automatically discovered and rendered here.</p>
+            </div>
+            <PropertySheet
+              bind:values={cfgDraft}
+              scope="global"
+              groupByCategory={true}
+            />
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}

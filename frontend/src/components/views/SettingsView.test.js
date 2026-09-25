@@ -12,9 +12,7 @@ describe('SettingsView Component', () => {
     expect(screen.getByRole('tab', { name: /Storage/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Compatibility/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Profiles/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Credentials/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Maintenance/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Logs/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Advanced/i })).toBeInTheDocument();
 
     // Default tab is General
     expect(screen.getByText('Display & Interface')).toBeInTheDocument();
@@ -24,7 +22,7 @@ describe('SettingsView Component', () => {
     expect(screen.getByText('Launch Notifications')).toBeInTheDocument();
   });
 
-  it('switches to Storage tab and renders storage directories and backups', async () => {
+  it('switches to Storage tab and renders storage directories, backups, and API credentials', async () => {
     render(SettingsView);
 
     const storageTab = screen.getByRole('tab', { name: /Storage/i });
@@ -35,6 +33,15 @@ describe('SettingsView Component', () => {
     expect(screen.getByText('Normalize Folders')).toBeInTheDocument();
     expect(screen.getByText('Auto-Backup Saves')).toBeInTheDocument();
     expect(screen.getByText('Advanced Storage Locations')).toBeInTheDocument();
+
+    // Credentials unified in Storage
+    expect(screen.getByText('API Keys & Service Credentials')).toBeInTheDocument();
+    expect(screen.getByText('Steam Web API Key')).toBeInTheDocument();
+    expect(screen.getByText('Hubcap Manifest API Key')).toBeInTheDocument();
+    expect(screen.getByText('SteamGridDB API Key')).toBeInTheDocument();
+    expect(screen.getByText('RAWG API Key')).toBeInTheDocument();
+    expect(screen.getAllByText('Get Key').length).toBeGreaterThan(0);
+    expect(screen.getByText('Docs')).toBeInTheDocument();
   });
 
   it('renders custom speed limit input when custom bandwidth is selected in General tab', async () => {
@@ -44,6 +51,19 @@ describe('SettingsView Component', () => {
     await fireEvent.change(speedSelect, { target: { value: '-1' } });
 
     expect(screen.getByText(/Custom Limit \(MB\/s\):/i)).toBeInTheDocument();
+  });
+
+  it('switches to Compatibility tab and renders System Baseline banner and Global Env editor', async () => {
+    render(SettingsView);
+
+    const compatTab = screen.getByRole('tab', { name: /Compatibility/i });
+    await fireEvent.click(compatTab);
+
+    expect(screen.getByText('Global Runtime Baseline')).toBeInTheDocument();
+    expect(screen.getByText('Runtime & Execution Layer')).toBeInTheDocument();
+    expect(screen.getByText('Steam & Goldberg Emulation')).toBeInTheDocument();
+    expect(screen.getByText('Process Environment')).toBeInTheDocument();
+    expect(screen.getByText('Global Environment Variables')).toBeInTheDocument();
   });
 
   it('switches to Profiles tab and renders persona settings with custom ISO support', async () => {
@@ -58,26 +78,16 @@ describe('SettingsView Component', () => {
     expect(screen.getByText(/Region Code/i)).toBeInTheDocument();
   });
 
-  it('switches to Credentials tab and renders API key settings with Get Key / Docs actions', async () => {
+  it('switches to Advanced tab and displays Maintenance subtab with toolchain and batch operations', async () => {
     render(SettingsView);
 
-    const credsTab = screen.getByRole('tab', { name: /Credentials/i });
-    await fireEvent.click(credsTab);
+    const advancedTab = screen.getByRole('tab', { name: /Advanced/i });
+    await fireEvent.click(advancedTab);
 
-    expect(screen.getByText('API Keys & Service Credentials')).toBeInTheDocument();
-    expect(screen.getByText('Steam Web API Key')).toBeInTheDocument();
-    expect(screen.getByText('Hubcap Manifest API Key')).toBeInTheDocument();
-    expect(screen.getByText('SteamGridDB API Key')).toBeInTheDocument();
-    expect(screen.getByText('RAWG API Key')).toBeInTheDocument();
-    expect(screen.getAllByText('Get Key').length).toBeGreaterThan(0);
-    expect(screen.getByText('Docs')).toBeInTheDocument();
-  });
-
-  it('switches to Maintenance tab and displays toolchain and batch operations', async () => {
-    render(SettingsView);
-
-    const toolsTab = screen.getByRole('tab', { name: /Maintenance/i });
-    await fireEvent.click(toolsTab);
+    // Advanced subtabs exist
+    const maintenanceSubtab = screen.getByRole('tab', { name: /Maintenance/i });
+    expect(maintenanceSubtab).toBeInTheDocument();
+    await fireEvent.click(maintenanceSubtab);
 
     expect(screen.getByText('Helper Tools')).toBeInTheDocument();
     expect(screen.getByText('Batch Maintenance')).toBeInTheDocument();
@@ -88,15 +98,19 @@ describe('SettingsView Component', () => {
     expect(screen.getByText('Verify Manifests')).toBeInTheDocument();
   });
 
-  it('switches to Co-Op tab and persists software cursor and pointer toggles', async () => {
+  it('switches to Advanced tab, selects Co-Op subtab and persists software cursor toggle', async () => {
     const saveSpy = vi.spyOn(AppAPI, 'saveConfig').mockResolvedValue();
     render(SettingsView);
 
     // Wait for onMount to complete initial config hydration
     await new Promise(r => setTimeout(r, 50));
 
-    const coopTab = screen.getByRole('tab', { name: /Co-Op/i });
-    await fireEvent.click(coopTab);
+    const advancedTab = screen.getByRole('tab', { name: /Advanced/i });
+    await fireEvent.click(advancedTab);
+
+    const coopSubtab = screen.getByRole('tab', { name: /Co-Op/i });
+    expect(coopSubtab).toBeInTheDocument();
+    await fireEvent.click(coopSubtab);
 
     expect(screen.getByText('Player 2 Pointer & Compositor Options')).toBeInTheDocument();
     const softwareCursorText = screen.getByText('Software Cursor');
@@ -123,12 +137,15 @@ describe('SettingsView Component', () => {
     }, { timeout: 1500 });
   });
 
-  it('switches to All Options schema tab and renders dynamic declarative configuration engine', async () => {
+  it('switches to Advanced tab, selects All Options schema subtab and renders declarative configuration engine', async () => {
     render(SettingsView);
 
-    const schemaTab = screen.getByRole('tab', { name: /All Options/i });
-    expect(schemaTab).toBeInTheDocument();
-    await fireEvent.click(schemaTab);
+    const advancedTab = screen.getByRole('tab', { name: /Advanced/i });
+    await fireEvent.click(advancedTab);
+
+    const schemaSubtab = screen.getByRole('tab', { name: /All Options/i });
+    expect(schemaSubtab).toBeInTheDocument();
+    await fireEvent.click(schemaSubtab);
 
     expect(screen.getByText('Declarative Configuration Engine')).toBeInTheDocument();
   });

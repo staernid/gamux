@@ -1,6 +1,7 @@
 <script>
   import LibraryPathsCard from './cards/LibraryPathsCard.svelte';
   import StorageAutomationCard from './cards/StorageAutomationCard.svelte';
+  import CredentialsCard from './cards/CredentialsCard.svelte';
 
   export let cfgDraft;
 </script>
@@ -11,4 +12,9 @@
 
   <!-- Bespoke Automation & Backups Card -->
   <StorageAutomationCard bind:cfgDraft />
+
+  <!-- API Keys & Service Credentials Card -->
+  <div id="credentials-card">
+    <CredentialsCard bind:cfgDraft />
+  </div>
 </div>
