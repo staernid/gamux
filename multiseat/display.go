@@ -9,9 +9,13 @@ import (
 // DisplayOptions configures compositor and window layout for gamescope or cage.
 type DisplayOptions struct {
 	Mode            SeatMode      // "local" | "stream"
-	Layout          DisplayLayout // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
-	SeatID          string        // "p1" | "p2"
+	Layout          DisplayLayout // "dual_monitor" | "multi_monitor" | "side_by_side" | "top_bottom" | "quad_grid" | "three_player" | "custom" | "windowed"
+	SeatID          string        // "p1", "p2", "p3", "p4", etc.
+	SeatIndex       int           // 0-indexed position among active seats
+	TotalSeats      int           // Total active seats in session
 	DisplayIndex    int           // Physical monitor output index (0, 1, etc.)
+	DisplayName     string        // Physical connector name (e.g. "DP-1")
+	Backend         string        // Compositor backend: "wayland", "sdl", "auto"
 	TargetWidth     int           // Internal render width (e.g. 1920)
 	TargetHeight    int           // Internal render height (e.g. 1080)
 	TargetFPS       int           // Target refresh rate / FPS (e.g. 60, 100)
@@ -27,6 +31,26 @@ type DisplayOptions struct {
 	Command         []string // Executable command to run inside gamescope
 }
 
+// SeatIndexFromID parses standard seat identifiers ("p1"->0, "p2"->1, "p3"->2, "p4"->3).
+func SeatIndexFromID(seatID string) int {
+	switch seatID {
+	case "p1", "1", "seat1":
+		return 0
+	case "p2", "2", "seat2":
+		return 1
+	case "p3", "3", "seat3":
+		return 2
+	case "p4", "4", "seat4":
+		return 3
+	default:
+		var idx int
+		if n, _ := fmt.Sscanf(seatID, "p%d", &idx); n == 1 && idx > 0 {
+			return idx - 1
+		}
+		return 0
+	}
+}
+
 // DefaultDisplayDimensions returns standard baseline screen dimensions if unset.
 func DefaultDisplayDimensions() (width, height int) {
 	info := util.DetectPrimaryDisplay()
@@ -36,35 +60,101 @@ func DefaultDisplayDimensions() (width, height int) {
 	return 1920, 1080
 }
 
-// CalculateSplitGeometry calculates window dimensions and offsets for split-screen layouts.
+// CalculateSplitGeometry calculates window dimensions and offsets for 2-player split-screen layouts.
 func CalculateSplitGeometry(layout DisplayLayout, seatID string, totalWidth, totalHeight int) (winW, winH, winX, winY int) {
+	seatIdx := SeatIndexFromID(seatID)
+	return CalculateSeatGeometry(layout, seatID, seatIdx, 2, totalWidth, totalHeight)
+}
+
+// CalculateSeatGeometry calculates window dimensions and offsets for N-player split-screen layouts.
+func CalculateSeatGeometry(layout DisplayLayout, seatID string, seatIndex, totalSeats int, totalWidth, totalHeight int) (winW, winH, winX, winY int) {
 	if totalWidth <= 0 || totalHeight <= 0 {
 		totalWidth, totalHeight = DefaultDisplayDimensions()
+	}
+	if totalSeats <= 0 {
+		totalSeats = 2
+	}
+	if seatIndex < 0 {
+		seatIndex = 0
+	}
+	if seatIndex >= totalSeats {
+		seatIndex = totalSeats - 1
 	}
 
 	switch layout {
 	case LayoutSideBySide:
-		// Left/Right side-by-side (Vertical split cut line)
-		winW = totalWidth / 2
+		// Vertical columns (Left to Right)
+		colW := totalWidth / totalSeats
 		winH = totalHeight
 		winY = 0
-		if seatID == "p2" {
-			winX = winW
+		winX = seatIndex * colW
+		if seatIndex == totalSeats-1 {
+			winW = totalWidth - winX
 		} else {
-			winX = 0
+			winW = colW
 		}
+
 	case LayoutTopBottom:
-		// Top/Bottom (Horizontal split cut line)
+		// Horizontal rows (Top to Bottom)
+		rowH := totalHeight / totalSeats
 		winW = totalWidth
-		winH = totalHeight / 2
 		winX = 0
-		if seatID == "p2" {
-			winY = winH
+		winY = seatIndex * rowH
+		if seatIndex == totalSeats-1 {
+			winH = totalHeight - winY
 		} else {
-			winY = 0
+			winH = rowH
 		}
+
+	case LayoutQuadGrid:
+		if totalSeats < 4 {
+			if totalSeats == 3 {
+				return CalculateSeatGeometry(LayoutThreePlayer, seatID, seatIndex, totalSeats, totalWidth, totalHeight)
+			}
+			return CalculateSeatGeometry(LayoutSideBySide, seatID, seatIndex, totalSeats, totalWidth, totalHeight)
+		}
+		// 2x2 grid:
+		// [0: Top-Left ] [1: Top-Right ]
+		// [2: Bottom-L ] [3: Bottom-R  ]
+		halfW := totalWidth / 2
+		halfH := totalHeight / 2
+		switch seatIndex {
+		case 0:
+			winX, winY = 0, 0
+			winW, winH = halfW, halfH
+		case 1:
+			winX, winY = halfW, 0
+			winW, winH = totalWidth-halfW, halfH
+		case 2:
+			winX, winY = 0, halfH
+			winW, winH = halfW, totalHeight-halfH
+		default: // 3 or beyond
+			winX, winY = halfW, halfH
+			winW, winH = totalWidth-halfW, totalHeight-halfH
+		}
+
+	case LayoutThreePlayer:
+		if totalSeats < 3 {
+			return CalculateSeatGeometry(LayoutSideBySide, seatID, seatIndex, totalSeats, totalWidth, totalHeight)
+		}
+		// 3-Player layout: Seat 0 gets top full width, Seats 1 & 2 share bottom half
+		halfH := totalHeight / 2
+		switch seatIndex {
+		case 0:
+			winX, winY = 0, 0
+			winW, winH = totalWidth, halfH
+		case 1:
+			halfW := totalWidth / 2
+			winX, winY = 0, halfH
+			winW, winH = halfW, totalHeight-halfH
+		default:
+			halfW := totalWidth / 2
+			winX, winY = halfW, halfH
+			winW, winH = totalWidth-halfW, totalHeight-halfH
+		}
+
 	default:
-		// Full window / single monitor
+		// Full window / single monitor / dual monitor
 		winW = totalWidth
 		winH = totalHeight
 		winX = 0
@@ -85,6 +175,10 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 
 	var args []string
 
+	if opts.Backend != "" {
+		args = append(args, "--backend", opts.Backend)
+	}
+
 	if opts.Mode == SeatModeStream {
 		if tw <= 0 || th <= 0 {
 			tw, th = DefaultDisplayDimensions()
@@ -95,7 +189,7 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 	} else {
 		// Local mode with layout
 		switch opts.Layout {
-		case LayoutDualMonitor:
+		case LayoutDualMonitor, LayoutMultiMonitor:
 			if tw <= 0 || th <= 0 {
 				tw, th = DefaultDisplayDimensions()
 			}
@@ -104,11 +198,11 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 			if opts.Fullscreen {
 				args = append(args, "-f")
 			}
-		case LayoutSideBySide, LayoutTopBottom:
+		case LayoutSideBySide, LayoutTopBottom, LayoutQuadGrid, LayoutThreePlayer:
 			ww := opts.WindowWidth
 			wh := opts.WindowHeight
 			if ww <= 0 || wh <= 0 {
-				ww, wh, _, _ = CalculateSplitGeometry(opts.Layout, opts.SeatID, 0, 0)
+				ww, wh, _, _ = CalculateSeatGeometry(opts.Layout, opts.SeatID, opts.SeatIndex, opts.TotalSeats, 0, 0)
 			}
 			// For split layouts, default render resolution to window resolution for 1:1 pixel mapping
 			if tw <= 0 || th <= 0 {
@@ -120,7 +214,7 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 				args = append(args, "-W", fmt.Sprintf("%d", ww), "-H", fmt.Sprintf("%d", wh))
 			}
 			args = append(args, "-b") // Borderless window
-		default: // LayoutWindowed
+		default: // LayoutWindowed, LayoutCustom
 			ww := opts.WindowWidth
 			wh := opts.WindowHeight
 			if ww <= 0 || wh <= 0 {
@@ -141,7 +235,7 @@ func BuildGamescopeArgs(opts DisplayOptions) ([]string, error) {
 			}
 			if opts.Fullscreen {
 				args = append(args, "-f")
-			} else if opts.Borderless {
+			} else if opts.Borderless || opts.Layout == LayoutCustom {
 				args = append(args, "-b")
 			}
 		}

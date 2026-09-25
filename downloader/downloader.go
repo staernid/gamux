@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,8 +25,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// NewDownloaderHTTPClient returns an http.Client configured with dedicated transport pooling
+// optimized for high-concurrency depot chunk downloads.
+func NewDownloaderHTTPClient() *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   15 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   50,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	return &http.Client{
+		Transport: transport,
+	}
+}
+
 // DefaultHTTPClient is the default http.Client used for downloader operations.
-var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
+var DefaultHTTPClient = NewDownloaderHTTPClient()
 
 // ProgressUpdate carries unified quantitative telemetry for active downloads.
 type ProgressUpdate struct {
@@ -843,7 +866,7 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 					return fmt.Errorf("open target file %s: %w", filePath, err)
 				}
 
-				if !canDelta {
+				if !canDelta && (!fileExists || info.Size() < int64(entry.Size)) {
 					if err := util.PreallocateFile(f, int64(entry.Size)); err != nil {
 						f.Close()
 						return fmt.Errorf("preallocate target file %s: %w", filePath, err)
@@ -1012,6 +1035,11 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 	}
 
 	if err := g.Wait(); err != nil {
+		slog.Error("Direct game download aborted due to worker error",
+			"appID", m.AppID,
+			"depotID", m.DepotID,
+			"error", err,
+		)
 		return nil, fmt.Errorf("download execution failed: %w", err)
 	}
 
@@ -1182,69 +1210,126 @@ func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, 
 	}
 
 	chunkID := strings.ToLower(chunk.ChunkID)
+	startIdx := 0
+	if len(cdnHosts) > 1 && len(chunkID) >= 4 {
+		if n, err := strconv.ParseUint(chunkID[:4], 16, 32); err == nil {
+			startIdx = int(n) % len(cdnHosts)
+		}
+	}
+
+	const maxAttempts = 3
 	var lastErr error
-	for _, host := range cdnHosts {
-		chunkURL := fmt.Sprintf("https://%s/depot/%d/chunk/%s", host, depotID, chunkID)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, chunkURL, nil)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		req.Header.Set("User-Agent", "Valve/Steam HTTP Client 1.0")
 
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			lastErr = fmt.Errorf("HTTP status %d from %s: %s", resp.StatusCode, host, string(body))
-			continue
-		}
-
-		rawChunkData, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		// 1. Decrypt chunk payload if encrypted with depot key
-		payloadData, err := manifest.DecryptChunkPayload(rawChunkData, decKey)
-		if err != nil {
-			lastErr = fmt.Errorf("decrypt chunk %s: %w", chunk.ChunkID, err)
-			continue
-		}
-
-		// 2. Decompress chunk payload
-		decompressed, err := decompressChunkData(payloadData, chunk.UncompressedSize)
-		if err != nil {
-			lastErr = fmt.Errorf("decompress chunk %s: %w", chunk.ChunkID, err)
-			continue
-		}
-
-		// 3. Verify chunk integrity against chunk.ChunkID SHA-1 (when 40-hex SHA1 hash is provided)
-		if len(chunk.ChunkID) == 40 {
-			chunkSum := sha1.Sum(decompressed)
-			chunkHashHex := hex.EncodeToString(chunkSum[:])
-			if !strings.EqualFold(chunkHashHex, chunk.ChunkID) {
-				lastErr = fmt.Errorf("chunk %s checksum mismatch: got %s", chunk.ChunkID, chunkHashHex)
-				continue
+		if attempt > 0 {
+			jitter := time.Duration(10+int(chunkID[0])%50) * time.Millisecond
+			backoff := time.Duration(150*(1<<attempt))*time.Millisecond + jitter
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
 			}
 		}
 
-		// 4. Write chunk payload at expected offset
-		if _, err := dst.WriteAt(decompressed, int64(chunk.Offset)); err != nil {
-			return fmt.Errorf("write chunk %s at offset %d: %w", chunk.ChunkID, chunk.Offset, err)
+		for i := 0; i < len(cdnHosts); i++ {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			host := cdnHosts[(startIdx+i+attempt)%len(cdnHosts)]
+			chunkURL := fmt.Sprintf("https://%s/depot/%d/chunk/%s", host, depotID, chunkID)
+
+			reqCtx, reqCancel := context.WithTimeout(ctx, 45*time.Second)
+			req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, chunkURL, nil)
+			if err != nil {
+				reqCancel()
+				lastErr = err
+				continue
+			}
+			req.Header.Set("User-Agent", "Valve/Steam HTTP Client 1.0")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				reqCancel()
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				lastErr = fmt.Errorf("fetch from %s: %w", host, err)
+				continue
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				_, _ = io.CopyN(io.Discard, resp.Body, 4096)
+				_ = resp.Body.Close()
+				reqCancel()
+				lastErr = fmt.Errorf("HTTP status %d from %s", resp.StatusCode, host)
+				continue
+			}
+
+			rawChunkData, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			reqCancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				lastErr = fmt.Errorf("read chunk body from %s: %w", host, err)
+				continue
+			}
+
+			// 1. Decrypt chunk payload if encrypted with depot key
+			payloadData, err := manifest.DecryptChunkPayload(rawChunkData, decKey)
+			if err != nil {
+				lastErr = fmt.Errorf("decrypt chunk %s: %w", chunk.ChunkID, err)
+				continue
+			}
+
+			// 2. Decompress chunk payload
+			decompressed, err := decompressChunkData(payloadData, chunk.UncompressedSize)
+			if err != nil {
+				lastErr = fmt.Errorf("decompress chunk %s: %w", chunk.ChunkID, err)
+				continue
+			}
+
+			// 3. Verify chunk integrity against chunk.ChunkID SHA-1 (when 40-hex SHA1 hash is provided)
+			if len(chunk.ChunkID) == 40 {
+				chunkSum := sha1.Sum(decompressed)
+				chunkHashHex := hex.EncodeToString(chunkSum[:])
+				if !strings.EqualFold(chunkHashHex, chunk.ChunkID) {
+					lastErr = fmt.Errorf("chunk %s checksum mismatch: got %s", chunk.ChunkID, chunkHashHex)
+					continue
+				}
+			}
+
+			// 4. Write chunk payload at expected offset
+			if _, err := dst.WriteAt(decompressed, int64(chunk.Offset)); err != nil {
+				return fmt.Errorf("write chunk %s at offset %d: %w", chunk.ChunkID, chunk.Offset, err)
+			}
+
+			return nil
 		}
 
-		return nil
+		slog.Warn("Retrying chunk download after host round failure",
+			"chunkID", chunk.ChunkID,
+			"depotID", depotID,
+			"attempt", attempt+1,
+			"maxAttempts", maxAttempts,
+			"lastErr", lastErr,
+		)
 	}
 
-	return fmt.Errorf("download chunk %s (depot %d) failed across all CDN hosts: %w", chunk.ChunkID, depotID, lastErr)
+	slog.Error("Failed to download chunk after all retry attempts",
+		"chunkID", chunk.ChunkID,
+		"depotID", depotID,
+		"hosts", len(cdnHosts),
+		"error", lastErr,
+	)
+	return fmt.Errorf("download chunk %s (depot %d) failed after %d attempts across %d CDN hosts: %w",
+		chunk.ChunkID, depotID, maxAttempts, len(cdnHosts), lastErr)
 }
 
 func decompressChunkData(data []byte, expectedSize uint32) ([]byte, error) {

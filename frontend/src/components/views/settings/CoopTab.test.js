@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { get } from 'svelte/store';
 import CoopTab from './CoopTab.svelte';
 import { multiseatStore } from '../../../stores/multiseat.js';
 import { profilesStore } from '../../../stores/profiles.js';
@@ -38,6 +39,13 @@ describe('CoopTab Component', () => {
   ];
 
   beforeEach(() => {
+    multiseatStore.setLayout('dual_monitor');
+    const cur = get(multiseatStore);
+    if (cur.staging?.seats?.length > 2) {
+      for (let i = cur.staging.seats.length - 1; i >= 2; i--) {
+        multiseatStore.removeSeat(i);
+      }
+    }
     profilesStore.setProfiles([
       { id: 'main', index: 1, name: 'Alice', is_main: true },
       { id: 'p2', index: 2, name: 'PlayerTwo', is_main: false },
@@ -163,4 +171,60 @@ describe('CoopTab Component', () => {
     await fireEvent.click(switches[0]);
     expect(draft.multiseat.seat2_force_grab_cursor).toBe(true);
   });
+
+  it('selects visual split-screen layout options and updates config draft', async () => {
+    const draft = { ...mockCfgDraft, multiseat: { ...mockCfgDraft.multiseat } };
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    const quadBtn = screen.getByText('2x2 Quad Grid');
+    expect(quadBtn).toBeInTheDocument();
+
+    await fireEvent.click(quadBtn);
+    expect(draft.multiseat.default_layout).toBe('quad_grid');
+
+    const threeBtn = screen.getByText('3-Player Split');
+    await fireEvent.click(threeBtn);
+    expect(draft.multiseat.default_layout).toBe('three_player');
+  });
+
+  it('auto-expands seats when selecting 4-player or 3-player layout', async () => {
+    const draft = { ...mockCfgDraft, multiseat: { ...mockCfgDraft.multiseat, default_layout: 'side_by_side' } };
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    const quadBtn = screen.getByText('2x2 Quad Grid');
+    await fireEvent.click(quadBtn);
+
+    expect(draft.multiseat.default_layout).toBe('quad_grid');
+    expect(screen.getByText('Player 3 (Co-op Guest)')).toBeInTheDocument();
+    expect(screen.getByText('Player 4 (Co-op Guest)')).toBeInTheDocument();
+  });
+
+  it('renders screen portion selectors and swap halves button for split-screen layouts', async () => {
+    const draft = { ...mockCfgDraft, multiseat: { ...mockCfgDraft.multiseat, default_layout: 'side_by_side' } };
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    const swapBtn = screen.getByRole('button', { name: /Swap Halves ⇄/i });
+    expect(swapBtn).toBeInTheDocument();
+
+    const portionLabels = screen.getAllByText('Screen Portion');
+    expect(portionLabels.length).toBeGreaterThanOrEqual(2);
+
+    await fireEvent.click(swapBtn);
+  });
 });
+

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/util/testutil"
 )
 
@@ -607,6 +608,32 @@ unlock_all=0
 	}
 	if info.DLCCount != 3 {
 		t.Errorf("expected DLCCount 3, got %d", info.DLCCount)
+	}
+}
+
+func TestDetect_PlaceholderTitleHealing(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "Steam App 1458140")
+	if err := os.MkdirAll(filepath.Join(gameDir, ".gamux"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gameDir, "steam_appid.txt"), []byte("1458140\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Prime app name cache with the real game title
+	cache.SaveAppName("1458140", "Pacific Drive")
+
+	info, err := Detect(context.Background(), gameDir)
+	if err != nil {
+		t.Fatalf("Detect failed: %v", err)
+	}
+
+	if info.Name != "Pacific Drive" {
+		t.Errorf("expected healed Name 'Pacific Drive', got %q", info.Name)
+	}
+	if info.InstallDir != "Pacific Drive" {
+		t.Errorf("expected healed InstallDir 'Pacific Drive', got %q", info.InstallDir)
 	}
 }
 

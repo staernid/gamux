@@ -137,9 +137,14 @@ func (a *App) Startup(ctx context.Context) {
 			}
 			if ev.Type == events.EventGameLaunched {
 				safeEmit(a.ctx, "gamux:game-status", map[string]any{
-					"gameDir":   ev.GameDir,
-					"isRunning": true,
-					"pid":       parseMetaInt(ev.Metadata, "pid"),
+					"gameDir":    ev.GameDir,
+					"isRunning":  true,
+					"pid":        parseMetaInt(ev.Metadata, "pid"),
+					"profileId":  ev.ProfileID,
+					"seatId":     ev.SeatID,
+					"instanceId": ev.InstanceID,
+					"gameName":   ev.GameName,
+					"appId":      ev.AppID,
 				})
 				a.handleGameLaunchWindow(true)
 			}
@@ -150,6 +155,11 @@ func (a *App) Startup(ctx context.Context) {
 					"gameDir":         ev.GameDir,
 					"isRunning":       false,
 					"pid":             0,
+					"profileId":       ev.ProfileID,
+					"seatId":          ev.SeatID,
+					"instanceId":      ev.InstanceID,
+					"gameName":        ev.GameName,
+					"appId":           ev.AppID,
 					"sessionSeconds":  parseMetaInt64(ev.Metadata, "session_seconds"),
 					"playtimeSeconds": ps,
 					"lastPlayed":      lp,

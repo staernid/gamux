@@ -85,15 +85,14 @@ describe('GameHeroBanner Component', () => {
     // Popover appears
     expect(screen.getByText('Launch Mode')).toBeInTheDocument();
     expect(screen.getByText('Single Player')).toBeInTheDocument();
-    const coopOption = screen.getByText('2-Player Co-op');
+    const coopOption = screen.getByText('Co-Op (2P)');
     expect(coopOption).toBeInTheDocument();
 
-    // Select 2-Player Co-op
+    // Select Co-Op (2P)
     await fireEvent.click(coopOption);
 
-    // Button updates to 2-Player Session
-    expect(screen.getByText('Play Now (Co-Op)')).toBeInTheDocument();
-    expect(screen.getByText('2P')).toBeInTheDocument();
+    // Button updates to Play (2P)
+    expect(screen.getByText('Play (2P)')).toBeInTheDocument();
 
     // Reset store
     multiseatStore.toggleCoop();

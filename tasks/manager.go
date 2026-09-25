@@ -223,6 +223,7 @@ func (m *Manager) runWorker(ctx context.Context, t *Task, slot chan struct{}) {
 		taskCopy := *t
 		m.emitEvent(events.EventTaskCancelled, &taskCopy)
 	} else if runErr != nil {
+		slog.Error("Task execution failed", "id", t.ID, "type", t.Type, "title", t.Title, "error", runErr)
 		t.Status = StatusFailed
 		t.Error = runErr.Error()
 		taskCopy := *t

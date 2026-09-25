@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+// SeatPlacement maps a seat process ID to its layout positioning requirements.
+type SeatPlacement struct {
+	PID          int    `json:"pid"`
+	SeatIndex    int    `json:"seat_index"`
+	SeatID       string `json:"seat_id"`
+	DisplayIndex int    `json:"display_index"`
+}
+
 // KWinSplitCoordinator manages transient, pixel-perfect window placement and border removal
 // for multi-seat Gamescope sessions on KDE Plasma (Wayland / X11).
 // It registers an ephemeral KWin script via DBus without mutating user configuration files (~/.config/kwinrulesrc).
@@ -22,8 +30,7 @@ type KWinSplitCoordinator struct {
 	pluginName string
 	scriptPath string
 	scriptID   int
-	seat1PID   int
-	seat2PID   int
+	placements []SeatPlacement
 	layout     DisplayLayout
 	isLoaded   bool
 	cancelFn   context.CancelFunc
@@ -53,41 +60,134 @@ func IsKWinAvailable() bool {
 	return strings.Contains(string(out), "org.kde.kwin.Scripting")
 }
 
-// GenerateKWinSplitScript generates the ECMAScript content for positioning two Gamescope windows
-// side-by-side or top-and-bottom with 0 gaps, 0 borders, and raised above desktop panels.
+// GenerateKWinSplitScript generates the ECMAScript content for positioning Gamescope windows
+// with 0 gaps, 0 borders, and raised above desktop panels.
 func GenerateKWinSplitScript(seat1PID, seat2PID int, layout DisplayLayout) string {
-	isSideBySide := layout != LayoutTopBottom
+	return GenerateKWinMultiScript([]SeatPlacement{
+		{PID: seat1PID, SeatIndex: 0, SeatID: "p1"},
+		{PID: seat2PID, SeatIndex: 1, SeatID: "p2"},
+	}, layout)
+}
+
+// GenerateKWinMultiScript generates the ECMAScript content for N Gamescope windows.
+func GenerateKWinMultiScript(placements []SeatPlacement, layout DisplayLayout) string {
+	dispTotals := make(map[int]int)
+	dispCounts := make(map[int]int)
+	for _, p := range placements {
+		if p.PID > 0 {
+			dispTotals[p.DisplayIndex]++
+		}
+	}
+
+	var pidMapEntries []string
+	for _, p := range placements {
+		if p.PID > 0 {
+			localIdx := dispCounts[p.DisplayIndex]
+			dispCounts[p.DisplayIndex]++
+			totalOnDisp := dispTotals[p.DisplayIndex]
+			pidMapEntries = append(pidMapEntries, fmt.Sprintf("%d: { index: %d, id: %q, disp: %d, localIndex: %d, dispTotal: %d }",
+				p.PID, p.SeatIndex, p.SeatID, p.DisplayIndex, localIdx, totalOnDisp))
+		}
+	}
+	pidMapJS := strings.Join(pidMapEntries, ",\n        ")
+	totalSeats := len(placements)
+	if totalSeats == 0 {
+		totalSeats = 2
+	}
 
 	return fmt.Sprintf(`// Gamux transient splitscreen coordinator for KWin
 (function() {
-    var p1PID = %d;
-    var p2PID = %d;
-    var isSideBySide = %t;
+    var pidMap = {
+        %s
+    };
+    var layout = %q;
+    var totalSeats = %d;
 
-    function placeSeat(w, seatIndex) {
-        if (!w) return;
+    function getScreenGeometry(w, dispIndex) {
+        if (workspace.screens && workspace.screens.length > 0) {
+            var idx = Math.min(Math.max(0, dispIndex), workspace.screens.length - 1);
+            var s = workspace.screens[idx] || workspace.screens[0];
+            if (s && s.geometry) return s.geometry;
+        }
+        var sW = workspace.virtualScreenSize ? workspace.virtualScreenSize.width : 1920;
+        var sH = workspace.virtualScreenSize ? workspace.virtualScreenSize.height : 1080;
+        return { x: 0, y: 0, width: sW, height: sH };
+    }
+
+    function placeSeat(w, info) {
+        if (!w || !info) return;
         w.noBorder = true;
         w.keepAbove = true;
         w.skipTaskbar = true;
         w.skipPager = true;
 
-        var sW = workspace.virtualScreenSize.width;
-        var sH = workspace.virtualScreenSize.height;
+        var numScreens = (workspace.screens && workspace.screens.length > 0) ? workspace.screens.length : 1;
+        var dispIndex = (numScreens > 1) ? (info.disp || 0) : 0;
+        var geom = getScreenGeometry(w, dispIndex);
+        var sX = geom.x || 0;
+        var sY = geom.y || 0;
+        var sW = geom.width;
+        var sH = geom.height;
 
-        if (isSideBySide) {
-            var halfW = Math.round(sW * 0.5);
-            if (seatIndex === 1) {
-                w.frameGeometry = { x: 0, y: 0, width: halfW, height: sH };
+        var dispTotal = (numScreens === 1) ? totalSeats : (info.dispTotal || 1);
+        var idx = (numScreens === 1) ? (info.index !== undefined ? info.index : 0) : (info.localIndex !== undefined ? info.localIndex : info.index);
+
+        if (layout === "dual_monitor" || layout === "multi_monitor") {
+            w.frameGeometry = { x: sX, y: sY, width: sW, height: sH };
+            return;
+        }
+        if (dispTotal === 1 && totalSeats === 1) {
+            w.frameGeometry = { x: sX, y: sY, width: sW, height: sH };
+            return;
+        }
+
+        var effLayout = layout;
+        if (dispTotal < 3 && (effLayout === "three_player" || effLayout === "quad_grid")) {
+            effLayout = "side_by_side";
+        } else if (dispTotal === 3 && effLayout === "quad_grid") {
+            effLayout = "three_player";
+        }
+
+        if (effLayout === "side_by_side") {
+            var colW = Math.floor(sW / dispTotal);
+            var x = sX + (idx * colW);
+            var wW = (idx === dispTotal - 1) ? (sX + sW - x) : colW;
+            w.frameGeometry = { x: x, y: sY, width: wW, height: sH };
+        } else if (effLayout === "top_bottom") {
+            var rowH = Math.floor(sH / dispTotal);
+            var y = sY + (idx * rowH);
+            var hH = (idx === dispTotal - 1) ? (sY + sH - y) : rowH;
+            w.frameGeometry = { x: sX, y: y, width: sW, height: hH };
+        } else if (effLayout === "quad_grid") {
+            var halfW = Math.floor(sW * 0.5);
+            var halfH = Math.floor(sH * 0.5);
+            if (idx === 0) {
+                w.frameGeometry = { x: sX, y: sY, width: halfW, height: halfH };
+            } else if (idx === 1) {
+                w.frameGeometry = { x: sX + halfW, y: sY, width: sW - halfW, height: halfH };
+            } else if (idx === 2) {
+                w.frameGeometry = { x: sX, y: sY + halfH, width: halfW, height: sH - halfH };
             } else {
-                w.frameGeometry = { x: halfW, y: 0, width: sW - halfW, height: sH };
+                w.frameGeometry = { x: sX + halfW, y: sY + halfH, width: sW - halfW, height: sH - halfH };
             }
-        } else {
-            var halfH = Math.round(sH * 0.5);
-            if (seatIndex === 1) {
-                w.frameGeometry = { x: 0, y: 0, width: sW, height: halfH };
+        } else if (effLayout === "three_player") {
+            var halfH = Math.floor(sH * 0.5);
+            var halfW = Math.floor(sW * 0.5);
+            if (idx === 0) {
+                w.frameGeometry = { x: sX, y: sY, width: sW, height: halfH };
+            } else if (idx === 1) {
+                w.frameGeometry = { x: sX, y: sY + halfH, width: halfW, height: sH - halfH };
             } else {
-                w.frameGeometry = { x: 0, y: halfH, width: sW, height: sH - halfH };
+                w.frameGeometry = { x: sX + halfW, y: sY + halfH, width: sW - halfW, height: sH - halfH };
             }
+        }
+    }
+
+    function checkAndPlace(w) {
+        if (!w) return;
+        var info = pidMap[w.pid];
+        if (info) {
+            placeSeat(w, info);
         }
     }
 
@@ -95,45 +195,25 @@ func GenerateKWinSplitScript(seat1PID, seat2PID int, layout DisplayLayout) strin
         var list = workspace.windowList ? workspace.windowList() : workspace.clientList();
         if (!list) return;
         for (var i = 0; i < list.length; i++) {
-            var w = list[i];
-            if (!w) continue;
-            if (w.pid === p1PID) {
-                placeSeat(w, 1);
-            } else if (w.pid === p2PID) {
-                placeSeat(w, 2);
-            }
+            checkAndPlace(list[i]);
         }
     }
 
     if (typeof workspace.windowAdded !== 'undefined') {
-        workspace.windowAdded.connect(function(w) {
-            if (!w) return;
-            if (w.pid === p1PID) {
-                placeSeat(w, 1);
-            } else if (w.pid === p2PID) {
-                placeSeat(w, 2);
-            }
-        });
+        workspace.windowAdded.connect(checkAndPlace);
     } else if (typeof workspace.clientAdded !== 'undefined') {
-        workspace.clientAdded.connect(function(w) {
-            if (!w) return;
-            if (w.pid === p1PID) {
-                placeSeat(w, 1);
-            } else if (w.pid === p2PID) {
-                placeSeat(w, 2);
-            }
-        });
+        workspace.clientAdded.connect(checkAndPlace);
     }
 
     applyPositions();
 })();
-`, seat1PID, seat2PID, isSideBySide)
+`, pidMapJS, string(layout), totalSeats)
 }
 
-// NewKWinSplitCoordinator initializes a new coordinator for the given seat PIDs and layout.
-func NewKWinSplitCoordinator(seat1PID, seat2PID int, layout DisplayLayout) (*KWinSplitCoordinator, error) {
-	if seat1PID <= 0 || seat2PID <= 0 {
-		return nil, fmt.Errorf("valid PIDs required for both seats (p1=%d, p2=%d)", seat1PID, seat2PID)
+// NewKWinMultiCoordinator initializes a coordinator for N seats.
+func NewKWinMultiCoordinator(placements []SeatPlacement, layout DisplayLayout) (*KWinSplitCoordinator, error) {
+	if len(placements) == 0 {
+		return nil, fmt.Errorf("at least one seat placement required")
 	}
 
 	qdbus, err := ResolveQDBusBinary()
@@ -141,16 +221,27 @@ func NewKWinSplitCoordinator(seat1PID, seat2PID int, layout DisplayLayout) (*KWi
 		return nil, err
 	}
 
-	pluginName := fmt.Sprintf("gamux_split_%d_%d_%d", time.Now().UnixNano(), seat1PID, seat2PID)
+	pluginName := fmt.Sprintf("gamux_split_%d", time.Now().UnixNano())
 
 	return &KWinSplitCoordinator{
 		qdbusBin:   qdbus,
 		pluginName: pluginName,
-		seat1PID:   seat1PID,
-		seat2PID:   seat2PID,
+		placements: placements,
 		layout:     layout,
 		scriptID:   -1,
 	}, nil
+}
+
+// NewKWinSplitCoordinator initializes a new coordinator for the given seat PIDs and layout (2 seats).
+func NewKWinSplitCoordinator(seat1PID, seat2PID int, layout DisplayLayout) (*KWinSplitCoordinator, error) {
+	if seat1PID <= 0 || seat2PID <= 0 {
+		return nil, fmt.Errorf("valid PIDs required for both seats (p1=%d, p2=%d)", seat1PID, seat2PID)
+	}
+
+	return NewKWinMultiCoordinator([]SeatPlacement{
+		{PID: seat1PID, SeatIndex: 0, SeatID: "p1"},
+		{PID: seat2PID, SeatIndex: 1, SeatID: "p2"},
+	}, layout)
 }
 
 // Start writes the transient script, loads it into KWin via DBus, and begins polling to ensure
@@ -163,7 +254,7 @@ func (c *KWinSplitCoordinator) Start(ctx context.Context) error {
 		return nil
 	}
 
-	scriptContent := GenerateKWinSplitScript(c.seat1PID, c.seat2PID, c.layout)
+	scriptContent := GenerateKWinMultiScript(c.placements, c.layout)
 
 	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.js", c.pluginName))
 	if err := os.WriteFile(tmpFile, []byte(scriptContent), 0600); err != nil {
@@ -191,7 +282,7 @@ func (c *KWinSplitCoordinator) Start(ctx context.Context) error {
 	scriptObjPath := fmt.Sprintf("/Scripting/Script%d", c.scriptID)
 	_ = exec.CommandContext(ctx, c.qdbusBin, "org.kde.KWin", scriptObjPath, "org.kde.kwin.Script.run").Run()
 
-	slog.Info("KWin splitscreen coordinator initialized", "plugin", c.pluginName, "script_id", c.scriptID, "seat1_pid", c.seat1PID, "seat2_pid", c.seat2PID)
+	slog.Info("KWin splitscreen coordinator initialized", "plugin", c.pluginName, "script_id", c.scriptID, "seats_count", len(c.placements))
 
 	// Launch background re-application ticker to catch late window creation (e.g. game startup taking a few seconds)
 	pollCtx, cancel := context.WithCancel(ctx)

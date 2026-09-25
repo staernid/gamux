@@ -124,7 +124,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	if cached, ok := cache.GetCachedGame(absPath, dirMtime, profileMtime); ok && cached != nil {
-		return cached, nil
+		if !util.IsPlaceholderTitle(cached.Name, cached.AppID) {
+			return cached, nil
+		}
 	}
 
 	var state scanState
@@ -435,12 +437,36 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	}
 
 	// 6. Resolve Title
-	if info.Name == "" || info.Name == info.AppID {
-		info.Name = filepath.Base(info.GameDir)
+	if info.Name == "" || info.Name == info.AppID || util.IsPlaceholderTitle(info.Name, info.AppID) {
+		// 6a. Offline / warm cache lookup for Steam AppID
+		if info.NumericAppID > 0 {
+			if cachedName, ok := cache.GetAppName(info.AppID); ok && cachedName != "" && !util.IsPlaceholderTitle(cachedName, info.AppID) {
+				info.Name = cachedName
+			}
+		}
+
+		// 6b. Remote lookup for Steam games with unpopulated or placeholder titles
+		if (info.Name == "" || util.IsPlaceholderTitle(info.Name, info.AppID)) && info.NumericAppID > 0 {
+			if name, err := steam.FetchAppName(ctx, info.AppID); err == nil && name != "" && !util.IsPlaceholderTitle(name, info.AppID) {
+				info.Name = name
+			}
+		}
+
+		// 6c. Fallback to directory base if not already a placeholder
+		if info.Name == "" || util.IsPlaceholderTitle(info.Name, info.AppID) {
+			base := filepath.Base(info.GameDir)
+			if !util.IsPlaceholderTitle(base, info.AppID) {
+				info.Name = base
+			} else if info.Name == "" {
+				info.Name = base
+			}
+		}
 	}
 
 	// 7. Resolve InstallDir
-	if info.InstallDir == "" && info.Name != "" {
+	if (info.InstallDir == "" || util.IsPlaceholderTitle(info.InstallDir, info.AppID)) && info.Name != "" && !util.IsPlaceholderTitle(info.Name, info.AppID) {
+		info.InstallDir = util.SanitizeInstallDir(info.Name)
+	} else if info.InstallDir == "" && info.Name != "" {
 		info.InstallDir = util.SanitizeInstallDir(info.Name)
 	}
 
@@ -535,6 +561,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	launchProfilePath := filepath.Join(info.GameDir, ".gamux", "launch_profile.json")
 	launchProfileExists := util.FileExists(launchProfilePath) || util.FileExists(filepath.Join(info.GameDir, "steam_settings", "launch_profile.json"))
 	if profile, err := compat.LoadProfile(info.GameDir); err == nil && profile != nil {
+		if util.IsPlaceholderTitle(profile.Name, info.AppID) && !util.IsPlaceholderTitle(info.Name, info.AppID) {
+			profile.Name = info.Name
+		}
 		info.ApplyProfile(profile, launchProfileExists)
 	}
 

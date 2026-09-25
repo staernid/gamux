@@ -21,7 +21,7 @@ build-cli:
 
 generate-bindings:
 	@ln -sf ../../wails.json cmd/gamux-gui/wails.json
-	@which wails > /dev/null 2>&1 && (cd cmd/gamux-gui && wails generate module $(GUI_TAGS) > /dev/null 2>&1) || true
+	@which wails > /dev/null 2>&1 && (cd cmd/gamux-gui && WAILS_GENERATE_MODULE=1 wails generate module $(GUI_TAGS) > /dev/null 2>&1) || true
 
 build-frontend: generate-bindings
 	@echo "Building frontend dist assets..."

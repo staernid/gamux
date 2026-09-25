@@ -28,3 +28,34 @@ func TestParseAppID(t *testing.T) {
 		}
 	}
 }
+
+func TestIsPlaceholderTitle(t *testing.T) {
+	tests := []struct {
+		name  string
+		appID string
+		want  bool
+	}{
+		{"", "1458140", true},
+		{"   ", "1458140", true},
+		{"Unknown Game", "1458140", true},
+		{"unknown", "1458140", true},
+		{"1458140", "1458140", true},
+		{"Steam App 1458140", "1458140", true},
+		{"steam app 1458140", "1458140", true},
+		{"Steam AppID 1458140", "1458140", true},
+		{"SteamApp 1458140", "1458140", true},
+		{"Game 1458140", "1458140", true},
+		{"Steam App 9999", "", true},
+		{"Pacific Drive", "1458140", false},
+		{"Half-Life 2", "220", false},
+		{"Cyberpunk 2077", "1091500", false},
+		{"1984", "12345", false},
+	}
+
+	for _, tt := range tests {
+		got := IsPlaceholderTitle(tt.name, tt.appID)
+		if got != tt.want {
+			t.Errorf("IsPlaceholderTitle(%q, %q) = %v, want %v", tt.name, tt.appID, got, tt.want)
+		}
+	}
+}

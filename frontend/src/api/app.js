@@ -47,8 +47,13 @@ const DEFAULT_MOCKS = {
   launchGame: () => Promise.resolve(),
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
+  stopGameInstance: () => Promise.resolve(),
   isGameRunning: () => false,
   getRunningGames: () => [],
+  getRunningInstances: () => [],
+  getConnectedDisplays: () => [
+    { name: 'Display-1', width: 1920, height: 1080, refresh_rate: 60, is_primary: true, scale: 1.0, x: 0, y: 0 }
+  ],
   getMultiseatCapabilities: () => ({
     has_bwrap: true,
     has_pasta: true,

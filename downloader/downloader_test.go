@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/staernid/gamux/manifest"
@@ -1744,6 +1745,127 @@ func TestDownloadOrUpdateGame_LanguageAndDepotFiltering(t *testing.T) {
 		t.Errorf("expected 3 files with IncludeOptional, got %d", res4.TotalFiles)
 	}
 }
+
+func TestNewDownloaderHTTPClient(t *testing.T) {
+	client := NewDownloaderHTTPClient()
+	if client == nil {
+		t.Fatal("expected non-nil client")
+	}
+	tr, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if tr.MaxIdleConns != 100 {
+		t.Errorf("expected MaxIdleConns 100, got %d", tr.MaxIdleConns)
+	}
+	if tr.MaxIdleConnsPerHost != 50 {
+		t.Errorf("expected MaxIdleConnsPerHost 50, got %d", tr.MaxIdleConnsPerHost)
+	}
+	if tr.IdleConnTimeout != 90*time.Second {
+		t.Errorf("expected IdleConnTimeout 90s, got %v", tr.IdleConnTimeout)
+	}
+	if tr.TLSHandshakeTimeout != 15*time.Second {
+		t.Errorf("expected TLSHandshakeTimeout 15s, got %v", tr.TLSHandshakeTimeout)
+	}
+}
+
+type testBufferWriter struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (w *testBufferWriter) WriteAt(p []byte, off int64) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	end := int(off) + len(p)
+	if end > len(w.buf) {
+		newBuf := make([]byte, end)
+		copy(newBuf, w.buf)
+		w.buf = newBuf
+	}
+	copy(w.buf[off:], p)
+	return len(p), nil
+}
+
+func TestDownloadChunk_RetryAndFailover(t *testing.T) {
+	var callCount atomic.Int32
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			count := callCount.Add(1)
+			if count == 1 {
+				// First call fails with 503 Service Unavailable
+				return &http.Response{
+					StatusCode: http.StatusServiceUnavailable,
+					Body:       io.NopCloser(bytes.NewBufferString("service unavailable")),
+					Header:     make(http.Header),
+				}, nil
+			} else if count == 2 {
+				// Second call fails with 429 Too Many Requests
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Body:       io.NopCloser(bytes.NewBufferString("too many requests")),
+					Header:     make(http.Header),
+				}, nil
+			}
+			// Third call succeeds
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString("retry_payload_ok")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	cdnHosts := []string{"edge1.steamcontent.com", "edge2.steamcontent.com", "edge3.steamcontent.com"}
+	chunk := manifest.ChunkInfo{
+		ChunkID:          "chunk_retry_test",
+		Offset:           0,
+		UncompressedSize: 16,
+	}
+
+	writer := &testBufferWriter{}
+	err := downloadChunk(context.Background(), mockClient, cdnHosts, 100, "", chunk, writer)
+	if err != nil {
+		t.Fatalf("downloadChunk failed despite retries: %v", err)
+	}
+
+	if string(writer.buf) != "retry_payload_ok" {
+		t.Errorf("expected payload 'retry_payload_ok', got %q", string(writer.buf))
+	}
+	if callCount.Load() < 3 {
+		t.Errorf("expected at least 3 attempts before success, got %d", callCount.Load())
+	}
+}
+
+func TestDownloadChunk_ExhaustRetries(t *testing.T) {
+	mockClient := &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(bytes.NewBufferString("internal error")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	cdnHosts := []string{"edge1.steamcontent.com", "edge2.steamcontent.com"}
+	chunk := manifest.ChunkInfo{
+		ChunkID:          "chunk_fail_test",
+		Offset:           0,
+		UncompressedSize: 10,
+	}
+
+	writer := &testBufferWriter{}
+	err := downloadChunk(context.Background(), mockClient, cdnHosts, 100, "", chunk, writer)
+	if err == nil {
+		t.Fatal("expected downloadChunk to fail after retries exhausted, got nil error")
+	}
+
+	if !strings.Contains(err.Error(), "failed after 3 attempts") {
+		t.Errorf("expected error message to mention 3 attempts, got %v", err)
+	}
+}
+
 
 
 

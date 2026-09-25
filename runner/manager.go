@@ -25,9 +25,15 @@ type ProcessEvent struct {
 }
 
 type trackedProcess struct {
-	cmd    *exec.Cmd
-	pgid   int
-	cancel context.CancelFunc
+	instanceID string
+	gameDir    string
+	gameName   string
+	appID      string
+	profileID  string
+	cmd        *exec.Cmd
+	pgid       int
+	cancel     context.CancelFunc
+	startTime  int64
 }
 
 // Manager tracks and supervises running game processes.
@@ -93,9 +99,22 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 		}
 
 		supCtx, supCancel := context.WithCancel(context.Background())
+		profileID := opts.ProfileID
+		instID := domain.MakeInstanceID(gameDir, profileID)
+		startTime := time.Now().Unix()
 
 		m.mu.Lock()
-		m.processes[gameDir] = &trackedProcess{cmd: cmd, pgid: pgid, cancel: supCancel}
+		m.processes[instID] = &trackedProcess{
+			instanceID: instID,
+			gameDir:    gameDir,
+			gameName:   opts.Name,
+			appID:      opts.AppID,
+			profileID:  profileID,
+			cmd:        cmd,
+			pgid:       pgid,
+			cancel:     supCancel,
+			startTime:  startTime,
+		}
 		b := m.bus
 		m.mu.Unlock()
 
@@ -106,7 +125,7 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 		})
 
 		if b != nil {
-			b.Publish(events.NewGameLaunched(gameDir, opts.Name, opts.AppID, cmd.Process.Pid))
+			b.Publish(events.NewGameInstanceLaunched(gameDir, opts.Name, opts.AppID, cmd.Process.Pid, profileID, ""))
 		}
 
 		isGamescope := isGamescopeCmd(cfg, opts.Gamescope, cmd)
@@ -129,17 +148,26 @@ func (m *Manager) Start(ctx context.Context, cfg *config.Config, opts LaunchOpti
 					}
 
 					m.mu.Lock()
-					delete(m.processes, gameDir)
+					delete(m.processes, instID)
+					stillRunning := false
+					for _, p := range m.processes {
+						if p.gameDir == gameDir {
+							stillRunning = true
+							break
+						}
+					}
 					m.mu.Unlock()
 
-					m.emit(ProcessEvent{
-						GameDir:   gameDir,
-						IsRunning: false,
-						PID:       0,
-					})
+					if !stillRunning {
+						m.emit(ProcessEvent{
+							GameDir:   gameDir,
+							IsRunning: false,
+							PID:       0,
+						})
+					}
 
 					if b != nil {
-						ev := events.NewGameExited(gameDir, opts.Name, opts.AppID, waitErr)
+						ev := events.NewGameInstanceExited(gameDir, opts.Name, opts.AppID, waitErr, profileID, "")
 						if ev.Metadata == nil {
 							ev.Metadata = make(map[string]string)
 						}
@@ -265,21 +293,58 @@ func (m *Manager) RunGame(ctx context.Context, cfg *config.Config, game *domain.
 	return Run(ctx, cfg, opts)
 }
 
-// Stop terminates an active game process and its child process group.
+// Stop terminates all active game processes for a game directory across profiles.
 func (m *Manager) Stop(gameDir string) error {
-	gameDir = util.CanonicalPath(gameDir)
-	if gameDir == "" {
+	cDir := util.CanonicalPath(gameDir)
+	if cDir == "" {
 		return fmt.Errorf("game directory cannot be empty")
 	}
 
 	m.mu.Lock()
-	proc, ok := m.processes[gameDir]
+	var targets []*trackedProcess
+	for _, proc := range m.processes {
+		if proc.gameDir == cDir {
+			targets = append(targets, proc)
+		}
+	}
 	m.mu.Unlock()
 
-	if !ok || proc == nil {
-		return nil
+	for _, proc := range targets {
+		_ = m.stopProcess(proc)
+	}
+	return nil
+}
+
+// StopInstance terminates a specific running instance identified by its instanceID.
+func (m *Manager) StopInstance(instanceID string) error {
+	if instanceID == "" {
+		return fmt.Errorf("instance ID cannot be empty")
 	}
 
+	m.mu.Lock()
+	proc, ok := m.processes[instanceID]
+	if !ok {
+		// Fallback check by gameDir match
+		cDir := util.CanonicalPath(instanceID)
+		for _, p := range m.processes {
+			if p.gameDir == cDir {
+				proc = p
+				break
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	if proc == nil {
+		return nil
+	}
+	return m.stopProcess(proc)
+}
+
+func (m *Manager) stopProcess(proc *trackedProcess) error {
+	if proc == nil {
+		return nil
+	}
 	cmd := proc.cmd
 	pgid := proc.pgid
 	if pgid <= 1 && cmd != nil && cmd.Process != nil {
@@ -288,7 +353,7 @@ func (m *Manager) Stop(gameDir string) error {
 		}
 	}
 
-	slog.Info("Terminating running game process", "dir", gameDir, "pgid", pgid)
+	slog.Info("Terminating running game process", "instance", proc.instanceID, "dir", proc.gameDir, "pgid", pgid)
 
 	if proc.cancel != nil {
 		proc.cancel()
@@ -311,27 +376,66 @@ func (m *Manager) Stop(gameDir string) error {
 	return nil
 }
 
-// IsRunning checks if a game process in the given game directory is active.
+// IsRunning checks if a game process in the given game directory is active for any profile.
 func (m *Manager) IsRunning(gameDir string) bool {
-	gameDir = util.CanonicalPath(gameDir)
-	if gameDir == "" {
+	cDir := util.CanonicalPath(gameDir)
+	if cDir == "" {
 		return false
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	proc, ok := m.processes[gameDir]
-	return ok && proc != nil
+	for _, proc := range m.processes {
+		if proc.gameDir == cDir {
+			return true
+		}
+	}
+	return false
 }
 
-// RunningGames returns a slice of game directories that are currently running.
+// IsInstanceRunning checks if a specific instance ID is active.
+func (m *Manager) IsInstanceRunning(instanceID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.processes[instanceID]
+	return ok
+}
+
+// RunningGames returns a deduplicated slice of game directories currently running.
 func (m *Manager) RunningGames() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	seen := make(map[string]bool)
 	var list []string
-	for dir := range m.processes {
-		list = append(list, util.CanonicalPath(dir))
+	for _, proc := range m.processes {
+		c := proc.gameDir
+		if c != "" && !seen[c] {
+			seen[c] = true
+			list = append(list, c)
+		}
 	}
 	return list
+}
+
+// RunningInstances returns a slice of all active domain.RunningInstance objects.
+func (m *Manager) RunningInstances() []domain.RunningInstance {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	res := make([]domain.RunningInstance, 0, len(m.processes))
+	for _, proc := range m.processes {
+		if proc.cmd != nil && proc.cmd.Process != nil {
+			res = append(res, domain.RunningInstance{
+				InstanceID:  proc.instanceID,
+				GameDir:     proc.gameDir,
+				GameName:    proc.gameName,
+				AppID:       proc.appID,
+				ProfileID:   proc.profileID,
+				PID:         proc.cmd.Process.Pid,
+				IsMultiseat: false,
+				StartTime:   proc.startTime,
+			})
+		}
+	}
+	return res
 }
 
 // Subscribe registers a listener callback for process events.

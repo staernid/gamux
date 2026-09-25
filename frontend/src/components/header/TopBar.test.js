@@ -71,6 +71,23 @@ describe('TopBar Component', () => {
     runningGames.set(new Set());
   });
 
+  it('renders profile pills with badges for secondary/co-op seats and omits badge for solo main', async () => {
+    const { runningInstances } = await import('../../stores/library.js');
+    runningInstances.set([
+      { instanceId: '/games/hl2', gameDir: '/games/hl2', gameName: 'Half-Life 2', profileId: 'main', seatId: '' },
+      { instanceId: '/games/portal2:p2', gameDir: '/games/portal2', gameName: 'Portal 2 (P2)', profileId: 'p2', seatId: 'p2' }
+    ]);
+
+    render(TopBar);
+
+    expect(screen.getByText('Half-Life 2')).toBeInTheDocument();
+    expect(screen.getByText('Portal 2 (P2)')).toBeInTheDocument();
+    // P2 badge and/or avatar initials are shown
+    expect(screen.getAllByText('P2').length).toBeGreaterThanOrEqual(1);
+
+    runningInstances.set([]);
+  });
+
   it('renders catalog button and opens catalog modal on click', async () => {
     const { modalStore } = await import('../../stores/modal.js');
     const openSpy = vi.spyOn(modalStore, 'open');

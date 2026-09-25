@@ -223,6 +223,7 @@
     try {
       await AppAPI.saveConfig(cfgDraft);
       await AppAPI.saveGSEUserConfig(userCfgDraft);
+      await configStore.load();
 
       initialCfgJSON = JSON.stringify(cfgDraft);
       initialUserCfgJSON = JSON.stringify(userCfgDraft);

@@ -27,11 +27,14 @@ func main() {
 		app.HandleOpenTarget(initialTarget)
 	}
 
-	guard, isPrimary := gui.AcquireOrActivate(os.Args[1:], func() context.Context {
-		return runtimeCtx
-	}, func(target string) {
-		app.HandleOpenTarget(target)
-	})
+	guard, isPrimary := (*gui.SingleInstanceGuard)(nil), true
+	if os.Getenv("WAILS_GENERATE_MODULE") != "1" {
+		guard, isPrimary = gui.AcquireOrActivate(os.Args[1:], func() context.Context {
+			return runtimeCtx
+		}, func(target string) {
+			app.HandleOpenTarget(target)
+		})
+	}
 	if !isPrimary {
 		return
 	}

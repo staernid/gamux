@@ -4,8 +4,8 @@ import {domain} from '../models';
 import {http} from '../models';
 import {saves} from '../models';
 import {config} from '../models';
-import {multiseat} from '../models';
 import {util} from '../models';
+import {multiseat} from '../models';
 import {gbe} from '../models';
 import {gui} from '../models';
 import {tasks} from '../models';
@@ -53,6 +53,8 @@ export function GetConfig():Promise<config.Config>;
 
 export function GetConfigSchema():Promise<Array<config.PropertyDescriptor>>;
 
+export function GetConnectedDisplays():Promise<Array<util.DisplayInfo>>;
+
 export function GetConnectedGamepads():Promise<Array<multiseat.InputDevice>>;
 
 export function GetConnectedKeyboards():Promise<Array<multiseat.InputDevice>>;
@@ -96,6 +98,8 @@ export function GetProfiles():Promise<Array<domain.Profile>>;
 export function GetRecentGames(arg1:number):Promise<Array<gui.TrayGame>>;
 
 export function GetRunningGames():Promise<Array<string>>;
+
+export function GetRunningInstances():Promise<Array<domain.RunningInstance>>;
 
 export function GetSteamBranches(arg1:number):Promise<Array<domain.SteamBranch>>;
 
@@ -196,6 +200,8 @@ export function StartVerifyGameTask(arg1:string):Promise<string>;
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function StopGame(arg1:string):Promise<void>;
+
+export function StopGameInstance(arg1:string):Promise<void>;
 
 export function StopMultiseatSeat(arg1:string,arg2:string):Promise<void>;
 

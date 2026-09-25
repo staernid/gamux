@@ -1,9 +1,12 @@
 package util
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+var placeholderTitleRegex = regexp.MustCompile(`^(?i)(steam\s*app(id)?|game)\s*\d+$`)
 
 // ParseAppID parses a string into a valid non-zero Steam uint32 AppID.
 // It returns the uint32 value and true if valid, or 0 and false if invalid or "0" / "custom".
@@ -23,4 +26,25 @@ func ParseAppID(s string) (uint32, bool) {
 func IsSteamAppID(s string) bool {
 	_, ok := ParseAppID(s)
 	return ok
+}
+
+// IsPlaceholderTitle checks whether a game title is empty, generic, or an unpopulated sentinel
+// such as "Steam App 1458140", "Steam AppID 1458140", "Game 1458140", or matching the raw AppID.
+func IsPlaceholderTitle(name, appID string) bool {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" || strings.EqualFold(trimmed, "unknown game") || strings.EqualFold(trimmed, "unknown") {
+		return true
+	}
+	cleanAppID := strings.TrimSpace(appID)
+	if cleanAppID != "" && (trimmed == cleanAppID || strings.EqualFold(trimmed, "game "+cleanAppID) ||
+		strings.EqualFold(trimmed, "steam app "+cleanAppID) || strings.EqualFold(trimmed, "steam appid "+cleanAppID)) {
+		return true
+	}
+	if placeholderTitleRegex.MatchString(trimmed) {
+		return true
+	}
+	if cleanAppID == "" && IsSteamAppID(trimmed) {
+		return true
+	}
+	return false
 }

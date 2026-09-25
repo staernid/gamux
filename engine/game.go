@@ -671,10 +671,11 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 
 	if opts.AutoApply {
 		eng.reportStep(ctx, 3, 3, "Running Post-Download Setup", fmt.Sprintf("Target: %s", opts.TargetDir))
+		shouldNormalize := util.IsPlaceholderTitle(filepath.Base(opts.TargetDir), fmt.Sprintf("%d", opts.AppID))
 		applyOpts := ProcessOptions{
 			Path:              opts.TargetDir,
 			OperatingMode:     domain.ModeLoader,
-			NormalizeDir:      false,
+			NormalizeDir:      shouldNormalize,
 			DryRun:            opts.DryRun,
 			AutoYes:           true,
 			FetchAchievements: true,

@@ -58,6 +58,9 @@ type Event struct {
 	Stage        string            `json:"stage,omitempty"`
 	Details      string            `json:"details,omitempty"`
 	Progress     TaskProgress      `json:"progress"`
+	ProfileID    string            `json:"profile_id,omitempty"`
+	SeatID       string            `json:"seat_id,omitempty"`
+	InstanceID   string            `json:"instance_id,omitempty"`
 	Error        string            `json:"error,omitempty"`
 	Timestamp    int64             `json:"timestamp"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
@@ -302,11 +305,23 @@ func NewNotification(title, message string) Event {
 
 // NewGameLaunched creates an event representing a newly started game process.
 func NewGameLaunched(gameDir, gameName, appID string, pid int) Event {
+	return NewGameInstanceLaunched(gameDir, gameName, appID, pid, "", "")
+}
+
+// NewGameInstanceLaunched creates an event representing a newly started game process tied to a profile and seat.
+func NewGameInstanceLaunched(gameDir, gameName, appID string, pid int, profileID, seatID string) Event {
+	instID := gameDir
+	if profileID != "" {
+		instID = fmt.Sprintf("%s:%s", gameDir, profileID)
+	}
 	return Event{
-		Type:     EventGameLaunched,
-		GameDir:  gameDir,
-		GameName: gameName,
-		AppID:    appID,
+		Type:       EventGameLaunched,
+		GameDir:    gameDir,
+		GameName:   gameName,
+		AppID:      appID,
+		ProfileID:  profileID,
+		SeatID:     seatID,
+		InstanceID: instID,
 		Metadata: map[string]string{
 			"pid": fmt.Sprintf("%d", pid),
 		},
@@ -315,16 +330,28 @@ func NewGameLaunched(gameDir, gameName, appID string, pid int) Event {
 
 // NewGameExited creates an event representing a finished game process.
 func NewGameExited(gameDir, gameName, appID string, exitErr error) Event {
+	return NewGameInstanceExited(gameDir, gameName, appID, exitErr, "", "")
+}
+
+// NewGameInstanceExited creates an event representing a finished game process tied to a profile and seat.
+func NewGameInstanceExited(gameDir, gameName, appID string, exitErr error, profileID, seatID string) Event {
 	errStr := ""
 	if exitErr != nil {
 		errStr = exitErr.Error()
 	}
+	instID := gameDir
+	if profileID != "" {
+		instID = fmt.Sprintf("%s:%s", gameDir, profileID)
+	}
 	return Event{
-		Type:     EventGameExited,
-		GameDir:  gameDir,
-		GameName: gameName,
-		AppID:    appID,
-		Error:    errStr,
+		Type:       EventGameExited,
+		GameDir:    gameDir,
+		GameName:   gameName,
+		AppID:      appID,
+		ProfileID:  profileID,
+		SeatID:     seatID,
+		InstanceID: instID,
+		Error:      errStr,
 	}
 }
 

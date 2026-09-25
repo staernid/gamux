@@ -60,60 +60,6 @@ func FindUMUBinary() (string, error) {
 	return "", fmt.Errorf("umu-run binary not found in PATH or standard runtime directories (~/.local/share/umu/umu-run)")
 }
 
-// FindLatestInstalledProton searches standard Steam compatibility tools locations
-// for locally installed GE-Proton or Proton releases, returning the latest directory path.
-func FindLatestInstalledProton() string {
-	home, _ := os.UserHomeDir()
-	var searchDirs []string
-	if home != "" {
-		searchDirs = append(searchDirs,
-			filepath.Join(home, ".local", "share", "Steam", "compatibilitytools.d"),
-			filepath.Join(home, ".steam", "root", "compatibilitytools.d"),
-			filepath.Join(home, ".steam", "steam", "compatibilitytools.d"),
-		)
-	}
-	searchDirs = append(searchDirs,
-		"/usr/share/steam/compatibilitytools.d",
-		"/usr/local/share/steam/compatibilitytools.d",
-	)
-
-	var found []string
-	for _, dir := range searchDirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			if strings.HasPrefix(name, "GE-Proton") || strings.HasPrefix(name, "Proton") {
-				p := filepath.Join(dir, name)
-				if util.FileExists(filepath.Join(p, "proton")) || util.FileExists(filepath.Join(p, "toolmanifest.vdf")) {
-					found = append(found, p)
-				}
-			}
-		}
-	}
-
-	if len(found) == 0 {
-		return ""
-	}
-
-	sort.Slice(found, func(i, j int) bool {
-		baseI := filepath.Base(found[i])
-		baseJ := filepath.Base(found[j])
-		geI := strings.HasPrefix(baseI, "GE-Proton")
-		geJ := strings.HasPrefix(baseJ, "GE-Proton")
-		if geI != geJ {
-			return !geI
-		}
-		return baseI < baseJ
-	})
-
-	return found[len(found)-1]
-}
 
 // GetAvailableRunners inspects system PATH to detect available execution tools.
 func GetAvailableRunners() []string {

@@ -4,7 +4,13 @@ import (
 	"fmt"
 
 	"github.com/staernid/gamux/multiseat"
+	"github.com/staernid/gamux/util"
 )
+
+// GetConnectedDisplays returns physical and logical details of connected monitors.
+func (a *App) GetConnectedDisplays() []util.DisplayInfo {
+	return util.DetectDisplays()
+}
 
 // GetMultiseatCapabilities returns available host tools for multi-seat support.
 func (a *App) GetMultiseatCapabilities() multiseat.SystemCapabilities {

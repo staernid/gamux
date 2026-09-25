@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
@@ -24,11 +26,35 @@ func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name,
 	}
 
 	cleanName := strings.TrimSpace(name)
+	var folderName string
+	storeLower := strings.ToLower(strings.TrimSpace(storeName))
+	if storeLower == "" {
+		storeLower = "steam"
+	}
+
+	if cleanName == "" || util.IsPlaceholderTitle(cleanName, appID) {
+		// Attempt to resolve official title from cache or remote store
+		if storeLower == "steam" && appID != "" && appID != "0" {
+			if cachedName, ok := cache.GetAppName(appID); ok && cachedName != "" && !util.IsPlaceholderTitle(cachedName, appID) {
+				cleanName = cachedName
+			} else if rName, _, rInstallDir, err := steam.FetchAppInfo(ctx, appID); err == nil {
+				if rName != "" && !util.IsPlaceholderTitle(rName, appID) {
+					cleanName = rName
+				}
+				if rInstallDir != "" {
+					folderName = rInstallDir
+				}
+			}
+		}
+	}
+
 	if cleanName == "" {
 		cleanName = fmt.Sprintf("Game %s", appID)
 	}
 
-	folderName := util.SanitizeInstallDir(cleanName)
+	if folderName == "" {
+		folderName = util.SanitizeInstallDir(cleanName)
+	}
 	if folderName == "" {
 		folderName = cleanName
 	}
@@ -37,11 +63,6 @@ func (eng *Engine) CreateGameStub(ctx context.Context, libraryPath, appID, name,
 	settingsDir := filepath.Join(gameDir, "steam_settings")
 	if err := os.MkdirAll(settingsDir, 0755); err != nil {
 		return nil, fmt.Errorf("create stub directory: %w", err)
-	}
-
-	storeLower := strings.ToLower(strings.TrimSpace(storeName))
-	if storeLower == "" {
-		storeLower = "steam"
 	}
 
 	cleanBranch := strings.TrimSpace(branch)

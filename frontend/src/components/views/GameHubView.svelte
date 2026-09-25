@@ -18,7 +18,7 @@
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
   import { profilesStore } from '../../stores/profiles.js';
   import { AppAPI } from '../../api/app.js';
-  import { isSamePath, countOverrides, normalizeGame, isSteamApp } from '../../utils/game.js';
+  import { isSamePath, countOverrides, normalizeGame, isSteamApp, isPlaceholderTitle } from '../../utils/game.js';
   import HubSavesCard from './hub/cards/HubSavesCard.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
   import GameTaskHud from './hub/GameTaskHud.svelte';
@@ -140,6 +140,23 @@
       integrityError = '';
     } else if (!initialDraftJSON) {
       initialDraftJSON = JSON.stringify($drawerDraft);
+    }
+  }
+
+  $: if (game && isPlaceholderTitle(game.name, game.appId)) {
+    const prov = (game.metadataProvider || game.store || 'steam').toLowerCase();
+    const id = game.metadataId || game.appId;
+    if (id && id !== '0') {
+      AppAPI.getGameMetadata(prov, id).then(meta => {
+        if (meta && meta.name && !isPlaceholderTitle(meta.name, id)) {
+          const updated = { ...game, name: meta.name };
+          if (meta.header_image && (!game.coverUrl || game.coverUrl.includes('header.jpg'))) {
+            updated.coverUrl = meta.header_image;
+          }
+          selectedGame.set(normalizeGame(updated));
+          updateGameInStore(updated);
+        }
+      }).catch(() => {});
     }
   }
 
@@ -275,7 +292,8 @@
       if ($multiseatStore.isCoopEnabled) {
         await multiseatStore.launchSession(game, userCfg || {});
       } else {
-        const isNative = game.platform === 'linux';
+        const isNative = (game.platform || '').toLowerCase().includes('linux') || game.runner === 'linux';
+        const profId = $profilesStore.activeProfile?.id || 'main';
         await AppAPI.launchGame({
           name: game.name,
           game_dir: game.gameDir,
@@ -284,10 +302,14 @@
           runner: isNative ? 'linux' : (game.runner || globalCfg?.default_runner || 'umu'),
           exe_path: targetExe,
           exe_args: game.exeArgs || $drawerDraft?.exeArgs || '',
-          profile_id: $profilesStore.activeProfile?.id || '',
+          profile_id: profId,
+        });
+        setGameRunning(game.gameDir, true, 0, 0, {
+          profileId: profId,
+          gameName: game.name,
+          appId: game.appId,
         });
       }
-      setGameRunning(game.gameDir, true);
     } catch (err) {
       notificationStore.items.add({
         type: 'error',

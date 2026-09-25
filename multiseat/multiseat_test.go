@@ -3,6 +3,7 @@ package multiseat
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -501,7 +502,7 @@ func TestBuildSeatCommand_DefaultPrefixes(t *testing.T) {
 	}
 
 	// 1. Verify Player 1 seat command uses ~/Games/umu/70
-	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p1", filepath.Join(tmpDir, "p1"), nil, caps)
+	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat1, filepath.Join(tmpDir, "p1"), nil, caps, 0, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p1) failed: %v", err)
 	}
@@ -515,7 +516,7 @@ func TestBuildSeatCommand_DefaultPrefixes(t *testing.T) {
 	}
 
 	// 2. Verify Player 2 seat command uses ~/Games/umu-p2/70
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -643,7 +644,7 @@ func TestBuildSeatCommand_WindowPositioning(t *testing.T) {
 	}
 
 	// Seat 1 should have SDL_VIDEO_WINDOW_POS=0,0
-	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p1", filepath.Join(tmpDir, "p1"), nil, caps)
+	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat1, filepath.Join(tmpDir, "p1"), nil, caps, 0, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p1) failed: %v", err)
 	}
@@ -659,7 +660,7 @@ func TestBuildSeatCommand_WindowPositioning(t *testing.T) {
 	}
 
 	// Seat 2 should have SDL_VIDEO_WINDOW_POS=960,0 (halfway across 1920)
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -774,7 +775,7 @@ func TestBuildSeatCommand_P2_KBM_UsesGamescope(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -919,7 +920,7 @@ func TestBuildSeatCommand_ExplicitGamescope_NoCage(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -964,7 +965,7 @@ func TestBuildSeatCommand_AutoCompositor_NoDedicatedKBM_NoCage(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -1010,7 +1011,7 @@ func TestBuildSeatCommand_NestedCageGamescope(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -1055,7 +1056,7 @@ func TestBuildSeatCommand_CageOnly_NoGamescope(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -1105,7 +1106,7 @@ func TestBuildSeatCommand_Gamescope_SplitWindowPos(t *testing.T) {
 		HasCage:      true,
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -1122,7 +1123,7 @@ func TestBuildSeatCommand_Gamescope_SplitWindowPos(t *testing.T) {
 	}
 
 	// Seat 1 (standalone gamescope) should also have SDL_VIDEO_WINDOW_POS set to 0,0
-	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p1", filepath.Join(tmpDir, "p1"), nil, caps)
+	cmdP1, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat1, filepath.Join(tmpDir, "p1"), nil, caps, 0, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p1) failed: %v", err)
 	}
@@ -1135,6 +1136,24 @@ func TestBuildSeatCommand_Gamescope_SplitWindowPos(t *testing.T) {
 	}
 	if !p1HasPos {
 		t.Errorf("P1 (standalone gamescope, side-by-side) should have SDL_VIDEO_WINDOW_POS set")
+	}
+
+	// Verify explicit ScreenSlot swapping: P2 explicitly placed on left half (slot 0)
+	slot0 := 0
+	sessionCfg.Seat2.ScreenSlot = &slot0
+	cmdP2Swapped, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2_swapped"), nil, caps, 1, 2)
+	if err != nil {
+		t.Fatalf("buildSeatCommand(p2 swapped) failed: %v", err)
+	}
+	var p2SwappedHasPos bool
+	for _, env := range cmdP2Swapped.Env {
+		if strings.HasPrefix(env, "SDL_VIDEO_WINDOW_POS=0,0") {
+			p2SwappedHasPos = true
+			break
+		}
+	}
+	if !p2SwappedHasPos {
+		t.Errorf("expected SDL_VIDEO_WINDOW_POS=0,0 for P2 swapped to slot 0")
 	}
 }
 
@@ -1710,7 +1729,7 @@ func TestBuildSeatCommand_DedicatedKBM_NoHostGrab(t *testing.T) {
 		},
 	}
 
-	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
@@ -1734,7 +1753,7 @@ func TestBuildSeatCommand_DedicatedKBM_NoHostGrab(t *testing.T) {
 	sessionCfgNoKBM.Seat2.KeyboardNode = "none"
 	sessionCfgNoKBM.Seat2.MouseNode = "none"
 
-	cmdP2NoKBM, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgNoKBM, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2NoKBM, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgNoKBM, sessionCfgNoKBM.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2 no kbm) failed: %v", err)
 	}
@@ -1756,7 +1775,7 @@ func TestBuildSeatCommand_DedicatedKBM_NoHostGrab(t *testing.T) {
 	// 3. Seat 2 with NO dedicated KBM, but ShowCursor=true -> gamescope_cursor_composite=2 IS present
 	sessionCfgShowCursor := sessionCfgNoKBM
 	sessionCfgShowCursor.Seat2.ShowCursor = true
-	cmdP2ShowCursor, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgShowCursor, "p2", filepath.Join(tmpDir, "p2"), nil, caps)
+	cmdP2ShowCursor, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfgShowCursor, sessionCfgShowCursor.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2 show cursor) failed: %v", err)
 	}
@@ -1773,13 +1792,17 @@ func TestSupervisor_RunningSessions(t *testing.T) {
 
 	sup.sessions[util.CanonicalPath(gameDir1)] = &runningSession{
 		config: MultiseatSessionConfig{GameDir: gameDir1},
-		seat1:  runningSeat{status: SeatStatus{IsRunning: true}},
-		seat2:  runningSeat{status: SeatStatus{IsRunning: false}},
+		seats: map[string]*runningSeat{
+			"p1": {seatID: "p1", status: SeatStatus{IsRunning: true}},
+			"p2": {seatID: "p2", status: SeatStatus{IsRunning: false}},
+		},
 	}
 	sup.sessions[util.CanonicalPath(gameDir2)] = &runningSession{
 		config: MultiseatSessionConfig{GameDir: gameDir2},
-		seat1:  runningSeat{status: SeatStatus{IsRunning: false}},
-		seat2:  runningSeat{status: SeatStatus{IsRunning: true}},
+		seats: map[string]*runningSeat{
+			"p1": {seatID: "p1", status: SeatStatus{IsRunning: false}},
+			"p2": {seatID: "p2", status: SeatStatus{IsRunning: true}},
+		},
 	}
 
 	running := sup.RunningSessions()
@@ -1822,13 +1845,19 @@ func TestSupervisor_IndependentSeatDrop(t *testing.T) {
 	sess := &runningSession{
 		config:    MultiseatSessionConfig{GameDir: gameDir, Name: "CoopGame", AppID: "999"},
 		startTime: time.Now().Unix(),
-		seat1: runningSeat{
-			cmd:    cmdP1,
-			status: SeatStatus{IsRunning: true, PID: cmdP1.Process.Pid},
-		},
-		seat2: runningSeat{
-			cmd:    cmdP2,
-			status: SeatStatus{IsRunning: true, PID: cmdP2.Process.Pid},
+		seats: map[string]*runningSeat{
+			"p1": {
+				seatID:    "p1",
+				profileID: "main",
+				cmd:       cmdP1,
+				status:    SeatStatus{SeatID: "p1", ProfileID: "main", IsRunning: true, PID: cmdP1.Process.Pid},
+			},
+			"p2": {
+				seatID:    "p2",
+				profileID: "p2",
+				cmd:       cmdP2,
+				status:    SeatStatus{SeatID: "p2", ProfileID: "p2", IsRunning: true, PID: cmdP2.Process.Pid},
+			},
 		},
 	}
 
@@ -1914,14 +1943,14 @@ func TestSupervisor_StopAll(t *testing.T) {
 func TestGenerateKWinSplitScript_SideBySide(t *testing.T) {
 	script := GenerateKWinSplitScript(1234, 5678, LayoutSideBySide)
 
-	if !strings.Contains(script, "var p1PID = 1234;") {
-		t.Errorf("expected p1PID 1234 in script")
+	if !strings.Contains(script, "1234: { index: 0, id: \"p1\"") {
+		t.Errorf("expected p1 placement for PID 1234 in script")
 	}
-	if !strings.Contains(script, "var p2PID = 5678;") {
-		t.Errorf("expected p2PID 5678 in script")
+	if !strings.Contains(script, "5678: { index: 1, id: \"p2\"") {
+		t.Errorf("expected p2 placement for PID 5678 in script")
 	}
-	if !strings.Contains(script, "var isSideBySide = true;") {
-		t.Errorf("expected isSideBySide true in script")
+	if !strings.Contains(script, "var layout = \"side_by_side\";") {
+		t.Errorf("expected layout side_by_side in script")
 	}
 	if !strings.Contains(script, "w.noBorder = true;") {
 		t.Errorf("expected w.noBorder = true in script")
@@ -1935,25 +1964,74 @@ func TestGenerateKWinSplitScript_SideBySide(t *testing.T) {
 	if !strings.Contains(script, "workspace.windowAdded") {
 		t.Errorf("expected workspace.windowAdded in script")
 	}
-	if !strings.Contains(script, "halfW = Math.round(sW * 0.5)") {
-		t.Errorf("expected halfW calculation in script")
+	if !strings.Contains(script, "colW = Math.floor(sW / dispTotal)") {
+		t.Errorf("expected colW calculation in script")
 	}
 }
 
 func TestGenerateKWinSplitScript_TopBottom(t *testing.T) {
 	script := GenerateKWinSplitScript(1111, 2222, LayoutTopBottom)
 
-	if !strings.Contains(script, "var p1PID = 1111;") {
-		t.Errorf("expected p1PID 1111 in script")
+	if !strings.Contains(script, "1111: { index: 0, id: \"p1\"") {
+		t.Errorf("expected p1 placement for PID 1111 in script")
 	}
-	if !strings.Contains(script, "var p2PID = 2222;") {
-		t.Errorf("expected p2PID 2222 in script")
+	if !strings.Contains(script, "2222: { index: 1, id: \"p2\"") {
+		t.Errorf("expected p2 placement for PID 2222 in script")
 	}
-	if !strings.Contains(script, "var isSideBySide = false;") {
-		t.Errorf("expected isSideBySide false in script")
+	if !strings.Contains(script, "var layout = \"top_bottom\";") {
+		t.Errorf("expected layout top_bottom in script")
 	}
-	if !strings.Contains(script, "halfH = Math.round(sH * 0.5)") {
-		t.Errorf("expected halfH calculation in script")
+	if !strings.Contains(script, "rowH = Math.floor(sH / dispTotal)") {
+		t.Errorf("expected rowH calculation in script")
+	}
+}
+
+func TestEffectiveSeats_DisabledFiltering(t *testing.T) {
+	cfg := MultiseatSessionConfig{
+		Seats: []SeatConfig{
+			{SeatID: "p1", Disabled: false},
+			{SeatID: "p2", Disabled: true},
+			{SeatID: "p3", Disabled: false},
+		},
+	}
+	eff := cfg.EffectiveSeats()
+	if len(eff) != 2 {
+		t.Fatalf("expected 2 active seats, got %d", len(eff))
+	}
+	if eff[0].SeatID != "p1" || eff[1].SeatID != "p3" {
+		t.Errorf("expected p1 and p3, got %s and %s", eff[0].SeatID, eff[1].SeatID)
+	}
+}
+
+func TestScaleGuard_StatePersistenceAndRecovery(t *testing.T) {
+	tmpDir := t.TempDir()
+	stateFile := filepath.Join(tmpDir, "scaleguard.json")
+
+	sg := &ScaleGuard{
+		kscreenBin:     "", // Mocked absent
+		originalScales: map[string]float64{"DP-1": 1.15},
+		stateFilePath:  stateFile,
+	}
+
+	sg.persistLockedScales()
+
+	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+		t.Fatalf("expected scaleguard.json to be created")
+	}
+
+	// Read content
+	data, _ := os.ReadFile(stateFile)
+	var state ScaleLockState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if state.OriginalScales["DP-1"] != 1.15 {
+		t.Errorf("expected DP-1 scale 1.15, got %f", state.OriginalScales["DP-1"])
+	}
+
+	sg.removeStateFile()
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Errorf("expected scaleguard.json to be removed")
 	}
 }
 
@@ -2019,6 +2097,118 @@ func TestKWinSplitCoordinator_LiveLifecycle(t *testing.T) {
 
 	if err := coord.Stop(); err != nil {
 		t.Fatalf("coord.Stop failed: %v", err)
+	}
+}
+
+func TestCalculateSeatGeometry_QuadGrid(t *testing.T) {
+	totalW, totalH := 3840, 2160
+
+	// 4 seats in quad grid
+	// Seat 0: top-left
+	w0, h0, x0, y0 := CalculateSeatGeometry(LayoutQuadGrid, "p1", 0, 4, totalW, totalH)
+	if w0 != 1920 || h0 != 1080 || x0 != 0 || y0 != 0 {
+		t.Errorf("Seat 0 quad_grid unexpected: %dx%d @ (%d,%d)", w0, h0, x0, y0)
+	}
+
+	// Seat 1: top-right
+	w1, h1, x1, y1 := CalculateSeatGeometry(LayoutQuadGrid, "p2", 1, 4, totalW, totalH)
+	if w1 != 1920 || h1 != 1080 || x1 != 1920 || y1 != 0 {
+		t.Errorf("Seat 1 quad_grid unexpected: %dx%d @ (%d,%d)", w1, h1, x1, y1)
+	}
+
+	// Seat 2: bottom-left
+	w2, h2, x2, y2 := CalculateSeatGeometry(LayoutQuadGrid, "p3", 2, 4, totalW, totalH)
+	if w2 != 1920 || h2 != 1080 || x2 != 0 || y2 != 1080 {
+		t.Errorf("Seat 2 quad_grid unexpected: %dx%d @ (%d,%d)", w2, h2, x2, y2)
+	}
+
+	// Seat 3: bottom-right
+	w3, h3, x3, y3 := CalculateSeatGeometry(LayoutQuadGrid, "p4", 3, 4, totalW, totalH)
+	if w3 != 1920 || h3 != 1080 || x3 != 1920 || y3 != 1080 {
+		t.Errorf("Seat 3 quad_grid unexpected: %dx%d @ (%d,%d)", w3, h3, x3, y3)
+	}
+}
+
+func TestCalculateSeatGeometry_ThreePlayer(t *testing.T) {
+	totalW, totalH := 1920, 1080
+
+	// Seat 0: top half
+	w0, h0, x0, y0 := CalculateSeatGeometry(LayoutThreePlayer, "p1", 0, 3, totalW, totalH)
+	if w0 != 1920 || h0 != 540 || x0 != 0 || y0 != 0 {
+		t.Errorf("Seat 0 three_player unexpected: %dx%d @ (%d,%d)", w0, h0, x0, y0)
+	}
+
+	// Seat 1: bottom-left
+	w1, h1, x1, y1 := CalculateSeatGeometry(LayoutThreePlayer, "p2", 1, 3, totalW, totalH)
+	if w1 != 960 || h1 != 540 || x1 != 0 || y1 != 540 {
+		t.Errorf("Seat 1 three_player unexpected: %dx%d @ (%d,%d)", w1, h1, x1, y1)
+	}
+
+	// Seat 2: bottom-right
+	w2, h2, x2, y2 := CalculateSeatGeometry(LayoutThreePlayer, "p3", 2, 3, totalW, totalH)
+	if w2 != 960 || h2 != 540 || x2 != 960 || y2 != 540 {
+		t.Errorf("Seat 2 three_player unexpected: %dx%d @ (%d,%d)", w2, h2, x2, y2)
+	}
+}
+
+func TestSupervisor_GetRunningInstances(t *testing.T) {
+	sup := NewSupervisor(nil, nil)
+	gameDir := "/games/Overcooked"
+	cleanDir := util.CanonicalPath(gameDir)
+
+	cmdP1 := exec.Command("sleep", "1")
+	cmdP2 := exec.Command("sleep", "1")
+	_ = cmdP1.Start()
+	_ = cmdP2.Start()
+	defer func() {
+		if cmdP1.Process != nil {
+			_ = cmdP1.Process.Kill()
+		}
+		if cmdP2.Process != nil {
+			_ = cmdP2.Process.Kill()
+		}
+	}()
+
+	sess := &runningSession{
+		config:    MultiseatSessionConfig{GameDir: gameDir, Name: "Overcooked", AppID: "448510"},
+		startTime: 1234567,
+		seats: map[string]*runningSeat{
+			"p1": {
+				seatID:    "p1",
+				profileID: "main",
+				cmd:       cmdP1,
+				status:    SeatStatus{SeatID: "p1", ProfileID: "main", IsRunning: true, Mode: SeatModeLocal},
+			},
+			"p2": {
+				seatID:    "p2",
+				profileID: "p2",
+				cmd:       cmdP2,
+				status:    SeatStatus{SeatID: "p2", ProfileID: "p2", IsRunning: true, Mode: SeatModeLocal},
+			},
+		},
+	}
+
+	sup.sessions[cleanDir] = sess
+
+	instances := sup.GetRunningInstances()
+	if len(instances) != 2 {
+		t.Fatalf("expected 2 running instances, got %d", len(instances))
+	}
+
+	p1Inst := instances[0]
+	p2Inst := instances[1]
+	if p1Inst.SeatID != "p1" {
+		p1Inst, p2Inst = p2Inst, p1Inst
+	}
+
+	if p1Inst.GameName != "Overcooked" || p1Inst.AppID != "448510" || !p1Inst.IsMultiseat {
+		t.Errorf("unexpected p1 instance: %+v", p1Inst)
+	}
+	if p1Inst.InstanceID != cleanDir {
+		t.Errorf("expected p1 instance ID %s, got %s", cleanDir, p1Inst.InstanceID)
+	}
+	if p2Inst.InstanceID != fmt.Sprintf("%s:p2", cleanDir) {
+		t.Errorf("expected p2 instance ID %s:p2, got %s", cleanDir, p2Inst.InstanceID)
 	}
 }
 

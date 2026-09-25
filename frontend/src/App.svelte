@@ -20,6 +20,7 @@
     selectedGame,
     queueApplyGame,
     setGameRunning,
+    setRunningInstances,
     refreshGame,
     renameGameInStore,
     updateGameInStore,
@@ -251,8 +252,15 @@
       },
       onGameStatus: (data) => {
         if (data?.gameDir) {
-          setGameRunning(data.gameDir, !!data.isRunning, data.playtimeSeconds, data.lastPlayed);
-          if (!data.isRunning) {
+          setGameRunning(data.gameDir, !!data.isRunning, data.playtimeSeconds, data.lastPlayed, {
+            profileId: data.profileId,
+            seatId: data.seatId,
+            instanceId: data.instanceId,
+            gameName: data.gameName,
+            appId: data.appId,
+            pid: data.pid
+          });
+          if (!data.isRunning && !data.seatId) {
             multiseatStore.setSessionInactive(data.gameDir);
           }
         }
@@ -262,12 +270,18 @@
       }
     });
 
-    // Reconcile active running games on application startup
-    AppAPI.getRunningGames().then((running) => {
-      if (Array.isArray(running)) {
-        for (const dir of running) {
-          if (dir) setGameRunning(dir, true);
-        }
+    // Reconcile active running instances on application startup
+    AppAPI.getRunningInstances().then((instances) => {
+      if (Array.isArray(instances) && instances.length > 0) {
+        setRunningInstances(instances);
+      } else {
+        AppAPI.getRunningGames().then((running) => {
+          if (Array.isArray(running)) {
+            for (const dir of running) {
+              if (dir) setGameRunning(dir, true);
+            }
+          }
+        }).catch(() => {});
       }
     }).catch(() => {});
 

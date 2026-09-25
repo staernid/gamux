@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -90,6 +91,7 @@ type AppGenre struct {
 
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
+	SteamAppID         uint32         `json:"steam_appid,omitempty"`
 	Name                string         `json:"name"`
 	Type                string         `json:"type"`
 	IsFree              bool           `json:"is_free"`
@@ -238,8 +240,30 @@ func FetchAppDetails(ctx context.Context, appID string) (*AppDetails, error) {
 			return nil, fmt.Errorf("failed to decode JSON: %w", err)
 		}
 
-		appData, ok := result[appID]
-		if !ok || !appData.Success || appData.Data == nil {
+		var appData struct {
+			Success bool        `json:"success"`
+			Data    *AppDetails `json:"data"`
+		}
+		found := false
+		if entry, ok := result[appID]; ok && entry.Success && entry.Data != nil {
+			appData = entry
+			found = true
+		} else {
+			// Steam store API sometimes keys the response under a redirected AppID (e.g. demo, package, or parent app)
+			targetNum, _ := strconv.ParseUint(appID, 10, 32)
+			for _, entry := range result {
+				if entry.Success && entry.Data != nil {
+					// Match numeric AppID if present in Data, or fallback to first successful entry if single-item response
+					if (targetNum > 0 && entry.Data.SteamAppID == uint32(targetNum)) || len(result) == 1 {
+						appData = entry
+						found = true
+						break
+					}
+				}
+			}
+		}
+
+		if !found || !appData.Success || appData.Data == nil {
 			return nil, fmt.Errorf("app details unavailable for AppID %s", appID)
 		}
 

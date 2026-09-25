@@ -99,8 +99,14 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 					metaID = status.AppID
 				}
 				if meta, err := p.GetMetadata(ctx, metaID); err == nil && meta != nil {
-					if (status.Name == "" || status.Name == status.AppID || status.Name == filepath.Base(status.GameDir)) && meta.Name != "" {
+					if (status.Name == "" || status.Name == status.AppID || status.Name == filepath.Base(status.GameDir) || util.IsPlaceholderTitle(status.Name, status.AppID)) && meta.Name != "" {
 						status.Name = meta.Name
+						if status.LaunchProfile != nil && (status.LaunchProfile.Name == "" || util.IsPlaceholderTitle(status.LaunchProfile.Name, status.AppID)) {
+							status.LaunchProfile.Name = status.Name
+						}
+						if status.InstallDir == "" || util.IsPlaceholderTitle(status.InstallDir, status.AppID) {
+							status.InstallDir = util.SanitizeInstallDir(status.Name)
+						}
 					}
 					if len(status.SupportedLanguages) <= 1 && len(meta.SupportedLanguages) > 0 {
 						status.SupportedLanguages = meta.SupportedLanguages

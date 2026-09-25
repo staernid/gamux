@@ -74,6 +74,10 @@ export function GetConfigSchema() {
   return window['go']['gui']['App']['GetConfigSchema']();
 }
 
+export function GetConnectedDisplays() {
+  return window['go']['gui']['App']['GetConnectedDisplays']();
+}
+
 export function GetConnectedGamepads() {
   return window['go']['gui']['App']['GetConnectedGamepads']();
 }
@@ -160,6 +164,10 @@ export function GetRecentGames(arg1) {
 
 export function GetRunningGames() {
   return window['go']['gui']['App']['GetRunningGames']();
+}
+
+export function GetRunningInstances() {
+  return window['go']['gui']['App']['GetRunningInstances']();
 }
 
 export function GetSteamBranches(arg1) {
@@ -360,6 +368,10 @@ export function Startup(arg1) {
 
 export function StopGame(arg1) {
   return window['go']['gui']['App']['StopGame'](arg1);
+}
+
+export function StopGameInstance(arg1) {
+  return window['go']['gui']['App']['StopGameInstance'](arg1);
 }
 
 export function StopMultiseatSeat(arg1, arg2) {

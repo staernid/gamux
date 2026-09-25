@@ -100,6 +100,8 @@
   $: isSteam = game ? isSteamApp(game.appId) : false;
   $: heroBackdropUrl = game ? (game.localHeroUrl || game.heroUrl || game.localBannerUrl || game.bannerUrl || (isSteam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/library_hero.jpg` : '') || game.localCoverUrl || game.coverUrl || '') : '';
 
+  $: seatCount = ($multiseatStore.staging?.seats?.length) || 2;
+
   $: primaryButtonLabel = isTaskActive
     ? (activeGameTask?.status === 'queued'
         ? 'Queued...'
@@ -113,8 +115,8 @@
     : !isInstalled
     ? 'Download'
     : isReady
-    ? (isCoop ? 'Play Now (Co-Op)' : 'Play Now')
-    : 'Setup & Play';
+    ? (isCoop ? `Play (${seatCount}P)` : 'Play Now')
+    : (isCoop ? `Setup & Play (${seatCount}P)` : 'Setup & Play');
 
   function handleReturnToShelf() {
     dispatch('returnToShelf');
@@ -286,25 +288,6 @@
 
       <!-- Right: Primary CTA & Actions -->
       <div class="flex flex-col items-start sm:items-end space-y-2.5 flex-shrink-0">
-        {#if isMultiseatActive && multiseatSession}
-          <div class="px-3 py-1.5 bg-neutral-900/90 border border-neutral-700 rounded-xl flex items-center space-x-3 text-2xs font-mono shadow-lg">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="text-white font-bold">2-Player Active</span>
-            <span class="text-neutral-400">P1: {multiseatSession.seat1?.mode || 'local'}</span>
-            <span class="text-neutral-400">P2: {multiseatSession.seat2?.mode || 'local'}</span>
-            {#if multiseatSession.seat2?.is_running}
-              <button
-                type="button"
-                on:click={() => dispatch('stopSeat', 'p2')}
-                class="px-2 py-0.5 rounded bg-surface-card hover:bg-surface-cardHover border border-surface-border text-rose-300 hover:text-white font-bold transition cursor-pointer"
-                title="Stop Player 2 seat only"
-              >
-                Drop P2
-              </button>
-            {/if}
-          </div>
-        {/if}
-
         <div class="flex items-center space-x-3">
         {#if isVirtual}
           <button
@@ -352,9 +335,6 @@
                 </svg>
               {/if}
               <span>{primaryButtonLabel}</span>
-              {#if isCoop && isReady && !isGameRunning}
-                <span class="ml-1 px-1.5 py-0.5 rounded text-3xs font-mono font-black bg-black text-white">2P</span>
-              {/if}
             </button>
 
             {#if isInstalled && isReady && !isTaskActive && !isGameRunning}
@@ -363,7 +343,7 @@
                 type="button"
                 on:click|stopPropagation={() => { showLaunchMenu = !showLaunchMenu; }}
                 class="px-2.5 py-3.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-l border-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
-                title="Launch Options (Single Player / 2-Player Co-op)"
+                title="Launch Options (Single Player / Co-Op)"
                 aria-label="Launch Options"
               >
                 <svg class="w-3.5 h-3.5 transition-transform duration-200 {showLaunchMenu ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,13 +356,13 @@
           <!-- Launch Options Dropdown Popover -->
           {#if showLaunchMenu}
             <div
-              class="absolute right-0 bottom-full mb-2 w-72 bg-[#121215]/95 backdrop-blur-md border border-[#27272a] rounded-2xl shadow-2xl p-2 z-50 animate-fade-in space-y-1 text-left"
+              class="absolute right-0 bottom-full mb-2 w-52 bg-[#121215]/95 backdrop-blur-md border border-[#27272a] rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in space-y-1 text-left"
               on:click|stopPropagation
               on:keydown|stopPropagation
               role="menu"
               tabindex="-1"
             >
-              <div class="px-2.5 py-1 text-3xs font-mono font-bold text-neutral-400 uppercase tracking-wider border-b border-surface-border mb-1">
+              <div class="px-2.5 py-1 text-4xs font-mono font-bold text-neutral-400 uppercase tracking-wider border-b border-surface-border mb-1">
                 Launch Mode
               </div>
 
@@ -391,41 +371,22 @@
                 type="button"
                 role="menuitem"
                 on:click={() => { if (isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
-                class="w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs transition cursor-pointer {!isCoop ? 'bg-surface-cardHover text-white font-bold border border-surface-borderHighlight' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
+                class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition cursor-pointer {!isCoop ? 'bg-surface-cardHover text-white font-bold' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
               >
-                <div class="flex items-center space-x-2.5">
-                  <svg class="w-4 h-4 text-neutral-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
-                  </svg>
-                  <div class="text-left">
-                    <span class="block">Single Player</span>
-                    <span class="text-3xs text-neutral-400 font-normal">Standard local launch</span>
-                  </div>
-                </div>
+                <span>Single Player</span>
                 {#if !isCoop}
-                  <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 {/if}
               </button>
 
-              <!-- Mode 2: 2-Player Co-op / Multiseat -->
+              <!-- Mode 2: Co-op -->
               <button
                 type="button"
                 role="menuitem"
                 on:click={() => { if (!isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
-                class="w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs transition cursor-pointer {isCoop ? 'bg-surface-cardHover text-white font-bold border border-surface-borderHighlight' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
+                class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition cursor-pointer {isCoop ? 'bg-surface-cardHover text-white font-bold' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
               >
-                <div class="flex items-center space-x-2.5">
-                  <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <div class="text-left">
-                    <div class="flex items-center space-x-1.5">
-                      <span>2-Player Co-op</span>
-                      <span class="px-1 py-0.2 rounded text-4xs font-mono font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">Multiseat</span>
-                    </div>
-                    <span class="text-3xs text-neutral-400 font-normal">Dual instance & isolated seats</span>
-                  </div>
-                </div>
+                <span>Co-Op ({seatCount}P)</span>
                 {#if isCoop}
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 {/if}

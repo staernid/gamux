@@ -868,6 +868,30 @@ func TestBuildCommand_ModeNone_WineNoLoaderOverride(t *testing.T) {
 	}
 }
 
+func TestBuildCommand_NoDllOverridesByDefault(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		ExePath:       "game.exe",
+		Platform:      "win64",
+		Runner:        RunnerWine,
+		OperatingMode: ModeStandalone,
+	}
+
+	spec, err := BuildLaunchSpec(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildLaunchSpec failed: %v", err)
+	}
+
+	if overrides, exists := spec.Env["WINEDLLOVERRIDES"]; exists {
+		t.Errorf("expected no WINEDLLOVERRIDES by default, got: %s", overrides)
+	}
+}
+
 func TestBuildCommand_Linux_LoaderPreload(t *testing.T) {
 	tmpDir := t.TempDir()
 	gbeDir := filepath.Join(tmpDir, "gbe_fork")
@@ -1688,12 +1712,43 @@ func TestManager_StopProcessGroupWithReapedParent(t *testing.T) {
 	}
 }
 
-func TestFindLatestInstalledProton(t *testing.T) {
-	latest := FindLatestInstalledProton()
-	if latest != "" {
-		if !util.FileExists(latest) {
-			t.Errorf("FindLatestInstalledProton returned non-existent path: %s", latest)
-		}
+func TestBuildCommand_UMUDefaultProtonPath(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	// Default: should set PROTONPATH to GE-Proton for UMU runner
+	optsDefault := LaunchOptions{
+		GameDir:  tmpDir,
+		ExePath:  "game.exe",
+		Platform: "win64",
+		Runner:   RunnerUMU,
+	}
+
+	specDefault, err := BuildLaunchSpec(context.Background(), cfg, optsDefault)
+	if err != nil {
+		t.Fatalf("BuildLaunchSpec failed: %v", err)
+	}
+	if specDefault.Env["PROTONPATH"] != "GE-Proton" {
+		t.Errorf("expected PROTONPATH to default to GE-Proton, got %q", specDefault.Env["PROTONPATH"])
+	}
+
+	// Custom: should respect custom ProtonPath
+	optsCustom := LaunchOptions{
+		GameDir:    tmpDir,
+		ExePath:    "game.exe",
+		Platform:   "win64",
+		Runner:     RunnerUMU,
+		ProtonPath: "/opt/custom-proton",
+	}
+
+	specCustom, err := BuildLaunchSpec(context.Background(), cfg, optsCustom)
+	if err != nil {
+		t.Fatalf("BuildLaunchSpec failed: %v", err)
+	}
+	if specCustom.Env["PROTONPATH"] != "/opt/custom-proton" {
+		t.Errorf("expected PROTONPATH to be custom, got %q", specCustom.Env["PROTONPATH"])
 	}
 }
 

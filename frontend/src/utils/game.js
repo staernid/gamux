@@ -567,3 +567,20 @@ export function formatInstallDate(timestamp) {
   return formatTimeAgo(timestamp);
 }
 
+export function isPlaceholderTitle(name, appId) {
+  if (!name || typeof name !== 'string') return true;
+  const trimmed = name.trim();
+  if (!trimmed || /^unknown(\s*game)?$/i.test(trimmed)) return true;
+  const cleanAppId = appId ? String(appId).trim() : '';
+  if (cleanAppId && (trimmed === cleanAppId || new RegExp(`^(steam\\s*app(id)?|game)\\s*${cleanAppId}$`, 'i').test(trimmed))) {
+    return true;
+  }
+  if (/^(steam\s*app(id)?|game)\s*\d+$/i.test(trimmed)) {
+    return true;
+  }
+  if (!cleanAppId && /^\d+$/.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+

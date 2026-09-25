@@ -14,6 +14,7 @@ import {
   filterLaunchCandidates,
   getExecutablePath,
   countOverrides,
+  isPlaceholderTitle,
 } from './game.js';
 
 describe('Game Data Model & Normalization Helpers', () => {
@@ -141,6 +142,22 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(isSteamApp('Custom')).toBe(false);
     expect(isSteamApp('')).toBe(false);
     expect(isSteamApp(null)).toBe(false);
+  });
+
+  it('detects placeholder titles accurately', () => {
+    expect(isPlaceholderTitle('', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('   ', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('Unknown Game', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('unknown', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('1458140', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('Steam App 1458140', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('Steam AppID 1458140', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('SteamApp 1458140', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('Game 1458140', '1458140')).toBe(true);
+    expect(isPlaceholderTitle('Steam App 9999', '')).toBe(true);
+    expect(isPlaceholderTitle('Pacific Drive', '1458140')).toBe(false);
+    expect(isPlaceholderTitle('Half-Life 2', '220')).toBe(false);
+    expect(isPlaceholderTitle('Cyberpunk 2077', '1091500')).toBe(false);
   });
 
   it('determines platform colors and types', () => {

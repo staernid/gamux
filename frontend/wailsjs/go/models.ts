@@ -770,6 +770,36 @@ export namespace domain {
 	        this.is_main = source["is_main"];
 	    }
 	}
+	export class RunningInstance {
+	    instance_id: string;
+	    game_dir: string;
+	    game_name: string;
+	    app_id?: string;
+	    profile_id: string;
+	    seat_id?: string;
+	    pid: number;
+	    is_multiseat: boolean;
+	    mode?: string;
+	    start_time: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RunningInstance(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instance_id = source["instance_id"];
+	        this.game_dir = source["game_dir"];
+	        this.game_name = source["game_name"];
+	        this.app_id = source["app_id"];
+	        this.profile_id = source["profile_id"];
+	        this.seat_id = source["seat_id"];
+	        this.pid = source["pid"];
+	        this.is_multiseat = source["is_multiseat"];
+	        this.mode = source["mode"];
+	        this.start_time = source["start_time"];
+	    }
+	}
 	export class SteamBranch {
 	    name: string;
 	    description?: string;
@@ -1039,6 +1069,7 @@ export namespace multiseat {
 	    profile_id?: string;
 	    mode: string;
 	    display_index: number;
+	    display_name?: string;
 	    target_width?: number;
 	    target_height?: number;
 	    target_fps?: number;
@@ -1046,6 +1077,7 @@ export namespace multiseat {
 	    window_height?: number;
 	    window_x?: number;
 	    window_y?: number;
+	    screen_slot?: number;
 	    gamepad_node?: string;
 	    keyboard_node?: string;
 	    mouse_node?: string;
@@ -1060,6 +1092,8 @@ export namespace multiseat {
 	    physical_sink?: string;
 	    wine_prefix?: string;
 	    home_dir?: string;
+	    disabled?: boolean;
+	    sunshine_port?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SeatConfig(source);
@@ -1072,6 +1106,7 @@ export namespace multiseat {
 	        this.profile_id = source["profile_id"];
 	        this.mode = source["mode"];
 	        this.display_index = source["display_index"];
+	        this.display_name = source["display_name"];
 	        this.target_width = source["target_width"];
 	        this.target_height = source["target_height"];
 	        this.target_fps = source["target_fps"];
@@ -1079,6 +1114,7 @@ export namespace multiseat {
 	        this.window_height = source["window_height"];
 	        this.window_x = source["window_x"];
 	        this.window_y = source["window_y"];
+	        this.screen_slot = source["screen_slot"];
 	        this.gamepad_node = source["gamepad_node"];
 	        this.keyboard_node = source["keyboard_node"];
 	        this.mouse_node = source["mouse_node"];
@@ -1093,6 +1129,8 @@ export namespace multiseat {
 	        this.physical_sink = source["physical_sink"];
 	        this.wine_prefix = source["wine_prefix"];
 	        this.home_dir = source["home_dir"];
+	        this.disabled = source["disabled"];
+	        this.sunshine_port = source["sunshine_port"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1121,8 +1159,9 @@ export namespace multiseat {
 	    exe_args?: string;
 	    runner?: string;
 	    layout: string;
-	    seat1: SeatConfig;
-	    seat2: SeatConfig;
+	    seats?: SeatConfig[];
+	    seat1?: SeatConfig;
+	    seat2?: SeatConfig;
 	    enable_broadcast_relay: boolean;
 	    sunshine_port_p1?: number;
 	    sunshine_port_p2?: number;
@@ -1140,6 +1179,7 @@ export namespace multiseat {
 	        this.exe_args = source["exe_args"];
 	        this.runner = source["runner"];
 	        this.layout = source["layout"];
+	        this.seats = this.convertValues(source["seats"], SeatConfig);
 	        this.seat1 = this.convertValues(source["seat1"], SeatConfig);
 	        this.seat2 = this.convertValues(source["seat2"], SeatConfig);
 	        this.enable_broadcast_relay = source["enable_broadcast_relay"];
@@ -1166,6 +1206,8 @@ export namespace multiseat {
 		}
 	}
 	export class SeatStatus {
+	    seat_id: string;
+	    profile_id?: string;
 	    pid: number;
 	    mode: string;
 	    is_running: boolean;
@@ -1183,6 +1225,8 @@ export namespace multiseat {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seat_id = source["seat_id"];
+	        this.profile_id = source["profile_id"];
 	        this.pid = source["pid"];
 	        this.mode = source["mode"];
 	        this.is_running = source["is_running"];
@@ -1198,6 +1242,7 @@ export namespace multiseat {
 	export class MultiseatSessionStatus {
 	    game_dir: string;
 	    is_running: boolean;
+	    seats?: Record<string, SeatStatus>;
 	    seat1: SeatStatus;
 	    seat2: SeatStatus;
 	    start_time: number;
@@ -1210,6 +1255,7 @@ export namespace multiseat {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.game_dir = source["game_dir"];
 	        this.is_running = source["is_running"];
+	        this.seats = this.convertValues(source["seats"], SeatStatus, true);
 	        this.seat1 = this.convertValues(source["seat1"], SeatStatus);
 	        this.seat2 = this.convertValues(source["seat2"], SeatStatus);
 	        this.start_time = source["start_time"];
@@ -1667,6 +1713,38 @@ export namespace util {
 	        this.total_bytes = source["total_bytes"];
 	        this.free_bytes = source["free_bytes"];
 	        this.used_bytes = source["used_bytes"];
+	    }
+	}
+	export class DisplayInfo {
+	    name?: string;
+	    index: number;
+	    width: number;
+	    height: number;
+	    logical_width?: number;
+	    logical_height?: number;
+	    x: number;
+	    y: number;
+	    scale?: number;
+	    refresh_rate: number;
+	    primary: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DisplayInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.index = source["index"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	        this.logical_width = source["logical_width"];
+	        this.logical_height = source["logical_height"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.scale = source["scale"];
+	        this.refresh_rate = source["refresh_rate"];
+	        this.primary = source["primary"];
 	    }
 	}
 

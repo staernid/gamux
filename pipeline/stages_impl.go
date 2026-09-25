@@ -44,8 +44,8 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 
 	*pctx.Game = *info
 
-	if pctx.Game.NumericAppID > 0 && (pctx.Game.Name == "" || pctx.Game.Name == pctx.Game.AppID || pctx.Game.Name == filepath.Base(targetPath)) {
-		if name, err := steam.FetchAppName(ctx, pctx.Game.AppID); err == nil && name != "" {
+	if pctx.Game.NumericAppID > 0 && (pctx.Game.Name == "" || pctx.Game.Name == pctx.Game.AppID || pctx.Game.Name == filepath.Base(targetPath) || util.IsPlaceholderTitle(pctx.Game.Name, pctx.Game.AppID)) {
+		if name, err := steam.FetchAppName(ctx, pctx.Game.AppID); err == nil && name != "" && !util.IsPlaceholderTitle(name, pctx.Game.AppID) {
 			pctx.Game.Name = name
 		}
 	}

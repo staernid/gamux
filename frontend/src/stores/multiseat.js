@@ -13,53 +13,102 @@ export function getActiveSession(sessions, gameDir) {
   return null;
 }
 
-export function resolveGamepadAssignments(gamepads = [], seat1Pref = 'auto', seat2Pref = 'auto') {
+export function resolveMultiGamepadAssignments(gamepads = [], seatPrefs = ['auto', 'auto']) {
   const pads = Array.isArray(gamepads) ? gamepads : [];
-  let p1Dev = 'none';
-  let p2Dev = 'none';
+  const assigned = new Array(seatPrefs.length).fill('none');
+  const usedPads = new Set();
 
-  const s1 = seat1Pref || 'auto';
-  const s2 = seat2Pref || 'auto';
+  // Step 1: Assign explicit (non-auto) preferences
+  seatPrefs.forEach((pref, idx) => {
+    if (pref && pref !== 'auto' && pref !== 'none') {
+      assigned[idx] = pref;
+      usedPads.add(pref);
+    } else if (pref === 'none') {
+      assigned[idx] = 'none';
+    }
+  });
 
-  if (s1 === 'auto' && s2 === 'auto') {
-    if (pads.length >= 2) {
-      p1Dev = pads[0].dev_node;
-      p2Dev = pads[1].dev_node;
-    } else if (pads.length === 1) {
-      // Single gamepad: dedicate controller to Player 2; Player 1 uses host keyboard/mouse
-      p1Dev = 'none';
-      p2Dev = pads[0].dev_node;
-    } else {
-      p1Dev = 'none';
-      p2Dev = 'none';
-    }
-  } else {
-    // Explicit preferences
-    if (s1 !== 'auto') {
-      p1Dev = s1;
-    }
-    if (s2 !== 'auto') {
-      p2Dev = s2;
-    }
-
-    // Resolve auto for Player 1
-    if (s1 === 'auto') {
-      const unused = pads.find(p => p.dev_node !== p2Dev);
-      if (unused && (p2Dev !== 'none' || pads.length > 1)) {
-        p1Dev = unused.dev_node;
-      } else {
-        p1Dev = 'none';
-      }
-    }
-
-    // Resolve auto for Player 2
-    if (s2 === 'auto') {
-      const unused = pads.find(p => p.dev_node !== p1Dev);
-      p2Dev = unused ? unused.dev_node : 'none';
-    }
+  // Step 2: Handle special 2-player convention when only 1 pad is connected and both are 'auto':
+  // Dedicate the sole pad to Player 2, Player 1 uses host keyboard/mouse ('none').
+  if (seatPrefs.length === 2 && seatPrefs[0] === 'auto' && seatPrefs[1] === 'auto' && pads.length === 1 && !usedPads.has(pads[0].dev_node)) {
+    assigned[0] = 'none';
+    assigned[1] = pads[0].dev_node;
+    return assigned;
   }
 
+  // Step 3: For remaining 'auto' seats, assign available pads sequentially
+  seatPrefs.forEach((pref, idx) => {
+    if (pref === 'auto' && assigned[idx] === 'none') {
+      const unused = pads.find(p => !usedPads.has(p.dev_node));
+      if (unused) {
+        assigned[idx] = unused.dev_node;
+        usedPads.add(unused.dev_node);
+      }
+    }
+  });
+
+  return assigned;
+}
+
+export function resolveGamepadAssignments(gamepads = [], seat1Pref = 'auto', seat2Pref = 'auto') {
+  const [p1Dev, p2Dev] = resolveMultiGamepadAssignments(gamepads, [seat1Pref, seat2Pref]);
   return { p1Dev, p2Dev };
+}
+
+const defaultSeats = [
+  {
+    seat_id: 'p1',
+    mode: 'local',
+    display_index: 0,
+    screen_slot: 0,
+    disabled: false,
+    gamepad_node: '',
+    keyboard_node: '',
+    mouse_node: '',
+    physical_sink: '',
+    profile_id: 'main',
+  },
+  {
+    seat_id: 'p2',
+    mode: 'local',
+    display_index: 0,
+    screen_slot: 1,
+    disabled: false,
+    gamepad_node: '',
+    keyboard_node: '',
+    mouse_node: '',
+    force_grab_cursor: false,
+    grab_keyboard: false,
+    exclusive_grab: false,
+    compositor: '',
+    nest_cage: false,
+    show_cursor: true,
+    physical_sink: '',
+    profile_id: 'p2',
+  },
+];
+
+function syncStaging(staging) {
+  let seats;
+  if (Array.isArray(staging.seats) && staging.seats.length > 0) {
+    seats = staging.seats.map((s, idx) => ({
+      ...s,
+      seat_id: s.seat_id || `p${idx + 1}`,
+      disabled: Boolean(s.disabled),
+    }));
+  } else {
+    seats = [
+      { ...defaultSeats[0], ...(staging.seat1 || {}) },
+      { ...defaultSeats[1], ...(staging.seat2 || {}) },
+    ];
+  }
+
+  return {
+    ...staging,
+    seats,
+    seat1: seats[0],
+    seat2: seats[1] || seats[0],
+  };
 }
 
 function createMultiseatStore() {
@@ -75,31 +124,16 @@ function createMultiseatStore() {
     gamepads: [],
     keyboards: [],
     mice: [],
+    displays: [],
     isCoopEnabled: false,
     staging: {
-      seat1: {
-        mode: 'local', // 'local' | 'stream'
-        display_index: 0,
-        gamepad_node: '',
-        keyboard_node: '',
-        mouse_node: '',
-        physical_sink: '',
-      },
-      seat2: {
-        mode: 'local', // 'local' | 'stream'
-        display_index: 1,
-        gamepad_node: '',
-        keyboard_node: '',
-        mouse_node: '',
-        force_grab_cursor: false,
-        grab_keyboard: false,
-        exclusive_grab: false,
-        compositor: '',
-        nest_cage: false,
-        show_cursor: true,
-        physical_sink: '',
-      },
-      layout: 'dual_monitor', // 'dual_monitor' | 'side_by_side' | 'top_bottom' | 'windowed'
+      seats: [
+        { ...defaultSeats[0] },
+        { ...defaultSeats[1] },
+      ],
+      seat1: { ...defaultSeats[0] },
+      seat2: { ...defaultSeats[1] },
+      layout: 'dual_monitor', // 'dual_monitor' | 'side_by_side' | 'top_bottom' | 'quad_grid' | 'three_player' | 'windowed'
       enable_broadcast_relay: true,
       sunshine_port_p1: 47989,
       sunshine_port_p2: 48010,
@@ -128,6 +162,30 @@ function createMultiseatStore() {
         }
       } catch (err) {
         console.warn('Failed to probe multiseat capabilities:', err);
+      }
+    },
+
+    async refreshDisplays() {
+      try {
+        const displays = await AppAPI.getConnectedDisplays();
+        if (Array.isArray(displays)) {
+          update(state => {
+            const maxDisp = displays.length > 0 ? displays.length - 1 : 0;
+            let staging = state.staging;
+            if (staging?.seats && staging.seats.length > 0) {
+              const updatedSeats = staging.seats.map(s => {
+                if ((s.display_index ?? 0) > maxDisp) {
+                  return { ...s, display_index: 0 };
+                }
+                return s;
+              });
+              staging = { ...staging, seats: updatedSeats, seat1: updatedSeats[0], seat2: updatedSeats[1] || updatedSeats[0] };
+            }
+            return { ...state, displays, staging };
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to probe displays:', err);
       }
     },
 
@@ -171,17 +229,160 @@ function createMultiseatStore() {
       });
     },
 
-    setSeatMode(seatId, mode) {
-      update(state => ({
-        ...state,
-        staging: {
+    addSeat() {
+      update(state => {
+        const currentSeats = state.staging.seats || [state.staging.seat1, state.staging.seat2];
+        if (currentSeats.length >= 4) return state;
+        const nextIdx = currentSeats.length + 1;
+        const newSeat = {
+          seat_id: `p${nextIdx}`,
+          mode: 'local',
+          display_index: currentSeats.length % 2,
+          disabled: false,
+          gamepad_node: '',
+          keyboard_node: '',
+          mouse_node: '',
+          physical_sink: '',
+          profile_id: `p${nextIdx}`,
+          screen_slot: currentSeats.length,
+          force_grab_cursor: false,
+          grab_keyboard: false,
+          exclusive_grab: false,
+          compositor: '',
+          nest_cage: false,
+          show_cursor: true,
+        };
+        const nextSeats = [...currentSeats, newSeat];
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: nextSeats,
+          }),
+        };
+      });
+    },
+
+    toggleSeatActive(seatId) {
+      update(state => {
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        const idx = currentSeats.findIndex(s => s.seat_id === seatId || (seatId === 'seat1' && s.seat_id === 'p1') || (seatId === 'seat2' && s.seat_id === 'p2'));
+        if (idx < 0) return state;
+
+        const nextDisabled = !currentSeats[idx].disabled;
+        currentSeats[idx] = { ...currentSeats[idx], disabled: nextDisabled };
+
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: currentSeats,
+          }),
+        };
+      });
+    },
+
+    setSeatDisplay(seatId, displayIndex) {
+      update(state => {
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        const idx = currentSeats.findIndex(s => s.seat_id === seatId || (seatId === 'seat1' && s.seat_id === 'p1') || (seatId === 'seat2' && s.seat_id === 'p2'));
+        if (idx < 0) return state;
+
+        currentSeats[idx] = { ...currentSeats[idx], display_index: Number(displayIndex) };
+
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: currentSeats,
+          }),
+        };
+      });
+    },
+
+    setSeatSlot(seatId, targetSlot) {
+      update(state => {
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        const seatIdx = currentSeats.findIndex(s => s.seat_id === seatId);
+        if (seatIdx < 0) return state;
+
+        const oldSlot = currentSeats[seatIdx].screen_slot ?? seatIdx;
+        const otherIdx = currentSeats.findIndex((s, idx) => idx !== seatIdx && (s.screen_slot ?? idx) === targetSlot);
+
+        currentSeats[seatIdx] = { ...currentSeats[seatIdx], screen_slot: targetSlot };
+        if (otherIdx >= 0) {
+          currentSeats[otherIdx] = { ...currentSeats[otherIdx], screen_slot: oldSlot };
+        }
+
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: currentSeats,
+          }),
+        };
+      });
+    },
+
+    removeSeat(index) {
+      update(state => {
+        const currentSeats = state.staging.seats || [state.staging.seat1, state.staging.seat2];
+        if (currentSeats.length <= 2) return state;
+        const nextSeats = currentSeats.filter((_, idx) => idx !== index).map((s, idx) => ({
+          ...s,
+          seat_id: `p${idx + 1}`,
+        }));
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: nextSeats,
+          }),
+        };
+      });
+    },
+
+    updateSeat(indexOrId, partial) {
+      update(state => {
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        const idx = typeof indexOrId === 'number'
+          ? indexOrId
+          : currentSeats.findIndex(s => s.seat_id === indexOrId || (indexOrId === 'seat1' && s.seat_id === 'p1') || (indexOrId === 'seat2' && s.seat_id === 'p2'));
+
+        if (idx < 0 || idx >= currentSeats.length) return state;
+        currentSeats[idx] = { ...currentSeats[idx], ...partial };
+
+        const nextStaging = {
           ...state.staging,
-          [seatId]: {
-            ...state.staging[seatId],
-            mode,
-          },
-        },
-      }));
+          seats: currentSeats,
+        };
+        if (idx === 0) nextStaging.seat1 = currentSeats[0];
+        if (idx === 1) nextStaging.seat2 = currentSeats[1];
+
+        return {
+          ...state,
+          staging: syncStaging(nextStaging),
+        };
+      });
+    },
+
+    setSeatMode(seatId, mode) {
+      update(state => {
+        const key = seatId === 'seat1' || seatId === 'p1' ? 'seat1' : (seatId === 'seat2' || seatId === 'p2' ? 'seat2' : seatId);
+        const idx = seatId === 'seat1' || seatId === 'p1' ? 0 : (seatId === 'seat2' || seatId === 'p2' ? 1 : parseInt(seatId.replace(/\D/g, ''), 10) - 1);
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        if (idx >= 0 && idx < currentSeats.length) {
+          currentSeats[idx] = { ...currentSeats[idx], mode };
+        }
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            [key]: { ...(state.staging[key] || {}), mode },
+            seats: currentSeats,
+          }),
+        };
+      });
     },
 
     setLayout(layout) {
@@ -195,52 +396,83 @@ function createMultiseatStore() {
     },
 
     assignGamepad(seatId, devNode) {
-      update(state => ({
-        ...state,
-        staging: {
-          ...state.staging,
-          [seatId]: {
-            ...state.staging[seatId],
-            gamepad_node: devNode,
-          },
-        },
-      }));
+      update(state => {
+        const key = seatId === 'seat1' || seatId === 'p1' ? 'seat1' : (seatId === 'seat2' || seatId === 'p2' ? 'seat2' : seatId);
+        const idx = seatId === 'seat1' || seatId === 'p1' ? 0 : (seatId === 'seat2' || seatId === 'p2' ? 1 : parseInt(seatId.replace(/\D/g, ''), 10) - 1);
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        if (idx >= 0 && idx < currentSeats.length) {
+          currentSeats[idx] = { ...currentSeats[idx], gamepad_node: devNode };
+        }
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            [key]: { ...(state.staging[key] || {}), gamepad_node: devNode },
+            seats: currentSeats,
+          }),
+        };
+      });
     },
 
     assignKeyboard(seatId, devNode) {
-      update(state => ({
-        ...state,
-        staging: {
-          ...state.staging,
-          [seatId]: {
-            ...state.staging[seatId],
-            keyboard_node: devNode,
-          },
-        },
-      }));
+      update(state => {
+        const key = seatId === 'seat1' || seatId === 'p1' ? 'seat1' : (seatId === 'seat2' || seatId === 'p2' ? 'seat2' : seatId);
+        const idx = seatId === 'seat1' || seatId === 'p1' ? 0 : (seatId === 'seat2' || seatId === 'p2' ? 1 : parseInt(seatId.replace(/\D/g, ''), 10) - 1);
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        if (idx >= 0 && idx < currentSeats.length) {
+          currentSeats[idx] = { ...currentSeats[idx], keyboard_node: devNode };
+        }
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            [key]: { ...(state.staging[key] || {}), keyboard_node: devNode },
+            seats: currentSeats,
+          }),
+        };
+      });
     },
 
     assignMouse(seatId, devNode) {
-      update(state => ({
-        ...state,
-        staging: {
-          ...state.staging,
-          [seatId]: {
-            ...state.staging[seatId],
-            mouse_node: devNode,
-          },
-        },
-      }));
+      update(state => {
+        const key = seatId === 'seat1' || seatId === 'p1' ? 'seat1' : (seatId === 'seat2' || seatId === 'p2' ? 'seat2' : seatId);
+        const idx = seatId === 'seat1' || seatId === 'p1' ? 0 : (seatId === 'seat2' || seatId === 'p2' ? 1 : parseInt(seatId.replace(/\D/g, ''), 10) - 1);
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        if (idx >= 0 && idx < currentSeats.length) {
+          currentSeats[idx] = { ...currentSeats[idx], mouse_node: devNode };
+        }
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            [key]: { ...(state.staging[key] || {}), mouse_node: devNode },
+            seats: currentSeats,
+          }),
+        };
+      });
     },
 
     updateStaging(partial) {
-      update(state => ({
-        ...state,
-        staging: {
-          ...state.staging,
-          ...partial,
-        },
-      }));
+      update(state => {
+        let stagingSeats = state.staging.seats ? state.staging.seats.map(s => ({ ...s })) : [];
+        if (partial.seats) {
+          stagingSeats = partial.seats.map(s => ({ ...s }));
+        }
+        if (partial.seat1 && stagingSeats.length > 0) {
+          stagingSeats[0] = { ...stagingSeats[0], ...partial.seat1 };
+        }
+        if (partial.seat2 && stagingSeats.length > 1) {
+          stagingSeats[1] = { ...stagingSeats[1], ...partial.seat2 };
+        }
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            ...partial,
+            seats: stagingSeats,
+          }),
+        };
+      });
     },
 
     async launchSession(game, userCfg = {}) {
@@ -265,32 +497,7 @@ function createMultiseatStore() {
       const allProfs = get(profilesStore.profiles) || [];
       const activeProf = get(profilesStore.activeProfile);
 
-      const p1Prof = activeProf || { name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US' };
-
-      const p2Id = state.staging?.seat2?.profile_id || mCfg.player2_profile_id || 'p2';
-      const p2Prof = allProfs.find(p => p.id === p2Id) || allProfs.find(p => !p.is_main) || {
-        id: 'p2',
-        name: 'PlayerTwo',
-        steam_id: '76561198998877665',
-        language: 'english',
-        ip_country: 'US',
-      };
-
-      const player1Profile = {
-        account_name: p1Prof.name || 'GamuxPlayer',
-        account_steamid: p1Prof.steam_id || '76561197960287930',
-        language: p1Prof.language || 'english',
-        ip_country: p1Prof.ip_country || 'US',
-      };
-
-      const player2Profile = {
-        account_name: p2Prof.name || 'PlayerTwo',
-        account_steamid: p2Prof.steam_id || '76561198998877665',
-        language: p2Prof.language || 'english',
-        ip_country: p2Prof.ip_country || 'US',
-      };
-
-      // Check connected gamepads for intelligent assignment if not assigned explicitly
+      // Probe gamepads if not yet populated
       let pads = state.gamepads;
       if (!pads || pads.length === 0) {
         try {
@@ -303,38 +510,95 @@ function createMultiseatStore() {
         }
       }
 
-      // Resolve gamepad assignments respecting config preferences and staging overrides
-      const seat1GamepadPref = state.staging?.seat1?.gamepad_node || mCfg.seat1_gamepad || 'auto';
-      const seat2GamepadPref = state.staging?.seat2?.gamepad_node || mCfg.seat2_gamepad || 'auto';
-      const { p1Dev, p2Dev } = resolveGamepadAssignments(pads, seat1GamepadPref, seat2GamepadPref);
+      const rawSeats = (state.staging?.seats && state.staging.seats.length > 0)
+        ? state.staging.seats
+        : [state.staging.seat1, state.staging.seat2];
 
-      const p1Gamepad = p1Dev === 'none' ? '' : p1Dev;
-      const p2Gamepad = p2Dev === 'none' ? '' : p2Dev;
+      const activeRawSeats = rawSeats.filter(s => !s.disabled);
+      const effectiveRawSeats = activeRawSeats.length > 0 ? activeRawSeats : [rawSeats[0]];
 
-      const layout = mCfg.default_layout || state.staging?.layout || 'dual_monitor';
-      const seat1Mode = mCfg.default_seat1_mode || state.staging?.seat1?.mode || 'local';
-      const seat2Mode = mCfg.default_seat2_mode || state.staging?.seat2?.mode || 'local';
-      const seat1Display = mCfg.seat1_display_index ?? state.staging?.seat1?.display_index ?? 0;
-      const seat2Display = mCfg.seat2_display_index ?? state.staging?.seat2?.display_index ?? 1;
-      const enableRelay = mCfg.broadcast_relay_enabled ?? state.staging?.enable_broadcast_relay ?? true;
-      const sunPortP1 = mCfg.sunshine_port_p1 || state.staging?.sunshine_port_p1 || 47989;
-      const sunPortP2 = mCfg.sunshine_port_p2 || state.staging?.sunshine_port_p2 || 48010;
+      const seatGamepadPrefs = effectiveRawSeats.map((s, idx) => {
+        if (s.seat_id === 'p1') return s?.gamepad_node || mCfg.seat1_gamepad || 'auto';
+        if (s.seat_id === 'p2') return s?.gamepad_node || mCfg.seat2_gamepad || 'auto';
+        return s?.gamepad_node || 'auto';
+      });
 
-      const seat1Kbd = state.staging?.seat1?.keyboard_node || mCfg.seat1_keyboard || '';
-      const seat2Kbd = state.staging?.seat2?.keyboard_node || mCfg.seat2_keyboard || '';
-      const seat1Mouse = state.staging?.seat1?.mouse_node || mCfg.seat1_mouse || '';
-      const seat2Mouse = state.staging?.seat2?.mouse_node || mCfg.seat2_mouse || '';
-      const seat2ForceGrab = state.staging?.seat2?.force_grab_cursor ?? mCfg.seat2_force_grab_cursor ?? false;
-      const seat2GrabKbd = state.staging?.seat2?.grab_keyboard ?? mCfg.seat2_grab_keyboard ?? false;
-      const seat2ExclGrab = state.staging?.seat2?.exclusive_grab ?? false;
+      const resolvedPads = resolveMultiGamepadAssignments(pads, seatGamepadPrefs);
+
       const isExplicitDeviceNode = (node) => Boolean(node && node !== 'none' && node !== 'auto');
-      const p2HasDedicatedKBM = isExplicitDeviceNode(seat2Kbd) || isExplicitDeviceNode(seat2Mouse);
 
-      const seat2Compositor = state.staging?.seat2?.compositor || mCfg.seat2_compositor || 'auto';
-      const seat2NestCage = state.staging?.seat2?.nest_cage ?? mCfg.seat2_nest_cage ?? false;
-      const seat2ShowCursor = state.staging?.seat2?.show_cursor ?? mCfg.seat2_show_cursor ?? true;
+      const seatConfigs = effectiveRawSeats.map((s, idx) => {
+        const seatId = s.seat_id || `p${idx + 1}`;
+        let prof;
+        if (s.seat_id === 'p1' || idx === 0) {
+          prof = activeProf || { name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US' };
+        } else {
+          const profId = s.profile_id || (s.seat_id === 'p2' ? (mCfg.player2_profile_id || 'p2') : s.seat_id);
+          prof = allProfs.find(p => p.id === profId) || allProfs.find(p => !p.is_main) || {
+            id: profId,
+            name: `Player${idx + 1}`,
+            steam_id: `7656119899887766${idx + 4}`,
+            language: 'english',
+            ip_country: 'US',
+          };
+        }
 
+        const playerProfile = {
+          account_name: prof.name || `Player${idx + 1}`,
+          account_steamid: prof.steam_id || `7656119899887766${idx + 4}`,
+          language: prof.language || 'english',
+          ip_country: prof.ip_country || 'US',
+        };
+
+        const devPad = resolvedPads[idx] === 'none' ? '' : resolvedPads[idx];
+        const kbd = s.keyboard_node || (s.seat_id === 'p1' ? (mCfg.seat1_keyboard || '') : (s.seat_id === 'p2' ? (mCfg.seat2_keyboard || '') : ''));
+        const mouse = s.mouse_node || (s.seat_id === 'p1' ? (mCfg.seat1_mouse || '') : (s.seat_id === 'p2' ? (mCfg.seat2_mouse || '') : ''));
+
+        const mode = s.mode || (s.seat_id === 'p1' ? (mCfg.default_seat1_mode || 'local') : (s.seat_id === 'p2' ? (mCfg.default_seat2_mode || 'local') : 'local'));
+        const maxDisp = (state.displays && state.displays.length > 0) ? state.displays.length - 1 : 0;
+        let displayIndex = s.display_index ?? (s.seat_id === 'p1' ? (mCfg.seat1_display_index ?? 0) : (s.seat_id === 'p2' ? (mCfg.seat2_display_index ?? 0) : 0));
+        if (displayIndex > maxDisp || displayIndex < 0) {
+          displayIndex = 0;
+        }
+
+        const baseSunshinePort = s.seat_id === 'p1'
+          ? (mCfg.sunshine_port_p1 || state.staging?.sunshine_port_p1 || 47989)
+          : (s.seat_id === 'p2'
+            ? (mCfg.sunshine_port_p2 || state.staging?.sunshine_port_p2 || 48010)
+            : 48010 + (idx - 1) * 10);
+
+        return {
+          seat_id: seatId,
+          profile_id: prof.id || (s.seat_id === 'p1' ? 'main' : seatId),
+          player: playerProfile,
+          mode,
+          display_index: displayIndex,
+          screen_slot: s.screen_slot ?? idx,
+          gamepad_node: devPad,
+          keyboard_node: kbd,
+          mouse_node: mouse,
+          force_grab_cursor: s.force_grab_cursor ?? (s.seat_id === 'p2' ? (mCfg.seat2_force_grab_cursor ?? false) : false),
+          grab_keyboard: s.grab_keyboard ?? (s.seat_id === 'p2' ? (mCfg.seat2_grab_keyboard ?? false) : false),
+          exclusive_grab: s.exclusive_grab ?? false,
+          compositor: s.compositor || (s.seat_id === 'p2' ? (mCfg.seat2_compositor || 'auto') : 'auto'),
+          nest_cage: s.nest_cage ?? (s.seat_id === 'p2' ? (mCfg.seat2_nest_cage ?? false) : false),
+          show_cursor: s.show_cursor ?? (s.seat_id === 'p2' ? (mCfg.seat2_show_cursor ?? true) : true),
+          physical_sink: s.physical_sink || '',
+          wine_prefix: s.wine_prefix || (s.seat_id === 'p1' ? (cfg?.wine_prefix || '') : (s.seat_id === 'p2' ? (mCfg.player2_wine_prefix || '') : '')),
+          sunshine_port: baseSunshinePort,
+        };
+      });
+
+      const rawLayout = state.staging?.layout || mCfg.default_layout || 'dual_monitor';
+      let layout = rawLayout;
+      if (effectiveRawSeats.length === 2 && (layout === 'three_player' || layout === 'quad_grid')) {
+        layout = (mCfg.default_layout === 'top_bottom' || state.staging?.layout === 'top_bottom') ? 'top_bottom' : 'side_by_side';
+      } else if (effectiveRawSeats.length === 3 && layout === 'quad_grid') {
+        layout = 'three_player';
+      }
+      const enableRelay = mCfg.broadcast_relay_enabled ?? state.staging?.enable_broadcast_relay ?? true;
       const isNative = game.platform === 'linux';
+
       const sessionConfig = {
         game_dir: game.gameDir,
         name: game.name,
@@ -345,41 +609,20 @@ function createMultiseatStore() {
         runner: isNative ? 'linux' : (game.runner || cfg?.default_runner || 'umu'),
         layout,
         enable_broadcast_relay: enableRelay,
-        sunshine_port_p1: sunPortP1,
-        sunshine_port_p2: sunPortP2,
-        seat1: {
-          seat_id: 'p1',
-          profile_id: p1Prof.id || 'main',
-          player: player1Profile,
-          mode: seat1Mode,
-          display_index: seat1Display,
-          gamepad_node: p1Gamepad,
-          keyboard_node: seat1Kbd,
-          mouse_node: seat1Mouse,
-          physical_sink: state.staging?.seat1?.physical_sink || '',
-          wine_prefix: state.staging?.seat1?.wine_prefix || cfg?.wine_prefix || '',
-        },
-        seat2: {
-          seat_id: 'p2',
-          profile_id: p2Prof.id || 'p2',
-          player: player2Profile,
-          mode: seat2Mode,
-          display_index: seat2Display,
-          gamepad_node: p2Gamepad,
-          keyboard_node: seat2Kbd,
-          mouse_node: seat2Mouse,
-          force_grab_cursor: seat2ForceGrab,
-          grab_keyboard: seat2GrabKbd,
-          exclusive_grab: seat2ExclGrab,
-          compositor: seat2Compositor,
-          nest_cage: seat2NestCage,
-          show_cursor: seat2ShowCursor,
-          physical_sink: state.staging?.seat2?.physical_sink || '',
-          wine_prefix: state.staging?.seat2?.wine_prefix || mCfg.player2_wine_prefix || '',
-        },
+        sunshine_port_p1: seatConfigs[0]?.sunshine_port || 47989,
+        sunshine_port_p2: seatConfigs[1]?.sunshine_port || 48010,
+        seats: seatConfigs,
+        seat1: seatConfigs[0],
+        seat2: seatConfigs[1] || seatConfigs[0],
       };
 
       await AppAPI.launchMultiseatSession(sessionConfig);
+
+      const activeSeatsMap = {};
+      seatConfigs.forEach((sc, idx) => {
+        activeSeatsMap[sc.seat_id] = { mode: sc.mode, is_running: true };
+        activeSeatsMap[`seat${idx + 1}`] = { mode: sc.mode, is_running: true };
+      });
 
       update(s => ({
         ...s,
@@ -387,8 +630,10 @@ function createMultiseatStore() {
           ...s.activeSessions,
           [game.gameDir]: {
             is_running: true,
-            seat1: { mode: seat1Mode, is_running: true },
-            seat2: { mode: seat2Mode, is_running: true },
+            ...activeSeatsMap,
+            seat1: { mode: seatConfigs[0]?.mode || 'local', is_running: true },
+            seat2: { mode: seatConfigs[1]?.mode || 'local', is_running: true },
+            seats: seatConfigs.map(sc => ({ seat_id: sc.seat_id, profile_id: sc.profile_id, mode: sc.mode, is_running: true })),
           },
         },
       }));
@@ -419,19 +664,27 @@ function createMultiseatStore() {
         }
         if (!matchedKey) return state;
         const sess = state.activeSessions[matchedKey];
-        const seatKey = (seatId === 'p1' || seatId === 'seat1') ? 'seat1' : 'seat2';
-        const nextSeat = { ...(sess[seatKey] || {}), is_running: false };
-        const otherKey = seatKey === 'seat1' ? 'seat2' : 'seat1';
-        const isStillRunning = (sess[otherKey]?.is_running) ?? false;
+        const seatKey = (seatId === 'p1' || seatId === 'seat1') ? 'seat1' : ((seatId === 'p2' || seatId === 'seat2') ? 'seat2' : seatId);
+        const normId = seatId.startsWith('seat') ? `p${seatId.replace('seat', '')}` : seatId;
+
+        const nextSess = { ...sess };
+        if (nextSess[seatKey]) nextSess[seatKey] = { ...nextSess[seatKey], is_running: false };
+        if (nextSess[normId]) nextSess[normId] = { ...nextSess[normId], is_running: false };
+        if (Array.isArray(nextSess.seats)) {
+          nextSess.seats = nextSess.seats.map(s => s.seat_id === normId ? { ...s, is_running: false } : s);
+        }
+
+        const anyRunning = (nextSess.seats && nextSess.seats.length > 0)
+          ? nextSess.seats.some(s => s.is_running)
+          : Boolean(nextSess.seat1?.is_running || nextSess.seat2?.is_running);
+
+        nextSess.is_running = anyRunning;
+
         return {
           ...state,
           activeSessions: {
             ...state.activeSessions,
-            [matchedKey]: {
-              ...sess,
-              [seatKey]: nextSeat,
-              is_running: isStillRunning,
-            },
+            [matchedKey]: nextSess,
           },
         };
       });

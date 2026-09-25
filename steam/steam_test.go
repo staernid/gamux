@@ -96,6 +96,28 @@ func TestFetchAppName(t *testing.T) {
 			t.Errorf("expected name 'Blue Prince DLC', got '%s'", name)
 		}
 	})
+
+	t.Run("redirected appid key in response", func(t *testing.T) {
+		mockClient := &http.Client{
+			Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				jsonResp := `{"3361610": {"success": true, "data": {"steam_appid": 1458140, "name": "Pacific Drive"}}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(jsonResp)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		}
+
+		ctx := WithHTTPClient(context.Background(), mockClient)
+		name, err := FetchAppName(ctx, "1458140")
+		if err != nil {
+			t.Fatalf("FetchAppName failed: %v", err)
+		}
+		if name != "Pacific Drive" {
+			t.Errorf("expected name 'Pacific Drive', got '%s'", name)
+		}
+	})
 }
 
 func TestFetchDLCs(t *testing.T) {

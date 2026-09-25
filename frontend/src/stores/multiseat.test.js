@@ -181,6 +181,44 @@ describe('multiseatStore', () => {
     expect(getActiveSession(get(multiseatStore).activeSessions, '/games/CoopGame')).toBeNull();
   });
 
+  it('supports adding, updating, and removing seats dynamically for up to 4 players', () => {
+    // Starts with 2 seats
+    expect(get(multiseatStore).staging.seats.length).toBe(2);
+
+    multiseatStore.addSeat();
+    expect(get(multiseatStore).staging.seats.length).toBe(3);
+    expect(get(multiseatStore).staging.seats[2].seat_id).toBe('p3');
+
+    multiseatStore.addSeat();
+    expect(get(multiseatStore).staging.seats.length).toBe(4);
+    expect(get(multiseatStore).staging.seats[3].seat_id).toBe('p4');
+
+    // Max 4 seats
+    multiseatStore.addSeat();
+    expect(get(multiseatStore).staging.seats.length).toBe(4);
+
+    // Update seat
+    multiseatStore.updateSeat('p3', { mode: 'stream' });
+    expect(get(multiseatStore).staging.seats[2].mode).toBe('stream');
+
+    // Remove seat (removes p4)
+    multiseatStore.removeSeat(3);
+    expect(get(multiseatStore).staging.seats.length).toBe(3);
+
+    // Cannot remove below 2 seats
+    multiseatStore.removeSeat(2);
+    expect(get(multiseatStore).staging.seats.length).toBe(2);
+    multiseatStore.removeSeat(1);
+    expect(get(multiseatStore).staging.seats.length).toBe(2);
+  });
+
+  it('refreshes connected displays from AppAPI', async () => {
+    await multiseatStore.refreshDisplays();
+    const displays = get(multiseatStore).displays;
+    expect(displays.length).toBeGreaterThan(0);
+    expect(displays[0].name).toBeDefined();
+  });
+
   describe('resolveGamepadAssignments', () => {
     const mockPads = [
       { name: 'Black Shark Green Ghost', dev_node: '/dev/input/event29', bus: 'usb' },

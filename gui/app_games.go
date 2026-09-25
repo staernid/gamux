@@ -141,6 +141,65 @@ func (a *App) StopGame(gamePath string) error {
 	return a.Engine.RunnerMgr.Stop(cPath)
 }
 
+// StopGameInstance terminates an individual running instance (single-player or a specific multi-seat seat).
+func (a *App) StopGameInstance(instanceID string) error {
+	if instanceID == "" {
+		return fmt.Errorf("instanceID cannot be empty")
+	}
+	gameDir, profileID := domain.ParseInstanceID(instanceID)
+	cDir := util.CanonicalPath(gameDir)
+
+	// Check if this instance is running in a multi-seat session
+	msSup := a.multiseatSupervisor()
+	if msSup.IsSessionRunning(cDir) {
+		status := msSup.GetStatus(cDir)
+		if status != nil && status.Seats != nil {
+			for seatID, st := range status.Seats {
+				if st.ProfileID == profileID || seatID == profileID {
+					return msSup.StopSeat(cDir, seatID)
+				}
+			}
+		}
+		// If profile match wasn't found but seatID matched instance directly
+		if err := msSup.StopSeat(cDir, profileID); err == nil {
+			return nil
+		}
+		return msSup.StopSession(cDir)
+	}
+
+	// Single-player instance
+	if a.Engine != nil && a.Engine.RunnerMgr != nil {
+		return a.Engine.RunnerMgr.StopInstance(instanceID)
+	}
+	return fmt.Errorf("engine not initialized")
+}
+
+// GetRunningInstances returns all active execution instances (solo sessions and multi-seat seats).
+func (a *App) GetRunningInstances() []domain.RunningInstance {
+	var result []domain.RunningInstance
+	seen := make(map[string]bool)
+
+	// Solo instances from RunnerMgr
+	if a.Engine != nil && a.Engine.RunnerMgr != nil {
+		for _, inst := range a.Engine.RunnerMgr.RunningInstances() {
+			if !seen[inst.InstanceID] {
+				seen[inst.InstanceID] = true
+				result = append(result, inst)
+			}
+		}
+	}
+
+	// Multiseat seat instances
+	for _, inst := range a.multiseatSupervisor().GetRunningInstances() {
+		if !seen[inst.InstanceID] {
+			seen[inst.InstanceID] = true
+			result = append(result, inst)
+		}
+	}
+
+	return result
+}
+
 // GetRunningGames returns merged, deduplicated canonical paths of all active single-player and multi-seat games.
 func (a *App) GetRunningGames() []string {
 	seen := make(map[string]bool)

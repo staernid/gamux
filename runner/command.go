@@ -355,7 +355,6 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		gameEnv["WINEDEBUG"] = "-all"
 
 		// Construct and merge WINEDLLOVERRIDES
-		baseOverrides := "d3d10core,d3d11,d3d12,d3d12core,d3d8,d3d9,dxgi,nvapi,nvapi64,nvofapi64=n;winemenubuilder="
 		var overridesParts []string
 
 		if resolved.DllOverrides != "" {
@@ -368,22 +367,12 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 			overridesParts = append(overridesParts, "steamclient,steamclient64,GameOverlayRenderer,GameOverlayRenderer64=n,b")
 		}
 
-		if len(overridesParts) == 0 {
-			gameEnv["WINEDLLOVERRIDES"] = baseOverrides
-		} else {
-			merged := strings.Join(overridesParts, ";")
-			if !strings.Contains(merged, "winemenubuilder=") {
-				merged = baseOverrides + ";" + merged
-			}
-			gameEnv["WINEDLLOVERRIDES"] = merged
+		if len(overridesParts) > 0 {
+			gameEnv["WINEDLLOVERRIDES"] = strings.Join(overridesParts, ";")
 		}
 		if resolved.Runner == RunnerUMU || resolved.Runner == RunnerAuto || resolved.Runner == "" {
 			if resolved.ProtonPath == "" {
-				if latestProton := FindLatestInstalledProton(); latestProton != "" {
-					gameEnv["PROTONPATH"] = latestProton
-				} else {
-					gameEnv["PROTONPATH"] = "GE-Proton"
-				}
+				gameEnv["PROTONPATH"] = "GE-Proton"
 			}
 			gameEnv["PROTON_VERB"] = "waitforexitandrun"
 		}
