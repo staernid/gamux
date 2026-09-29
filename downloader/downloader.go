@@ -75,6 +75,7 @@ type DownloadRequest struct {
 	LuaPath          string
 	HubcapAPIKey     string
 	ManifestGIDs     map[uint32]string // Optional map of DepotID -> ManifestGID to acquire via GMRC
+	Branch           string            // Optional target branch name (e.g. "public", "beta")
 	GMRCEndpoint     string            // Optional custom GMRC endpoint URL
 	WorkerLimit      int
 	DryRun           bool
@@ -98,6 +99,7 @@ type DownloadOptions struct {
 	IncludedDepots       []uint32
 	ExcludedDepots       []uint32
 	IncludeOptional      bool
+	Branch               string
 	DepotMetadata        map[uint32]manifest.DepotMeta
 	ManifestGIDs         map[uint32]string
 	GMRCEndpoint         string
@@ -116,6 +118,24 @@ type Result struct {
 	UpdatedFiles    int    `json:"updated_files"`
 	DownloadedBytes uint64 `json:"downloaded_bytes"`
 	NetworkBytes    uint64 `json:"network_bytes,omitempty"`
+}
+
+// DownloadError wraps a root cause with the audit trace and AppID for diagnostics.
+// Callers can inspect the Cause to determine the specific failure reason (e.g.
+// manifest.PlatformMismatchError), while the audit trace provides detailed
+// provider resolution context for debugging.
+type DownloadError struct {
+	AppID      uint32
+	AuditTrace []string
+	Cause      error
+}
+
+func (e *DownloadError) Error() string {
+	return e.Cause.Error()
+}
+
+func (e *DownloadError) Unwrap() error {
+	return e.Cause
 }
 
 type cdnServerEntry struct {
@@ -167,12 +187,44 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		return nil, fmt.Errorf("resolve keys and manifests for AppID %d: %w", req.AppID, err)
 	}
 
-	// 1.5 Attempt GMRC direct SteamPipe CDN manifest acquisition if manifest GIDs were provided and manifests are missing
-	if (parsedLua.ManifestFiles == nil || len(parsedLua.ManifestFiles) == 0) && len(req.ManifestGIDs) > 0 {
+	req.AppID = parsedLua.AppID
+	manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
+
+	// 1.5 Target branch manifest acquisition:
+	// If specific ManifestGIDs were provided (e.g. for a selected branch), ensure each depot acquires
+	// and uses that exact target manifest GID.
+	if len(req.ManifestGIDs) > 0 {
+		if parsedLua.ManifestFiles == nil {
+			parsedLua.ManifestFiles = make(map[string][]byte)
+		}
 		for depotID, gid := range req.ManifestGIDs {
 			if gid == "" {
 				continue
 			}
+			targetFname := fmt.Sprintf("%d_%s.manifest", depotID, gid)
+
+			// Remove any non-matching manifests for this depot from parsedLua.ManifestFiles
+			depotPrefix := fmt.Sprintf("%d_", depotID)
+			for existingFname := range parsedLua.ManifestFiles {
+				if strings.HasPrefix(existingFname, depotPrefix) && existingFname != targetFname {
+					delete(parsedLua.ManifestFiles, existingFname)
+				}
+			}
+
+			// If target manifest is already in parsedLua, proceed
+			if _, exists := parsedLua.ManifestFiles[targetFname]; exists {
+				continue
+			}
+
+			// Check if target manifest is already present on disk in [Manifests]
+			diskPath := filepath.Join(manifestsDir, targetFname)
+			if content, err := os.ReadFile(diskPath); err == nil && len(content) > 0 {
+				parsedLua.ManifestFiles[targetFname] = content
+				parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("Local Disk: Found target branch manifest %s (%d bytes)", targetFname, len(content)))
+				continue
+			}
+
+			// Download via GMRC + Steam CDN
 			reqCode, err := manifest.FetchGMRCRequestCode(ctx, gid, req.GMRCEndpoint)
 			if err != nil {
 				slog.Warn("Failed to resolve GMRC request code", "depotID", depotID, "manifestGID", gid, "error", err)
@@ -185,17 +237,10 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 				parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("Steam CDN Manifest Download (%d_%s): %v", depotID, gid, err))
 				continue
 			}
-			if parsedLua.ManifestFiles == nil {
-				parsedLua.ManifestFiles = make(map[string][]byte)
-			}
-			fname := fmt.Sprintf("%d_%s.manifest", depotID, gid)
-			parsedLua.ManifestFiles[fname] = mBytes
-			parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("GMRC + Steam CDN: Successfully downloaded manifest %s (%d bytes)", fname, len(mBytes)))
+			parsedLua.ManifestFiles[targetFname] = mBytes
+			parsedLua.AuditTrace = append(parsedLua.AuditTrace, fmt.Sprintf("GMRC + Steam CDN: Successfully downloaded manifest %s (%d bytes)", targetFname, len(mBytes)))
 		}
 	}
-
-	req.AppID = parsedLua.AppID
-	manifestsDir := filepath.Join(absTargetDir, "[Manifests]")
 
 	// 2. Persist returned .manifest files to disk
 	if !req.DryRun && len(parsedLua.ManifestFiles) > 0 {
@@ -222,7 +267,14 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		}
 	}
 
-	// 3. Extract depot keys
+	// 3. Extract depot keys and persist .lua file to [Manifests]
+	if len(parsedLua.Depots) > 0 {
+		luaPath := filepath.Join(manifestsDir, fmt.Sprintf("%d.lua", req.AppID))
+		if err := manifest.SaveLuaFile(luaPath, req.AppID, parsedLua.Depots); err == nil {
+			slog.Info("Saved depot keys lua file", "path", luaPath, "depots", len(parsedLua.Depots))
+		}
+	}
+
 	depotKeys := make(map[uint32]string)
 	for _, d := range parsedLua.Depots {
 		depotKeys[d.DepotID] = d.DecryptionKey
@@ -239,6 +291,7 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 		IncludedDepots:  req.IncludedDepots,
 		ExcludedDepots:  req.ExcludedDepots,
 		IncludeOptional: req.IncludeOptional,
+		ManifestGIDs:    req.ManifestGIDs,
 		DepotMetadata:   req.DepotMetadata,
 	}
 
@@ -349,18 +402,29 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
 		}
 
-		traceStr := ""
-		if len(trace) > 0 {
-			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
+		// If the manifest module returned a structured error, propagate it directly
+		// as the cause instead of generating a misleading generic message.
+		var cause error
+		if localLoadErr != nil {
+			cause = localLoadErr
+		} else {
+			cause = fmt.Errorf("no depot manifests could be resolved for AppID %d", req.AppID)
 		}
-
-		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", req.AppID, traceStr)
+		return nil, &DownloadError{
+			AppID:      req.AppID,
+			AuditTrace: trace,
+			Cause:      cause,
+		}
 	}
 
 	// 5. Validate that all file paths in manifest are decrypted
 	for _, f := range loadedManifest.Files {
 		if util.IsEncryptedBase64Path(f.Path) {
-			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
+			return nil, &DownloadError{
+				AppID:      req.AppID,
+				AuditTrace: parsedLua.AuditTrace,
+				Cause:      &manifest.EncryptedDepotError{DepotID: f.DepotID},
+			}
 		}
 	}
 
@@ -399,6 +463,7 @@ func DownloadGame(ctx context.Context, cfg *config.Config, opts DownloadOptions)
 		LuaPath:          opts.LuaPath,
 		HubcapAPIKey:     hubcapKey,
 		ManifestGIDs:     opts.ManifestGIDs,
+		Branch:           opts.Branch,
 		GMRCEndpoint:     opts.GMRCEndpoint,
 		WorkerLimit:      opts.WorkerLimit,
 		DryRun:           opts.DryRun,
@@ -451,6 +516,7 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		IncludedDepots:  opts.IncludedDepots,
 		ExcludedDepots:  opts.ExcludedDepots,
 		IncludeOptional: opts.IncludeOptional,
+		ManifestGIDs:    opts.ManifestGIDs,
 		DepotMetadata:   opts.DepotMetadata,
 	}
 
@@ -491,17 +557,20 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 			trace = append(trace, fmt.Sprintf("Local [Manifests] Dir ('%s'): Directory missing", manifestsDir))
 		}
 
-		traceStr := ""
-		if len(trace) > 0 {
-			traceStr = "\n\n🔍 Key & Manifest Provider Resolution Audit Trace:\n  • " + strings.Join(trace, "\n  • ")
+		return nil, &DownloadError{
+			AppID:      opts.AppID,
+			AuditTrace: trace,
+			Cause:      fmt.Errorf("no depot manifests could be resolved for AppID %d", opts.AppID),
 		}
-
-		return nil, fmt.Errorf("no depot binary manifest (.manifest) files found in '[Manifests]/' or resolved for AppID %d%s", opts.AppID, traceStr)
 	}
 
 	for _, f := range m.Files {
 		if util.IsEncryptedBase64Path(f.Path) {
-			return nil, fmt.Errorf("manifest contains encrypted filenames for depot %d and no valid depot decryption key was found to decrypt them. Aborting download to prevent corrupting target directory", f.DepotID)
+			return nil, &DownloadError{
+				AppID:      opts.AppID,
+				AuditTrace: opts.AuditTrace,
+				Cause:      &manifest.EncryptedDepotError{DepotID: f.DepotID},
+			}
 		}
 	}
 

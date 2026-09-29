@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { AppAPI } from '../api/app.js';
 import { generateId } from '../utils/format.js';
 import { notificationStore } from './notifications.js';
@@ -109,8 +109,8 @@ function normalizeTask(t) {
   const gameName = t.game_name || t.gameName || t.title || 'Task';
   const isDl = isDownloadTask(t);
   const taskType = t.type || (isDl ? 'download' : (t.operation || 'operation'));
-  const appId = String(t.app_id ?? t.appId ?? '');
-  const gameDir = t.game_dir || t.gameDir || '';
+  const appId = String(t.app_id ?? t.appId ?? t.game_id ?? '');
+  const gameDir = t.game_dir || t.gameDir || t.target_dir || t.targetDir || '';
 
   return {
     id: t.id || t.task_id,
@@ -400,6 +400,16 @@ function createTasksStore() {
     }
   }
 
+  async function pauseAll() {
+    const targets = get(items).filter((t) => isDownloadTask(t) && (t.status === 'running' || t.status === 'downloading'));
+    await Promise.allSettled(targets.map((t) => pause(t.id)));
+  }
+
+  async function resumeAll() {
+    const targets = get(items).filter((t) => isDownloadTask(t) && t.status === 'paused');
+    await Promise.allSettled(targets.map((t) => resume(t.id)));
+  }
+
   async function cancel(id) {
     try {
       await AppAPI.cancelTask(id);
@@ -422,6 +432,16 @@ function createTasksStore() {
   }
 
   async function reorder(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    items.update((list) => {
+      const orderMap = new Map();
+      ids.forEach((id, idx) => orderMap.set(id, idx));
+      return [...list].sort((a, b) => {
+        const orderA = orderMap.has(a.id) ? orderMap.get(a.id) : 9999;
+        const orderB = orderMap.has(b.id) ? orderMap.get(b.id) : 9999;
+        return orderA - orderB;
+      });
+    });
     try {
       await AppAPI.reorderTasks(ids);
       await refresh();
@@ -557,6 +577,8 @@ function createTasksStore() {
     start,
     pause,
     resume,
+    pauseAll,
+    resumeAll,
     cancel,
     remove,
     reorder,

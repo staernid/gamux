@@ -9,7 +9,8 @@
     isGamePathRunning,
     refreshGame,
     libraryPath,
-    updateGameInStore
+    updateGameInStore,
+    trashGame
   } from '../../stores/library.js';
   import { tasksStore } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
@@ -21,7 +22,6 @@
   import { isSamePath, countOverrides, normalizeGame, isSteamApp, isPlaceholderTitle } from '../../utils/game.js';
   import HubSavesCard from './hub/cards/HubSavesCard.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
-  import GameTaskHud from './hub/GameTaskHud.svelte';
   import HubOverviewTab from './hub/HubOverviewTab.svelte';
   import HubCommunityTab from './hub/HubCommunityTab.svelte';
   import HubConfigTab from './hub/HubConfigTab.svelte';
@@ -53,7 +53,7 @@
   $: isGameRunning = Boolean(game?.gameDir && isGamePathRunning($runningGames, game.gameDir));
 
   $: activeGameTask = ($allTasks || []).find(t => {
-    if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending') return false;
+    if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'paused') return false;
     if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
     if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
     return false;
@@ -174,6 +174,33 @@
     }
   }
 
+  function handleTrashGame() {
+    if (!game?.gameDir || isGameRunning) return;
+    const gameName = game.name || 'this game';
+    const gameDir = game.gameDir;
+
+    modalStore.open('confirm', {
+      title: `Move "${gameName}" to Trash?`,
+      message: `This will move the game files (${gameDir}) to your desktop Trash. Saves and emulation configuration will remain intact.`,
+      confirmLabel: 'Move to Trash',
+      cancelLabel: 'Keep Game',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await trashGame(gameDir);
+          activeView.set('library');
+          notificationStore.items.add({
+            type: 'success',
+            title: 'Moved to Trash',
+            message: `${gameName} was moved to Trash.`
+          });
+        } catch (err) {
+          notificationStore.error('Failed to Move Game to Trash', err);
+        }
+      }
+    });
+  }
+
   async function handleAddToLibrary() {
     if (!game) return;
     const lib = $libraryPath || '/home/staernid/Games';
@@ -201,6 +228,17 @@
 
   async function handlePrimaryAction() {
     if (!game) return;
+
+    if (activeGameTask) {
+      if (activeGameTask.status === 'paused') {
+        await tasksStore.resume(activeGameTask.id);
+        return;
+      }
+      if (activeGameTask.status === 'running' || activeGameTask.status === 'downloading' || activeGameTask.status === 'queued' || activeGameTask.status === 'pending') {
+        await tasksStore.pause(activeGameTask.id);
+        return;
+      }
+    }
 
     if (isGameRunning) {
       try {
@@ -553,6 +591,7 @@
       on:primaryAction={handlePrimaryAction}
       on:addToLibrary={handleAddToLibrary}
       on:openDirectory={openDirectory}
+      on:trash={handleTrashGame}
       on:stopSeat={handleStopSeat}
       on:openBranchTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
       on:openBetasTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
@@ -560,11 +599,6 @@
 
     <!-- Main Content & Consolidated Tabs Section -->
     <div class="max-w-6xl w-full mx-auto px-6 py-4 flex-1 flex flex-col space-y-4">
-      <!-- Live Task Progress HUD -->
-      {#if activeGameTask}
-        <GameTaskHud task={activeGameTask} />
-      {/if}
-
       <!-- Primary Navigation Tabs (4 Surfaces) -->
       <div class="flex items-center space-x-2 border-b border-surface-border pb-2 text-xs font-bold select-none overflow-x-auto custom-scrollbar">
         <!-- 1. Overview Tab -->

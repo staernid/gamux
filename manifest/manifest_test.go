@@ -8,10 +8,12 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/staernid/gamux/util/testutil"
@@ -35,6 +37,78 @@ func TestMain(m *testing.M) {
 	HTTPClient = oldClient
 	restore()
 	os.Exit(code)
+}
+
+func TestInspectRealFactorio(t *testing.T) {
+	gameDir := "/home/staernid/Games/Factorio"
+	if _, err := os.Stat(gameDir); err != nil {
+		t.Skip("skipping real Factorio test: game directory not found")
+	}
+	summaries, err := InspectGameDepotsWithMetadata(gameDir, 427520, nil)
+	if err != nil {
+		t.Fatalf("InspectGameDepotsWithMetadata: %v", err)
+	}
+	var foundWin32, foundLin64, foundLin32 bool
+	for _, s := range summaries {
+		t.Logf("DEPOT %d: Name=%q Category=%q ContentCat=%q Installed=%v Files=%d Size=%d OSArch=%q",
+			s.DepotID, s.Name, s.Category, s.ContentCategory, s.Installed, s.FileCount, s.Size, s.OSArch)
+		if s.DepotID == 427522 {
+			foundWin32 = true
+			if s.Installed {
+				t.Errorf("Depot 427522 (Windows 32-bit) should NOT be installed, but got Installed=true")
+			}
+			if s.Category != string(DepotCategoryWindows) {
+				t.Errorf("Depot 427522 should have Category=windows, got %s", s.Category)
+			}
+		}
+		if s.DepotID == 427523 {
+			foundLin64 = true
+			if !s.Installed {
+				t.Errorf("Depot 427523 (Linux 64-bit) SHOULD be installed, but got Installed=false")
+			}
+			if s.Category != string(DepotCategoryLinux) {
+				t.Errorf("Depot 427523 should have Category=linux, got %s", s.Category)
+			}
+		}
+		if s.DepotID == 427524 {
+			foundLin32 = true
+			if !s.Installed {
+				t.Errorf("Depot 427524 (Linux 32-bit) SHOULD be installed, but got Installed=false")
+			}
+			if s.Category != string(DepotCategoryLinux) {
+				t.Errorf("Depot 427524 should have Category=linux, got %s", s.Category)
+			}
+		}
+	}
+	if !foundWin32 || !foundLin64 || !foundLin32 {
+		t.Errorf("missing expected depots in inspection: win32=%v, lin64=%v, lin32=%v", foundWin32, foundLin64, foundLin32)
+	}
+}
+
+func TestFormatAndSaveLua(t *testing.T) {
+	depots := []DepotKeyPair{
+		{DepotID: 427523, DecryptionKey: "key64"},
+		{DepotID: 427522, DecryptionKey: "key32"},
+		{DepotID: 427520, DecryptionKey: ""},
+	}
+	content := FormatLua(427520, depots)
+	expected := "addappid(427520)\naddappid(427522, 1, \"key32\")\naddappid(427523, 1, \"key64\")\n"
+	if content != expected {
+		t.Errorf("FormatLua output mismatch.\nGot:\n%s\nExpected:\n%s", content, expected)
+	}
+
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "[Manifests]", "427520.lua")
+	if err := SaveLuaFile(outPath, 427520, depots); err != nil {
+		t.Fatalf("SaveLuaFile failed: %v", err)
+	}
+	readBytes, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	if string(readBytes) != expected {
+		t.Errorf("Saved content mismatch: got %q, expected %q", string(readBytes), expected)
+	}
 }
 
 func encodeVarint(val uint64) []byte {
@@ -630,19 +704,71 @@ func TestShouldIncludeDepot(t *testing.T) {
 func TestInspectGameDepotsWithMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 	metaMap := map[uint32]DepotMeta{
-		1091501: {DepotID: 1091501, Name: "Cyberpunk 2077 Base", OSList: "windows"},
-		1091504: {DepotID: 1091504, Name: "Cyberpunk 2077 - French", Language: "french", OSList: "windows"},
+		1091501: {
+			DepotID:      1091501,
+			Name:         "",
+			OSList:       "windows",
+			OSArch:       "64",
+			Size:         5000000000,
+			DownloadSize: 4000000000,
+		},
+		1091504: {
+			DepotID:  1091504,
+			Name:     "Cyberpunk 2077 - French",
+			Language: "french",
+			OSList:   "windows",
+			Size:     1000000000,
+		},
+		1091599: {
+			DepotID:  1091599,
+			Name:     "",
+			IsDLC:    true,
+			DLCAppID: 2138330, // Phantom Liberty
+			OSList:   "windows",
+			OSArch:   "64",
+			Size:     30000000000,
+		},
 	}
 
 	summaries, err := InspectGameDepotsWithMetadata(tmpDir, 1091500, metaMap)
 	if err != nil {
 		t.Fatalf("InspectGameDepotsWithMetadata failed: %v", err)
 	}
-	if len(summaries) != 2 {
-		t.Fatalf("expected 2 depot summaries, got %d", len(summaries))
+	if len(summaries) != 3 {
+		t.Fatalf("expected 3 depot summaries, got %d", len(summaries))
 	}
+
+	// 1. Base Windows 64-bit depot
+	if summaries[0].Size != 5000000000 {
+		t.Errorf("expected size 5000000000, got %d", summaries[0].Size)
+	}
+	if summaries[0].DownloadSize != 4000000000 {
+		t.Errorf("expected download size 4000000000, got %d", summaries[0].DownloadSize)
+	}
+	if !strings.Contains(summaries[0].Name, "Windows Binaries (64-bit)") {
+		t.Errorf("expected name to contain 'Windows Binaries (64-bit)', got %q", summaries[0].Name)
+	}
+
+	// 2. Locale depot
 	if summaries[1].ContentCategory != "locale:french" || summaries[1].Language != "french" {
 		t.Errorf("expected locale:french, got %+v", summaries[1])
+	}
+	if summaries[1].Size != 1000000000 {
+		t.Errorf("expected size 1000000000, got %d", summaries[1].Size)
+	}
+
+	// 3. DLC depot
+	if summaries[2].ContentCategory != ContentCategoryDLC {
+		t.Errorf("expected ContentCategory '%s', got %q", ContentCategoryDLC, summaries[2].ContentCategory)
+	}
+	if summaries[2].DLCAppID != 2138330 || !summaries[2].IsDLC {
+		t.Errorf("expected DLCAppID 2138330 and IsDLC true, got %+v", summaries[2])
+	}
+	if summaries[2].Size != 30000000000 {
+		t.Errorf("expected size 30000000000, got %d", summaries[2].Size)
+	}
+	if !strings.Contains(summaries[2].Name, "DLC #2138330") {
+		t.Errorf("expected name to contain 'DLC #2138330', got %q", summaries[2].Name)
 	}
 }
 
@@ -755,8 +881,205 @@ func TestLoadManifestFromDirWithFilter_RelaxedLanguageFallback(t *testing.T) {
 	}
 }
 
+func TestLoadManifestFromDirWithFilter_BranchManifestGIDPrecedence(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
 
+	legacyFiles := []ManifestFileEntry{
+		{Path: "LosslessScaling_legacy.exe", Size: 12345},
+	}
+	publicFiles := []ManifestFileEntry{
+		{Path: "LosslessScaling_public.exe", Size: 67890},
+	}
 
+	legacyPayload := buildTestProtobufPayload(legacyFiles)
+	publicPayload := buildTestProtobufPayload(publicFiles)
 
+	// Note: 9191341654061558981 is numerically larger than 2549887697121492489
+	if err := os.WriteFile(filepath.Join(manifestsDir, "993091_9191341654061558981.manifest"), legacyPayload, 0644); err != nil {
+		t.Fatalf("write legacy manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifestsDir, "993091_2549887697121492489.manifest"), publicPayload, 0644); err != nil {
+		t.Fatalf("write public manifest: %v", err)
+	}
+
+	// 1. Without specifying ManifestGIDs, numerical sort picks legacy (919134... > 254988...)
+	mDefault, err := LoadManifestFromDirWithFilter(tmpDir, 993090, nil, DepotFilter{Platform: "win64"})
+	if err != nil {
+		t.Fatalf("default load failed: %v", err)
+	}
+	if len(mDefault.Files) != 1 || mDefault.Files[0].Path != "LosslessScaling_legacy.exe" {
+		t.Fatalf("expected default to pick highest numerical manifest, got %+v", mDefault.Files)
+	}
+
+	// 2. When ManifestGIDs targets public (2549887697121492489), it must prioritize the target branch
+	mTarget, err := LoadManifestFromDirWithFilter(tmpDir, 993090, nil, DepotFilter{
+		Platform:     "win64",
+		ManifestGIDs: map[uint32]string{993091: "2549887697121492489"},
+	})
+	if err != nil {
+		t.Fatalf("target load failed: %v", err)
+	}
+	if len(mTarget.Files) != 1 || mTarget.Files[0].Path != "LosslessScaling_public.exe" {
+		t.Fatalf("expected target branch to pick public manifest, got %+v", mTarget.Files)
+	}
+}
+
+func TestLoadManifestFromDirWithFilter_PlatformMismatchError(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Create a Windows-only depot manifest (contains only .exe/.dll files)
+	winFiles := []ManifestFileEntry{
+		{Path: "Game.exe", Size: 5000000},
+		{Path: "steam_api64.dll", Size: 100000},
+	}
+	payload := buildTestProtobufPayload(winFiles)
+	manifestPath := filepath.Join(manifestsDir, "100_1000.manifest")
+	if err := os.WriteFile(manifestPath, payload, 0644); err != nil {
+		t.Fatalf("write manifest failed: %v", err)
+	}
+
+	// Request Linux platform — should fail with PlatformMismatchError
+	_, err := LoadManifestFromDirWithFilter(tmpDir, 100, nil, DepotFilter{
+		Platform: "linux",
+		Language: "english",
+	})
+	if err == nil {
+		t.Fatal("expected error when requesting linux for windows-only depot, got nil")
+	}
+
+	var platErr *PlatformMismatchError
+	if !errors.As(err, &platErr) {
+		t.Fatalf("expected PlatformMismatchError, got %T: %v", err, err)
+	}
+	if platErr.RequestedPlatform != "linux" {
+		t.Errorf("expected RequestedPlatform=linux, got %q", platErr.RequestedPlatform)
+	}
+	if len(platErr.AvailablePlatforms) == 0 {
+		t.Error("expected AvailablePlatforms to be non-empty")
+	}
+	// Error message should be user-friendly
+	msg := platErr.Error()
+	if !bytes.Contains([]byte(msg), []byte("linux")) {
+		t.Errorf("error message should mention linux: %q", msg)
+	}
+	if !bytes.Contains([]byte(msg), []byte("windows")) {
+		t.Errorf("error message should mention windows: %q", msg)
+	}
+}
+
+func TestLoadManifestFromDirWithFilter_NoManifestFilesError(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Write a non-manifest file so the directory is not empty but has no .manifest files
+	if err := os.WriteFile(filepath.Join(manifestsDir, "readme.txt"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	_, err := LoadManifestFromDirWithFilter(tmpDir, 100, nil, DepotFilter{
+		Platform: "linux",
+		Language: "english",
+	})
+	if err == nil {
+		t.Fatal("expected error for empty manifests dir, got nil")
+	}
+
+	var noManifestErr *NoManifestFilesError
+	if !errors.As(err, &noManifestErr) {
+		t.Fatalf("expected NoManifestFilesError, got %T: %v", err, err)
+	}
+}
+
+func TestLoadManifestFromDirWithFilter_NoManifestFilesError_ParseFailures(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Write a corrupt .manifest file
+	manifestPath := filepath.Join(manifestsDir, "100_1000.manifest")
+	if err := os.WriteFile(manifestPath, []byte("not a valid manifest"), 0644); err != nil {
+		t.Fatalf("write corrupt manifest failed: %v", err)
+	}
+
+	_, err := LoadManifestFromDirWithFilter(tmpDir, 100, nil, DepotFilter{
+		Platform: "linux",
+		Language: "english",
+	})
+	if err == nil {
+		t.Fatal("expected error for corrupt manifest, got nil")
+	}
+
+	var noManifestErr *NoManifestFilesError
+	if !errors.As(err, &noManifestErr) {
+		t.Fatalf("expected NoManifestFilesError, got %T: %v", err, err)
+	}
+	if len(noManifestErr.ParseErrors) == 0 {
+		t.Error("expected ParseErrors to be non-empty for corrupted manifest files")
+	}
+}
+
+func TestErrorMessages_UserFriendly(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		contains string
+	}{
+		{
+			name:     "PlatformMismatch",
+			err:      &PlatformMismatchError{RequestedPlatform: "linux", AvailablePlatforms: []string{"windows"}},
+			contains: "linux",
+		},
+		{
+			name:     "PlatformMismatch_NoPlatforms",
+			err:      &PlatformMismatchError{RequestedPlatform: "linux"},
+			contains: "no platform-specific depots",
+		},
+		{
+			name:     "LanguageMismatch",
+			err:      &LanguageMismatchError{RequestedLanguage: "japanese", RequestedPlatform: "linux"},
+			contains: "japanese",
+		},
+		{
+			name:     "NoManifestFiles",
+			err:      &NoManifestFilesError{ManifestDir: "/tmp/test"},
+			contains: "/tmp/test",
+		},
+		{
+			name:     "NoManifestFiles_WithParseErrors",
+			err:      &NoManifestFilesError{ManifestDir: "/tmp/test", ParseErrors: []string{"bad parse"}},
+			contains: "failed to parse",
+		},
+		{
+			name:     "EncryptedDepot",
+			err:      &EncryptedDepotError{DepotID: 12345},
+			contains: "12345",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := tt.err.Error()
+			if msg == "" {
+				t.Fatal("error message should not be empty")
+			}
+			if !bytes.Contains([]byte(msg), []byte(tt.contains)) {
+				t.Errorf("error message %q should contain %q", msg, tt.contains)
+			}
+		})
+	}
+}
 
 

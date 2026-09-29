@@ -321,9 +321,9 @@
             <p class="text-2xs text-neutral-400 font-mono">
               Installed files: #{cleanInstalledBuild} &rarr; Target branch files: #{targetBuildId}
             </p>
-            {#if activeGameTask && (activeGameTask.status === 'downloading' || activeGameTask.status === 'running')}
+            {#if activeGameTask && (activeGameTask.status === 'downloading' || activeGameTask.status === 'running' || activeGameTask.status === 'paused')}
               <p class="text-3xs text-neutral-400 font-mono">
-                Active task: {activeGameTask.stage || activeGameTask.details || 'Syncing files...'}
+                Active task: {activeGameTask.status === 'paused' ? 'Paused - ' : ''}{activeGameTask.stage || activeGameTask.details || 'Syncing files...'}
               </p>
             {/if}
           </div>
@@ -335,11 +335,15 @@
             class="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-black text-xs transition-colors flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer disabled:opacity-50"
           >
             {#if isTaskActive}
-              <svg class="animate-spin w-3.5 h-3.5 text-neutral-950" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-              </svg>
-              <span>Download in Progress...</span>
+              {#if activeGameTask?.status === 'paused'}
+                <span>Download Paused</span>
+              {:else}
+                <svg class="animate-spin w-3.5 h-3.5 text-neutral-950" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span>Download in Progress...</span>
+              {/if}
             {:else}
               <svg class="w-3.5 h-3.5 text-neutral-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

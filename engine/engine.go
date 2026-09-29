@@ -51,6 +51,7 @@ func New(cfg *config.Config) *Engine {
 	reg.Register(store.NewGOGProvider())
 	reg.Register(store.NewRAWGProvider(cfg.RAWGAPIKey))
 	reg.Register(store.NewSGDBProvider(cfg.SteamGridDBAPIKey))
+	reg.Register(store.NewSteamGridProxyProvider())
 
 	artSvc := store.NewArtworkService(cfg.ArtworkDir, reg)
 

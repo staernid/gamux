@@ -40,6 +40,9 @@ const SPECIAL_SNAKE_TO_CAMEL = {
   custom_icon_url: 'customIconUrl',
   locked_artwork: 'lockedArtwork',
   branch_password: 'branchPassword',
+  inhibit_sleep: 'inhibitSleep',
+  prefer_sdl: 'preferSdl',
+  enable_wayland: 'enableWayland',
 };
 
 const SPECIAL_CAMEL_TO_SNAKE = {
@@ -71,6 +74,9 @@ const SPECIAL_CAMEL_TO_SNAKE = {
   customIconUrl: 'custom_icon_url',
   lockedArtwork: 'locked_artwork',
   branchPassword: 'branch_password',
+  inhibitSleep: 'inhibit_sleep',
+  preferSdl: 'prefer_sdl',
+  enableWayland: 'enable_wayland',
 };
 
 export function snakeToCamelKey(key) {
@@ -98,6 +104,9 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     mangoHud: null,
     disableOverlay: null,
     offlineMode: null,
+    inhibitSleep: null,
+    preferSdl: null,
+    enableWayland: null,
     dllOverrides: '',
     customEnv: {},
     language: '',
@@ -157,6 +166,15 @@ export function createInitialDraft(game = null, globalCfg = {}) {
   }
   if (lp.offline_mode !== undefined || lp.offlineMode !== undefined) {
     draft.offlineMode = lp.offline_mode ?? lp.offlineMode;
+  }
+  if (lp.inhibit_sleep !== undefined || lp.inhibitSleep !== undefined) {
+    draft.inhibitSleep = lp.inhibit_sleep ?? lp.inhibitSleep;
+  }
+  if (lp.prefer_sdl !== undefined || lp.preferSdl !== undefined) {
+    draft.preferSdl = lp.prefer_sdl ?? lp.preferSdl;
+  }
+  if (lp.enable_wayland !== undefined || lp.enableWayland !== undefined) {
+    draft.enableWayland = lp.enable_wayland ?? lp.enableWayland;
   }
 
   if (!draft.exePath && baseExe) {

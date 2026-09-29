@@ -178,6 +178,35 @@ describe('GameHubView Component', () => {
     expect(openDirSpy).toHaveBeenCalledWith('/home/user/Games/Cyberpunk 2077');
   });
 
+  it('opens confirmation modal and trashes game when trash button is clicked', async () => {
+    const { modalStore } = await import('../../stores/modal.js');
+    const modalSpy = vi.spyOn(modalStore, 'open');
+    const trashSpy = vi.spyOn(AppAPI, 'trashGame').mockResolvedValue({});
+
+    render(GameHubView);
+
+    const trashBtn = screen.getByRole('button', { name: /Move Game to Trash/i });
+    expect(trashBtn).toBeInTheDocument();
+    expect(trashBtn.textContent.trim()).toBe('');
+
+    await fireEvent.click(trashBtn);
+
+    expect(modalSpy).toHaveBeenCalledWith('confirm', expect.objectContaining({
+      title: expect.stringContaining('Move "Cyberpunk 2077" to Trash?'),
+      danger: true,
+      confirmLabel: 'Move to Trash',
+      cancelLabel: 'Keep Game',
+    }));
+
+    // Trigger onConfirm from modal config
+    const modalConfig = modalSpy.mock.calls[0][1];
+    await modalConfig.onConfirm();
+    modalStore.close();
+
+    expect(trashSpy).toHaveBeenCalledWith('/home/user/Games/Cyberpunk 2077');
+    expect(get(activeView)).toBe('library');
+  });
+
   it('switches to Configuration tab when X key is pressed', async () => {
     render(GameHubView);
 
@@ -207,7 +236,7 @@ describe('GameHubView Component', () => {
     expect(await screen.findByRole('button', { name: /PCGamingWiki/i })).toBeInTheDocument();
   });
 
-  it('renders live inline task progress HUD and disables primary action button when an operation is running for the active game', async () => {
+  it('renders live task progress bar on hero button and disables primary action when an operation is running', async () => {
     tasksStore.handleTaskEvent({
       type: 'task:started',
       id: 'task_test_apply_1',
@@ -226,16 +255,65 @@ describe('GameHubView Component', () => {
 
     render(GameHubView);
 
-    expect(screen.getByText('APPLYING SETUP')).toBeInTheDocument();
-    expect(screen.getByText('GBE Steam Client Patching')).toBeInTheDocument();
-    expect(screen.getByText('Patching steamclient64.dll wrapper...')).toBeInTheDocument();
-    expect(screen.getByText(/Step 3 of 6 \(45%\)/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /View Tasks/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Cancel/i })).toBeInTheDocument();
+    // Verify task status pill is in hero banner
+    expect(screen.getByText('TASK ACTIVE')).toBeInTheDocument();
 
+    // Verify hero action button shows Task in Progress... and is disabled
     const busyBtn = screen.getByRole('button', { name: /Task in Progress\.\.\./i });
     expect(busyBtn).toBeInTheDocument();
     expect(busyBtn).toBeDisabled();
+
+    // Verify hero progress bar background is rendered with correct percentage
+    const progressBar = screen.getByTestId('hero-progress-bar');
+    expect(progressBar).toBeInTheDocument();
+    expect(progressBar.style.width).toBe('45%');
+  });
+
+  it('renders paused download state with frozen grayed-out progress bar and allows resuming download rather than displaying Play Now', async () => {
+    tasksStore.handleTaskEvent({
+      type: 'transfer:started',
+      id: 'download_cp2077_1',
+      task_id: 'download_cp2077_1',
+      operation: 'download',
+      game_name: 'Cyberpunk 2077',
+      game_dir: '/home/user/Games/Cyberpunk 2077',
+      app_id: '1091500',
+      stage: 'Downloading Depots',
+      details: 'depot 1091501 chunk 42',
+      progress: {
+        percent: 62,
+        current_bytes: 62000000,
+        total_bytes: 100000000
+      }
+    });
+
+    tasksStore.handleTaskEvent({
+      type: 'transfer:paused',
+      id: 'download_cp2077_1',
+      task_id: 'download_cp2077_1',
+      operation: 'download'
+    });
+
+    render(GameHubView);
+
+    // Verify paused badge and telemetry in hero banner
+    expect(screen.getByText('DOWNLOAD PAUSED')).toBeInTheDocument();
+    expect(screen.getByText('Download paused')).toBeInTheDocument();
+
+    // Verify hero banner displays Resume button instead of Play Now
+    expect(screen.queryByRole('button', { name: /Play Now/i })).toBeNull();
+    const resumeBtn = screen.getByRole('button', { name: /Resume \(62%\)/i });
+    expect(resumeBtn).toBeInTheDocument();
+    expect(resumeBtn).not.toBeDisabled();
+
+    // Verify frozen progress bar background is rendered with 62% width
+    const progressBar = screen.getByTestId('hero-progress-bar');
+    expect(progressBar).toBeInTheDocument();
+    expect(progressBar.style.width).toBe('62%');
+    expect(progressBar.className).toContain('bg-neutral-700');
+
+    // Verify cancel button is accessible
+    expect(screen.getByRole('button', { name: /Cancel Task/i })).toBeInTheDocument();
   });
 
   it('toggles inline Source and Metadata setup wizards in Configuration tab', async () => {

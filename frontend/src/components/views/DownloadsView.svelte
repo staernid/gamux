@@ -1,32 +1,37 @@
 <script>
   import { onMount } from 'svelte';
-  import { libraryPath } from '../../stores/library.js';
+  import { libraryPath, games, selectedGame, activeView } from '../../stores/library.js';
   import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
+  import { modalStore } from '../../stores/modal.js';
   import { AppAPI } from '../../api/app.js';
   import { formatBytes } from '../../utils/format.js';
+  import { isSamePath } from '../../utils/game.js';
   import TaskCard from './tasks/TaskCard.svelte';
   import TaskQueueSection from './tasks/TaskQueueSection.svelte';
   import TaskHistorySection from './tasks/TaskHistorySection.svelte';
 
-  let currentFilter = 'all'; // 'all' | 'downloads' | 'operations' | 'completed'
-
   let diskSpace = null;
   let expandedDepots = {};
   let speedHistory = [0];
+  let showLimitMenu = false;
+
+  const SPEED_LIMIT_OPTIONS = [
+    { label: 'Unlimited', value: 0 },
+    { label: '50 MB/s', value: 50 * 1024 * 1024 },
+    { label: '25 MB/s', value: 25 * 1024 * 1024 },
+    { label: '10 MB/s', value: 10 * 1024 * 1024 },
+    { label: '5 MB/s', value: 5 * 1024 * 1024 },
+    { label: '2 MB/s', value: 2 * 1024 * 1024 },
+  ];
 
   const {
     items,
-    active,
-    queued,
-    paused,
-    completed,
     activeDownloads,
     queuedDownloads,
     pausedDownloads,
     completedDownloads,
-    activeOperations,
-    queuedOperations,
     totalSpeedBps,
+    speedLimit,
   } = tasksStore;
 
   async function loadDiskSpace(path) {
@@ -73,142 +78,192 @@
     if (dir) AppAPI.openDirectory(dir);
   }
 
+  function handleOpenGame(e) {
+    const task = e.detail || e;
+    if (!task) return;
+    const allGames = $games || [];
+    const game = allGames.find(g => (task.gameDir && isSamePath(g.gameDir, task.gameDir)) || (task.appId && String(g.appId || g.app_id) === String(task.appId)));
+    if (game) {
+      selectedGame.set(game);
+      activeView.set('game-hub');
+    } else if (task.gameDir) {
+      AppAPI.openDirectory(task.gameDir);
+    }
+  }
+
   function toggleDepots(e) {
     const id = typeof e === 'string' ? e : e.detail;
     expandedDepots[id] = !expandedDepots[id];
   }
 
-  // Filtered lists based on currentFilter
-  $: displayedActive = (() => {
-    if (currentFilter === 'downloads') return $activeDownloads;
-    if (currentFilter === 'operations') return $activeOperations;
-    if (currentFilter === 'completed') return [];
-    return $active;
-  })();
+  function handleSetLimit(bps) {
+    tasksStore.setLimit(bps);
+    showLimitMenu = false;
+  }
 
-  $: displayedQueued = (() => {
-    if (currentFilter === 'downloads') return [...$queuedDownloads, ...$pausedDownloads];
-    if (currentFilter === 'operations') return $queuedOperations;
-    if (currentFilter === 'completed') return [];
-    return [...$queued, ...$paused];
-  })();
+  function handlePauseAll() {
+    tasksStore.pauseAll();
+  }
 
-  $: displayedCompleted = (() => {
-    if (currentFilter === 'downloads') return $completedDownloads;
-    if (currentFilter === 'operations') return $completed.filter(t => !isDownloadTask(t));
-    return $completed;
-  })();
+  function handleResumeAll() {
+    tasksStore.resumeAll();
+  }
+
+  // Strictly downloads only
+  $: displayedActive = $activeDownloads;
+  $: displayedQueued = [...$queuedDownloads, ...$pausedDownloads];
+  $: displayedCompleted = $completedDownloads;
 </script>
 
 <div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-4 sm:px-8 pb-8 max-w-4xl mx-auto w-full space-y-5 text-xs sm:text-sm animate-fade-in custom-scrollbar">
   <!-- Minimalist HUD Header -->
   <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-surface-border">
-    <div>
+    <div class="flex items-center space-x-3">
       <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
-        Tasks
+        Downloads
         <span class="text-2xs font-mono font-medium px-2 py-0.5 rounded-full bg-surface-header text-neutral-300 border border-surface-border">
-          {$active.length} active
+          {$activeDownloads.length} active
         </span>
       </h2>
     </div>
 
-    <!-- Right Controls: Bandwidth HUD -->
-    <div class="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
-      {#if $totalSpeedBps > 0}
-        <div class="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border">
-          <span class="font-mono text-xs font-bold text-neutral-200">{formatBytes($totalSpeedBps)}/s</span>
-          {#if speedHistory.length > 2}
-            <svg class="w-12 h-3.5 text-neutral-400" viewBox="0 0 100 22">
-              <polyline
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                points={generateSparklinePoints(speedHistory, 100, 22)}
-              />
-            </svg>
-          {/if}
+    <!-- Right Controls: Drive Space, Speed Limiter, Pause/Resume All, Bandwidth HUD -->
+    <div class="flex items-center space-x-2 flex-wrap gap-y-2 w-full sm:w-auto justify-end">
+      <!-- Sleek Drive Space Pill -->
+      {#if diskSpace}
+        <div
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border text-2xs font-mono text-neutral-300"
+          title="Drive {diskSpace.path}: {formatBytes(diskSpace.free_bytes)} free of {formatBytes(diskSpace.total_bytes)}"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0"></span>
+          <span class="font-bold text-neutral-200">{formatBytes(diskSpace.free_bytes)}</span>
+          <span class="text-neutral-500">Free</span>
         </div>
       {/if}
-    </div>
-  </div>
 
-  <!-- Sleek Minimalist Target Drive Capacity Bar -->
-  {#if diskSpace}
-    {@const usedPct = diskSpace.total_bytes ? Math.min(100, Math.max(0, (diskSpace.used_bytes / diskSpace.total_bytes) * 100)) : 0}
-    <div class="px-3.5 py-2 rounded-xl bg-surface-card border border-surface-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
-      <div class="flex items-center space-x-2 text-neutral-400 truncate max-w-sm sm:max-w-md">
-        <span class="text-neutral-500 font-mono text-3xs uppercase font-bold tracking-wider">Target Drive Capacity:</span>
-        <span class="font-mono text-2xs text-neutral-300 truncate font-medium">{diskSpace.path}</span>
+      <!-- Speed Limit Dropdown -->
+      <div class="relative">
+        <button
+          type="button"
+          on:click={() => showLimitMenu = !showLimitMenu}
+          class="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono text-neutral-300 hover:text-white transition cursor-pointer"
+          title="Bandwidth Limit"
+        >
+          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>{$speedLimit > 0 ? `${formatBytes($speedLimit)}/s` : 'Max'}</span>
+          <svg class="w-2.5 h-2.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {#if showLimitMenu}
+          <button type="button" class="fixed inset-0 z-40 cursor-default bg-transparent border-0 w-full h-full" aria-label="Close bandwidth menu" on:click={() => showLimitMenu = false}></button>
+          <div class="absolute right-0 mt-1 w-36 bg-surface-header border border-surface-border rounded-xl shadow-2xl py-1 z-50 text-xs font-mono animate-fade-in">
+            <div class="px-2.5 py-1 text-4xs uppercase tracking-wider text-neutral-500 font-bold border-b border-surface-borderSubtle">
+              Bandwidth Cap
+            </div>
+            {#each SPEED_LIMIT_OPTIONS as opt}
+              <button
+                type="button"
+                on:click={() => handleSetLimit(opt.value)}
+                class="w-full text-left px-2.5 py-1 text-2xs flex items-center justify-between hover:bg-surface-cardHover transition cursor-pointer {$speedLimit === opt.value ? 'text-emerald-400 font-bold' : 'text-neutral-300'}"
+              >
+                <span>{opt.label}</span>
+                {#if $speedLimit === opt.value}
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
-      <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
-        <div class="w-28 bg-surface-input h-1.5 rounded-full overflow-hidden border border-surface-border">
-          <div class="bg-neutral-300 h-full rounded-full transition-all duration-500" style="width: {usedPct}%"></div>
-        </div>
-        <span class="font-mono text-2xs text-neutral-400 whitespace-nowrap">
-          <strong class="text-emerald-400 font-semibold">{formatBytes(diskSpace.free_bytes)} Free</strong>
-          <span class="text-neutral-500"> / {formatBytes(diskSpace.total_bytes)} Total</span>
+
+      <!-- Master Pause/Resume All Button -->
+      {#if $activeDownloads.length > 0}
+        <button
+          type="button"
+          on:click={handlePauseAll}
+          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-amber-400 hover:text-amber-300 transition cursor-pointer flex items-center space-x-1"
+          title="Pause all active downloads"
+        >
+          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
+          </svg>
+          <span>Pause All</span>
+        </button>
+      {:else if $pausedDownloads.length > 0}
+        <button
+          type="button"
+          on:click={handleResumeAll}
+          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-emerald-400 hover:text-emerald-300 transition cursor-pointer flex items-center space-x-1"
+          title="Resume all paused downloads"
+        >
+          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>Resume All</span>
+        </button>
+      {/if}
+
+      <!-- Bandwidth HUD -->
+      <div class="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border min-w-[70px]">
+        <span class="font-mono text-xs font-bold text-neutral-200">
+          {$totalSpeedBps > 0 ? `${formatBytes($totalSpeedBps)}/s` : '0 B/s'}
         </span>
+        {#if $totalSpeedBps > 0 && speedHistory.length > 2}
+          <svg class="w-12 h-3.5 text-neutral-400 flex-shrink-0" viewBox="0 0 100 22" aria-hidden="true">
+            <polyline
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              points={generateSparklinePoints(speedHistory, 100, 22)}
+            />
+          </svg>
+        {/if}
       </div>
     </div>
-  {/if}
-
-  <!-- Segmented Filter Pills -->
-  <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
-    <button
-      type="button"
-      on:click={() => currentFilter = 'all'}
-      class="px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer {currentFilter === 'all' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-      <span>All ({$items.length})</span>
-    </button>
-    <button
-      type="button"
-      on:click={() => currentFilter = 'downloads'}
-      class="px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer {currentFilter === 'downloads' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-      </svg>
-      <span>Transfers ({$activeDownloads.length + $queuedDownloads.length + $pausedDownloads.length})</span>
-    </button>
-    <button
-      type="button"
-      on:click={() => currentFilter = 'operations'}
-      class="px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer {currentFilter === 'operations' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white hover:bg-surface-input'}"
-    >
-      <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-      <span>Operations ({$activeOperations.length + $queuedOperations.length})</span>
-    </button>
-    {#if $completed.length > 0}
-      <button
-        type="button"
-        on:click={() => currentFilter = 'completed'}
-        class="px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer {currentFilter === 'completed' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white hover:bg-surface-input'}"
-      >
-        <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>Completed ({$completed.length})</span>
-      </button>
-    {/if}
   </div>
 
-  <!-- Active Tasks Section -->
-  <div class="space-y-3">
+  <!-- Downloads Content Area -->
+  <div class="space-y-4">
     {#if displayedActive.length === 0 && displayedQueued.length === 0 && displayedCompleted.length === 0}
-      <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center text-neutral-400 space-y-1 font-mono text-xs">
-        <p class="font-bold text-neutral-200 text-sm">No active tasks running.</p>
-        <p class="text-2xs text-neutral-400">Background downloads, file verifications, and setup operations will appear here.</p>
+      <!-- Living Empty State -->
+      <div class="bg-surface-card border border-surface-border rounded-2xl p-12 text-center text-neutral-400 space-y-4">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-surface-input border border-surface-border flex items-center justify-center text-neutral-400">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <p class="font-bold text-white text-sm">No downloads active</p>
+          <p class="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+            Active downloads, depot transfers, and install queues will appear here.
+          </p>
+        </div>
+        <div class="pt-2 flex items-center justify-center space-x-3">
+          <button
+            type="button"
+            on:click={() => modalStore.open('catalog')}
+            class="px-4 py-2 rounded-xl bg-white text-neutral-950 font-bold hover:bg-neutral-200 transition shadow cursor-pointer text-xs"
+          >
+            Browse Catalog
+          </button>
+          <button
+            type="button"
+            on:click={() => activeView.set('library')}
+            class="px-4 py-2 rounded-xl bg-surface-header hover:bg-surface-cardHover text-neutral-200 border border-surface-border font-bold transition cursor-pointer text-xs"
+          >
+            Go to Shelf
+          </button>
+        </div>
       </div>
     {:else}
+      <!-- Active Downloads (Hero) -->
       {#if displayedActive.length > 0}
         <div class="space-y-2.5">
           {#each displayedActive as tr (tr.id)}
@@ -223,20 +278,22 @@
         </div>
       {/if}
 
-      <!-- Queued & Paused Tasks -->
+      <!-- Queued & Paused Downloads -->
       {#if displayedQueued.length > 0}
         <TaskQueueSection
           tasks={displayedQueued}
           on:resume={(e) => tasksStore.resume(e.detail)}
           on:pause={(e) => tasksStore.pause(e.detail)}
           on:cancel={(e) => tasksStore.cancel(e.detail)}
+          on:reorder={(e) => tasksStore.reorder(e.detail)}
         />
       {/if}
 
-      <!-- Completed History -->
+      <!-- Completed Downloads History -->
       {#if displayedCompleted.length > 0}
         <TaskHistorySection
           tasks={displayedCompleted}
+          on:openGame={handleOpenGame}
           on:openDirectory={handleOpenDirectory}
           on:dismiss={(e) => tasksStore.remove(e.detail)}
           on:clearAll={() => tasksStore.clearFinished()}

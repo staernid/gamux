@@ -15,9 +15,10 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([]);
     render(DownloadsView);
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/Tasks/i);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/Downloads/i);
     expect(screen.getByText(/0 active/i)).toBeInTheDocument();
-    expect(screen.getByText(/No active tasks running/i)).toBeInTheDocument();
+    expect(screen.getByText(/No downloads active/i)).toBeInTheDocument();
+    expect(screen.getByText(/Browse Catalog/i)).toBeInTheDocument();
   });
 
   it('renders active download with formatted byte progress, speed, and ETA', async () => {
@@ -76,7 +77,7 @@ describe('DownloadsView Component', () => {
     expect(cancelSpy).toHaveBeenCalledWith('dl_test_1');
   });
 
-  it('moves completed download to finished history section', async () => {
+  it('moves completed download to finished history section and navigates to gamehub on click', async () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'dl_completed_1',
@@ -89,11 +90,22 @@ describe('DownloadsView Component', () => {
       }
     ]);
 
+    const { games, activeView } = await import('../../stores/library.js');
+    games.set([{ gameDir: '/home/staernid/Games/Half-Life', name: 'Half-Life', appId: '70' }]);
+
     render(DownloadsView);
 
     expect(await screen.findByText(/Completed History/i)).toBeInTheDocument();
-    expect(screen.getByText('Half-Life')).toBeInTheDocument();
+    expect((await screen.findAllByText('Half-Life')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/View in Game Hub/i)).toBeInTheDocument();
     expect(screen.getByText('Dismiss')).toBeInTheDocument();
+
+    const historyCard = screen.getByTitle(/Open Half-Life in Game Hub/i);
+    await fireEvent.click(historyCard);
+
+    let current = '';
+    activeView.subscribe(v => current = v)();
+    expect(current).toBe('game-hub');
   });
 
   it('renders drive capacity gauge and allows expanding multi-depot breakdown', async () => {
@@ -124,8 +136,8 @@ describe('DownloadsView Component', () => {
 
     render(DownloadsView);
 
-    expect(await screen.findByText(/Target Drive Capacity/i)).toBeInTheDocument();
-    expect(screen.getByText(/459.*GiB Free/i)).toBeInTheDocument();
+    expect(await screen.findByText(/459.*GiB/i)).toBeInTheDocument();
+    expect(screen.getByText(/Free/i)).toBeInTheDocument();
 
     const depotToggle = screen.getByText(/Depots & Chunk Breakdown/i);
     expect(depotToggle).toBeInTheDocument();
@@ -135,7 +147,7 @@ describe('DownloadsView Component', () => {
     expect(screen.getByText('Executables')).toBeInTheDocument();
   });
 
-  it('renders active system operations and supports filter tab switching', async () => {
+  it('strictly excludes non-download system operations from downloads view', async () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'op_verify_1',
@@ -164,24 +176,48 @@ describe('DownloadsView Component', () => {
 
     render(DownloadsView);
 
-    const cpMatches = await screen.findAllByText('Cyberpunk 2077');
-    expect(cpMatches.length).toBeGreaterThanOrEqual(1);
+    // Download should be visible
     expect((await screen.findAllByText('Half-Life')).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/INTEGRITY/i)).toBeInTheDocument();
 
-    // Switch to Operations tab
-    const opsTab = screen.getByRole('button', { name: /Operations/i });
-    await fireEvent.click(opsTab);
-
-    expect(screen.getAllByText('Cyberpunk 2077').length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText('Half-Life')).not.toBeInTheDocument();
-
-    // Switch to Transfers tab
-    const transfersTab = screen.getByRole('button', { name: /Transfers/i });
-    await fireEvent.click(transfersTab);
-
-    expect(screen.getAllByText('Half-Life').length).toBeGreaterThanOrEqual(1);
+    // Maintenance operation must NOT be in downloads view
     expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
+    expect(screen.queryByText(/INTEGRITY/i)).not.toBeInTheDocument();
+  });
+
+  it('supports pause all and resume all master buttons', async () => {
+    const pauseSpy = vi.spyOn(AppAPI, 'pauseTask').mockResolvedValue(true);
+    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
+      {
+        id: 'dl_game_1',
+        game_id: '1',
+        game_name: 'Game One',
+        status: 'downloading',
+        percent: 30,
+      }
+    ]);
+
+    render(DownloadsView);
+
+    const pauseAllBtn = await screen.findByRole('button', { name: /Pause All/i });
+    expect(pauseAllBtn).toBeInTheDocument();
+    await fireEvent.click(pauseAllBtn);
+    expect(pauseSpy).toHaveBeenCalledWith('dl_game_1');
+  });
+
+  it('supports configuring download speed limit from header dropdown', async () => {
+    const limitSpy = vi.spyOn(AppAPI, 'setTransferSpeedLimit').mockResolvedValue(true);
+    vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([]);
+
+    render(DownloadsView);
+
+    const limitTrigger = screen.getByTitle(/Bandwidth Limit/i);
+    expect(limitTrigger).toBeInTheDocument();
+    await fireEvent.click(limitTrigger);
+
+    const tenMbOpt = await screen.findByRole('button', { name: /10 MB\/s/i });
+    await fireEvent.click(tenMbOpt);
+
+    expect(limitSpy).toHaveBeenCalledWith(10 * 1024 * 1024);
   });
 });
 

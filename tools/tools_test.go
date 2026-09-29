@@ -51,6 +51,16 @@ func TestManager_RegisterAndGet(t *testing.T) {
 		t.Fatalf("expected umu tool registered by default, got err: %v", err)
 	}
 
+	protonGE, err := mgr.GetTool("proton-ge")
+	if err != nil || protonGE == nil {
+		t.Fatalf("expected proton-ge tool registered by default, got err: %v", err)
+	}
+
+	protonCachyOS, err := mgr.GetTool("proton-cachyos")
+	if err != nil || protonCachyOS == nil {
+		t.Fatalf("expected proton-cachyos tool registered by default, got err: %v", err)
+	}
+
 	mock := &mockTool{key: "custom", name: "Custom Tool"}
 	mgr.Register(mock)
 

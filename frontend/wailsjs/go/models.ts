@@ -76,6 +76,9 @@ export namespace config {
 	    gamescope_fps?: number;
 	    transfer_speed_limit?: number;
 	    global_env?: Record<string, string>;
+	    inhibit_sleep: boolean;
+	    prefer_sdl?: boolean;
+	    enable_wayland?: boolean;
 	    language?: string;
 	    disable_overlay?: boolean;
 	    offline_mode?: boolean;
@@ -116,6 +119,9 @@ export namespace config {
 	        this.gamescope_fps = source["gamescope_fps"];
 	        this.transfer_speed_limit = source["transfer_speed_limit"];
 	        this.global_env = source["global_env"];
+	        this.inhibit_sleep = source["inhibit_sleep"];
+	        this.prefer_sdl = source["prefer_sdl"];
+	        this.enable_wayland = source["enable_wayland"];
 	        this.language = source["language"];
 	        this.disable_overlay = source["disable_overlay"];
 	        this.offline_mode = source["offline_mode"];
@@ -320,8 +326,12 @@ export namespace domain {
 	    language?: string;
 	    installed: boolean;
 	    size: number;
+	    download_size?: number;
 	    file_count: number;
 	    manifest_id: number;
+	    osarch?: string;
+	    dlc_app_id?: number;
+	    is_dlc?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DepotSummary(source);
@@ -336,8 +346,12 @@ export namespace domain {
 	        this.language = source["language"];
 	        this.installed = source["installed"];
 	        this.size = source["size"];
+	        this.download_size = source["download_size"];
 	        this.file_count = source["file_count"];
 	        this.manifest_id = source["manifest_id"];
+	        this.osarch = source["osarch"];
+	        this.dlc_app_id = source["dlc_app_id"];
+	        this.is_dlc = source["is_dlc"];
 	    }
 	}
 	export class VersionStatus {
@@ -412,6 +426,9 @@ export namespace domain {
 	    disable_overlay?: boolean;
 	    offline_mode?: boolean;
 	    dll_overrides?: string;
+	    inhibit_sleep?: boolean;
+	    prefer_sdl?: boolean;
+	    enable_wayland?: boolean;
 	    custom_env?: Record<string, string>;
 	    working_dir?: string;
 	    profile_id?: string;
@@ -459,6 +476,9 @@ export namespace domain {
 	        this.disable_overlay = source["disable_overlay"];
 	        this.offline_mode = source["offline_mode"];
 	        this.dll_overrides = source["dll_overrides"];
+	        this.inhibit_sleep = source["inhibit_sleep"];
+	        this.prefer_sdl = source["prefer_sdl"];
+	        this.enable_wayland = source["enable_wayland"];
 	        this.custom_env = source["custom_env"];
 	        this.working_dir = source["working_dir"];
 	        this.profile_id = source["profile_id"];

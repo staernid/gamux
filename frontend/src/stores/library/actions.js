@@ -3,7 +3,7 @@ import { AppAPI } from '../../api/app.js';
 import { normalizeGame, isSamePath } from '../../utils/game.js';
 import { notificationStore } from '../notifications.js';
 import { libraryPaths, libraryPath, setOnPathsChangedHook } from './paths.js';
-import { games, isScanning, updateGameInStore } from './catalog.js';
+import { games, isScanning, updateGameInStore, removeGameFromStore } from './catalog.js';
 import { selectedGame, activeView } from './selection.js';
 
 export async function scanLibrary(pathOverride = '') {
@@ -137,4 +137,16 @@ export function batchApplyCleanGames() {
   cleanGames.forEach(g => {
     queueApplyGame(g);
   });
+}
+
+export async function trashGame(gameDir) {
+  if (!gameDir) return false;
+  try {
+    await AppAPI.trashGame(gameDir);
+    removeGameFromStore(gameDir);
+    return true;
+  } catch (err) {
+    notificationStore.error('Trash Failed', err);
+    throw err;
+  }
 }

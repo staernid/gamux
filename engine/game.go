@@ -350,11 +350,16 @@ func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.
 			metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
 			for dID, dInfo := range remoteDepots {
 				metaMap[dID] = manifest.DepotMeta{
-					DepotID:  dInfo.DepotID,
-					Name:     dInfo.Name,
-					Language: dInfo.Language,
-					OSList:   dInfo.OSList,
-					Optional: dInfo.Optional,
+					DepotID:      dInfo.DepotID,
+					Name:         dInfo.Name,
+					Language:     dInfo.Language,
+					OSList:       dInfo.OSList,
+					OSArch:       dInfo.OSArch,
+					Optional:     dInfo.Optional,
+					IsDLC:        dInfo.IsDLC,
+					DLCAppID:     dInfo.DLCAppID,
+					Size:         dInfo.Size,
+					DownloadSize: dInfo.DownloadSize,
 				}
 			}
 		}
@@ -379,11 +384,16 @@ func (eng *Engine) GetAppDepots(ctx context.Context, appID uint32) ([]domain.Dep
 		metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
 		for dID, dInfo := range remoteDepots {
 			metaMap[dID] = manifest.DepotMeta{
-				DepotID:  dInfo.DepotID,
-				Name:     dInfo.Name,
-				Language: dInfo.Language,
-				OSList:   dInfo.OSList,
-				Optional: dInfo.Optional,
+				DepotID:      dInfo.DepotID,
+				Name:         dInfo.Name,
+				Language:     dInfo.Language,
+				OSList:       dInfo.OSList,
+				OSArch:       dInfo.OSArch,
+				Optional:     dInfo.Optional,
+				IsDLC:        dInfo.IsDLC,
+				DLCAppID:     dInfo.DLCAppID,
+				Size:         dInfo.Size,
+				DownloadSize: dInfo.DownloadSize,
 			}
 		}
 	}
@@ -632,6 +642,21 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		}
 	}
 
+	targetBranch := opts.Branch
+	if targetBranch == "" && opts.TargetDir != "" {
+		if prof, lErr := compat.LoadProfile(opts.TargetDir); lErr == nil && prof != nil && prof.Branch != "" {
+			targetBranch = prof.Branch
+		}
+	}
+	if targetBranch == "" {
+		targetBranch = "public"
+	}
+
+	var branchManifestGIDs map[uint32]string
+	if gids, bErr := steam.FetchAppBranchManifestGIDs(ctx, opts.AppID, targetBranch); bErr == nil && len(gids) > 0 {
+		branchManifestGIDs = gids
+	}
+
 	req := downloader.DownloadRequest{
 		AppID:            opts.AppID,
 		TargetDir:        opts.TargetDir,
@@ -640,6 +665,8 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		IncludedDepots:   opts.IncludedDepots,
 		ExcludedDepots:   opts.ExcludedDepots,
 		IncludeOptional:  opts.IncludeOptional,
+		Branch:           targetBranch,
+		ManifestGIDs:     branchManifestGIDs,
 		DepotMetadata:    depotMetaMap,
 		LuaPath:          opts.LuaPath,
 		HubcapAPIKey:     hubcapKey,
@@ -666,7 +693,7 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 
 	res, err := downloader.Download(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("download game depot: %w", err)
+		return nil, err
 	}
 
 	if opts.AutoApply {

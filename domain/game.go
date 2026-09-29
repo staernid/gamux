@@ -182,12 +182,16 @@ type DepotSummary struct {
 	DepotID         uint32 `json:"depot_id"`
 	Name            string `json:"name"`
 	Category        string `json:"category"` // "common", "windows", "linux", "macos", "soundtrack"
-	ContentCategory string `json:"content_category,omitempty"` // "core", "locale:<language>", "soundtrack", "optional_hd"
+	ContentCategory string `json:"content_category,omitempty"` // "core", "locale:<language>", "soundtrack", "optional_hd", "dlc"
 	Language        string `json:"language,omitempty"`          // e.g. "french", "german", "english"
 	Installed       bool   `json:"installed"`
 	Size            uint64 `json:"size"`
+	DownloadSize    uint64 `json:"download_size,omitempty"`
 	FileCount       int    `json:"file_count"`
 	ManifestID      uint64 `json:"manifest_id"`
+	OSArch          string `json:"osarch,omitempty"`
+	DLCAppID        uint32 `json:"dlc_app_id,omitempty"`
+	IsDLC           bool   `json:"is_dlc,omitempty"`
 }
 
 // ManifestStatus holds depot manifest and file integrity state.
@@ -310,6 +314,9 @@ type LaunchProfile struct {
 	DisableOverlay    *bool             `json:"disable_overlay,omitempty"`
 	OfflineMode       *bool             `json:"offline_mode,omitempty"`
 	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
+	InhibitSleep      *bool             `json:"inhibit_sleep,omitempty"`
+	PreferSDL         *bool             `json:"prefer_sdl,omitempty"`
+	EnableWayland     *bool             `json:"enable_wayland,omitempty"`
 	CustomEnv         map[string]string `json:"custom_env,omitempty"`
 	WorkingDir        string            `json:"working_dir,omitempty"`
 	ProfileID         string            `json:"profile_id,omitempty"`
@@ -397,6 +404,15 @@ func (p *LaunchProfile) MergeFrom(other *LaunchProfile) {
 	}
 	if p.DllOverrides == "" {
 		p.DllOverrides = other.DllOverrides
+	}
+	if p.InhibitSleep == nil && other.InhibitSleep != nil {
+		p.InhibitSleep = other.InhibitSleep
+	}
+	if p.PreferSDL == nil && other.PreferSDL != nil {
+		p.PreferSDL = other.PreferSDL
+	}
+	if p.EnableWayland == nil && other.EnableWayland != nil {
+		p.EnableWayland = other.EnableWayland
 	}
 	if p.WorkingDir == "" {
 		p.WorkingDir = other.WorkingDir

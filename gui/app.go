@@ -352,6 +352,27 @@ func (a *App) UpdateCachedGame(game *domain.Game) {
 	}
 }
 
+// RemoveCachedGame removes a game from the in-memory cache and updates the tray.
+func (a *App) RemoveCachedGame(gameDir string) {
+	if gameDir == "" {
+		return
+	}
+	cDir := util.CanonicalPath(gameDir)
+	a.gamesMu.Lock()
+	filtered := make([]*domain.Game, 0, len(a.cachedGames))
+	for _, g := range a.cachedGames {
+		if g != nil && util.CanonicalPath(g.GameDir) != cDir {
+			filtered = append(filtered, g)
+		}
+	}
+	a.cachedGames = filtered
+	a.gamesMu.Unlock()
+
+	if a.trayMgr != nil {
+		a.trayMgr.SetRecentGames(a.GetRecentGames(3))
+	}
+}
+
 // RecordGamePlayed updates the last played and playtime timestamps for a game in the cache.
 func (a *App) RecordGamePlayed(gameDir string, lastPlayed int64, playtimeSeconds int64) {
 	if gameDir == "" {

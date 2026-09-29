@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/staernid/gamux/util"
 )
 
 const (
@@ -280,6 +282,7 @@ type DepotFilter struct {
 	IncludedDepots  []uint32             `json:"included_depots,omitempty"`
 	ExcludedDepots  []uint32             `json:"excluded_depots,omitempty"`
 	IncludeOptional bool                 `json:"include_optional,omitempty"`
+	ManifestGIDs    map[uint32]string    `json:"manifest_gids,omitempty"`
 	DepotMetadata   map[uint32]DepotMeta `json:"-"`
 }
 
@@ -421,15 +424,34 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 		}
 	}
 
-	// Sort candidates for each depot by manifestID descending (newest first)
+	// Sort candidates for each depot by manifestID descending (newest first),
+	// but prioritize the manifest ID matching filter.ManifestGIDs[dID] if specified.
 	for dID := range depotManifests {
+		targetGID := ""
+		if filter.ManifestGIDs != nil {
+			targetGID = filter.ManifestGIDs[dID]
+		}
 		sort.Slice(depotManifests[dID], func(i, j int) bool {
+			if targetGID != "" {
+				isTargetI := strconv.FormatUint(depotManifests[dID][i].manifestID, 10) == targetGID
+				isTargetJ := strconv.FormatUint(depotManifests[dID][j].manifestID, 10) == targetGID
+				if isTargetI != isTargetJ {
+					return isTargetI
+				}
+			}
 			return depotManifests[dID][i].manifestID > depotManifests[dID][j].manifestID
 		})
 	}
 
 	allFiles := make([]ManifestFileEntry, 0)
 	var resolvedDepotID uint32
+
+	// Track reasons depots were filtered out for structured error reporting
+	var seenPlatforms []string
+	var encryptedDepotIDs []uint32
+	var parseErrors []string
+	parsedDepotCount := 0
+	platformFilteredCount := 0
 
 	for dID, candidates := range depotManifests {
 		var validFiles []ManifestFileEntry
@@ -441,11 +463,13 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 			data, err := os.ReadFile(info.path)
 			if err != nil {
 				slog.Warn("Failed to read manifest file", "path", info.path, "error", err)
+				parseErrors = append(parseErrors, fmt.Sprintf("%s: %v", info.name, err))
 				continue
 			}
 			files, err := ParseBinaryManifestWithKey(data, hexKey)
 			if err != nil {
 				slog.Warn("Failed to parse local manifest file, trying fallback candidate if available", "path", info.path, "depotID", dID, "error", err)
+				parseErrors = append(parseErrors, fmt.Sprintf("%s: %v", info.name, err))
 				continue
 			}
 			if len(files) > 0 {
@@ -455,8 +479,43 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 		}
 
 		if len(validFiles) > 0 {
+			parsedDepotCount++
+
+			// Skip depots whose filenames are encrypted and cannot be decrypted
+			hasEncrypted := false
+			for _, vf := range validFiles {
+				if util.IsEncryptedBase64Path(vf.Path) {
+					hasEncrypted = true
+					break
+				}
+			}
+			if hasEncrypted {
+				slog.Warn("Skipping depot manifest with encrypted filenames due to missing decryption key", "depotID", dID)
+				encryptedDepotIDs = append(encryptedDepotIDs, dID)
+				continue
+			}
+
+			// Record depot platform for diagnostics before filtering
+			cat := ClassifyDepot(validFiles)
+			if cat != DepotCategoryCommon && cat != DepotCategorySoundtrack {
+				platName := string(cat)
+				found := false
+				for _, p := range seenPlatforms {
+					if p == platName {
+						found = true
+						break
+					}
+				}
+				if !found {
+					seenPlatforms = append(seenPlatforms, platName)
+				}
+			}
+
 			if !ShouldIncludeDepot(dID, validFiles, filter) {
-				slog.Debug("Skipping depot manifest filtered out by options", "depotID", dID, "platform", filter.Platform, "language", filter.Language)
+				slog.Debug("Skipping depot manifest filtered out by options", "depotID", dID, "platform", filter.Platform, "language", filter.Language, "depotCategory", cat)
+				if filter.Platform != "" && filter.Platform != "all" && !MatchesPlatform(cat, filter.Platform) {
+					platformFilteredCount++
+				}
 				continue
 			}
 			if resolvedDepotID == 0 {
@@ -492,6 +551,17 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 				}
 			}
 			if len(validFiles) > 0 {
+				hasEncrypted := false
+				for _, vf := range validFiles {
+					if util.IsEncryptedBase64Path(vf.Path) {
+						hasEncrypted = true
+						break
+					}
+				}
+				if hasEncrypted {
+					continue
+				}
+
 				if !ShouldIncludeDepot(dID, validFiles, relaxedFilter) {
 					continue
 				}
@@ -510,7 +580,31 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 	}
 
 	if len(allFiles) == 0 {
-		return nil, fmt.Errorf("no valid manifest file entries matching filter (platform=%q, lang=%q) loaded from %s", filter.Platform, filter.Language, manifestsDir)
+		// Return the most specific structured error based on what we observed
+		if parsedDepotCount > 0 && len(encryptedDepotIDs) == parsedDepotCount {
+			// Every parseable depot had encrypted filenames
+			return nil, &EncryptedDepotError{DepotID: encryptedDepotIDs[0]}
+		}
+		if platformFilteredCount > 0 && len(seenPlatforms) > 0 {
+			return nil, &PlatformMismatchError{
+				RequestedPlatform:  filter.Platform,
+				AvailablePlatforms: seenPlatforms,
+				ManifestDir:        manifestsDir,
+			}
+		}
+		if parsedDepotCount == 0 {
+			return nil, &NoManifestFilesError{
+				ManifestDir: manifestsDir,
+				ParseErrors: parseErrors,
+			}
+		}
+		// Depots parsed and passed platform check but still zero files — language mismatch
+		// (the relaxed-language fallback above already ran and also matched zero)
+		return nil, &LanguageMismatchError{
+			RequestedLanguage: filter.Language,
+			RequestedPlatform: filter.Platform,
+			ManifestDir:       manifestsDir,
+		}
 	}
 
 	return &Manifest{

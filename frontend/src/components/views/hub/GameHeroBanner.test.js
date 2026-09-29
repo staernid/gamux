@@ -97,4 +97,84 @@ describe('GameHeroBanner Component', () => {
     // Reset store
     multiseatStore.toggleCoop();
   });
+
+  it('renders trash button with no text next to files button and handles click', async () => {
+    const { fireEvent } = await import('@testing-library/svelte');
+    const trashHandler = vi.fn();
+    render(GameHeroBanner, {
+      props: {
+        game: mockSteamGame,
+        isGameRunning: false,
+        isTaskActive: false,
+      },
+      events: {
+        trash: trashHandler,
+      },
+    });
+
+    const trashBtn = screen.getByRole('button', { name: /Move Game to Trash/i });
+    expect(trashBtn).toBeInTheDocument();
+    // Verify strictly no text inside button
+    expect(trashBtn.textContent.trim()).toBe('');
+
+    await fireEvent.click(trashBtn);
+    expect(trashHandler).toHaveBeenCalled();
+  });
+
+  it('disables trash button when game is currently running', () => {
+    render(GameHeroBanner, {
+      props: {
+        game: mockSteamGame,
+        isGameRunning: true,
+        isTaskActive: false,
+      },
+    });
+
+    const trashBtn = screen.getByRole('button', { name: /Move Game to Trash/i });
+    expect(trashBtn).toBeDisabled();
+  });
+
+  it('renders trash button for uninstalled Stubs that have a game directory in the library', () => {
+    const stubGame = normalizeGame({
+      name: 'Skeleton Stub Game',
+      app_id: '99999',
+      game_dir: '/home/staernid/Games/Skeleton Stub Game',
+      platform: 'win64',
+      is_installed: false,
+      is_stub: true,
+    });
+
+    render(GameHeroBanner, {
+      props: {
+        game: stubGame,
+        isGameRunning: false,
+        isTaskActive: false,
+      },
+    });
+
+    const trashBtn = screen.getByRole('button', { name: /Move Game to Trash/i });
+    expect(trashBtn).toBeInTheDocument();
+  });
+
+  it('does NOT render trash button for online catalog previews (virtual titles)', () => {
+    const virtualGame = {
+      name: 'Online Catalog Preview',
+      app_id: '123456',
+      game_dir: '',
+      gameDir: '',
+      isVirtual: true,
+      is_virtual: true,
+      is_installed: false,
+    };
+
+    render(GameHeroBanner, {
+      props: {
+        game: virtualGame,
+        isGameRunning: false,
+        isTaskActive: false,
+      },
+    });
+
+    expect(screen.queryByRole('button', { name: /Move Game to Trash/i })).not.toBeInTheDocument();
+  });
 });

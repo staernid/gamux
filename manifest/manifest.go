@@ -74,16 +74,22 @@ const (
 	ContentCategoryCore         = "core"
 	ContentCategorySoundtrack   = "soundtrack"
 	ContentCategoryOptionalHD   = "optional_hd"
+	ContentCategoryDLC          = "dlc"
 	ContentCategoryLocalePrefix = "locale:"
 )
 
 // DepotMeta captures metadata about a Steam depot for classification and filtering.
 type DepotMeta struct {
-	DepotID  uint32 `json:"depot_id"`
-	Name     string `json:"name,omitempty"`
-	Language string `json:"language,omitempty"`
-	OSList   string `json:"oslist,omitempty"`
-	Optional bool   `json:"optional,omitempty"`
+	DepotID      uint32 `json:"depot_id"`
+	Name         string `json:"name,omitempty"`
+	Language     string `json:"language,omitempty"`
+	OSList       string `json:"oslist,omitempty"`
+	OSArch       string `json:"osarch,omitempty"`
+	Optional     bool   `json:"optional,omitempty"`
+	IsDLC        bool   `json:"is_dlc,omitempty"`
+	DLCAppID     uint32 `json:"dlc_app_id,omitempty"`
+	Size         uint64 `json:"size,omitempty"`
+	DownloadSize uint64 `json:"download_size,omitempty"`
 }
 
 var languageAliases = map[string]string{
@@ -229,6 +235,36 @@ func LanguagesMatch(lang1, lang2 string) bool {
 	return false
 }
 
+// isBinaryOrExecutable returns true if the relative file path represents an executable binary or shared library.
+func isBinaryOrExecutable(normPath string) bool {
+	p := strings.ToLower(normPath)
+	ext := filepath.Ext(p)
+	if ext == ".exe" || ext == ".dll" || ext == ".so" || ext == ".dylib" || ext == ".app" ||
+		ext == ".x86_64" || ext == ".x86" || ext == ".bin.x86" || ext == ".bin.x86_64" || ext == ".elf" {
+		return true
+	}
+	if strings.Contains(p, ".so.") {
+		return true
+	}
+	if strings.HasPrefix(p, "bin/") || strings.Contains(p, "/bin/") ||
+		strings.HasPrefix(p, "bin32/") || strings.HasPrefix(p, "bin64/") ||
+		strings.Contains(p, "/bin32/") || strings.Contains(p, "/bin64/") ||
+		strings.HasPrefix(p, "lib/") || strings.Contains(p, "/lib/") ||
+		strings.HasPrefix(p, "lib64/") || strings.Contains(p, "/lib64/") {
+		nonBinaryExts := map[string]bool{
+			".txt": true, ".json": true, ".xml": true, ".cfg": true, ".ini": true,
+			".png": true, ".jpg": true, ".jpeg": true, ".log": true, ".dat": true,
+			".pak": true, ".pdb": true, ".html": true, ".htm": true, ".css": true,
+			".js": true, ".md": true, ".csv": true, ".yml": true, ".yaml": true,
+			".lua": true, ".manifest": true,
+		}
+		if !nonBinaryExts[ext] {
+			return true
+		}
+	}
+	return false
+}
+
 // ClassifyDepotContent inspects depot metadata, depot names, and manifest file entries
 // to classify a depot into "core", "locale:<language>", "soundtrack", or "optional_hd".
 func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFileEntry, meta *DepotMeta) (string, string) {
@@ -239,8 +275,7 @@ func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFile
 			continue // directory entry
 		}
 		p := strings.ToLower(NormalizePath(f.Path))
-		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".so") || strings.HasSuffix(p, ".dylib") ||
-			strings.HasSuffix(p, ".bin.x86_64") || strings.HasSuffix(p, ".x86_64") {
+		if isBinaryOrExecutable(p) {
 			return ContentCategoryCore, ""
 		}
 	}
@@ -274,6 +309,9 @@ func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFile
 				return ContentCategoryLocalePrefix + normLang, normLang
 			}
 		}
+		if meta.IsDLC || meta.DLCAppID > 0 {
+			return ContentCategoryDLC, ""
+		}
 	}
 
 	// 2. Depot name string inspection
@@ -290,6 +328,9 @@ func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFile
 			strings.Contains(nameToCheck, "hd texture") || strings.Contains(nameToCheck, "ultra texture") ||
 			strings.Contains(nameToCheck, "artbook") || strings.Contains(nameToCheck, "bonus content") {
 			return ContentCategoryOptionalHD, ""
+		}
+		if strings.Contains(nameToCheck, "dlc #") || strings.Contains(nameToCheck, "dlc -") || strings.Contains(nameToCheck, "dlc content") {
+			return ContentCategoryDLC, ""
 		}
 
 		// Check for language keywords in depot name
@@ -425,17 +466,20 @@ func ClassifyDepot(files []ManifestFileEntry) DepotCategory {
 		}
 
 		// 2. Linux checks
-		if strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") || strings.HasSuffix(p, ".bin.x86") || strings.HasSuffix(p, ".bin.x86_64") || strings.Contains(p, "linux_client") || strings.HasPrefix(p, "linux/") {
-			hasLinux = true
+		if strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") || strings.HasSuffix(p, ".bin.x86") || strings.HasSuffix(p, ".bin.x86_64") || strings.Contains(p, "linux_client") || strings.HasPrefix(p, "linux/") ||
+			strings.Contains(p, "bin/x64/") || strings.Contains(p, "bin/i386/") || strings.Contains(p, "bin/x86/") || strings.Contains(p, "bin/linux/") || strings.HasPrefix(p, "linux64/") {
+			if !strings.HasSuffix(p, ".exe") && !strings.HasSuffix(p, ".dll") && !strings.HasSuffix(p, ".pdb") {
+				hasLinux = true
+			}
 		}
 
 		// 3. Windows checks
-		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".dll") || strings.HasSuffix(p, ".bat") || strings.HasSuffix(p, ".cmd") || strings.HasPrefix(p, "win32/") || strings.HasPrefix(p, "win64/") || strings.HasPrefix(p, "windows/") || strings.Contains(p, "_commonredist") {
+		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".dll") || strings.HasSuffix(p, ".bat") || strings.HasSuffix(p, ".cmd") || strings.HasPrefix(p, "win32/") || strings.HasPrefix(p, "win64/") || strings.HasPrefix(p, "windows/") || strings.Contains(p, "_commonredist") || strings.Contains(p, "bin/win32/") || strings.Contains(p, "bin/win64/") {
 			hasWin = true
 		}
 
 		// 4. Executable / binary check
-		if strings.HasSuffix(p, ".exe") || strings.HasSuffix(p, ".dll") || strings.HasSuffix(p, ".so") || strings.HasSuffix(p, ".dylib") || strings.HasSuffix(p, ".app") || strings.HasSuffix(p, ".x86_64") || strings.HasSuffix(p, ".x86") {
+		if isBinaryOrExecutable(p) {
 			hasExecutables = true
 		}
 
@@ -944,6 +988,20 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 			}
 		}
 
+		// If no depot keys were found locally and appID is known, resolve from default providers
+		if len(depotKeys) == 0 && appID > 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			chain := NewDefaultProviderChain("", "")
+			if res, err := chain.Resolve(ctx, appID); err == nil && res != nil && len(res.Depots) > 0 {
+				for _, pair := range res.Depots {
+					depotKeys[pair.DepotID] = pair.DecryptionKey
+				}
+				luaPath := filepath.Join(manifestsDir, fmt.Sprintf("%d.lua", appID))
+				_ = SaveLuaFile(luaPath, appID, res.Depots)
+			}
+			cancel()
+		}
+
 		for dID, manifestPath := range depotLatest {
 			data, err := os.ReadFile(manifestPath)
 			if err != nil {
@@ -962,11 +1020,25 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				}
 			}
 
+			// Authoritative platform override from remote metadata if depot files yielded generic common
+			if cat == DepotCategoryCommon && meta != nil && meta.OSList != "" {
+				switch strings.ToLower(meta.OSList) {
+				case "windows":
+					cat = DepotCategoryWindows
+				case "linux":
+					cat = DepotCategoryLinux
+				case "macos", "osx":
+					cat = DepotCategoryMacOS
+				}
+			}
+
 			contentCat, lang := ClassifyDepotContent(dID, "", files, meta)
 
 			var totalBytes uint64
 			fileCount := 0
 			installedCount := 0
+			execFileCount := 0
+			installedExecCount := 0
 
 			for _, f := range files {
 				if (f.Flags & 0x40) != 0 {
@@ -976,14 +1048,31 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				fileCount++
 
 				norm := NormalizePath(f.Path)
+				isExec := isBinaryOrExecutable(norm)
+				if isExec {
+					execFileCount++
+				}
+
 				if norm != "" {
 					if fi, statErr := os.Stat(filepath.Join(gameDir, norm)); statErr == nil && !fi.IsDir() {
 						installedCount++
+						if isExec {
+							installedExecCount++
+						}
 					}
 				}
 			}
 
-			isInstalled := fileCount > 0 && installedCount > 0 && float64(installedCount)/float64(fileCount) >= 0.5
+			var isInstalled bool
+			if fileCount > 0 {
+				if execFileCount > 0 {
+					// Depots with platform binaries MUST have at least one binary present on disk
+					isInstalled = installedExecCount > 0 && float64(installedCount)/float64(fileCount) >= 0.5
+				} else {
+					// Content / asset depots without binaries require high matching ratio
+					isInstalled = installedCount > 0 && float64(installedCount)/float64(fileCount) >= 0.8
+				}
+			}
 			depotName := fmt.Sprintf("Depot %d", dID)
 			if meta != nil && meta.Name != "" {
 				depotName = meta.Name
@@ -1008,6 +1097,20 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				}
 			}
 
+			var downloadSize uint64
+			var osArch string
+			var dlcAppID uint32
+			var isDLC bool
+			if meta != nil {
+				downloadSize = meta.DownloadSize
+				osArch = meta.OSArch
+				dlcAppID = meta.DLCAppID
+				isDLC = meta.IsDLC
+				if meta.Size > 0 && totalBytes == 0 {
+					totalBytes = meta.Size
+				}
+			}
+
 			summaries = append(summaries, domain.DepotSummary{
 				DepotID:         dID,
 				Name:            depotName,
@@ -1016,8 +1119,12 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				Language:        lang,
 				Installed:       isInstalled,
 				Size:            totalBytes,
+				DownloadSize:    downloadSize,
 				FileCount:       fileCount,
 				ManifestID:      depotLatestManifestID[dID],
+				OSArch:          osArch,
+				DLCAppID:        dlcAppID,
+				IsDLC:           isDLC,
 			})
 		}
 	}
@@ -1045,7 +1152,32 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				} else if contentCat == ContentCategorySoundtrack {
 					depotName = fmt.Sprintf("Official Soundtrack (%d)", dID)
 				} else {
-					depotName = fmt.Sprintf("Depot %d", dID)
+					archStr := ""
+					if m.OSArch == "64" {
+						archStr = " (64-bit)"
+					} else if m.OSArch == "32" {
+						archStr = " (32-bit)"
+					}
+					prefix := ""
+					if m.IsDLC && m.DLCAppID > 0 {
+						prefix = fmt.Sprintf("DLC #%d ", m.DLCAppID)
+					}
+					switch cat {
+					case DepotCategoryCommon:
+						if m.IsDLC {
+							depotName = fmt.Sprintf("%sContent (%d)", prefix, dID)
+						} else {
+							depotName = fmt.Sprintf("Base Content (%d)", dID)
+						}
+					case DepotCategoryWindows:
+						depotName = fmt.Sprintf("%sWindows Binaries%s (%d)", prefix, archStr, dID)
+					case DepotCategoryLinux:
+						depotName = fmt.Sprintf("%sLinux Native Binaries%s (%d)", prefix, archStr, dID)
+					case DepotCategoryMacOS:
+						depotName = fmt.Sprintf("%smacOS Bundle%s (%d)", prefix, archStr, dID)
+					default:
+						depotName = fmt.Sprintf("Depot %d", dID)
+					}
 				}
 			}
 
@@ -1056,9 +1188,13 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				ContentCategory: contentCat,
 				Language:        lang,
 				Installed:       false,
-				Size:            0,
+				Size:            m.Size,
+				DownloadSize:    m.DownloadSize,
 				FileCount:       0,
 				ManifestID:      0,
+				OSArch:          m.OSArch,
+				DLCAppID:        m.DLCAppID,
+				IsDLC:           m.IsDLC,
 			})
 		}
 	}
@@ -1170,6 +1306,20 @@ func UninstallDepot(gameDir string, appID uint32, depotID uint32) (int, uint64, 
 				}
 			}
 		}
+	}
+
+	// If no depot keys were found locally and appID is known, resolve from default providers
+	if len(depotKeys) == 0 && appID > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		chain := NewDefaultProviderChain("", "")
+		if res, err := chain.Resolve(ctx, appID); err == nil && res != nil && len(res.Depots) > 0 {
+			for _, pair := range res.Depots {
+				depotKeys[pair.DepotID] = pair.DecryptionKey
+			}
+			luaPath := filepath.Join(manifestsDir, fmt.Sprintf("%d.lua", appID))
+			_ = SaveLuaFile(luaPath, appID, res.Depots)
+		}
+		cancel()
 	}
 
 	for _, e := range entries {

@@ -44,6 +44,9 @@ type Config struct {
 	GamescopeFPS       int               `json:"gamescope_fps,omitempty"`
 	TransferSpeedLimit int64             `json:"transfer_speed_limit,omitempty"`
 	GlobalEnv          map[string]string `json:"global_env,omitempty"`
+	InhibitSleep       bool              `json:"inhibit_sleep"`
+	PreferSDL          bool              `json:"prefer_sdl,omitempty"`
+	EnableWayland      bool              `json:"enable_wayland,omitempty"`
 
 	// Emulation Profile Flags
 	Language       string `json:"language,omitempty"`
@@ -145,6 +148,9 @@ func DefaultConfig() *Config {
 		Normalize:            true,
 		WinePrefix:           "",
 		MangoHud:             false,
+		InhibitSleep:         true,
+		PreferSDL:            false,
+		EnableWayland:        false,
 		Multiseat: MultiseatConfig{
 			Player2ProfileID:      "p2",
 			DefaultSeat1Mode:      "local",

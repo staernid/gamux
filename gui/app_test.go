@@ -307,6 +307,46 @@ func TestApp_GameOperations(t *testing.T) {
 	}
 }
 
+func TestApp_TrashGame(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeDataHome := filepath.Join(tmpDir, "data_home")
+	t.Setenv("XDG_DATA_HOME", fakeDataHome)
+
+	gameDir := filepath.Join(tmpDir, "GameToTrash")
+	_ = os.MkdirAll(gameDir, 0755)
+	_ = os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("payload"), 0755)
+
+	cfg := config.DefaultConfig()
+	app := NewApp(cfg)
+
+	// Populate cache
+	app.UpdateCachedGame(domain.NewGame("GameToTrash", gameDir, "12345", "win64"))
+
+	// Empty path error
+	if err := app.TrashGame(""); err == nil {
+		t.Error("TrashGame(\"\") expected error, got nil")
+	}
+
+	// Trash valid game
+	if err := app.TrashGame(gameDir); err != nil {
+		t.Fatalf("TrashGame() failed: %v", err)
+	}
+
+	// Verify target no longer exists at original path
+	if _, err := os.Stat(gameDir); !os.IsNotExist(err) {
+		t.Errorf("gameDir still exists after TrashGame")
+	}
+
+	// Verify removed from cache
+	app.gamesMu.RLock()
+	for _, g := range app.cachedGames {
+		if g != nil && g.GameDir == gameDir {
+			t.Errorf("game still found in cachedGames")
+		}
+	}
+	app.gamesMu.RUnlock()
+}
+
 func TestApp_StartupAndNotifier(t *testing.T) {
 	cfg := config.DefaultConfig()
 	app := NewApp(cfg)

@@ -64,109 +64,114 @@
   });
 </script>
 
-<div class="bg-surface-card border border-surface-border rounded-2xl p-4 shadow-lg space-y-3 hover:border-surface-borderHighlight transition">
-  <div class="flex items-start justify-between gap-3">
-    <div class="flex items-center space-x-3.5 min-w-0">
-      <!-- Poster Thumbnail -->
-      <div class="w-11 h-15 rounded-xl overflow-hidden bg-surface-base border border-surface-border flex-shrink-0">
-        <PosterArt
-          appId={task.appId}
-          name={task.gameName}
-          posterUrl={task.posterUrl}
-          className="w-full h-full object-cover"
-        />
-      </div>
+<div class="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 hover:border-surface-borderHighlight transition">
+  <div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+    <!-- Hero Poster Artwork: True 2:3 uncropped ratio -->
+    <div class="w-24 sm:w-32 aspect-[2/3] rounded-xl overflow-hidden bg-surface-base border border-surface-border flex-shrink-0 shadow-lg">
+      <PosterArt
+        appId={task.appId}
+        name={task.gameName}
+        posterUrl={task.posterUrl}
+        className="w-full h-full object-cover"
+      />
+    </div>
 
-      <div class="min-w-0 space-y-1">
-        <div class="flex items-center space-x-2 flex-wrap gap-y-1">
-          <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-pill text-neutral-300 uppercase font-mono border border-surface-border">
-            {task.store || 'steam'}
-          </span>
-          <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-input text-neutral-400 uppercase font-mono border border-surface-borderSubtle">
-            {getTaskTypeLabel(task.type)}
-          </span>
-          <h4
-            class="font-bold text-white text-sm truncate"
-            title={task.gameName || task.title}
+    <!-- Download Details & Progress -->
+    <div class="min-w-0 flex-1 flex flex-col justify-between self-stretch py-0.5 space-y-3 w-full">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 space-y-1">
+          <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+            <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-pill text-neutral-300 uppercase font-mono border border-surface-border">
+              {task.store || 'steam'}
+            </span>
+            <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-input text-neutral-400 uppercase font-mono border border-surface-borderSubtle">
+              {getTaskTypeLabel(task.type)}
+            </span>
+            <h4
+              class="font-bold text-white text-base sm:text-lg truncate"
+              title={task.gameName || task.title}
+            >
+              {task.gameName || task.title}
+            </h4>
+          </div>
+          <p
+            class="text-xs text-neutral-400 font-mono truncate max-w-lg"
+            title={task.details || task.stage || 'In progress...'}
           >
-            {task.gameName || task.title}
-          </h4>
+            {task.details || task.stage || 'In progress...'}
+          </p>
         </div>
-        <p
-          class="text-2xs text-neutral-400 font-mono truncate max-w-lg"
-          title={task.details || task.stage || 'In progress...'}
-        >
-          {task.details || task.stage || 'In progress...'}
-        </p>
+
+        <!-- Controls -->
+        <div class="flex items-center space-x-2 flex-shrink-0">
+          {#if isDl}
+            <button
+              type="button"
+              on:click={handlePause}
+              class="bg-surface-elevated hover:bg-surface-cardHover border border-surface-border text-amber-400 hover:text-amber-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
+              aria-label="Pause {task.gameName || task.title || 'task'}"
+            >
+              Pause
+            </button>
+          {/if}
+          <button
+            type="button"
+            on:click={handleCancel}
+            class="font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer {confirmingCancel
+              ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500 shadow-md animate-pulse'
+              : 'bg-surface-elevated hover:bg-rose-950/40 border border-surface-border hover:border-rose-900/50 text-neutral-400 hover:text-rose-400'}"
+            aria-label={confirmingCancel ? `Confirm cancellation for ${task.gameName || task.title || 'task'}` : `Cancel ${task.gameName || task.title || 'task'}`}
+          >
+            {confirmingCancel ? 'Confirm Cancel?' : 'Cancel'}
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Controls -->
-    <div class="flex items-center space-x-2 flex-shrink-0">
-      {#if isDl}
-        <button
-          type="button"
-          on:click={handlePause}
-          class="bg-surface-elevated hover:bg-surface-cardHover border border-surface-border text-amber-400 hover:text-amber-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
-          aria-label="Pause {task.gameName || task.title || 'task'}"
-        >
-          Pause
-        </button>
-      {/if}
-      <button
-        type="button"
-        on:click={handleCancel}
-        class="font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer {confirmingCancel
-          ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500 shadow-md animate-pulse'
-          : 'bg-surface-elevated hover:bg-rose-950/40 border border-surface-border hover:border-rose-900/50 text-neutral-400 hover:text-rose-400'}"
-        aria-label={confirmingCancel ? `Confirm cancellation for ${task.gameName || task.title || 'task'}` : `Cancel ${task.gameName || task.title || 'task'}`}
-      >
-        {confirmingCancel ? 'Confirm Cancel?' : 'Cancel'}
-      </button>
-    </div>
-  </div>
-
-  <!-- Progress Bar -->
-  <div class="space-y-1.5">
-    <div
-      class="w-full bg-surface-input border border-surface-border h-2 rounded-full overflow-hidden"
-      role="progressbar"
-      aria-valuenow={isIndeterminate ? undefined : (task.percent || 0)}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-label="{task.gameName || task.title || 'Task'} progress"
-    >
-      {#if isIndeterminate}
-        <div class="h-full w-full bg-neutral-600/40 animate-pulse rounded-full"></div>
-      {:else}
+      <!-- Progress Bar & Telemetry -->
+      <div class="space-y-2 pt-2 border-t border-surface-borderSubtle">
         <div
-          class="bg-white h-full rounded-full transition-all duration-300 relative"
-          style="width: {Math.min(100, Math.max(0, task.percent || 0))}%"
+          class="w-full bg-surface-input border border-surface-border h-2.5 rounded-full overflow-hidden"
+          role="progressbar"
+          aria-valuenow={isIndeterminate ? undefined : (task.percent || 0)}
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="{task.gameName || task.title || 'Task'} progress"
         >
-          <div class="absolute inset-0 bg-neutral-200/20 animate-pulse"></div>
+          {#if isIndeterminate}
+            <div class="h-full w-full bg-neutral-600/40 animate-pulse rounded-full"></div>
+          {:else}
+            <div
+              class="bg-white h-full rounded-full transition-all duration-300 relative"
+              style="width: {Math.min(100, Math.max(0, task.percent || 0))}%"
+            >
+              <div class="absolute inset-0 bg-neutral-200/20 animate-pulse"></div>
+            </div>
+          {/if}
         </div>
-      {/if}
-    </div>
 
-    <!-- Metadata line -->
-    <div class="flex items-center justify-between text-2xs font-mono text-neutral-400">
-      <span>
-        {#if task.totalBytes && task.totalBytes > 0}
-          {formatBytes(task.currentBytes || 0)} / {formatBytes(task.totalBytes)} ({task.percent?.toFixed(0) || 0}%)
-        {:else if task.totalItems && task.totalItems > 0}
-          {task.currentItems || 0} / {task.totalItems} items ({task.percent?.toFixed(0) || 0}%)
-        {:else if !isIndeterminate}
-          {task.percent?.toFixed(0) || 0}%
-        {:else}
-          Processing...
-        {/if}
-      </span>
-      {#if task.speedBps > 0}
-        <span class="text-neutral-200 font-bold">{formatBytes(task.speedBps)}/s</span>
-      {/if}
-      {#if task.etaSeconds > 0}
-        <span>ETA: {formatETA(task.etaSeconds)}</span>
-      {/if}
+        <!-- Metadata line -->
+        <div class="flex items-center justify-between text-2xs font-mono text-neutral-400 flex-wrap gap-y-1">
+          <span class="text-neutral-300 font-medium">
+            {#if task.totalBytes && task.totalBytes > 0}
+              {formatBytes(task.currentBytes || 0)} / {formatBytes(task.totalBytes)} ({task.percent?.toFixed(0) || 0}%)
+            {:else if task.totalItems && task.totalItems > 0}
+              {task.currentItems || 0} / {task.totalItems} items ({task.percent?.toFixed(0) || 0}%)
+            {:else if !isIndeterminate}
+              {task.percent?.toFixed(0) || 0}%
+            {:else}
+              Processing...
+            {/if}
+          </span>
+          <div class="flex items-center space-x-3">
+            {#if task.speedBps > 0}
+              <span class="text-emerald-400 font-bold">{formatBytes(task.speedBps)}/s</span>
+            {/if}
+            {#if task.etaSeconds > 0}
+              <span>ETA: {formatETA(task.etaSeconds)}</span>
+            {/if}
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

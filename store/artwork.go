@@ -86,9 +86,11 @@ var canonicalAssetSpecs = []assetSpec{
 	},
 	{
 		AssetType:     domain.AssetIcon,
-		CacheFilename: "icon.jpg",
+		CacheFilename: "icon.png",
 		LocalCandidates: []string{
-			"icon.jpg", "icon.png",
+			"icon.png", "icon.ico", "icon.jpg",
+			filepath.Join(".gamux", "art", "icon.png"),
+			filepath.Join(".gamux", "art", "icon.ico"),
 			filepath.Join(".gamux", "art", "icon.jpg"),
 		},
 		SteamCDNURL: func(appID string) string {
@@ -236,6 +238,11 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 		if s.hasMissingAssets(game) && game.Name != "" && rawgID == "" {
 			s.resolveFromRAWGSearch(ctx, game, gameArtDir)
 		}
+
+		// 3f. SteamGrid Proxy (Bottles) Fallback for Cover
+		if s.hasMissingAssets(game) && game.Name != "" {
+			s.resolveFromSteamGridProxy(ctx, game, gameArtDir)
+		}
 	}
 
 	// Step 4: Cross-Asset Fallback Substitution (ensure no game remains artless)
@@ -290,6 +297,26 @@ func (s *ArtworkService) resolveLocalAsset(ctx context.Context, game *domain.Gam
 	// 3. Check disk cache
 	if loc.LocalPath == "" && util.FileExists(cachedPath) {
 		loc.LocalPath = cachedPath
+	}
+
+	// 4. For icons, extract embedded high-res icon from PE executable if available
+	if spec.AssetType == domain.AssetIcon && loc.LocalPath == "" {
+		targetExe := game.ExePath
+		if targetExe == "" && len(game.LaunchCandidates) > 0 {
+			targetExe = game.LaunchCandidates[0].Executable
+		}
+		if targetExe != "" {
+			if !filepath.IsAbs(targetExe) && game.GameDir != "" {
+				targetExe = filepath.Join(game.GameDir, targetExe)
+			}
+			if strings.HasSuffix(strings.ToLower(targetExe), ".exe") && util.FileExists(targetExe) {
+				pngPath := filepath.Join(gameArtDir, "icon.png")
+				if err := util.ExtractPEIcon(targetExe, pngPath); err == nil && util.FileExists(pngPath) {
+					loc.LocalPath = pngPath
+					loc.RemoteURL = ""
+				}
+			}
+		}
 	}
 
 	game.SetAsset(spec.AssetType, loc)
@@ -535,6 +562,37 @@ func (s *ArtworkService) resolveFromRAWGSearch(ctx context.Context, game *domain
 	}
 
 	s.resolveFromRAWG(ctx, game, targetID, gameArtDir)
+}
+
+func (s *ArtworkService) resolveFromSteamGridProxy(ctx context.Context, game *domain.Game, gameArtDir string) {
+	if game == nil || game.Name == "" {
+		return
+	}
+	p, ok := s.registry.Get("steamgrid-proxy")
+	if !ok {
+		return
+	}
+
+	proxyProvider, ok := p.(*SteamGridProxyProvider)
+	if !ok {
+		return
+	}
+
+	coverURL, err := proxyProvider.FetchCoverURL(ctx, game.Name)
+	if err != nil || coverURL == "" {
+		return
+	}
+
+	coverSpec := canonicalAssetSpecs[0] // domain.AssetCover
+	cachedPath := filepath.Join(gameArtDir, coverSpec.CacheFilename)
+	loc := game.GetAsset(domain.AssetCover)
+	if loc.LocalPath == "" {
+		if err := s.DownloadFile(ctx, coverURL, cachedPath); err == nil {
+			loc.LocalPath = cachedPath
+			loc.RemoteURL = coverURL
+			game.SetAsset(domain.AssetCover, loc)
+		}
+	}
 }
 
 func (s *ArtworkService) applyProviderArtwork(ctx context.Context, game *domain.Game, art *Artwork, gameArtDir string) {

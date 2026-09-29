@@ -52,6 +52,8 @@ func NewManager(cfg *config.Config) *Manager {
 	m.Register(NewGBETool(cfg))
 	m.Register(NewSteamlessTool(cfg))
 	m.Register(NewUMUTool(cfg))
+	m.Register(NewProtonTool(cfg, FlavorGE))
+	m.Register(NewProtonTool(cfg, FlavorCachyOS))
 	return m
 }
 

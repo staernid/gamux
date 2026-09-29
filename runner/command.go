@@ -99,6 +99,16 @@ func ResolveEffectiveOptions(cfg *config.Config, opts LaunchOptions) LaunchOptio
 		res.OfflineMode = util.Ptr(cfg.OfflineMode)
 	}
 
+	if res.InhibitSleep == nil {
+		res.InhibitSleep = util.Ptr(cfg.InhibitSleep)
+	}
+	if res.PreferSDL == nil && cfg.PreferSDL {
+		res.PreferSDL = util.Ptr(cfg.PreferSDL)
+	}
+	if res.EnableWayland == nil && cfg.EnableWayland {
+		res.EnableWayland = util.Ptr(cfg.EnableWayland)
+	}
+
 	// Merge Environment Variables (Global < Custom Profile)
 	mergedEnv := make(map[string]string)
 	if cfg.GlobalEnv != nil {
@@ -247,6 +257,15 @@ func DetectOverrides(p *domain.LaunchProfile, cfg *config.Config) []string {
 	if p.OfflineMode != nil && *p.OfflineMode != cfg.OfflineMode {
 		overrides = append(overrides, "offline_mode")
 	}
+	if p.InhibitSleep != nil && *p.InhibitSleep != cfg.InhibitSleep {
+		overrides = append(overrides, "inhibit_sleep")
+	}
+	if p.PreferSDL != nil && *p.PreferSDL != cfg.PreferSDL {
+		overrides = append(overrides, "prefer_sdl")
+	}
+	if p.EnableWayland != nil && *p.EnableWayland != cfg.EnableWayland {
+		overrides = append(overrides, "enable_wayland")
+	}
 	if p.Language != "" && p.Language != cfg.Language {
 		overrides = append(overrides, "language")
 	}
@@ -375,6 +394,14 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 				gameEnv["PROTONPATH"] = "GE-Proton"
 			}
 			gameEnv["PROTON_VERB"] = "waitforexitandrun"
+			gameEnv["UMU_CONTAINER_NSENTER"] = "1"
+			gameEnv["UMU_USE_STEAM"] = "1"
+		}
+		if resolved.PreferSDL != nil && *resolved.PreferSDL {
+			gameEnv["PROTON_PREFER_SDL"] = "1"
+		}
+		if resolved.EnableWayland != nil && *resolved.EnableWayland {
+			gameEnv["PROTON_ENABLE_WAYLAND"] = "1"
 		}
 	} else if domain.NormalizeOperatingMode(resolved.OperatingMode) == ModeLoader {
 		// Linux native loader support
@@ -467,6 +494,24 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 			}
 			gsArgs = append(gsArgs, "-f", "--")
 			finalArgs = append(gsArgs, finalArgs...)
+		}
+	}
+
+	// Inhibit system sleep/screensaver during gaming if enabled and available (for Windows/emulated runners)
+	if (resolved.Platform != "linux" || resolved.Runner != RunnerLinux) && resolved.InhibitSleep != nil && *resolved.InhibitSleep {
+		if inhibitBin, err := exec.LookPath("systemd-inhibit"); err == nil {
+			whyReason := "Game is running"
+			if resolved.Name != "" {
+				whyReason = fmt.Sprintf("Gamux: %s", resolved.Name)
+			}
+			inhibitArgs := []string{
+				inhibitBin,
+				"--what=sleep:idle",
+				fmt.Sprintf("--why=%s", whyReason),
+				"--mode=block",
+				"--",
+			}
+			finalArgs = append(inhibitArgs, finalArgs...)
 		}
 	}
 

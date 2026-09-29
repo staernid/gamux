@@ -23,7 +23,7 @@ type DownloadOperation struct {
 }
 
 func (op *DownloadOperation) TaskSpec() tasks.TaskSpec {
-	return tasks.TaskSpec{
+	spec := tasks.TaskSpec{
 		Type:         tasks.TypeDownload,
 		Title:        fmt.Sprintf("Download %s", op.GameName),
 		GameName:     op.GameName,
@@ -31,6 +31,10 @@ func (op *DownloadOperation) TaskSpec() tasks.TaskSpec {
 		AppID:        fmt.Sprintf("%d", op.Options.AppID),
 		Capabilities: tasks.CapCancellable | tasks.CapPausable | tasks.CapPersist | tasks.CapBandwidthLimit,
 	}
+	if op.Options.Branch != "" {
+		spec.Metadata = map[string]string{"branch": op.Options.Branch}
+	}
+	return spec
 }
 
 func (op *DownloadOperation) Execute(ctx context.Context, ctrl *tasks.Controller) error {

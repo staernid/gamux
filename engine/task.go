@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/gbe"
@@ -363,11 +364,22 @@ func (eng *Engine) registerDefaultTaskRunners() {
 			return fmt.Errorf("target directory cannot be empty for download task %s", t.ID)
 		}
 
+		branch := ""
+		if t.Metadata != nil {
+			branch = t.Metadata["branch"]
+		}
+		if branch == "" && t.GameDir != "" {
+			if lp, lErr := compat.LoadProfile(t.GameDir); lErr == nil && lp != nil && lp.Branch != "" {
+				branch = lp.Branch
+			}
+		}
+
 		op := &DownloadOperation{
 			Engine: eng,
 			Options: DownloadGameOptions{
 				AppID:     appIDVal,
 				TargetDir: t.GameDir,
+				Branch:    branch,
 				AutoApply: true,
 			},
 			GameName: t.GameName,

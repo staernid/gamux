@@ -356,6 +356,10 @@ func isTitleMatch(candidateName, targetTitle string) bool {
 // QueryArtworkCandidates fetches a list of candidate assets using a typed ArtworkQuery.
 func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query ArtworkQuery) ([]ArtworkOption, error) {
 	if s.apiKey == "" {
+		if (query.AssetType == "cover" || query.AssetType == "") && query.Title != "" {
+			proxy := NewSteamGridProxyProvider().WithCustomClient(s.httpClient, "")
+			return proxy.QueryArtworkCandidates(ctx, query)
+		}
 		return nil, fmt.Errorf("missing steamgriddb api key")
 	}
 

@@ -156,3 +156,16 @@ export function renameGameInStore(oldDir, rawOrNormalizedGame) {
 export function updateGameInStore(rawOrNormalizedGame) {
   return renameGameInStore(null, rawOrNormalizedGame);
 }
+
+export function removeGameFromStore(gameDir) {
+  if (!gameDir) return;
+
+  games.update(list => list.filter(g => !isSamePath(g.gameDir, gameDir)));
+
+  selectedGame.update(current => {
+    if (current && isSamePath(current.gameDir, gameDir)) {
+      return null;
+    }
+    return current;
+  });
+}

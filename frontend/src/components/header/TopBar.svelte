@@ -9,11 +9,8 @@
   import { AppAPI } from '../../api/app.js';
   import { isSamePath } from '../../utils/game.js';
 
-  const totalTasks = tasksStore.activeCount;
   const activeTransfersCount = tasksStore.activeTransfersCount;
   const isSettingsDirty = configStore.isDirty;
-
-  $: activeOpsCount = $activeTransfersCount > 0 ? $activeTransfersCount : $totalTasks;
 
   // Build unified running instance display list:
   // If runningInstances has items, map them to game + profile entities.
@@ -148,18 +145,18 @@
         <Icon name="shelf" className="w-4 h-4 flex-shrink-0" />
       </button>
 
-      <!-- Tasks (2) -->
+      <!-- Downloads (2) -->
       <button
         type="button"
         on:click={() => navigateWithGuard('tasks')}
         class="relative p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'tasks' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        title="Tasks (2)"
-        aria-label="Tasks (2)"
+        title="Downloads (2)"
+        aria-label="Downloads (2)"
       >
         <Icon name="tasks" className="w-4 h-4 flex-shrink-0" />
-        {#if activeOpsCount > 0}
+        {#if $activeTransfersCount > 0}
           <span class="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[15px] text-center text-4xs rounded-full bg-white text-neutral-950 font-black font-mono shadow">
-            {activeOpsCount}
+            {$activeTransfersCount}
           </span>
         {/if}
       </button>

@@ -3,7 +3,10 @@ package manifest
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -95,4 +98,37 @@ func ParseLua(content string) (*ParsedLua, error) {
 func ResolveKeys(ctx context.Context, appID uint32, luaPath string, hubcapAPIKey string) (*ParsedLua, error) {
 	chain := NewDefaultProviderChain(luaPath, hubcapAPIKey)
 	return chain.Resolve(ctx, appID)
+}
+
+// FormatLua serializes an AppID and depot keys into standard .lua format.
+func FormatLua(appID uint32, depots []DepotKeyPair) string {
+	var sb strings.Builder
+	if appID > 0 {
+		sb.WriteString(fmt.Sprintf("addappid(%d)\n", appID))
+	}
+	sorted := make([]DepotKeyPair, len(depots))
+	copy(sorted, depots)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].DepotID < sorted[j].DepotID
+	})
+	for _, d := range sorted {
+		if d.DepotID == appID && d.DecryptionKey == "" {
+			continue
+		}
+		if d.DecryptionKey != "" {
+			sb.WriteString(fmt.Sprintf("addappid(%d, 1, %q)\n", d.DepotID, d.DecryptionKey))
+		} else {
+			sb.WriteString(fmt.Sprintf("addappid(%d)\n", d.DepotID))
+		}
+	}
+	return sb.String()
+}
+
+// SaveLuaFile writes an AppID and its depot keys to a .lua file on disk.
+func SaveLuaFile(path string, appID uint32, depots []DepotKeyPair) error {
+	content := FormatLua(appID, depots)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0644)
 }

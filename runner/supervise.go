@@ -32,8 +32,10 @@ func isGamescopeCmd(cfg *config.Config, gamescopeOpt *bool, cmd *exec.Cmd) bool 
 		return true
 	}
 	if cmd != nil {
-		if len(cmd.Args) > 0 && filepath.Base(cmd.Args[0]) == "gamescope" {
-			return true
+		for _, arg := range cmd.Args {
+			if filepath.Base(arg) == "gamescope" {
+				return true
+			}
 		}
 		if filepath.Base(cmd.Path) == "gamescope" {
 			return true
@@ -58,6 +60,7 @@ func isHelperDaemon(name string) bool {
 		"tabtip.exe",
 		"start.exe",
 		"gamemoded",
+		"systemd-inhibit",
 		"bwrap",
 		"pasta",
 		"reaper":

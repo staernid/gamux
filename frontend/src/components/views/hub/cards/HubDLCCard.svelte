@@ -4,6 +4,7 @@
   import { tasksStore } from '../../../../stores/tasks.js';
   import { notificationStore } from '../../../../stores/notifications.js';
   import { configStore } from '../../../../stores/config.js';
+  import { modalStore } from '../../../../stores/modal.js';
   import { formatBytes } from '../../../../utils/format.js';
   import { isSamePath } from '../../../../utils/game.js';
 
@@ -77,6 +78,7 @@
 
   function getContentCategory(depot) {
     if (depot.content_category) return depot.content_category;
+    if (depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0)) return 'dlc';
     if (depot.category === 'soundtrack') return 'soundtrack';
     return 'core';
   }
@@ -103,6 +105,12 @@
     if (cat === 'soundtrack') {
       return 'Official Soundtrack';
     }
+    if (cat === 'dlc' || depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0)) {
+      if (depot.dlc_app_id) {
+        return `DLC #${depot.dlc_app_id}`;
+      }
+      return 'DLC Content';
+    }
     switch (depot.category) {
       case 'common': return 'Base Content';
       case 'windows': return 'Windows Binaries';
@@ -122,6 +130,9 @@
     }
     if (cat === 'soundtrack') {
       return 'bg-purple-950/60 text-purple-300 border-purple-800/50';
+    }
+    if (cat === 'dlc' || depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0)) {
+      return 'bg-emerald-950/60 text-emerald-300 border-emerald-800/50';
     }
     return 'bg-surface-header text-neutral-300 border-surface-border';
   }
@@ -298,26 +309,36 @@
     }
   }
 
-  async function handleUninstallDepot(depot) {
+  function handleUninstallDepot(depot) {
     if (isActionRunning || !gameDir) return;
-    isActionRunning = true;
-    try {
-      await AppAPI.uninstallDepot(gameDir, Number(depot.depot_id));
-      notificationStore.items.add({
-        type: 'success',
-        title: 'Depot Uninstalled',
-        message: `Removed ${depot.name} (${formatBytes(depot.size || 0)} freed)`
-      });
-      await loadDepots();
-    } catch (err) {
-      notificationStore.items.add({
-        type: 'error',
-        title: 'Uninstall Failed',
-        message: err?.message || String(err)
-      });
-    } finally {
-      isActionRunning = false;
-    }
+    const depotName = depot.name || `Depot ${depot.depot_id}`;
+    modalStore.open('confirm', {
+      title: `Uninstall ${depotName}?`,
+      message: `This will remove local files for this depot from ${gameDir}. Shared game assets and manifests will remain intact.`,
+      confirmLabel: 'Uninstall Depot',
+      cancelLabel: 'Cancel',
+      danger: true,
+      onConfirm: async () => {
+        isActionRunning = true;
+        try {
+          await AppAPI.uninstallDepot(gameDir, Number(depot.depot_id));
+          notificationStore.items.add({
+            type: 'success',
+            title: 'Depot Uninstalled',
+            message: `Removed ${depotName} (${formatBytes(depot.size || 0)} freed)`
+          });
+          await loadDepots();
+        } catch (err) {
+          notificationStore.items.add({
+            type: 'error',
+            title: 'Uninstall Failed',
+            message: err?.message || String(err)
+          });
+        } finally {
+          isActionRunning = false;
+        }
+      }
+    });
   }
 
   $: totalInstalledSize = depots.filter(d => d.installed).reduce((acc, d) => acc + (d.size || 0), 0);
@@ -326,9 +347,10 @@
   $: languageDepots = depots.filter(d => getContentCategory(d).startsWith('locale:'));
   $: optionalDepots = depots.filter(d => getContentCategory(d) === 'optional_hd');
   $: soundtrackDepots = depots.filter(d => getContentCategory(d) === 'soundtrack');
+  $: dlcDepots = depots.filter(d => getContentCategory(d) === 'dlc');
   $: coreDepots = depots.filter(d => {
     const cat = getContentCategory(d);
-    return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack');
+    return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack' && cat !== 'dlc');
   });
 
   $: availableLanguages = Array.from(new Set(
@@ -341,7 +363,8 @@
     if (selectedCategoryFilter === 'languages') return cat.startsWith('locale:');
     if (selectedCategoryFilter === 'optional') return cat === 'optional_hd';
     if (selectedCategoryFilter === 'soundtrack') return cat === 'soundtrack';
-    if (selectedCategoryFilter === 'core') return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack');
+    if (selectedCategoryFilter === 'dlc') return cat === 'dlc';
+    if (selectedCategoryFilter === 'core') return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack' && cat !== 'dlc');
     return true;
   });
 
@@ -497,6 +520,17 @@
           </button>
         {/if}
 
+        {#if dlcDepots.length > 0}
+          <button
+            type="button"
+            on:click={() => { selectedCategoryFilter = 'dlc'; }}
+            class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'dlc' ? 'bg-emerald-500 text-neutral-950 font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
+          >
+            <span>📦 DLCs</span>
+            <span class="px-1 py-0.2 rounded-full text-3xs bg-black/30">{dlcDepots.length}</span>
+          </button>
+        {/if}
+
         {#if coreDepots.length > 0}
           <button
             type="button"
@@ -568,6 +602,11 @@
                 <span class="px-2 py-0.5 rounded-full text-3xs font-bold border {getCategoryBadgeClass(depot)}">
                   {getCategoryLabel(depot)}
                 </span>
+                {#if depot.osarch}
+                  <span class="px-1.5 py-0.5 rounded text-3xs font-bold bg-surface-header text-neutral-400 border border-surface-border">
+                    {depot.osarch}-bit
+                  </span>
+                {/if}
                 {#if isDefaultLanguageDepot(depot)}
                   <span class="px-1.5 py-0.5 rounded text-3xs font-bold bg-blue-950/40 text-blue-300 border border-blue-800/40">
                     Active Locale
@@ -575,7 +614,16 @@
                 {/if}
               </div>
               <p class="text-2xs text-neutral-400 font-mono">
-                {depot.file_count || 0} files • {formatBytes(depot.size || 0)}
+                {#if depot.file_count > 0}
+                  {depot.file_count} files • {formatBytes(depot.size || 0)}
+                {:else if depot.size > 0}
+                  Estimated {formatBytes(depot.size)}
+                  {#if depot.download_size && depot.download_size !== depot.size}
+                    ({formatBytes(depot.download_size)} download)
+                  {/if}
+                {:else}
+                  0 files • 0 B
+                {/if}
               </p>
             </div>
           </div>
@@ -608,7 +656,7 @@
                 <span class="text-emerald-400 font-bold text-2xs px-2 py-1 bg-emerald-950/40 rounded-lg border border-emerald-800/40">
                   Installed
                 </span>
-                {#if getContentCategory(depot) !== 'core' || depot.category !== 'common'}
+                {#if depots.length > 1 || getContentCategory(depot) !== 'core' || depot.category !== 'common' || depot.osarch}
                   <button
                     type="button"
                     on:click={() => handleUninstallDepot(depot)}

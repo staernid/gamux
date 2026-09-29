@@ -48,6 +48,7 @@ const DEFAULT_MOCKS = {
   quickPlay: () => Promise.resolve(),
   stopGame: () => Promise.resolve(),
   stopGameInstance: () => Promise.resolve(),
+  trashGame: (path) => Promise.resolve(),
   isGameRunning: () => false,
   getRunningGames: () => [],
   getRunningInstances: () => [],

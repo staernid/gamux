@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/staernid/gamux/downloader"
 	"github.com/staernid/gamux/events"
 )
 
@@ -513,8 +515,24 @@ func (m *Manager) RunSync(ctx context.Context, spec TaskSpec) error {
 		m.emitEvent(events.EventTaskCancelled, &tc)
 	} else if runErr != nil {
 		task.Status = StatusFailed
-		task.Error = runErr.Error()
-		task.Details = fmt.Sprintf("Failed: %v", runErr)
+
+		// Extract clean user-facing message from structured download errors,
+		// and log the audit trace separately for debugging.
+		var dlErr *downloader.DownloadError
+		if errors.As(runErr, &dlErr) {
+			task.Error = dlErr.Cause.Error()
+			task.Details = fmt.Sprintf("Failed: %s", dlErr.Cause.Error())
+			if len(dlErr.AuditTrace) > 0 {
+				slog.Error("Download failed with audit trace",
+					"taskID", id, "appID", dlErr.AppID,
+					"error", dlErr.Cause.Error(),
+					"trace", strings.Join(dlErr.AuditTrace, " → "))
+			}
+		} else {
+			task.Error = runErr.Error()
+			task.Details = fmt.Sprintf("Failed: %v", runErr)
+		}
+
 		tc := *task
 		m.emitEvent(events.EventTaskFailed, &tc)
 	} else {

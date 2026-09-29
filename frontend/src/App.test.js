@@ -21,16 +21,16 @@ describe('App Root Shell', () => {
     render(App);
 
     expect(screen.getByTitle(/Shelf \(1\)/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Tasks \(2\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Downloads \(2\)/i)).toBeInTheDocument();
     expect(screen.getByTitle(/Settings \(3\)/i)).toBeInTheDocument();
   });
 
   it('switches views smoothly via activeView store', async () => {
     render(App);
 
-    // Switch to tasks view
+    // Switch to tasks/downloads view
     activeView.set('tasks');
-    expect(await screen.findByRole('heading', { name: /Tasks/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Downloads/i })).toBeInTheDocument();
 
     // Switch to settings view
     activeView.set('settings');

@@ -201,8 +201,19 @@ describe('HubDLCCard Component', () => {
       expect(screen.getByRole('button', { name: /Uninstall/i })).toBeInTheDocument();
     });
 
+    const { modalStore } = await import('../../../../stores/modal.js');
+    const modalSpy = vi.spyOn(modalStore, 'open');
+
     const uninstallBtn = screen.getByRole('button', { name: /Uninstall/i });
     await fireEvent.click(uninstallBtn);
+
+    expect(modalSpy).toHaveBeenCalledWith('confirm', expect.objectContaining({
+      danger: true,
+      confirmLabel: 'Uninstall Depot',
+    }));
+
+    const modalConfig = modalSpy.mock.calls[0][1];
+    await modalConfig.onConfirm();
 
     expect(uninstallSpy).toHaveBeenCalledWith(mockGame.gameDir, 200714);
   });

@@ -3,8 +3,10 @@ package store
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -587,6 +589,75 @@ func TestRAWGProvider_ExtractLinkedStoreIDs(t *testing.T) {
 		t.Errorf("expected gog slug 'hollow_knight', got '%s'", gogSlug)
 	}
 }
+
+func TestArtworkService_SteamGridProxyFallback(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/search/IndieGame" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(fmt.Sprintf("%q", server.URL+"/indie_cover.jpg")))
+			return
+		}
+		if r.URL.Path == "/indie_cover.jpg" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("fake-cover-bytes"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	proxy := NewSteamGridProxyProvider().WithCustomClient(server.Client(), server.URL+"/search")
+	reg := NewRegistry()
+	reg.Register(proxy)
+
+	tmpDir := t.TempDir()
+	svc := NewArtworkService(tmpDir, reg)
+	svc.httpClient = server.Client()
+
+	gameDir := t.TempDir()
+	g := domain.NewGame("IndieGame", gameDir, "", "win64")
+
+	art, err := svc.Resolve(context.Background(), g)
+	if err != nil {
+		t.Fatalf("resolve artwork: %v", err)
+	}
+
+	if art.LocalCover == "" {
+		t.Errorf("expected proxy cover to be downloaded and populated, got empty")
+	}
+	if !util.FileExists(art.LocalCover) {
+		t.Errorf("expected downloaded cover file to exist at %s", art.LocalCover)
+	}
+}
+
+func TestArtworkService_PEIconExtraction(t *testing.T) {
+	hostExe := "/home/staernid/.local/share/Steam/legacycompat/SteamService.exe"
+	if !util.FileExists(hostExe) {
+		t.Skip("SteamService.exe not available on host, skipping live PE icon extraction test")
+	}
+
+	reg := NewRegistry()
+	tmpDir := t.TempDir()
+	svc := NewArtworkService(tmpDir, reg)
+
+	gameDir := t.TempDir()
+	g := domain.NewGame("Custom Game", gameDir, "", "win64")
+	g.ExePath = hostExe
+
+	art, err := svc.Resolve(context.Background(), g)
+	if err != nil {
+		t.Fatalf("resolve artwork: %v", err)
+	}
+
+	if art.LocalIcon == "" {
+		t.Errorf("expected LocalIcon to be extracted from PE executable, got empty")
+	}
+	if !util.FileExists(art.LocalIcon) {
+		t.Errorf("expected extracted icon file to exist at %s", art.LocalIcon)
+	}
+}
+
 
 
 

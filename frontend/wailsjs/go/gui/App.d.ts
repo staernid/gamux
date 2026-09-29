@@ -151,6 +151,8 @@ export function Quit():Promise<void>;
 
 export function RecordGamePlayed(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function RemoveCachedGame(arg1:string):Promise<void>;
+
 export function RemoveTask(arg1:string):Promise<void>;
 
 export function ReorderTasks(arg1:Array<string>):Promise<void>;
@@ -220,6 +222,8 @@ export function SubmitUpdate(arg1:string):Promise<string>;
 export function SubmitVerify(arg1:string):Promise<string>;
 
 export function SwitchGamePlatform(arg1:string,arg2:string):Promise<domain.Game>;
+
+export function TrashGame(arg1:string):Promise<void>;
 
 export function UninstallDepot(arg1:string,arg2:number):Promise<domain.Game>;
 

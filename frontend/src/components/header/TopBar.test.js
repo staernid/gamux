@@ -10,19 +10,19 @@ describe('TopBar Component', () => {
     tasksStore.reset();
   });
 
-  it('renders navigation buttons (1: Shelf, 2: Tasks, 3: Settings)', () => {
+  it('renders navigation buttons (1: Shelf, 2: Downloads, 3: Settings)', () => {
     render(TopBar);
 
     expect(screen.getByTitle(/Shelf \(1\)/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Tasks \(2\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Downloads \(2\)/i)).toBeInTheDocument();
     expect(screen.getByTitle(/Settings \(3\)/i)).toBeInTheDocument();
   });
 
-  it('navigates to tasks view on button click', async () => {
+  it('navigates to downloads view on button click', async () => {
     render(TopBar);
 
-    const taskBtn = screen.getByTitle(/Tasks \(2\)/i);
-    await fireEvent.click(taskBtn);
+    const downloadBtn = screen.getByTitle(/Downloads \(2\)/i);
+    await fireEvent.click(downloadBtn);
 
     let currentView = '';
     activeView.subscribe(v => currentView = v)();
@@ -106,6 +106,7 @@ describe('TopBar Component', () => {
     expect(screen.queryByText('Back to Shelf')).not.toBeInTheDocument();
     expect(screen.queryByText('Shelf')).not.toBeInTheDocument();
     expect(screen.queryByText('Tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Downloads')).not.toBeInTheDocument();
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Search')).not.toBeInTheDocument();
     expect(screen.queryByText(/Ctrl\+K/i)).not.toBeInTheDocument();

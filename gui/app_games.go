@@ -12,6 +12,7 @@ import (
 	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/store"
 	"github.com/staernid/gamux/util"
+	"github.com/staernid/gamux/util/trash"
 )
 
 // -----------------------------------------------------------------------------
@@ -505,5 +506,25 @@ func (a *App) SetGameBranch(gameDir, branch, password string) (*domain.Game, err
 		a.UpdateCachedGame(res)
 	}
 	return res, err
+}
+
+// TrashGame safely moves a game directory to the user's system trash.
+// It returns an error if the game is currently running or if trashing fails.
+func (a *App) TrashGame(gamePath string) error {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return err
+	}
+
+	if a.IsGameRunning(path) {
+		return fmt.Errorf("cannot trash game: process is currently running")
+	}
+
+	if err := trash.TrashWithContext(a.getContext(), path); err != nil {
+		return fmt.Errorf("failed to trash game: %w", err)
+	}
+
+	a.RemoveCachedGame(path)
+	return nil
 }
 

@@ -283,7 +283,7 @@ func FetchGMRCRequestCode(ctx context.Context, manifestGID string, customEndpoin
 
 	endpoint := customEndpoint
 	if endpoint == "" {
-		endpoint = fmt.Sprintf("http://gmrc.wudrm.com/manifest/%s", manifestGID)
+		endpoint = fmt.Sprintf("https://gmrc.wudrm.com/manifest/%s", manifestGID)
 	} else if strings.Contains(endpoint, "%s") {
 		endpoint = fmt.Sprintf(endpoint, manifestGID)
 	}
@@ -296,7 +296,7 @@ func FetchGMRCRequestCode(ctx context.Context, manifestGID string, customEndpoin
 	}
 
 	req.Header.Set("User-Agent", "gamux/1.0")
-	req.Header.Set("Referer", "http://gmrc.wudrm.com/")
+	req.Header.Set("Referer", "https://gmrc.wudrm.com/")
 
 	resp, err := HTTPClientFromContext(ctx).Do(req)
 	if err != nil {

@@ -270,6 +270,10 @@ export function RecordGamePlayed(arg1, arg2, arg3) {
   return window['go']['gui']['App']['RecordGamePlayed'](arg1, arg2, arg3);
 }
 
+export function RemoveCachedGame(arg1) {
+  return window['go']['gui']['App']['RemoveCachedGame'](arg1);
+}
+
 export function RemoveTask(arg1) {
   return window['go']['gui']['App']['RemoveTask'](arg1);
 }
@@ -408,6 +412,10 @@ export function SubmitVerify(arg1) {
 
 export function SwitchGamePlatform(arg1, arg2) {
   return window['go']['gui']['App']['SwitchGamePlatform'](arg1, arg2);
+}
+
+export function TrashGame(arg1) {
+  return window['go']['gui']['App']['TrashGame'](arg1);
 }
 
 export function UninstallDepot(arg1, arg2) {
