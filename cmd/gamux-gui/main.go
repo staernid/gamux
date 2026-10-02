@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/staernid/gamux/assets"
 	"github.com/staernid/gamux/frontend"
 	"github.com/staernid/gamux/gui"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -31,6 +32,7 @@ func main() {
 	wailsApp := application.New(application.Options{
 		Name:        "gamux-gui",
 		Description: "gamux - Steam Game Manager",
+		Icon:        assets.AppIconPNG,
 		Services: []application.Service{
 			application.NewService(app),
 		},
@@ -47,7 +49,8 @@ func main() {
 			},
 		},
 		Linux: application.LinuxOptions{
-			ProgramName: "gamux-gui",
+			ProgramName:   "io.github.staernid.gamux",
+			ApplicationID: "io.github.staernid.gamux",
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "gamux-gui-singleinstance",
@@ -96,6 +99,7 @@ func main() {
 	// Initialize system tray
 	var trayErr error
 	tray, trayErr = gui.StartTray(gui.TrayCallbacks{
+		Icon: assets.AppIconPNG,
 		OnActivate: func() {
 			if mainWindow != nil {
 				mainWindow.Show()

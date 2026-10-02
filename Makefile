@@ -95,9 +95,12 @@ install: build-all
 	install -m 644 assets/io.github.staernid.gamux.desktop $(DESTDIR)$(PREFIX)/share/applications/io.github.staernid.gamux.desktop
 	install -d $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	install -m 644 assets/io.github.staernid.gamux.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/io.github.staernid.gamux.svg
+	install -d $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps
+	install -m 644 assets/io.github.staernid.gamux.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.staernid.gamux.png
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/gamux
 	rm -f $(DESTDIR)$(PREFIX)/bin/gamux-gui
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/io.github.staernid.gamux.desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/io.github.staernid.gamux.svg
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.staernid.gamux.png

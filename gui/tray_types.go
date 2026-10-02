@@ -17,6 +17,7 @@ type TrayGame struct {
 
 // TrayCallbacks defines callbacks for tray events.
 type TrayCallbacks struct {
+	Icon           []byte
 	OnActivate     func()
 	OnQuit         func()
 	OnLaunchGame   func(gameDir string)

@@ -7,5 +7,6 @@ Terminal=false
 Type=Application
 Categories=Game;Utility;
 Keywords=steam;games;proton;wine;goldberg;manager;
-StartupWMClass=gamux-gui
+StartupWMClass=io.github.staernid.gamux
+StartupNotify=true
 MimeType=x-scheme-handler/gamux;

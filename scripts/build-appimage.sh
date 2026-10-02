@@ -20,6 +20,7 @@ APPDIR="$BUILD_DIR/AppDir"
 mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Copy binary and assets
 cp "$GUI_BIN" "$APPDIR/usr/bin/gamux-gui"
@@ -33,6 +34,9 @@ cp assets/io.github.staernid.gamux.svg "$APPDIR/usr/share/icons/hicolor/scalable
 cp assets/io.github.staernid.gamux.svg "$APPDIR/io.github.staernid.gamux.svg"
 cp assets/io.github.staernid.gamux.svg "$APPDIR/gamux-gui.svg"
 cp assets/io.github.staernid.gamux.svg "$APPDIR/.DirIcon"
+cp assets/io.github.staernid.gamux.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/io.github.staernid.gamux.png"
+cp assets/io.github.staernid.gamux.png "$APPDIR/io.github.staernid.gamux.png"
+cp assets/io.github.staernid.gamux.png "$APPDIR/gamux-gui.png"
 
 # Create standard AppRun launcher
 cat <<'EOF' > "$APPDIR/AppRun"

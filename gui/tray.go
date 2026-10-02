@@ -32,6 +32,9 @@ func StartTray(cb TrayCallbacks) (*TrayManager, error) {
 	st := wailsApp.SystemTray.New()
 	st.SetLabel("gamux")
 	st.SetTooltip("gamux - Steam Game Manager")
+	if len(cb.Icon) > 0 {
+		st.SetIcon(cb.Icon)
+	}
 
 	tm := &TrayManager{
 		systemTray:  st,
@@ -46,7 +49,6 @@ func StartTray(cb TrayCallbacks) (*TrayManager, error) {
 	}
 
 	tm.rebuildMenu()
-	st.Run()
 	return tm, nil
 }
 
