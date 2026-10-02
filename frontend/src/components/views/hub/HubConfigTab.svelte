@@ -34,6 +34,7 @@
   $: candidates = game?.launchCandidates || [];
   $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
   $: hasMatch = game ? hasMetadataMatch(game) : false;
+  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
 
   $: isLinux = $drawerDraft.platform === 'linux';
   $: effectiveRunner = isLinux ? 'linux' : ($drawerDraft.runner || game?.runner || globalCfg?.default_runner || 'umu');
@@ -116,6 +117,15 @@
 </script>
 
 <div class="space-y-4 animate-fade-in text-neutral-200">
+  {#if !isInstalled}
+    <div class="p-3.5 bg-surface-card border border-surface-border rounded-2xl flex items-center space-x-3 text-xs text-neutral-300 shadow-sm">
+      <span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0 animate-pulse"></span>
+      <p class="leading-relaxed">
+        <strong class="text-white font-bold">Pre-installation Configuration:</strong> Customize runner, wine prefix, launch arguments, or environment variables now. These options will be applied when the game is installed and launched.
+      </p>
+    </div>
+  {/if}
+
   <!-- Inheritance Status & Auto-Save Banner -->
   <div class="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

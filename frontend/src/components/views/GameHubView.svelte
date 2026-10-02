@@ -28,40 +28,44 @@
   import HubFilesTab from './hub/HubFilesTab.svelte';
 
   // 4 Primary Consolidated Surfaces: 'overview' | 'config' | 'files' | 'saves'
-  let activeTab = 'overview';
-  let communitySubTab = 'achievements';
-  let communityNewsIndex = 0;
-  let filesSubTab = 'depots';
+  let activeTab = $state('overview');
+  let communitySubTab = $state('achievements');
+  let communityNewsIndex = $state(0);
+  let filesSubTab = $state('depots');
 
-  let globalCfg = {};
-  let userCfg = null;
-  let isSaving = false;
-  let saveSuccess = false;
+  let globalCfg = $state({});
+  let userCfg = $state(null);
+  let isSaving = $state(false);
+  let saveSuccess = $state(false);
   let saveSuccessTimer = null;
   let autoSaveTimeout = null;
-  let initialDraftJSON = '';
+  let initialDraftJSON = $state('');
 
   // Integrity State
-  let integrityReport = null;
-  let integrityError = '';
-  let isCheckingIntegrity = false;
-  let isNormalizing = false;
+  let integrityReport = $state(null);
+  let integrityError = $state('');
+  let isCheckingIntegrity = $state(false);
+  let isNormalizing = $state(false);
 
   const allTasks = tasksStore.items;
 
-  $: game = $selectedGame;
-  $: isGameRunning = Boolean(game?.gameDir && isGamePathRunning($runningGames, game.gameDir));
+  let game = $derived($selectedGame);
+  let isGameRunning = $derived(Boolean(game?.gameDir && isGamePathRunning($runningGames, game.gameDir)));
 
-  $: activeGameTask = ($allTasks || []).find(t => {
-    if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'paused') return false;
-    if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
-    if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
-    return false;
+  let activeGameTask = $derived.by(() => {
+    const tasks = $allTasks || [];
+    return tasks.find(t => {
+      if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'paused') return false;
+      if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
+      if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
+      return false;
+    });
   });
-  $: isTaskActive = Boolean(activeGameTask);
+  let isTaskActive = $derived(Boolean(activeGameTask));
 
-  $: {
-    const vTask = ($allTasks || []).find(t => {
+  $effect(() => {
+    const tasks = $allTasks || [];
+    const vTask = tasks.find(t => {
       if (t.type !== 'verify' && t.operation !== 'verify') return false;
       if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
       if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
@@ -82,9 +86,9 @@
         }
       }
     }
-  }
+  });
 
-  $: overrideCount = countOverrides($drawerDraft, game, globalCfg);
+  let overrideCount = $derived(countOverrides($drawerDraft, game, globalCfg));
 
   onMount(async () => {
     try {
@@ -128,37 +132,43 @@
     }, 400);
   }
 
-  $: if ($drawerDraft && initialDraftJSON) {
-    triggerAutoSave();
-  }
-
-  $: if (game && $drawerDraft) {
-    if ($drawerDraft.gameDir !== game.gameDir) {
-      drawerDraft.init(game, globalCfg);
-      initialDraftJSON = JSON.stringify($drawerDraft);
-      integrityReport = null;
-      integrityError = '';
-    } else if (!initialDraftJSON) {
-      initialDraftJSON = JSON.stringify($drawerDraft);
+  $effect(() => {
+    if ($drawerDraft && initialDraftJSON) {
+      triggerAutoSave();
     }
-  }
+  });
 
-  $: if (game && isPlaceholderTitle(game.name, game.appId)) {
-    const prov = (game.metadataProvider || game.store || 'steam').toLowerCase();
-    const id = game.metadataId || game.appId;
-    if (id && id !== '0') {
-      AppAPI.getGameMetadata(prov, id).then(meta => {
-        if (meta && meta.name && !isPlaceholderTitle(meta.name, id)) {
-          const updated = { ...game, name: meta.name };
-          if (meta.header_image && (!game.coverUrl || game.coverUrl.includes('header.jpg'))) {
-            updated.coverUrl = meta.header_image;
+  $effect(() => {
+    if (game && $drawerDraft) {
+      if ($drawerDraft.gameDir !== game.gameDir) {
+        drawerDraft.init(game, globalCfg);
+        initialDraftJSON = JSON.stringify($drawerDraft);
+        integrityReport = null;
+        integrityError = '';
+      } else if (!initialDraftJSON) {
+        initialDraftJSON = JSON.stringify($drawerDraft);
+      }
+    }
+  });
+
+  $effect(() => {
+    if (game && isPlaceholderTitle(game.name, game.appId)) {
+      const prov = (game.metadataProvider || game.store || 'steam').toLowerCase();
+      const id = game.metadataId || game.appId;
+      if (id && id !== '0') {
+        AppAPI.getGameMetadata(prov, id).then(meta => {
+          if (meta && meta.name && !isPlaceholderTitle(meta.name, id)) {
+            const updated = { ...game, name: meta.name };
+            if (meta.header_image && (!game.coverUrl || game.coverUrl.includes('header.jpg'))) {
+              updated.coverUrl = meta.header_image;
+            }
+            selectedGame.set(normalizeGame(updated));
+            updateGameInStore(updated);
           }
-          selectedGame.set(normalizeGame(updated));
-          updateGameInStore(updated);
-        }
-      }).catch(() => {});
+        }).catch(() => {});
+      }
     }
-  }
+  });
 
   function returnToShelf() {
     $activeView = 'library';
@@ -331,7 +341,7 @@
         await multiseatStore.launchSession(game, userCfg || {});
       } else {
         const isNative = (game.platform || '').toLowerCase().includes('linux') || game.runner === 'linux';
-        const profId = $profilesStore.activeProfile?.id || 'main';
+        const profId = profilesStore.activeProfile?.id || 'main';
         await AppAPI.launchGame({
           name: game.name,
           game_dir: game.gameDir,
@@ -534,7 +544,7 @@
     }
   }
 
-  $: isSteam = Boolean((game?.appId && isSteamApp(game.appId)) || ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId)));
+  let isSteam = $derived(Boolean((game?.appId && isSteamApp(game.appId)) || ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId))));
   const primaryTabs = ['overview', 'config', 'files', 'saves'];
 
   function handleNavigateTab(e) {
@@ -604,7 +614,7 @@
         <!-- 1. Overview Tab -->
         <button
           type="button"
-          on:click={() => { activeTab = 'overview'; }}
+          onclick={() => { activeTab = 'overview'; }}
           class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'overview' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -616,7 +626,7 @@
         <!-- 2. Configuration & Overrides Tab (Diff Lens) -->
         <button
           type="button"
-          on:click={() => { activeTab = 'config'; }}
+          onclick={() => { activeTab = 'config'; }}
           class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'config' || activeTab === 'general' || activeTab === 'environment' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -633,7 +643,7 @@
         <!-- 3. Files & Depots Tab -->
         <button
           type="button"
-          on:click={() => { activeTab = 'files'; }}
+          onclick={() => { activeTab = 'files'; }}
           class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'files' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -648,7 +658,7 @@
         <!-- 4. Saves Tab -->
         <button
           type="button"
-          on:click={() => { activeTab = 'saves'; }}
+          onclick={() => { activeTab = 'saves'; }}
           class="px-4 py-2 rounded-xl transition-all flex items-center space-x-2 flex-shrink-0 cursor-pointer {activeTab === 'saves' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         >
           <svg class="w-4 h-4 opacity-80 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -666,7 +676,7 @@
           <div class="space-y-4">
             <button
               type="button"
-              on:click={() => { activeTab = 'overview'; }}
+              onclick={() => { activeTab = 'overview'; }}
               class="text-xs font-bold text-neutral-400 hover:text-white flex items-center space-x-1.5 cursor-pointer pb-1"
             >
               <span>← Back to Overview</span>
@@ -692,26 +702,6 @@
             on:updateGame={handleUpdateGame}
             on:normalizeDirectory={handleNormalizeDirectory}
           />
-        {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
-          <!-- Uninstalled State Placeholder for Technical Tabs -->
-          <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
-            <div class="w-12 h-12 rounded-2xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </div>
-            <div class="space-y-1">
-              <h3 class="font-bold text-white text-base">Game Files Not Installed</h3>
-              <p class="text-xs text-neutral-400 leading-relaxed">Download and install {game.name} to configure launch profiles, Wine prefixes, and inspect disk files.</p>
-            </div>
-            <button
-              type="button"
-              on:click={handlePrimaryAction}
-              class="px-5 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-black text-xs shadow-lg cursor-pointer"
-            >
-              Download Game Now
-            </button>
-          </div>
         {:else if activeTab === 'config' || activeTab === 'general' || activeTab === 'environment'}
           <HubConfigTab
             {game}
@@ -727,6 +717,26 @@
         {:else if activeTab === 'saves'}
           <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">
             <HubSavesCard {game} />
+          </div>
+        {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
+          <!-- Uninstalled State Placeholder for Technical Tabs -->
+          <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">
+            <div class="w-12 h-12 rounded-2xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </div>
+            <div class="space-y-1">
+              <h3 class="font-bold text-white text-base">Game Files Not Installed</h3>
+              <p class="text-xs text-neutral-400 leading-relaxed">Download and install {game.name} to inspect files and run diagnostic verification.</p>
+            </div>
+            <button
+              type="button"
+              onclick={handlePrimaryAction}
+              class="px-5 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-black text-xs shadow-lg cursor-pointer"
+            >
+              Download Game Now
+            </button>
           </div>
         {/if}
       </div>

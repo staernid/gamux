@@ -1,12 +1,15 @@
 <script>
-  export let label = '';
-  export let description = '';
-  export let tooltip = '';
-  export let forId = '';
-  export let badge = '';
-  export let badgeColor = 'cyan';
-  export let inline = true;
-  export let className = '';
+  let {
+    label = '',
+    description = '',
+    tooltip = '',
+    forId = '',
+    badge = '',
+    badgeColor = 'cyan',
+    inline = true,
+    className = '',
+    children
+  } = $props();
 
   const badgeColors = {
     neutral: 'bg-neutral-800 text-neutral-300 border-neutral-700',
@@ -18,7 +21,7 @@
     slate: 'bg-neutral-800 text-neutral-300 border-neutral-700'
   };
 
-  $: effectiveDescription = description || tooltip;
+  let effectiveDescription = $derived(description || tooltip);
 </script>
 
 <div class="{inline ? 'flex flex-col sm:flex-row sm:items-center justify-between gap-3' : 'space-y-1.5'} p-2 rounded-lg transition-colors {className}">
@@ -51,7 +54,7 @@
   {/if}
 
   <div class="{inline ? 'flex-shrink-0 w-full sm:w-auto flex items-center justify-start sm:justify-end' : 'w-full'}">
-    <slot />
+    {@render children?.()}
   </div>
 </div>
 

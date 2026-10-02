@@ -1,4 +1,5 @@
 // Dynamic Zero-Boilerplate Wails API Bridge & Event Subscription Hub
+import { Call, Events } from '@wailsio/runtime';
 import * as mockData from './mockData.js';
 
 // Declarative default mock implementations for browser testing & offline dev
@@ -307,7 +308,19 @@ function createMethodDispatcher(prop) {
       args = [args[0], ''];
     }
 
-    // 1. Try Go backend runtime binding (Wails exposes PascalCase methods)
+    // 1. Try Wails v3 @wailsio/runtime binding
+    const isWailsV3 = typeof window !== 'undefined' && Boolean(window._wails?.call || window.wails?.Call);
+    if (isWailsV3) {
+      const pascal = toPascalCase(prop);
+      try {
+        return await Call.ByName(`gui.App.${pascal}`, ...args);
+      } catch (err) {
+        // Fall back to alternative naming or error handling if Call.ByName throws
+        console.warn(`Wails v3 Call.ByName gui.App.${pascal} error:`, err);
+      }
+    }
+
+    // 2. Try Wails v2 Go backend runtime binding (window.go.gui.App)
     const wailsApp = typeof window !== 'undefined' ? window.go?.gui?.App : null;
     if (wailsApp) {
       const pascal = toPascalCase(prop);
@@ -319,12 +332,12 @@ function createMethodDispatcher(prop) {
       }
     }
 
-    // 2. Try configured declarative mock handler
+    // 3. Try configured declarative mock handler
     if (typeof DEFAULT_MOCKS[prop] === 'function') {
       return await DEFAULT_MOCKS[prop](...args);
     }
 
-    // 3. Transparent fallback
+    // 4. Transparent fallback
     return null;
   };
 }
@@ -373,6 +386,20 @@ export function initRuntimeEvents(listeners = {}) {
       window.__GAMUX_DEV__.registerEventListener(event, cb);
     }
 
+    // Wails v3 @wailsio/runtime
+    if (typeof window !== 'undefined' && window._wails?.call) {
+      try {
+        Events.On(event, (ev) => {
+          const payload = ev?.data !== undefined ? ev.data : ev;
+          window.__GAMUX_DEV__?.recordIncoming('wails', event, payload);
+          cb(payload);
+        });
+      } catch (e) {
+        console.warn(`Failed to bind Wails v3 event listener for ${event}:`, e);
+      }
+    }
+
+    // Wails v2 fallback if present
     if (typeof window !== 'undefined' && window.runtime?.EventsOn) {
       window.runtime.EventsOn(event, (ev) => {
         window.__GAMUX_DEV__?.recordIncoming('wails', event, ev);

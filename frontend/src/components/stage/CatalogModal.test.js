@@ -113,4 +113,79 @@ describe('CatalogModal Component', () => {
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(closeSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('triggers search when clicking a quick discovery seed in empty state', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    const searchSpy = vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '1145350', name: 'Hades II', store: 'steam', release_date: '2024' },
+    ]);
+
+    render(CatalogModal);
+
+    const hadesSeed = screen.getByRole('button', { name: 'Hades II' });
+    await fireEvent.click(hadesSeed);
+
+    await new Promise(r => setTimeout(r, 300));
+    expect(searchSpy).toHaveBeenCalledWith('Hades II');
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    expect(input.value).toBe('Hades II');
+  });
+
+  it('filters search results using store provider chips', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '1145350', name: 'Hades II', store: 'steam', release_date: '2024' },
+      { id: '1091500', name: 'Cyberpunk 2077', store: 'gog', release_date: '2020' },
+    ]);
+
+    render(CatalogModal);
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Game' } });
+
+    await new Promise(r => setTimeout(r, 300));
+    expect((await screen.findAllByText('Hades II')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Cyberpunk 2077')).length).toBeGreaterThan(0);
+
+    // Filter to GOG only
+    const gogFilterBtn = screen.getByRole('button', { name: /GOG \(1\)/i });
+    await fireEvent.click(gogFilterBtn);
+
+    expect(screen.queryByText('Hades II')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Cyberpunk 2077').length).toBeGreaterThan(0);
+
+    // Switch back to All
+    const allFilterBtn = screen.getByRole('button', { name: /All \(2\)/i });
+    await fireEvent.click(allFilterBtn);
+
+    expect(screen.getAllByText('Hades II').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Cyberpunk 2077').length).toBeGreaterThan(0);
+  });
+
+  it('navigates grid using arrow keys and activates selection with Enter', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '1145350', name: 'Hades II', store: 'steam', release_date: '2024' },
+      { id: '2379780', name: 'Balatro', store: 'steam', release_date: '2024' },
+    ]);
+
+    const closeSpy = vi.fn();
+    render(CatalogModal, { props: { onclose: closeSpy } });
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Roguelike' } });
+    await new Promise(r => setTimeout(r, 300));
+
+    // Initially focusedIndex is 0 (Hades II)
+    // Press ArrowRight to focus index 1 (Balatro)
+    await fireEvent.keyDown(window, { key: 'ArrowRight' });
+    // Press Enter to activate focused index
+    await fireEvent.keyDown(window, { key: 'Enter' });
+
+    let current = null;
+    selectedGame.subscribe(v => current = v)();
+    expect(current?.name).toBe('Balatro');
+    expect(closeSpy).toHaveBeenCalled();
+  });
 });

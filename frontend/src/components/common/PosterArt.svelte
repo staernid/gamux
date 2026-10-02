@@ -1,17 +1,24 @@
 <script>
-  import { getInitials } from '../../utils/game.js';
+  import { getInitials, getThumbnailUrl } from '../../utils/game.js';
 
-  export let appId = '';
-  export let name = '';
-  export let posterUrl = '';
-  export let localCoverUrl = '';
-  export let className = 'w-full h-full object-cover';
+  let {
+    appId = '',
+    name = '',
+    posterUrl = '',
+    localCoverUrl = '',
+    className = 'w-full h-full object-cover',
+    thumbnailWidth = 300
+  } = $props();
 
-  $: isForcedNone = (posterUrl === 'none' || localCoverUrl === 'none');
+  let isForcedNone = $derived(posterUrl === 'none' || localCoverUrl === 'none');
 
-  $: candidateUrls = (() => {
+  let candidateUrls = $derived.by(() => {
     if (isForcedNone) return [];
     const urls = [];
+    if (thumbnailWidth > 0 && localCoverUrl && localCoverUrl !== 'none') {
+      const thumb = getThumbnailUrl(localCoverUrl, thumbnailWidth, appId);
+      if (thumb && thumb !== localCoverUrl) urls.push(thumb);
+    }
     if (localCoverUrl && localCoverUrl !== 'none') urls.push(localCoverUrl);
     if (posterUrl && posterUrl !== 'none' && posterUrl !== localCoverUrl) urls.push(posterUrl);
     if (appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim())) {
@@ -20,22 +27,22 @@
       urls.push(`https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`);
     }
     return urls;
-  })();
+  });
 
-  let urlIndex = 0;
-  let imgFailed = false;
-  let candidateKey = '';
+  let urlIndex = $state(0);
+  let imgFailed = $state(false);
+  let candidateKey = $state('');
 
-  $: {
-    const key = `${isForcedNone}|${localCoverUrl}|${posterUrl}|${appId}`;
+  $effect(() => {
+    const key = `${isForcedNone}|${localCoverUrl}|${posterUrl}|${appId}|${thumbnailWidth}`;
     if (key !== candidateKey) {
       candidateKey = key;
       urlIndex = 0;
       imgFailed = false;
     }
-  }
+  });
 
-  $: activeUrl = candidateUrls[urlIndex] || '';
+  let activeUrl = $derived(candidateUrls[urlIndex] || '');
 
   function handleImgError() {
     if (urlIndex + 1 < candidateUrls.length) {
@@ -49,7 +56,7 @@
     imgFailed = false;
   }
 
-  $: initials = getInitials(name);
+  let initials = $derived(getInitials(name));
 </script>
 
 {#if activeUrl && !imgFailed}
@@ -57,8 +64,8 @@
     src={activeUrl}
     alt={name}
     class={className}
-    on:error={handleImgError}
-    on:load={handleImgLoad}
+    onerror={handleImgError}
+    onload={handleImgLoad}
     decoding="async"
     draggable="false"
   />

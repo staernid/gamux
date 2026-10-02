@@ -72,6 +72,7 @@
         appId={task.appId}
         name={task.gameName}
         posterUrl={task.posterUrl}
+        thumbnailWidth={150}
         className="w-full h-full object-cover"
       />
     </div>

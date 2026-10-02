@@ -157,6 +157,36 @@ export function isSteamApp(appId) {
   return Boolean(appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim()));
 }
 
+export function getThumbnailUrl(url, width = 300, appId = '') {
+  const w = Number(width) > 0 ? Number(width) : 300;
+  if (url && typeof url === 'string') {
+    const trimmed = url.trim();
+    if (trimmed.startsWith('/art/thumb')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('/art/')) {
+      const qIdx = trimmed.indexOf('?');
+      let pathPart = qIdx !== -1 ? trimmed.slice(5, qIdx) : trimmed.slice(5);
+      const queryPart = qIdx !== -1 ? trimmed.slice(qIdx + 1) : '';
+      pathPart = pathPart.replace(/^\/+/, '');
+      if (pathPart) {
+        let result = `/art/thumb?id=${encodeURIComponent(pathPart)}&w=${w}`;
+        if (queryPart) {
+          result += `&${queryPart}`;
+        }
+        return result;
+      }
+    }
+    if (trimmed.startsWith('/local-img/')) {
+      return `/art/thumb?id=${encodeURIComponent(trimmed)}&w=${w}`;
+    }
+  }
+  if (appId && appId !== '0' && appId !== 'Custom' && /^\d+$/.test(String(appId).trim())) {
+    return `/art/thumb?id=${encodeURIComponent(String(appId).trim())}&w=${w}`;
+  }
+  return '';
+}
+
 export function getGameSource(game) {
   if (!game) return 'Standalone';
   const src = (game.source || game.Source || '').toLowerCase();

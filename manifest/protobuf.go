@@ -305,21 +305,29 @@ func ShouldIncludeDepot(depotID uint32, files []ManifestFileEntry, filter DepotF
 		return false
 	}
 
-	// 3. Platform matching
-	if filter.Platform != "" && filter.Platform != "all" {
-		cat := ClassifyDepot(files)
-		if !MatchesPlatform(cat, filter.Platform) {
-			return false
-		}
-	}
-
-	// 4. Content Category & Language filtering
+	// Resolve depot metadata upfront
 	var meta *DepotMeta
 	if filter.DepotMetadata != nil {
 		if m, ok := filter.DepotMetadata[depotID]; ok {
 			meta = &m
 		}
 	}
+
+	// 3. Platform matching (official Steam OSList takes precedence over file-path heuristics)
+	if filter.Platform != "" && filter.Platform != "all" {
+		if meta != nil && meta.OSList != "" {
+			if !MatchesOSList(meta.OSList, filter.Platform) {
+				return false
+			}
+		} else {
+			cat := ClassifyDepot(files)
+			if !MatchesPlatform(cat, filter.Platform) {
+				return false
+			}
+		}
+	}
+
+	// 4. Content Category & Language filtering
 
 	contentCat, lang := ClassifyDepotContent(depotID, "", files, meta)
 

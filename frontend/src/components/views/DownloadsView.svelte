@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { libraryPath, games, selectedGame, activeView } from '../../stores/library.js';
   import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
@@ -10,10 +10,10 @@
   import TaskQueueSection from './tasks/TaskQueueSection.svelte';
   import TaskHistorySection from './tasks/TaskHistorySection.svelte';
 
-  let diskSpace = null;
-  let expandedDepots = {};
-  let speedHistory = [0];
-  let showLimitMenu = false;
+  let diskSpace = $state(null);
+  let expandedDepots = $state({});
+  let speedHistory = $state([0]);
+  let showLimitMenu = $state(false);
 
   const SPEED_LIMIT_OPTIONS = [
     { label: 'Unlimited', value: 0 },
@@ -24,16 +24,6 @@
     { label: '2 MB/s', value: 2 * 1024 * 1024 },
   ];
 
-  const {
-    items,
-    activeDownloads,
-    queuedDownloads,
-    pausedDownloads,
-    completedDownloads,
-    totalSpeedBps,
-    speedLimit,
-  } = tasksStore;
-
   async function loadDiskSpace(path) {
     if (!path) return;
     try {
@@ -43,18 +33,23 @@
     }
   }
 
-  $: if ($libraryPath) {
-    loadDiskSpace($libraryPath);
-  }
-
-  $: {
-    const currentSpeed = $totalSpeedBps || 0;
-    if (speedHistory.length > 25) {
-      speedHistory = [...speedHistory.slice(1), currentSpeed];
-    } else {
-      speedHistory = [...speedHistory, currentSpeed];
+  $effect(() => {
+    const p = $libraryPath;
+    if (p) {
+      untrack(() => loadDiskSpace(p));
     }
-  }
+  });
+
+  $effect(() => {
+    const currentSpeed = tasksStore.totalSpeedBps || 0;
+    untrack(() => {
+      if (speedHistory.length > 25) {
+        speedHistory = [...speedHistory.slice(1), currentSpeed];
+      } else {
+        speedHistory = [...speedHistory, currentSpeed];
+      }
+    });
+  });
 
   function generateSparklinePoints(data, width = 100, height = 22) {
     if (!data || data.length === 0) return '';
@@ -110,9 +105,9 @@
   }
 
   // Strictly downloads only
-  $: displayedActive = $activeDownloads;
-  $: displayedQueued = [...$queuedDownloads, ...$pausedDownloads];
-  $: displayedCompleted = $completedDownloads;
+  let displayedActive = $derived(tasksStore.activeDownloads);
+  let displayedQueued = $derived([...tasksStore.queuedDownloads, ...tasksStore.pausedDownloads]);
+  let displayedCompleted = $derived(tasksStore.completedDownloads);
 </script>
 
 <div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-4 sm:px-8 pb-8 max-w-4xl mx-auto w-full space-y-5 text-xs sm:text-sm animate-fade-in custom-scrollbar">
@@ -122,14 +117,84 @@
       <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
         Downloads
         <span class="text-2xs font-mono font-medium px-2 py-0.5 rounded-full bg-surface-header text-neutral-300 border border-surface-border">
-          {$activeDownloads.length} active
+          {tasksStore.activeDownloads.length} active
         </span>
       </h2>
     </div>
 
-    <!-- Right Controls: Drive Space, Speed Limiter, Pause/Resume All, Bandwidth HUD -->
+    <!-- Right Controls: Grouped into Interactive Tools and Telemetry HUD -->
     <div class="flex items-center space-x-2 flex-wrap gap-y-2 w-full sm:w-auto justify-end">
-      <!-- Sleek Drive Space Pill -->
+      <!-- Interactive Action: Master Pause/Resume All Button -->
+      {#if tasksStore.activeDownloads.length > 0}
+        <button
+          type="button"
+          onclick={handlePauseAll}
+          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-amber-400 hover:text-amber-300 transition cursor-pointer flex items-center space-x-1"
+          title="Pause all active downloads"
+        >
+          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
+          </svg>
+          <span>Pause All</span>
+        </button>
+      {:else if tasksStore.pausedDownloads.length > 0}
+        <button
+          type="button"
+          onclick={handleResumeAll}
+          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-emerald-400 hover:text-emerald-300 transition cursor-pointer flex items-center space-x-1"
+          title="Resume all paused downloads"
+        >
+          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>Resume All</span>
+        </button>
+      {/if}
+
+      <!-- Interactive Action: Speed Limit Dropdown -->
+      <div class="relative">
+        <button
+          type="button"
+          onclick={() => showLimitMenu = !showLimitMenu}
+          class="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono text-neutral-300 hover:text-white transition cursor-pointer"
+          title="Bandwidth Limit"
+        >
+          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>{tasksStore.speedLimit > 0 ? `${formatBytes(tasksStore.speedLimit)}/s` : 'Max'}</span>
+          <svg class="w-2.5 h-2.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {#if showLimitMenu}
+          <button type="button" class="fixed inset-0 z-40 cursor-default bg-transparent border-0 w-full h-full" aria-label="Close bandwidth menu" onclick={() => showLimitMenu = false}></button>
+          <div class="absolute right-0 mt-1 w-36 bg-surface-header border border-surface-border rounded-xl shadow-2xl py-1 z-50 text-xs font-mono animate-fade-in">
+            <div class="px-2.5 py-1 text-4xs uppercase tracking-wider text-neutral-500 font-bold border-b border-surface-borderSubtle">
+              Bandwidth Cap
+            </div>
+            {#each SPEED_LIMIT_OPTIONS as opt}
+              <button
+                type="button"
+                onclick={() => handleSetLimit(opt.value)}
+                class="w-full text-left px-2.5 py-1 text-2xs flex items-center justify-between hover:bg-surface-cardHover transition cursor-pointer {tasksStore.speedLimit === opt.value ? 'text-emerald-400 font-bold' : 'text-neutral-300'}"
+              >
+                <span>{opt.label}</span>
+                {#if tasksStore.speedLimit === opt.value}
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Subtle Visual Divider -->
+      <div class="h-4 w-px bg-surface-border hidden sm:block mx-1"></div>
+
+      <!-- Telemetry HUD: Drive Space Pill -->
       {#if diskSpace}
         <div
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border text-2xs font-mono text-neutral-300"
@@ -141,79 +206,12 @@
         </div>
       {/if}
 
-      <!-- Speed Limit Dropdown -->
-      <div class="relative">
-        <button
-          type="button"
-          on:click={() => showLimitMenu = !showLimitMenu}
-          class="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono text-neutral-300 hover:text-white transition cursor-pointer"
-          title="Bandwidth Limit"
-        >
-          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <span>{$speedLimit > 0 ? `${formatBytes($speedLimit)}/s` : 'Max'}</span>
-          <svg class="w-2.5 h-2.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {#if showLimitMenu}
-          <button type="button" class="fixed inset-0 z-40 cursor-default bg-transparent border-0 w-full h-full" aria-label="Close bandwidth menu" on:click={() => showLimitMenu = false}></button>
-          <div class="absolute right-0 mt-1 w-36 bg-surface-header border border-surface-border rounded-xl shadow-2xl py-1 z-50 text-xs font-mono animate-fade-in">
-            <div class="px-2.5 py-1 text-4xs uppercase tracking-wider text-neutral-500 font-bold border-b border-surface-borderSubtle">
-              Bandwidth Cap
-            </div>
-            {#each SPEED_LIMIT_OPTIONS as opt}
-              <button
-                type="button"
-                on:click={() => handleSetLimit(opt.value)}
-                class="w-full text-left px-2.5 py-1 text-2xs flex items-center justify-between hover:bg-surface-cardHover transition cursor-pointer {$speedLimit === opt.value ? 'text-emerald-400 font-bold' : 'text-neutral-300'}"
-              >
-                <span>{opt.label}</span>
-                {#if $speedLimit === opt.value}
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-
-      <!-- Master Pause/Resume All Button -->
-      {#if $activeDownloads.length > 0}
-        <button
-          type="button"
-          on:click={handlePauseAll}
-          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-amber-400 hover:text-amber-300 transition cursor-pointer flex items-center space-x-1"
-          title="Pause all active downloads"
-        >
-          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-            <rect x="6" y="5" width="4" height="14" rx="1" />
-            <rect x="14" y="5" width="4" height="14" rx="1" />
-          </svg>
-          <span>Pause All</span>
-        </button>
-      {:else if $pausedDownloads.length > 0}
-        <button
-          type="button"
-          on:click={handleResumeAll}
-          class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs font-mono font-bold text-emerald-400 hover:text-emerald-300 transition cursor-pointer flex items-center space-x-1"
-          title="Resume all paused downloads"
-        >
-          <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-          <span>Resume All</span>
-        </button>
-      {/if}
-
-      <!-- Bandwidth HUD -->
+      <!-- Telemetry HUD: Bandwidth & Sparkline -->
       <div class="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border min-w-[70px]">
         <span class="font-mono text-xs font-bold text-neutral-200">
-          {$totalSpeedBps > 0 ? `${formatBytes($totalSpeedBps)}/s` : '0 B/s'}
+          {tasksStore.totalSpeedBps > 0 ? `${formatBytes(tasksStore.totalSpeedBps)}/s` : '0 B/s'}
         </span>
-        {#if $totalSpeedBps > 0 && speedHistory.length > 2}
+        {#if tasksStore.totalSpeedBps > 0 && speedHistory.length > 2}
           <svg class="w-12 h-3.5 text-neutral-400 flex-shrink-0" viewBox="0 0 100 22" aria-hidden="true">
             <polyline
               fill="none"
@@ -248,14 +246,14 @@
         <div class="pt-2 flex items-center justify-center space-x-3">
           <button
             type="button"
-            on:click={() => modalStore.open('catalog')}
+            onclick={() => modalStore.open('catalog')}
             class="px-4 py-2 rounded-xl bg-white text-neutral-950 font-bold hover:bg-neutral-200 transition shadow cursor-pointer text-xs"
           >
             Browse Catalog
           </button>
           <button
             type="button"
-            on:click={() => activeView.set('library')}
+            onclick={() => activeView.set('library')}
             class="px-4 py-2 rounded-xl bg-surface-header hover:bg-surface-cardHover text-neutral-200 border border-surface-border font-bold transition cursor-pointer text-xs"
           >
             Go to Shelf

@@ -2,6 +2,10 @@ package gui
 
 import (
 	"context"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -474,6 +478,120 @@ func TestApp_AssetHandler(t *testing.T) {
 
 	if recTrav.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for traversal, got %d", recTrav.Code)
+	}
+}
+
+func TestApp_AssetHandler_Thumbnail(t *testing.T) {
+	tmpDir := t.TempDir()
+	artDir := filepath.Join(tmpDir, "art")
+	gameArtDir := filepath.Join(artDir, "test-game")
+	_ = os.MkdirAll(gameArtDir, 0755)
+
+	// Write real 800x1200 JPEG cover
+	img := image.NewRGBA(image.Rect(0, 0, 800, 1200))
+	for y := 0; y < 1200; y++ {
+		for x := 0; x < 800; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x % 256), G: uint8(y % 256), B: 100, A: 255})
+		}
+	}
+	coverPath := filepath.Join(gameArtDir, "cover.jpg")
+	f, err := os.Create(coverPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	// Write real 400x600 PNG for game-54321
+	appArtDir := filepath.Join(artDir, "game-54321")
+	_ = os.MkdirAll(appArtDir, 0755)
+	pngImg := image.NewRGBA(image.Rect(0, 0, 400, 600))
+	pngPath := filepath.Join(appArtDir, "cover.png")
+	pf, err := os.Create(pngPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(pf, pngImg); err != nil {
+		t.Fatal(err)
+	}
+	pf.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.ArtworkDir = artDir
+	app := NewApp(cfg)
+	app.UpdateCachedGame(domain.NewGame("Test Game", "/games/test", "12345", "win64"))
+
+	pngGame := domain.NewGame("PNG Icon Game", "/games/png", "54321", "win64")
+	pngGame.LocalCover = pngPath
+	app.UpdateCachedGame(pngGame)
+
+	handler := app.AssetHandler()
+
+	// 1. Direct path id: test-game/cover.jpg with w=300
+	req1 := httptest.NewRequest(http.MethodGet, "/art/thumb?id=test-game/cover.jpg&w=300", nil)
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec1.Code)
+	}
+	if ct := rec1.Header().Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("expected Content-Type image/jpeg, got %s", ct)
+	}
+	decoded1, _, err := image.Decode(rec1.Body)
+	if err != nil {
+		t.Fatalf("failed to decode response image: %v", err)
+	}
+	if decoded1.Bounds().Dx() != 300 {
+		t.Errorf("expected thumb width 300, got %d", decoded1.Bounds().Dx())
+	}
+	if decoded1.Bounds().Dy() != 450 {
+		t.Errorf("expected thumb height 450, got %d", decoded1.Bounds().Dy())
+	}
+
+	// 2. Slug id: test-game with w=200
+	req2 := httptest.NewRequest(http.MethodGet, "/art/thumb?id=test-game&w=200", nil)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for slug resolution, got %d", rec2.Code)
+	}
+
+	// 3. AppID resolution: id=54321 with w=150 (resolves cover.png)
+	req3 := httptest.NewRequest(http.MethodGet, "/art/thumb?id=54321&w=150", nil)
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for AppID resolution, got %d", rec3.Code)
+	}
+	if ct := rec3.Header().Get("Content-Type"); ct != "image/png" {
+		t.Errorf("expected Content-Type image/png, got %s", ct)
+	}
+
+	// 4. Missing ID parameter
+	reqMissing := httptest.NewRequest(http.MethodGet, "/art/thumb", nil)
+	recMissing := httptest.NewRecorder()
+	handler.ServeHTTP(recMissing, reqMissing)
+	if recMissing.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for missing id, got %d", recMissing.Code)
+	}
+
+	// 5. Traversal attempt
+	reqTrav := httptest.NewRequest(http.MethodGet, "/art/thumb?id=../../etc/passwd", nil)
+	recTrav := httptest.NewRecorder()
+	handler.ServeHTTP(recTrav, reqTrav)
+	if recTrav.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for traversal, got %d", recTrav.Code)
+	}
+
+	// 6. Non-existent ID
+	req404 := httptest.NewRequest(http.MethodGet, "/art/thumb?id=nonexistent-game", nil)
+	rec404 := httptest.NewRecorder()
+	handler.ServeHTTP(rec404, req404)
+	if rec404.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for missing game, got %d", rec404.Code)
 	}
 }
 

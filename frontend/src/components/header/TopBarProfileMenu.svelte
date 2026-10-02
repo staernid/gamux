@@ -1,18 +1,17 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
   import { profilesStore } from '../../stores/profiles.js';
   import { activeView } from '../../stores/library.js';
   import Icon from '../common/Icon.svelte';
 
-  export let onNavigateToProfilesSettings = null;
+  let { onNavigateToProfilesSettings = null } = $props();
 
-  let isOpen = false;
-  let isAdding = false;
-  let newProfileName = '';
-  let containerRef;
+  let isOpen = $state(false);
+  let isAdding = $state(false);
+  let newProfileName = $state('');
+  let containerRef = $state();
 
-  $: active = $profilesStore.activeProfile;
-  $: profileList = $profilesStore.profiles;
+  let active = $derived(profilesStore.activeProfile);
+  let profileList = $derived(profilesStore.profiles);
 
   function getInitials(name) {
     if (!name) return 'GP';
@@ -64,12 +63,11 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
     document.addEventListener('click', handleClickOutside);
-  });
-
-  onDestroy(() => {
-    document.removeEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
   });
 </script>
 
@@ -77,7 +75,7 @@
   <!-- Avatar Trigger Button -->
   <button
     type="button"
-    on:click={toggleMenu}
+    onclick={toggleMenu}
     class="w-9 h-9 rounded-full border border-surface-border hover:border-surface-borderHighlight overflow-hidden flex items-center justify-center bg-surface-header/90 hover:bg-surface-cardHover backdrop-blur-md shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-neutral-400 group"
     title={active?.name ? `Active Profile: ${active.name}` : 'Player Profiles'}
     aria-label="Player Profiles"
@@ -115,7 +113,7 @@
         {#each profileList as p (p.id)}
           <button
             type="button"
-            on:click={() => handleSelectProfile(p)}
+            onclick={() => handleSelectProfile(p)}
             class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all text-left cursor-pointer {p.id === active?.id ? 'bg-surface-cardHover text-white border border-surface-borderHighlight' : 'text-neutral-300 hover:text-white hover:bg-surface-input'}"
           >
             <div class="flex items-center space-x-2 min-w-0">
@@ -150,19 +148,19 @@
               bind:value={newProfileName}
               placeholder="Profile Name"
               class="w-full px-2 py-1 text-xs rounded-lg bg-surface-input border border-surface-border text-white placeholder-neutral-500 focus:outline-none focus:border-surface-borderHighlight font-medium"
-              on:keydown={(e) => { if (e.key === 'Enter') handleCreateProfile(); else if (e.key === 'Escape') isAdding = false; }}
+              onkeydown={(e) => { if (e.key === 'Enter') handleCreateProfile(); else if (e.key === 'Escape') isAdding = false; }}
             />
             <div class="flex items-center justify-end space-x-1.5">
               <button
                 type="button"
-                on:click={() => { isAdding = false; newProfileName = ''; }}
+                onclick={() => { isAdding = false; newProfileName = ''; }}
                 class="px-2 py-0.5 text-2xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                on:click={handleCreateProfile}
+                onclick={handleCreateProfile}
                 disabled={!newProfileName.trim()}
                 class="px-2.5 py-0.5 text-2xs rounded bg-white text-neutral-950 font-bold hover:bg-neutral-200 disabled:opacity-40 transition-all cursor-pointer"
               >
@@ -173,7 +171,7 @@
         {:else}
           <button
             type="button"
-            on:click={() => { isAdding = true; }}
+            onclick={() => { isAdding = true; }}
             class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-neutral-300 hover:text-white hover:bg-surface-input transition-all cursor-pointer text-xs"
           >
             <Icon name="plus" className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
@@ -186,7 +184,7 @@
       <div class="border-t border-surface-border/60 pt-1">
         <button
           type="button"
-          on:click={handleOpenSettings}
+          onclick={handleOpenSettings}
           class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-surface-input transition-all cursor-pointer text-2xs"
         >
           <Icon name="settings" className="w-3.5 h-3.5 flex-shrink-0" />

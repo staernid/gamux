@@ -1,5 +1,5 @@
 <script>
-  import { activeView, selectedGame, games, runningGames, runningInstances, setGameRunning } from '../../stores/library.js';
+  import { activeView, selectedGame, catalogStore, setGameRunning } from '../../stores/library.js';
   import { tasksStore } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
   import { configStore } from '../../stores/config.js';
@@ -9,16 +9,13 @@
   import { AppAPI } from '../../api/app.js';
   import { isSamePath } from '../../utils/game.js';
 
-  const activeTransfersCount = tasksStore.activeTransfersCount;
-  const isSettingsDirty = configStore.isDirty;
-
   // Build unified running instance display list:
   // If runningInstances has items, map them to game + profile entities.
   // Otherwise fall back to runningGames paths for backward compatibility.
-  $: instancePillList = (() => {
-    const insts = $runningInstances || [];
-    const profs = $profilesStore.profiles || [];
-    const allGames = $games || [];
+  let instancePillList = $derived.by(() => {
+    const insts = catalogStore.runningInstances || [];
+    const profs = profilesStore.profiles || [];
+    const allGames = catalogStore.games || [];
 
     if (insts.length > 0) {
       // Find games that have active multiseat seats (p1, p2...)
@@ -50,7 +47,7 @@
         seen.add(dedupKey);
 
         const game = allGames.find(g => isSamePath(g.gameDir, gDir));
-        const profile = profs.find(p => p.id === profId) || (profId === 'main' ? $profilesStore.activeProfile : null);
+        const profile = profs.find(p => p.id === profId) || (profId === 'main' ? profilesStore.activeProfile : null);
         const name = inst.gameName || inst.game_name || game?.name || 'Running Game';
         const isSolo = !seatId && (profId === 'main' || profId === '' || !profId);
 
@@ -71,7 +68,7 @@
     }
 
     // Fallback if runningInstances hasn't received detailed items yet
-    return Array.from($runningGames || []).map(dir => {
+    return Array.from(catalogStore.runningGames || []).map(dir => {
       const game = allGames.find(g => isSamePath(g.gameDir, dir));
       return {
         instanceId: dir,
@@ -80,12 +77,12 @@
         name: game?.name || 'Running Game',
         profileId: 'main',
         seatId: '',
-        profile: $profilesStore.activeProfile,
+        profile: profilesStore.activeProfile,
         isSolo: true,
         mode: '',
       };
     });
-  })();
+  });
 
   function getInitials(name) {
     if (!name) return 'P';
@@ -137,7 +134,7 @@
       <!-- Shelf / Game Hub (1) -->
       <button
         type="button"
-        on:click={handleShelfOrHubClick}
+        onclick={handleShelfOrHubClick}
         class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' || $activeView === 'game-hub' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title={$activeView === 'game-hub' ? 'Back to Shelf' : 'Shelf (1)'}
         aria-label={$activeView === 'game-hub' ? 'Back to Shelf' : 'Shelf (1)'}
@@ -148,15 +145,15 @@
       <!-- Downloads (2) -->
       <button
         type="button"
-        on:click={() => navigateWithGuard('tasks')}
+        onclick={() => navigateWithGuard('tasks')}
         class="relative p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'tasks' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title="Downloads (2)"
         aria-label="Downloads (2)"
       >
         <Icon name="tasks" className="w-4 h-4 flex-shrink-0" />
-        {#if $activeTransfersCount > 0}
+        {#if tasksStore.activeTransfersCount > 0}
           <span class="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[15px] text-center text-4xs rounded-full bg-white text-neutral-950 font-black font-mono shadow">
-            {$activeTransfersCount}
+            {tasksStore.activeTransfersCount}
           </span>
         {/if}
       </button>
@@ -164,7 +161,7 @@
       <!-- Settings (3) -->
       <button
         type="button"
-        on:click={() => navigateWithGuard('settings')}
+        onclick={() => navigateWithGuard('settings')}
         class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'settings' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
         title="Settings (3)"
         aria-label="Settings (3)"
@@ -175,7 +172,7 @@
       <!-- Store Catalog (Wireframe Globe) -->
       <button
         type="button"
-        on:click={() => modalStore.open('catalog')}
+        onclick={() => modalStore.open('catalog')}
         class="p-2 rounded-xl transition-all flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-surface-input cursor-pointer"
         title="Catalog"
         aria-label="Catalog"
@@ -215,7 +212,7 @@
           <!-- Game Title Clickable Button -->
           <button
             type="button"
-            on:click={() => {
+            onclick={() => {
               if (item.game) {
                 navigateWithGuard('game-hub', () => { $selectedGame = item.game; $activeView = 'game-hub'; });
               }
@@ -230,7 +227,7 @@
           <!-- Instance Stop Button -->
           <button
             type="button"
-            on:click|stopPropagation={() => handleStopInstance(item)}
+            onclick={(e) => { e.stopPropagation(); handleStopInstance(item); }}
             class="px-2 py-0.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-2xs font-mono font-bold border border-rose-900/40 hover:border-rose-700/60 transition-all flex items-center space-x-1 flex-shrink-0 active:scale-95 cursor-pointer shadow-sm"
             title="Stop Process (Terminate {item.name}{!item.isSolo ? ` - ${item.profileId}` : ''})"
           >

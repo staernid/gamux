@@ -14,7 +14,6 @@
   import InheritSelect from '../../../common/InheritSelect.svelte';
   import { UI_SCALE_OPTIONS } from '../../../../constants/options.js';
 
-  const currentUiScale = configStore.uiScale;
   const uiScaleOptions = UI_SCALE_OPTIONS;
 
   let sfxEnabled = isSfxEnabled();
@@ -53,7 +52,7 @@
       <InheritSelect
         label="Interface Scale"
         description="Base UI scale and font sizing for handhelds, desktops, or TVs (applies immediately)"
-        value={$currentUiScale}
+        value={configStore.uiScale}
         options={uiScaleOptions}
         on:change={(e) => handleScaleChange(e.detail)}
       />

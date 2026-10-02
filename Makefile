@@ -4,7 +4,7 @@ PREFIX ?= $(HOME)/.local
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS = -s -w -X main.Version=$(VERSION)
-GUI_TAGS = -tags desktop,production,webkit2_41
+GUI_TAGS = -tags desktop,production,gtk3,webkit2_41
 
 .PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test lint run run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
@@ -19,11 +19,7 @@ build-cli:
 	go build -ldflags "$(LDFLAGS)" -o $(CLI_BINARY) ./cmd/gamux
 	@cp -f $(CLI_BINARY) gamux
 
-generate-bindings:
-	@ln -sf ../../wails.json cmd/gamux-gui/wails.json
-	@which wails > /dev/null 2>&1 && (cd cmd/gamux-gui && WAILS_GENERATE_MODULE=1 wails generate module $(GUI_TAGS) > /dev/null 2>&1) || true
-
-build-frontend: generate-bindings
+build-frontend:
 	@echo "Building frontend dist assets..."
 	@cd frontend && ([ -d node_modules ] || ([ -f package-lock.json ] && npm ci --no-audit || npm install --no-audit)) && npm run check && npm run build
 
@@ -52,7 +48,7 @@ clean-all: clean
 	rm -rf frontend/dist/* frontend/node_modules
 
 test-go:
-	go test -race ./...
+	go test -race $(GUI_TAGS) ./...
 
 test-frontend:
 	@cd frontend && npm test
@@ -73,7 +69,7 @@ gui-snap:
 test: test-go test-frontend
 
 lint:
-	go vet ./...
+	go vet $(GUI_TAGS) ./...
 	@cd frontend && npm run check
 	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
 

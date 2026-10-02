@@ -60,6 +60,7 @@
       {name}
       posterUrl={coverUrl}
       {localCoverUrl}
+      thumbnailWidth={size === 'sm' ? 200 : size === 'lg' ? 400 : 300}
       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
     />
 

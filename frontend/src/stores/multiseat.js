@@ -494,8 +494,8 @@ function createMultiseatStore() {
         }
       }
 
-      const allProfs = get(profilesStore.profiles) || [];
-      const activeProf = get(profilesStore.activeProfile);
+      const allProfs = profilesStore.profiles || [];
+      const activeProf = profilesStore.activeProfile;
 
       // Probe gamepads if not yet populated
       let pads = state.gamepads;

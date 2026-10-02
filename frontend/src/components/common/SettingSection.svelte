@@ -3,7 +3,7 @@
   export let description = '';
   export let tooltip = '';
   export let badge = '';
-  export let badgeColor = 'cyan'; // 'cyan' | 'emerald' | 'amber' | 'purple' | 'slate'
+  export let badgeColor = 'cyan';
   export let className = '';
 
   const badgeColors = {

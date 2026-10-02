@@ -441,6 +441,13 @@
             {/if}
           </div>
 
+          {#if isInstalled && !isReady && !isTaskActive && !isGameRunning}
+            <div class="mt-1 text-3xs font-mono text-neutral-400 flex items-center space-x-1 select-none">
+              <span class="text-amber-400">✦</span>
+              <span>Auto-applies Goldberg emulator &amp; unpacks DRM</span>
+            </div>
+          {/if}
+
           <!-- Launch Options Dropdown Popover -->
           {#if showLaunchMenu}
             <div

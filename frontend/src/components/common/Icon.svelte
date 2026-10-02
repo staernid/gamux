@@ -1,7 +1,5 @@
 <script>
-  export let name = '';
-  export let className = 'w-4 h-4';
-  export let strokeWidth = 2;
+  let { name = '', className = 'w-4 h-4', strokeWidth = 2 } = $props();
 </script>
 
 {#if name === 'spinner'}

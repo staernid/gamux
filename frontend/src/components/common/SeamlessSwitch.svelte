@@ -72,8 +72,8 @@
   tabindex="0"
   aria-checked={effectiveValue}
   aria-label={label || tooltip || 'Setting toggle'}
-  on:click={toggleSwitch}
-  on:keydown={handleKeyDown}
+  onclick={toggleSwitch}
+  onkeydown={handleKeyDown}
 >
   {#if !isCompact}
     <!-- Left Side: Label & Description with Override Dot -->
@@ -106,7 +106,7 @@
     {#if isOverridden}
       <button
         type="button"
-        on:click={revertToInherit}
+        onclick={revertToInherit}
         class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
         title={`Reset to default (${inheritedValue ? 'On' : 'Off'})`}
         aria-label="Reset to global default"

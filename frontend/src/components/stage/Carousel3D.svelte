@@ -556,6 +556,7 @@
                 name={card.game.name}
                 posterUrl={card.game.coverUrl}
                 localCoverUrl={card.game.localCoverUrl}
+                thumbnailWidth={350}
                 className="w-full h-full object-cover select-none pointer-events-none"
               />
 

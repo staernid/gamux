@@ -18,12 +18,13 @@ import (
 	"github.com/staernid/gamux/engine"
 	"github.com/staernid/gamux/events"
 	"github.com/staernid/gamux/util"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // App is the Go backend adapter exposed to the Wails frontend.
 type App struct {
 	ctx           context.Context
+	mainWindow    *application.WebviewWindow
 	Config        *config.Config
 	Engine        *engine.Engine
 	targetMu      sync.Mutex
@@ -62,6 +63,16 @@ func (a *App) HandleOpenTarget(target string) {
 	safeEmit(a.ctx, "gamux:open-target", target)
 }
 
+// SetMainWindow registers the primary WebviewWindow reference.
+func (a *App) SetMainWindow(w *application.WebviewWindow) {
+	a.mainWindow = w
+}
+
+// GetMainWindow returns the primary WebviewWindow reference.
+func (a *App) GetMainWindow() *application.WebviewWindow {
+	return a.mainWindow
+}
+
 // GetInitialTarget returns and clears any initial target passed on cold start.
 func (a *App) GetInitialTarget() string {
 	a.targetMu.Lock()
@@ -72,15 +83,16 @@ func (a *App) GetInitialTarget() string {
 }
 
 func safeEmit(ctx context.Context, eventName string, data ...any) {
-	if ctx == nil || ctx.Value("events") == nil {
+	wailsApp := application.Get()
+	if wailsApp == nil {
 		return
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Debug("Ignoring panic during safeEmit (context likely closed)", "event", eventName, "recover", r)
+			slog.Debug("Ignoring panic during safeEmit", "event", eventName, "recover", r)
 		}
 	}()
-	wailsRuntime.EventsEmit(ctx, eventName, data...)
+	wailsApp.Event.Emit(eventName, data...)
 }
 
 func parseMetaInt(md map[string]string, key string) int {
@@ -119,8 +131,36 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Bind central EventBus to Wails frontend event emitter
 	if a.Engine != nil && a.Engine.EventBus != nil {
+		var (
+			progressMu   sync.Mutex
+			lastProgress = make(map[string]int64)
+		)
+
 		a.Engine.EventBus.SubscribeFunc(func(ev events.Event) {
-			safeEmit(a.ctx, "gamux:task-event", ev)
+			isTaskOrTransfer := strings.HasPrefix(string(ev.Type), "task:") || strings.HasPrefix(string(ev.Type), "transfer:")
+			if isTaskOrTransfer {
+				// Throttle high-frequency progress events crossing the Wails IPC boundary
+				if ev.Type == events.EventTaskProgress || ev.Type == events.EventTransferProgress {
+					now := time.Now().UnixMilli()
+					progressMu.Lock()
+					last := lastProgress[ev.TaskID]
+					isTerminalProgress := ev.Progress.Percent >= 100 || (ev.Progress.TotalBytes > 0 && ev.Progress.CurrentBytes >= ev.Progress.TotalBytes)
+					if !isTerminalProgress && (now-last) < 150 {
+						progressMu.Unlock()
+						return
+					}
+					lastProgress[ev.TaskID] = now
+					progressMu.Unlock()
+				} else if ev.Type == events.EventTaskCompleted || ev.Type == events.EventTaskFailed || ev.Type == events.EventTaskCancelled ||
+					ev.Type == events.EventTransferCompleted || ev.Type == events.EventTransferFailed || ev.Type == events.EventTransferCancelled {
+					progressMu.Lock()
+					delete(lastProgress, ev.TaskID)
+					progressMu.Unlock()
+				}
+
+				safeEmit(a.ctx, "gamux:task-event", ev)
+			}
+
 			if ev.Type == events.EventNotification {
 				title := ev.Stage
 				if t, ok := ev.Metadata["title"]; ok && t != "" {
@@ -214,17 +254,25 @@ func (a *App) handleGameLaunchWindow(launched bool) {
 	if launched {
 		switch behavior {
 		case "minimize":
-			wailsRuntime.WindowMinimise(a.ctx)
+			if a.mainWindow != nil {
+				a.mainWindow.Minimise()
+			}
 		case "hide":
-			wailsRuntime.WindowHide(a.ctx)
+			if a.mainWindow != nil {
+				a.mainWindow.Hide()
+			}
 		}
 	} else {
 		switch behavior {
 		case "minimize":
-			wailsRuntime.WindowUnminimise(a.ctx)
+			if a.mainWindow != nil {
+				a.mainWindow.Restore()
+			}
 		case "hide":
-			wailsRuntime.WindowShow(a.ctx)
-			wailsRuntime.WindowUnminimise(a.ctx)
+			if a.mainWindow != nil {
+				a.mainWindow.Show()
+				a.mainWindow.Restore()
+			}
 		}
 	}
 }
@@ -242,8 +290,9 @@ func (a *App) SetQuitting(quitting bool) {
 // Quit unconditionally terminates the GUI application.
 func (a *App) Quit() {
 	a.SetQuitting(true)
-	if a.ctx != nil {
-		wailsRuntime.Quit(a.ctx)
+	wailsApp := application.Get()
+	if wailsApp != nil {
+		wailsApp.Quit()
 	}
 }
 
@@ -262,22 +311,28 @@ func (a *App) getContext() context.Context {
 	return context.Background()
 }
 
-// AssetHandler returns an http.Handler that serves cached artwork and local game images from disk.
+// AssetHandler returns an http.Handler that serves cached artwork, local game images, and on-the-fly thumbnails.
 func (a *App) AssetHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		artDir := ""
+		if a.Config != nil && a.Config.ArtworkDir != "" {
+			artDir = util.ExpandPath(a.Config.ArtworkDir)
+		} else {
+			home, _ := os.UserHomeDir()
+			artDir = filepath.Join(home, ".local", "share", "gamux", "art")
+		}
+
+		if r.URL.Path == "/art/thumb" || r.URL.Path == "/art/thumb/" {
+			a.handleThumbnail(w, r, artDir)
+			return
+		}
+
 		if strings.HasPrefix(r.URL.Path, "/art/") {
 			rel := strings.TrimPrefix(r.URL.Path, "/art/")
 			rel = filepath.Clean(rel)
 			if strings.HasPrefix(rel, "..") {
 				http.Error(w, "invalid path", http.StatusBadRequest)
 				return
-			}
-			artDir := ""
-			if a.Config != nil && a.Config.ArtworkDir != "" {
-				artDir = util.ExpandPath(a.Config.ArtworkDir)
-			} else {
-				home, _ := os.UserHomeDir()
-				artDir = filepath.Join(home, ".local", "share", "gamux", "art")
 			}
 			filePath := filepath.Join(artDir, rel)
 			if util.FileExists(filePath) {
@@ -303,6 +358,134 @@ func (a *App) AssetHandler() http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+}
+
+func (a *App) handleThumbnail(w http.ResponseWriter, r *http.Request, artDir string) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		id = strings.TrimSpace(r.URL.Query().Get("path"))
+	}
+	if id == "" {
+		id = strings.TrimSpace(r.URL.Query().Get("src"))
+	}
+	if id == "" {
+		http.Error(w, "missing id parameter", http.StatusBadRequest)
+		return
+	}
+
+	if strings.Contains(id, "..") {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	targetWidth := 300
+	if wStr := r.URL.Query().Get("w"); wStr != "" {
+		if parsed, err := strconv.Atoi(wStr); err == nil && parsed > 0 {
+			targetWidth = parsed
+		}
+	}
+
+	sourcePath := a.resolveThumbnailSource(id, artDir)
+	if sourcePath == "" || !util.FileExists(sourcePath) {
+		http.NotFound(w, r)
+		return
+	}
+
+	cacheDir := filepath.Join(artDir, ".thumbs")
+	thumbPath, err := util.GetOrGenerateThumbnail(sourcePath, targetWidth, cacheDir)
+	if err != nil {
+		slog.Warn("Failed to generate thumbnail, serving source", "source", sourcePath, "error", err)
+		http.ServeFile(w, r, sourcePath)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if strings.HasSuffix(strings.ToLower(thumbPath), ".png") {
+		w.Header().Set("Content-Type", "image/png")
+	} else {
+		w.Header().Set("Content-Type", "image/jpeg")
+	}
+	http.ServeFile(w, r, thumbPath)
+}
+
+func (a *App) resolveThumbnailSource(id, artDir string) string {
+	// 1. Direct local filesystem image
+	if strings.HasPrefix(id, "/local-img/") {
+		rel := strings.TrimPrefix(id, "/local-img/")
+		candidate := "/" + filepath.Clean(rel)
+		if !strings.Contains(candidate, "..") && util.FileExists(candidate) {
+			return candidate
+		}
+	} else if strings.HasPrefix(id, "/") && util.FileExists(id) {
+		return id
+	}
+
+	cleanID := strings.TrimPrefix(id, "/art/")
+	cleanID = strings.TrimPrefix(cleanID, "/")
+	cleanID = filepath.Clean(cleanID)
+	if strings.HasPrefix(cleanID, "..") {
+		return ""
+	}
+
+	// 2. Direct file in artDir (e.g. half-life-2/cover.jpg)
+	direct := filepath.Join(artDir, cleanID)
+	if fi, err := os.Stat(direct); err == nil && !fi.IsDir() {
+		return direct
+	}
+
+	// 3. Slug folder in artDir -> check candidates
+	candidates := []string{"cover.jpg", "cover.png", "hero.jpg", "banner.jpg"}
+	for _, c := range candidates {
+		candPath := filepath.Join(direct, c)
+		if util.FileExists(candPath) {
+			return candPath
+		}
+	}
+
+	// 4. Check cachedGames by AppID or slug
+	a.gamesMu.RLock()
+	var matchedGame *domain.Game
+	for _, g := range a.cachedGames {
+		if g == nil {
+			continue
+		}
+		if g.AppID == cleanID || util.Slugify(g.Name) == cleanID || g.GameDir == cleanID {
+			matchedGame = g
+			break
+		}
+	}
+	a.gamesMu.RUnlock()
+
+	if matchedGame != nil {
+		if matchedGame.LocalCover != "" && util.FileExists(matchedGame.LocalCover) {
+			return matchedGame.LocalCover
+		}
+		slug := util.Slugify(matchedGame.Name)
+		if slug != "" {
+			for _, c := range candidates {
+				candPath := filepath.Join(artDir, slug, c)
+				if util.FileExists(candPath) {
+					return candPath
+				}
+			}
+		}
+		for _, c := range candidates {
+			candPath := filepath.Join(artDir, "game-"+matchedGame.AppID, c)
+			if util.FileExists(candPath) {
+				return candPath
+			}
+		}
+	}
+
+	// 5. Check artDir/game-<cleanID>/cover.jpg
+	for _, c := range candidates {
+		candPath := filepath.Join(artDir, "game-"+cleanID, c)
+		if util.FileExists(candPath) {
+			return candPath
+		}
+	}
+
+	return ""
 }
 
 // SetTrayManager registers the TrayManager with the application so menu items stay updated.

@@ -7,9 +7,9 @@
   const toasts = notificationStore.toasts;
   const undoQueue = notificationStore.undoQueue;
 
-  $: topCenterToasts = $toasts.filter(t => t.position === 'top-center');
-  $: bottomCenterToasts = $toasts.filter(t => t.position === 'bottom-center');
-  $: bottomRightToasts = $toasts.filter(t => !t.position || t.position === 'bottom-right');
+  let topCenterToasts = $derived($toasts.filter(t => t.position === 'top-center'));
+  let bottomCenterToasts = $derived($toasts.filter(t => t.position === 'bottom-center'));
+  let bottomRightToasts = $derived($toasts.filter(t => !t.position || t.position === 'bottom-right'));
 
   function handleToastAction(toast) {
     if (typeof toast.onAction === 'function') {
@@ -18,7 +18,7 @@
       return;
     }
     if (toast.actionView) {
-      if ($activeView === 'settings' && $configStore.isDirty && toast.actionView !== 'settings') {
+      if ($activeView === 'settings' && configStore.isDirty && toast.actionView !== 'settings') {
         modalStore.open('confirm', {
           title: 'Unsaved Changes',
           message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
@@ -100,7 +100,7 @@
           {#if toast.actionLabel || toast.actionView || toast.onAction}
             <button
               type="button"
-              on:click={() => handleToastAction(toast)}
+              onclick={() => handleToastAction(toast)}
               class="mt-2 text-2xs font-bold text-neutral-200 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
             >
               <span>{toast.actionLabel || (toast.actionView === 'tasks' ? 'View in Tasks' : 'Open')}</span>
@@ -111,7 +111,7 @@
           {/if}
         </div>
         <button
-          on:click={() => notificationStore.toasts.dismiss(toast.id)}
+          onclick={() => notificationStore.toasts.dismiss(toast.id)}
           class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           aria-label="Dismiss toast"
         >
@@ -133,7 +133,7 @@
         <button
           type="button"
           data-testid="undo-action-btn"
-          on:click={() => notificationStore.triggerUndo(item.id)}
+          onclick={() => notificationStore.triggerUndo(item.id)}
           class="px-2.5 py-1 rounded-xl bg-white text-neutral-950 hover:bg-neutral-200 font-black text-2xs transition shadow cursor-pointer flex items-center space-x-1"
         >
           <span>Undo ({item.remaining}s)</span>
@@ -141,7 +141,7 @@
         <button
           type="button"
           data-testid="dismiss-undo-btn"
-          on:click={() => notificationStore.dismissUndo(item.id)}
+          onclick={() => notificationStore.dismissUndo(item.id)}
           class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           aria-label="Dismiss undo"
         >

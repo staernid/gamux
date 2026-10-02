@@ -12,8 +12,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // SingleInstanceGuard manages exclusive process ownership and IPC activation.
@@ -144,20 +142,12 @@ func (g *SingleInstanceGuard) listenLoop(appCtxGetter func() context.Context, on
 				line := strings.TrimSpace(scanner.Text())
 				if line == "FOCUS" {
 					if appCtxGetter != nil {
-						ctx := appCtxGetter()
-						if ctx != nil {
-							wailsRuntime.WindowShow(ctx)
-							wailsRuntime.WindowUnminimise(ctx)
-						}
+						appCtxGetter()
 					}
 				} else if strings.HasPrefix(line, "OPEN ") {
 					target := strings.TrimSpace(strings.TrimPrefix(line, "OPEN "))
 					if appCtxGetter != nil {
-						ctx := appCtxGetter()
-						if ctx != nil {
-							wailsRuntime.WindowShow(ctx)
-							wailsRuntime.WindowUnminimise(ctx)
-						}
+						appCtxGetter()
 					}
 					if onOpenTarget != nil && target != "" {
 						onOpenTarget(target)

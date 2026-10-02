@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { get } from 'svelte/store';
 import { tasksStore, extractTaskProgress } from './tasks.js';
 
 describe('tasksStore', () => {
@@ -19,7 +18,7 @@ describe('tasksStore', () => {
       timestamp: Date.now()
     });
 
-    let active = get(tasksStore.active);
+    let active = tasksStore.active;
     expect(active.length).toBe(1);
     expect(active[0].id).toBe('task_download_1');
     expect(active[0].status).toBe('running');
@@ -40,11 +39,11 @@ describe('tasksStore', () => {
       }
     });
 
-    active = get(tasksStore.active);
+    active = tasksStore.active;
     expect(active[0].percent).toBe(50.0);
     expect(active[0].currentBytes).toBe(50000000);
     expect(active[0].speedBps).toBe(25000000);
-    expect(get(tasksStore.totalSpeedBps)).toBe(25000000);
+    expect(tasksStore.totalSpeedBps).toBe(25000000);
 
     // 3. Pause task
     tasksStore.handleTaskEvent({
@@ -54,7 +53,7 @@ describe('tasksStore', () => {
       details: 'Paused by user'
     });
 
-    const paused = get(tasksStore.paused);
+    const paused = tasksStore.paused;
     expect(paused.length).toBe(1);
     expect(paused[0].status).toBe('paused');
     expect(paused[0].speedBps).toBe(0);
@@ -65,7 +64,7 @@ describe('tasksStore', () => {
       task_id: 'task_download_1',
       stage: 'Running'
     });
-    expect(get(tasksStore.active).length).toBe(1);
+    expect(tasksStore.active.length).toBe(1);
 
     // 5. Complete task
     tasksStore.handleTaskEvent({
@@ -74,11 +73,11 @@ describe('tasksStore', () => {
       details: 'Download complete'
     });
 
-    const completed = get(tasksStore.completed);
+    const completed = tasksStore.completed;
     expect(completed.length).toBe(1);
     expect(completed[0].status).toBe('completed');
     expect(completed[0].percent).toBe(100);
-    expect(get(tasksStore.active).length).toBe(0);
+    expect(tasksStore.active.length).toBe(0);
   });
 
   it('tracks transfer:started, transfer:progress, and transfer:completed events', () => {
@@ -91,7 +90,7 @@ describe('tasksStore', () => {
       details: 'Connecting to Steam CDN...',
     });
 
-    let active = get(tasksStore.active);
+    let active = tasksStore.active;
     expect(active.length).toBe(1);
     expect(active[0].id).toBe('dl_hades');
     expect(active[0].status).toBe('downloading');
@@ -109,10 +108,10 @@ describe('tasksStore', () => {
       },
     });
 
-    active = get(tasksStore.active);
+    active = tasksStore.active;
     expect(active[0].percent).toBe(45.5);
     expect(active[0].currentBytes).toBe(45500000);
-    expect(get(tasksStore.totalSpeedBps)).toBe(25000000);
+    expect(tasksStore.totalSpeedBps).toBe(25000000);
 
     tasksStore.handleTransferEvent({
       type: 'transfer:completed',
@@ -120,7 +119,7 @@ describe('tasksStore', () => {
       stage: 'Completed',
     });
 
-    const completed = get(tasksStore.completed);
+    const completed = tasksStore.completed;
     expect(completed.length).toBe(1);
     expect(completed[0].status).toBe('completed');
     expect(completed[0].percent).toBe(100);
@@ -140,7 +139,7 @@ describe('tasksStore', () => {
       error: 'Disk full error',
     });
 
-    const items = get(tasksStore.items);
+    const items = tasksStore.items;
     const failedTask = items.find((j) => j.id === 'task_fail');
     expect(failedTask).toBeDefined();
     expect(failedTask.status).toBe('failed');
@@ -165,7 +164,7 @@ describe('tasksStore', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(successResult).toEqual({ applied: true });
-    const items = get(tasksStore.items);
+    const items = tasksStore.items;
     const match = items.find((t) => t.gameName === 'Portal 2');
     expect(match).toBeDefined();
     expect(match.status).toBe('completed');
@@ -190,7 +189,7 @@ describe('tasksStore', () => {
       percent: 50
     });
 
-    let items = get(tasksStore.items);
+    let items = tasksStore.items;
     expect(items.length).toBe(1);
     expect(items[0].id).toBe('op_setup_1');
     expect(items[0].stage).toBe('Applying Steamless DRM Patch');
@@ -224,16 +223,16 @@ describe('tasksStore', () => {
     });
 
     // Global active should contain all 3
-    const allActive = get(tasksStore.active);
+    const allActive = tasksStore.active;
     expect(allActive.length).toBe(3);
 
     // Downloads partition should contain only the 2 downloads
-    const activeDownloads = get(tasksStore.activeDownloads);
+    const activeDownloads = tasksStore.activeDownloads;
     expect(activeDownloads.length).toBe(2);
     expect(activeDownloads.map(d => d.id)).toEqual(['dl_escape', 'dl_garbanzo']);
 
     // Operations partition should contain only the 1 operation
-    const activeOps = get(tasksStore.activeOperations);
+    const activeOps = tasksStore.activeOperations;
     expect(activeOps.length).toBe(1);
     expect(activeOps[0].id).toBe('op_patch');
   });
@@ -247,19 +246,19 @@ describe('tasksStore', () => {
     });
 
     await tasksStore.pause('action_test_1');
-    let item = get(tasksStore.items).find(t => t.id === 'action_test_1');
+    let item = tasksStore.items.find(t => t.id === 'action_test_1');
     expect(item.status).toBe('paused');
 
     await tasksStore.resume('action_test_1');
-    item = get(tasksStore.items).find(t => t.id === 'action_test_1');
+    item = tasksStore.items.find(t => t.id === 'action_test_1');
     expect(item.status).toBe('downloading');
 
     await tasksStore.cancel('action_test_1');
-    item = get(tasksStore.items).find(t => t.id === 'action_test_1');
+    item = tasksStore.items.find(t => t.id === 'action_test_1');
     expect(item.status).toBe('cancelled');
 
     await tasksStore.remove('action_test_1');
-    item = get(tasksStore.items).find(t => t.id === 'action_test_1');
+    item = tasksStore.items.find(t => t.id === 'action_test_1');
     expect(item).toBeUndefined();
   });
 

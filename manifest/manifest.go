@@ -532,6 +532,46 @@ func MatchesPlatform(cat DepotCategory, targetPlat string) bool {
 	}
 }
 
+// MatchesOSList tests whether an official Steam depot oslist matches the requested platform target.
+// oslist may be empty (common to all platforms), comma/space separated, or a single OS name.
+func MatchesOSList(osList, targetPlat string) bool {
+	cleaned := strings.ToLower(strings.TrimSpace(osList))
+	if cleaned == "" || cleaned == "all" {
+		return true
+	}
+	target := strings.ToLower(strings.TrimSpace(targetPlat))
+	if target == "" || target == "all" {
+		return true
+	}
+
+	normTarget := ""
+	switch target {
+	case "win64", "win32", "windows", "win":
+		normTarget = "windows"
+	case "linux", "linuxnative":
+		normTarget = "linux"
+	case "macos", "osx", "darwin", "mac":
+		normTarget = "macos"
+	default:
+		normTarget = target
+	}
+
+	parts := strings.FieldsFunc(cleaned, func(r rune) bool {
+		return r == ',' || r == ' ' || r == ';'
+	})
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "all" || p == normTarget {
+			return true
+		}
+		if (normTarget == "macos" && (p == "osx" || p == "darwin" || p == "mac")) ||
+			(normTarget == "windows" && (p == "win" || p == "win32" || p == "win64")) {
+			return true
+		}
+	}
+	return false
+}
+
 // NormalizePath cleans and normalizes relative file paths for Linux/Windows cross-platform safety.
 func NormalizePath(p string) string {
 	cleaned := filepath.Clean(strings.ReplaceAll(p, "\\", "/"))
@@ -1020,14 +1060,14 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				}
 			}
 
-			// Authoritative platform override from remote metadata if depot files yielded generic common
-			if cat == DepotCategoryCommon && meta != nil && meta.OSList != "" {
+			// Authoritative platform override from remote metadata
+			if meta != nil && meta.OSList != "" {
 				switch strings.ToLower(meta.OSList) {
-				case "windows":
+				case "windows", "win":
 					cat = DepotCategoryWindows
 				case "linux":
 					cat = DepotCategoryLinux
-				case "macos", "osx":
+				case "macos", "osx", "darwin":
 					cat = DepotCategoryMacOS
 				}
 			}

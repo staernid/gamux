@@ -15,6 +15,7 @@ import {
   getExecutablePath,
   countOverrides,
   isPlaceholderTitle,
+  getThumbnailUrl,
 } from './game.js';
 
 describe('Game Data Model & Normalization Helpers', () => {
@@ -288,5 +289,36 @@ describe('Game Data Model & Normalization Helpers', () => {
       dllOverrides: 'dxgi=n,b',
     };
     expect(countOverrides(modifiedDraft, game, globalCfg)).toBe(5);
+  });
+
+  it('generates proper thumbnail URLs via getThumbnailUrl', () => {
+    // /art/ URL with timestamp
+    expect(getThumbnailUrl('/art/portal-2/cover.jpg?t=1700000000', 300)).toBe(
+      '/art/thumb?id=portal-2%2Fcover.jpg&w=300&t=1700000000'
+    );
+
+    // /art/ URL without query
+    expect(getThumbnailUrl('/art/portal-2/cover.jpg', 200)).toBe(
+      '/art/thumb?id=portal-2%2Fcover.jpg&w=200'
+    );
+
+    // Already a thumbnail URL -> return unchanged
+    expect(getThumbnailUrl('/art/thumb?id=abc&w=300', 300)).toBe(
+      '/art/thumb?id=abc&w=300'
+    );
+
+    // /local-img/ URL
+    expect(getThumbnailUrl('/local-img/home/user/games/cover.jpg', 300)).toBe(
+      '/art/thumb?id=%2Flocal-img%2Fhome%2Fuser%2Fgames%2Fcover.jpg&w=300'
+    );
+
+    // AppID fallback when no URL
+    expect(getThumbnailUrl('', 300, '620')).toBe(
+      '/art/thumb?id=620&w=300'
+    );
+
+    // Invalid inputs return empty string
+    expect(getThumbnailUrl('', 300, '')).toBe('');
+    expect(getThumbnailUrl(null, 300, '')).toBe('');
   });
 });

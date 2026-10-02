@@ -1,19 +1,21 @@
 <script>
   import { createEventDispatcher } from 'svelte';
 
-  export let label = '';
-  export let description = '';
-  export let tooltip = '';
-  export let options = []; // Array of { value, label } or simple strings
-  export let min = undefined;
-  export let max = undefined;
-  export let stepSize = 1;
-  export let value = null;
-  export let disabled = false;
+  let {
+    label = '',
+    description = '',
+    tooltip = '',
+    options = [],
+    min = undefined,
+    max = undefined,
+    stepSize = 1,
+    value = $bindable(null),
+    disabled = false
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
-  $: resolvedOptions = (() => {
+  let resolvedOptions = $derived.by(() => {
     if (Array.isArray(options) && options.length > 0) {
       return options;
     }
@@ -26,18 +28,20 @@
       return generated;
     }
     return [];
-  })();
-
-  $: normalizedOptions = resolvedOptions.map(opt => {
-    if (typeof opt === 'object' && opt !== null) {
-      return { value: opt.value, label: opt.label ?? String(opt.value) };
-    }
-    return { value: opt, label: String(opt) };
   });
 
-  $: currentIndex = normalizedOptions.findIndex(o => o.value === value || Number(o.value) === Number(value));
-  $: currentLabel = currentIndex >= 0 ? normalizedOptions[currentIndex].label : String(value ?? '');
-  $: effectiveTooltip = tooltip || description;
+  let normalizedOptions = $derived(
+    resolvedOptions.map(opt => {
+      if (typeof opt === 'object' && opt !== null) {
+        return { value: opt.value, label: opt.label ?? String(opt.value) };
+      }
+      return { value: opt, label: String(opt) };
+    })
+  );
+
+  let currentIndex = $derived(normalizedOptions.findIndex(o => o.value === value || Number(o.value) === Number(value)));
+  let currentLabel = $derived(currentIndex >= 0 ? normalizedOptions[currentIndex].label : String(value ?? ''));
+  let effectiveTooltip = $derived(tooltip || description);
 
   function step(dir) {
     if (disabled || normalizedOptions.length === 0) return;
@@ -99,13 +103,13 @@
     aria-valuemin={0}
     aria-valuemax={normalizedOptions.length - 1}
     aria-disabled={disabled}
-    on:keydown={handleKeydown}
+    onkeydown={handleKeydown}
   >
     <!-- Left Arrow Button (Mouse target only, tabindex -1) -->
     <button
       type="button"
       tabindex="-1"
-      on:click|stopPropagation={() => step(-1)}
+      onclick={(e) => { e.stopPropagation(); step(-1); }}
       {disabled}
       class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Previous Option (Left)"
@@ -125,7 +129,7 @@
     <button
       type="button"
       tabindex="-1"
-      on:click|stopPropagation={() => step(1)}
+      onclick={(e) => { e.stopPropagation(); step(1); }}
       {disabled}
       class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Next Option (Right)"

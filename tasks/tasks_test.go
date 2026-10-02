@@ -418,3 +418,66 @@ func TestTasksManager_RunSyncOp(t *testing.T) {
 		t.Errorf("expected stage Done, got %s", op.stage)
 	}
 }
+
+func TestTasksManager_ProgressThrottling(t *testing.T) {
+	sink := tasks.NewChannelEventSink(200)
+	mgr := tasks.NewManager(tasks.Options{
+		MaxConcurrentOperations: 1,
+		EventSink:               sink,
+	})
+	defer func() { _ = mgr.Shutdown(context.Background()) }()
+
+	done := make(chan struct{})
+	_, err := mgr.Submit(tasks.TaskSpec{
+		Type:  tasks.TypeApply,
+		Title: "Fast Telemetry Task",
+		Run: func(ctx context.Context, ctrl *tasks.Controller) error {
+			// Rapidly call ReportProgress 50 times
+			for i := 1; i <= 50; i++ {
+				pct := float64(i) * 1.5 // up to 75%
+				ctrl.ReportProgress(int64(i*1000), 100000, i, 50, 1024, 60, pct)
+				time.Sleep(2 * time.Millisecond) // total ~100ms
+			}
+			close(done)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Submit failed: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("task did not complete in time")
+	}
+
+	// Drain sink channel and count progress events
+	progressCount := 0
+	completedReceived := false
+
+	time.Sleep(50 * time.Millisecond)
+	drainLoop:
+	for {
+		select {
+		case ev := <-sink.Events():
+			if ev.Type == "task:progress" {
+				progressCount++
+			} else if ev.Type == "task:completed" {
+				completedReceived = true
+			}
+		default:
+			break drainLoop
+		}
+	}
+
+	if !completedReceived {
+		t.Error("expected task:completed event to be received")
+	}
+
+	// 50 rapid calls over ~100ms with a 150ms throttle must emit far fewer than 50 events (typically 1-3)
+	if progressCount >= 20 {
+		t.Errorf("expected throttled progress events to be < 20, got %d", progressCount)
+	}
+}
+

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/util"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // -----------------------------------------------------------------------------
@@ -17,7 +17,8 @@ import (
 
 // SelectDirectory opens a native OS directory picker dialog.
 func (a *App) SelectDirectory(title, defaultDir string) (string, error) {
-	if a.ctx == nil {
+	wailsApp := application.Get()
+	if wailsApp == nil || wailsApp.Dialog == nil {
 		return "", fmt.Errorf("GUI runtime context not ready")
 	}
 	if defaultDir == "" {
@@ -25,28 +26,39 @@ func (a *App) SelectDirectory(title, defaultDir string) (string, error) {
 			defaultDir = home
 		}
 	}
-	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title:            title,
-		DefaultDirectory: defaultDir,
-	})
+	dialog := wailsApp.Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle(title).
+		SetDirectory(defaultDir)
+
+	if a.mainWindow != nil {
+		dialog.AttachToWindow(a.mainWindow)
+	}
+
+	return dialog.PromptForSingleSelection()
 }
 
 // SelectFile opens a native OS file picker dialog.
 func (a *App) SelectFile(title, filterName, filterPattern string) (string, error) {
-	if a.ctx == nil {
+	wailsApp := application.Get()
+	if wailsApp == nil || wailsApp.Dialog == nil {
 		return "", fmt.Errorf("GUI runtime context not ready")
 	}
-	var filters []wailsRuntime.FileFilter
+	dialog := wailsApp.Dialog.OpenFile().
+		CanChooseFiles(true).
+		CanChooseDirectories(false).
+		SetTitle(title)
+
 	if filterName != "" && filterPattern != "" {
-		filters = append(filters, wailsRuntime.FileFilter{
-			DisplayName: filterName,
-			Pattern:     filterPattern,
-		})
+		dialog.AddFilter(filterName, filterPattern)
 	}
-	return wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title:   title,
-		Filters: filters,
-	})
+
+	if a.mainWindow != nil {
+		dialog.AttachToWindow(a.mainWindow)
+	}
+
+	return dialog.PromptForSingleSelection()
 }
 
 // OpenDirectory opens the specified directory or containing folder in the system default file manager.
@@ -77,9 +89,10 @@ func (a *App) OpenURL(rawURL string) error {
 	if rawURL == "" {
 		return fmt.Errorf("URL cannot be empty")
 	}
-	if a.ctx != nil {
-		wailsRuntime.BrowserOpenURL(a.ctx, rawURL)
-		return nil
+	if wailsApp := application.Get(); wailsApp != nil && wailsApp.Browser != nil {
+		if err := wailsApp.Browser.OpenURL(rawURL); err == nil {
+			return nil
+		}
 	}
 	cmd := exec.Command("xdg-open", rawURL)
 	if err := cmd.Start(); err != nil {

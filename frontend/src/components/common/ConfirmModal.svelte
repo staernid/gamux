@@ -2,17 +2,19 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { modalStore } from '../../stores/modal.js';
 
-  export let title = 'Confirm Action';
-  export let message = 'Are you sure you want to proceed?';
-  export let confirmLabel = 'Confirm';
-  export let cancelLabel = 'Cancel';
-  export let danger = false;
-  export let onConfirm = null;
-  export let onCancel = null;
+  let {
+    title = 'Confirm Action',
+    message = 'Are you sure you want to proceed?',
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
+    danger = false,
+    onConfirm = null,
+    onCancel = null
+  } = $props();
 
   const dispatch = createEventDispatcher();
-  let confirmBtn;
-  let cancelBtn;
+  let confirmBtn = $state();
+  let cancelBtn = $state();
 
   onMount(() => {
     if (danger) {
@@ -49,7 +51,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div
   role="dialog"
@@ -88,7 +90,7 @@
       <button
         type="button"
         bind:this={cancelBtn}
-        on:click={handleCancel}
+        onclick={handleCancel}
         class="px-4 py-2 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-xs font-bold text-neutral-200 hover:text-white transition-colors cursor-pointer"
       >
         {cancelLabel}
@@ -97,7 +99,7 @@
       <button
         type="button"
         bind:this={confirmBtn}
-        on:click={handleConfirm}
+        onclick={handleConfirm}
         class="px-4 py-2 rounded-xl text-xs font-black transition-all shadow-lg flex items-center space-x-1.5 cursor-pointer {danger ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-white hover:bg-neutral-200 text-black'}"
       >
         {confirmLabel}

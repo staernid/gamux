@@ -10,8 +10,6 @@
 
   export let game = null;
 
-  const activeDownloads = tasksStore.activeDownloads;
-
   let depots = [];
   let dlcs = [];
   let isLoading = true;
@@ -26,14 +24,14 @@
   $: appID = game?.appId || '';
   $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
 
-  $: activeTransfer = ($activeDownloads || []).find(
+  $: activeTransfer = (tasksStore.activeDownloads || []).find(
     (t) => String(t.appId) === String(appID) || (t.gameDir && isSamePath(t.gameDir, gameDir))
   );
 
   $: configuredLanguage = (
     userPreferredLanguage ||
     game?.currentLanguage ||
-    $configStore?.language ||
+    configStore.current?.language ||
     'english'
   ).toLowerCase();
 

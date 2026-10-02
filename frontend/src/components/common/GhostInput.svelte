@@ -4,14 +4,14 @@
   export let label = '';
   export let description = '';
   export let tooltip = '';
-  export let value = ''; // current local value ('' means inherit if hasInheritance)
-  export let placeholder = ''; // standard placeholder
-  export let globalPlaceholder = ''; // global default watermark (if in inherit mode)
+  export let value = '';
+  export let placeholder = '';
+  export let globalPlaceholder = '';
   export let disabled = false;
   export let mono = false;
-  export let type = 'text'; // 'text' | 'password'
-  export let status = ''; // optional status badge (e.g. 'SET')
-  export let stacked = false; // stacked vertical card layout
+  export let type = 'text';
+  export let status = '';
+  export let stacked = false;
   export let id = `input-${Math.random().toString(36).slice(2, 9)}`;
 
   const dispatch = createEventDispatcher();
@@ -90,7 +90,7 @@
           {value}
           {disabled}
           placeholder={globalPlaceholder || placeholder || ''}
-          on:input={handleInput}
+          oninput={handleInput}
           class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors {mono ? 'font-mono' : ''} {type === 'password' ? 'pr-8' : ''}
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
@@ -99,7 +99,7 @@
         {#if type === 'password'}
           <button
             type="button"
-            on:click={togglePasswordVisibility}
+            onclick={togglePasswordVisibility}
             class="absolute inset-y-0 right-0 px-2.5 flex items-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
             title={showPassword ? 'Hide value' : 'Show value'}
             aria-label={showPassword ? 'Hide value' : 'Show value'}
@@ -123,7 +123,7 @@
       {#if isOverridden}
         <button
           type="button"
-          on:click={revertToInherit}
+          onclick={revertToInherit}
           class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title="Reset to global default"
           aria-label="Reset to global default"
@@ -174,7 +174,7 @@
           {value}
           {disabled}
           placeholder={globalPlaceholder || placeholder || ''}
-          on:input={handleInput}
+          oninput={handleInput}
           class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors {mono ? 'font-mono' : ''} {type === 'password' ? 'pr-8' : ''}
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
@@ -183,7 +183,7 @@
         {#if type === 'password'}
           <button
             type="button"
-            on:click={togglePasswordVisibility}
+            onclick={togglePasswordVisibility}
             class="absolute inset-y-0 right-0 px-2.5 flex items-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
             title={showPassword ? 'Hide value' : 'Show value'}
             aria-label={showPassword ? 'Hide value' : 'Show value'}
@@ -213,7 +213,7 @@
       {#if isOverridden}
         <button
           type="button"
-          on:click={revertToInherit}
+          onclick={revertToInherit}
           class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title="Reset to global default"
           aria-label="Reset to global default"

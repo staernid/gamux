@@ -1953,11 +1953,23 @@ func TestFormatCommandLine(t *testing.T) {
 	spec := &LaunchSpec{
 		Args: []string{"umu-run", "game.exe", "-dx11", "spaced arg"},
 		Env: map[string]string{
-			"WINEPREFIX": "/home/user/Games/umu",
-			"MANGOHUD":   "1",
+			"GAMEID":      "220240",
+			"STORE":       "steam",
+			"SteamAppId":  "220240",
+			"WINEPREFIX":  "/home/user/Games/umu",
+			"MANGOHUD":    "1",
 		},
 	}
 	formatted := FormatCommandLine(spec)
+	if !strings.Contains(formatted, "GAMEID=220240") {
+		t.Errorf("expected GAMEID in formatted command, got %q", formatted)
+	}
+	if !strings.Contains(formatted, "STORE=steam") {
+		t.Errorf("expected STORE in formatted command, got %q", formatted)
+	}
+	if !strings.Contains(formatted, "SteamAppId=220240") {
+		t.Errorf("expected SteamAppId in formatted command, got %q", formatted)
+	}
 	if !strings.Contains(formatted, "WINEPREFIX=/home/user/Games/umu") {
 		t.Errorf("expected WINEPREFIX in formatted command, got %q", formatted)
 	}

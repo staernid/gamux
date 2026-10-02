@@ -172,7 +172,7 @@ func FormatCommandLine(spec *LaunchSpec) string {
 	}
 	var envParts []string
 	keyEnvVars := []string{
-		"WINEPREFIX", "PROTONPATH", "PROTON_VERB", "WINEDLLOVERRIDES", "MANGOHUD", "LD_PRELOAD",
+		"GAMEID", "STORE", "SteamAppId", "SteamGameId", "WINEPREFIX", "PROTONPATH", "PROTON_VERB", "WINEDLLOVERRIDES", "MANGOHUD", "LD_PRELOAD",
 	}
 	for _, k := range keyEnvVars {
 		if v, ok := spec.Env[k]; ok && v != "" {
@@ -313,11 +313,19 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 		gameEnv["SteamGameId"] = resolved.AppID
 		gameEnv["GAMEID"] = resolved.AppID
 		gameEnv["UMU_ID"] = resolved.AppID
-		gameEnv["STORE"] = "steam"
+		if resolved.Store != "" {
+			gameEnv["STORE"] = strings.ToLower(resolved.Store)
+		} else {
+			gameEnv["STORE"] = "steam"
+		}
 	} else {
 		gameEnv["GAMEID"] = "umu-default"
 		gameEnv["UMU_ID"] = "umu-default"
-		gameEnv["STORE"] = "none"
+		if resolved.Store != "" {
+			gameEnv["STORE"] = strings.ToLower(resolved.Store)
+		} else {
+			gameEnv["STORE"] = "none"
+		}
 	}
 	gameEnv["SteamAppUser"] = "client_player"
 	gameEnv["SteamUser"] = "client_player"

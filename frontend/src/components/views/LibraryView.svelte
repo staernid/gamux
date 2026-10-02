@@ -136,38 +136,38 @@
           <button
             type="button"
             on:click={() => { $activeFilter = 'all'; }}
-            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer {$activeFilter === 'all' ? 'bg-white text-neutral-950 font-bold shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer {$activeFilter === 'all' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             All
           </button>
           <button
             type="button"
             on:click={() => { $activeFilter = 'patched'; }}
-            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'patched' ? 'bg-white text-neutral-950 font-bold shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'patched' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             <span>Ready</span>
             {#if $stats.patchedCount > 0}
-              <span class="px-1 py-0.2 rounded text-3xs {$activeFilter === 'patched' ? 'bg-neutral-200 text-neutral-950' : 'bg-neutral-800 text-neutral-300'}">{$stats.patchedCount}</span>
+              <span class="px-1 py-0.2 rounded text-3xs {$activeFilter === 'patched' ? 'bg-neutral-800 text-neutral-200 border border-neutral-700' : 'bg-neutral-800 text-neutral-300'}">{$stats.patchedCount}</span>
             {/if}
           </button>
           <button
             type="button"
             on:click={() => { $activeFilter = 'clean'; }}
-            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'clean' ? 'bg-white text-neutral-950 font-bold shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'clean' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             <span>Unpatched</span>
             {#if $stats.cleanCount > 0}
-              <span class="px-1 py-0.2 rounded text-3xs {$activeFilter === 'clean' ? 'bg-neutral-200 text-neutral-950' : 'bg-neutral-800 text-neutral-300'}">{$stats.cleanCount}</span>
+              <span class="px-1 py-0.2 rounded text-3xs {$activeFilter === 'clean' ? 'bg-neutral-800 text-neutral-200 border border-neutral-700' : 'bg-neutral-800 text-neutral-300'}">{$stats.cleanCount}</span>
             {/if}
           </button>
           {#if $stats.updatesCount > 0}
             <button
               type="button"
               on:click={() => { $activeFilter = 'updates'; }}
-              class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'updates' ? 'bg-white text-neutral-950 font-bold shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
+              class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'updates' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
             >
               <span>Updates</span>
-              <span class="px-1 py-0.2 rounded text-3xs bg-amber-500/20 text-amber-300 font-bold">{$stats.updatesCount}</span>
+              <span class="px-1 py-0.2 rounded text-3xs bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">{$stats.updatesCount}</span>
             </button>
           {/if}
         </div>
@@ -367,7 +367,7 @@
               <span class="text-neutral-500">Platform:</span>
               <span class="text-neutral-300 font-semibold">{$selectedGame.platform || 'Linux'}</span>
               <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300">{$selectedGame.runner || $configStore?.default_runner || 'UMU'}</span>
+              <span class="text-neutral-300">{$selectedGame.runner || configStore.current?.default_runner || 'UMU'}</span>
               <span class="text-neutral-500">·</span>
               <span class="text-neutral-300 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
               {#if $selectedGame.playtimeSeconds > 0}

@@ -1,25 +1,27 @@
 <script>
   import { createEventDispatcher } from 'svelte';
 
-  export let label = '';
-  export let description = '';
-  export let tooltip = '';
-  export let value = ''; // current local value ('' means inherit if hasInheritance)
-  export let globalValue = undefined; // global default value (if in inherit mode)
-  export let globalLabel = ''; // optional human-readable label for global value
-  export let options = []; // Array<{ value: string, label: string }>
-  export let disabled = false;
-  export let stacked = false;
-  export let id = `select-${Math.random().toString(36).slice(2, 9)}`;
+  let {
+    label = '',
+    description = '',
+    tooltip = '',
+    value = $bindable(''),
+    globalValue = undefined,
+    globalLabel = '',
+    options = [],
+    disabled = false,
+    stacked = false,
+    id = `select-${Math.random().toString(36).slice(2, 9)}`
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
-  $: hasInheritance = globalValue !== undefined && globalValue !== null && globalValue !== '';
-  $: isInherited = hasInheritance && (!value || value === '' || value === globalValue);
-  $: isOverridden = hasInheritance && !isInherited;
-  $: selectedValue = hasInheritance ? (isOverridden ? value : globalValue) : value;
-  $: resolvedGlobalLabel = globalLabel || options.find(o => o.value === globalValue)?.label || globalValue || '';
-  $: effectiveDescription = description || tooltip;
+  let hasInheritance = $derived(globalValue !== undefined && globalValue !== null && globalValue !== '');
+  let isInherited = $derived(hasInheritance && (!value || value === '' || value === globalValue));
+  let isOverridden = $derived(hasInheritance && !isInherited);
+  let selectedValue = $derived(hasInheritance ? (isOverridden ? value : globalValue) : value);
+  let resolvedGlobalLabel = $derived(globalLabel || options.find(o => o.value === globalValue)?.label || globalValue || '');
+  let effectiveDescription = $derived(description || tooltip);
 
   function handleChange(e) {
     if (disabled) return;
@@ -77,7 +79,7 @@
           {id}
           value={selectedValue}
           {disabled}
-          on:change={handleChange}
+          onchange={handleChange}
           class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
@@ -98,7 +100,7 @@
       {#if isOverridden}
         <button
           type="button"
-          on:click={revertToInherit}
+          onclick={revertToInherit}
           class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
@@ -147,7 +149,7 @@
           {id}
           value={selectedValue}
           {disabled}
-          on:change={handleChange}
+          onchange={handleChange}
           class="w-full bg-surface-input border rounded-lg px-3 py-1.5 text-xs outline-none transition-colors appearance-none cursor-pointer pr-8
             {isOverridden
               ? 'border-neutral-500 text-white font-medium focus:border-white'
@@ -168,7 +170,7 @@
       {#if isOverridden}
         <button
           type="button"
-          on:click={revertToInherit}
+          onclick={revertToInherit}
           class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"

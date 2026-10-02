@@ -1,7 +1,9 @@
 <script>
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher, tick } from 'svelte';
   import ModalShell from '../common/ModalShell.svelte';
   import Icon from '../common/Icon.svelte';
+  import CatalogCard from './catalog/CatalogCard.svelte';
+  import CatalogEmptyState from './catalog/CatalogEmptyState.svelte';
   import { games, selectedGame, activeView } from '../../stores/library.js';
   import { normalizeGame } from '../../utils/game.js';
   import { AppAPI } from '../../api/app.js';
@@ -24,6 +26,7 @@
   let isSearchingStore = false;
   let storeSearchTimeout = null;
   let lastStoreQuery = '';
+  let activeStoreFilter = 'all'; // 'all' | 'steam' | 'gog'
 
   $: allGames = $games || [];
 
@@ -55,6 +58,17 @@
     }
   }
 
+  // Filtered Store Results by Provider
+  $: filteredResults = storeResults.filter(item => {
+    if (activeStoreFilter === 'all') return true;
+    const store = (item.store || 'steam').toLowerCase();
+    return store === activeStoreFilter;
+  });
+
+  // Store counts for filter chips
+  $: steamCount = storeResults.filter(item => (item.store || 'steam').toLowerCase() === 'steam').length;
+  $: gogCount = storeResults.filter(item => (item.store || '').toLowerCase() === 'gog').length;
+
   function getMatchingLocalGame(res) {
     if (!res) return null;
     const resId = String(res.id);
@@ -68,9 +82,19 @@
   }
 
   $: {
-    if (focusedIndex >= storeResults.length) {
-      focusedIndex = Math.max(0, storeResults.length - 1);
+    if (focusedIndex >= filteredResults.length) {
+      focusedIndex = Math.max(0, filteredResults.length - 1);
     }
+  }
+
+  // Scroll focused card into view smoothly
+  $: if (gridContainerEl && filteredResults.length > 0) {
+    tick().then(() => {
+      const activeCard = gridContainerEl?.querySelector(`[data-index="${focusedIndex}"]`);
+      if (activeCard && typeof activeCard.scrollIntoView === 'function') {
+        activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
   }
 
   onMount(() => {
@@ -112,6 +136,31 @@
     handleClose();
   }
 
+  function handleSuggest(e) {
+    query = e.detail;
+    if (searchInputEl) {
+      searchInputEl.focus();
+    }
+  }
+
+  function getColumnCount() {
+    if (!gridContainerEl) return 6;
+    const gridEl = gridContainerEl.querySelector('.catalog-grid');
+    if (gridEl && typeof window !== 'undefined' && window.getComputedStyle) {
+      const computedStyle = window.getComputedStyle(gridEl);
+      const gridTemplateColumns = computedStyle.getPropertyValue('grid-template-columns');
+      if (gridTemplateColumns) {
+        const count = gridTemplateColumns.split(' ').filter(Boolean).length;
+        if (count > 0) return count;
+      }
+    }
+    const width = gridContainerEl.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024);
+    if (width >= 1024) return 6;
+    if (width >= 768) return 4;
+    if (width >= 640) return 3;
+    return 2;
+  }
+
   function handleKeydown(e) {
     if (e.key === 'Escape') {
       e.stopPropagation();
@@ -121,23 +170,23 @@
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (storeResults[focusedIndex]) {
-        selectAndClose(storeResults[focusedIndex]);
+      if (filteredResults[focusedIndex]) {
+        selectAndClose(filteredResults[focusedIndex]);
       }
       return;
     }
 
-    const cols = 6;
+    const cols = getColumnCount();
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      if (focusedIndex < storeResults.length - 1) focusedIndex += 1;
+      if (focusedIndex < filteredResults.length - 1) focusedIndex += 1;
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       if (focusedIndex > 0) focusedIndex -= 1;
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (focusedIndex + cols < storeResults.length) focusedIndex += cols;
-      else focusedIndex = storeResults.length - 1;
+      if (focusedIndex + cols < filteredResults.length) focusedIndex += cols;
+      else focusedIndex = filteredResults.length - 1;
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (focusedIndex - cols >= 0) focusedIndex -= cols;
@@ -150,7 +199,7 @@
 
 <ModalShell customHeader={true} padding="p-6 sm:p-10" on:close={handleClose}>
   <!-- Header Bar -->
-  <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-6 flex-shrink-0">
+  <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-4 flex-shrink-0">
     <div class="flex items-center justify-between border-b border-surface-border pb-3">
       <div class="flex items-center space-x-3">
         <div class="w-8 h-8 rounded-xl bg-surface-card border border-surface-border flex items-center justify-center text-white shadow-sm">
@@ -163,19 +212,24 @@
           </span>
         </div>
         {#if isSearchingStore}
-          <span class="inline-block w-2 h-2 rounded-full bg-white animate-ping"></span>
+          <span class="inline-block w-2 h-2 rounded-full bg-white animate-ping" title="Searching catalogs..."></span>
         {/if}
       </div>
 
-      <!-- Close Button -->
+      <!-- Close Button & Live Result Count -->
       <div class="flex items-center space-x-3 text-xs font-mono text-neutral-400">
         {#if storeResults.length > 0}
-          <span>{storeResults.length} {storeResults.length === 1 ? 'title' : 'titles'}</span>
+          <span class="text-neutral-400">
+            {filteredResults.length} {filteredResults.length === 1 ? 'title' : 'titles'}
+            {#if activeStoreFilter !== 'all'}
+              <span class="text-neutral-500">({storeResults.length} total)</span>
+            {/if}
+          </span>
         {/if}
         <button
           type="button"
           on:click={handleClose}
-          class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer"
+          class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm active:scale-95"
         >
           <span class="px-1.5 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400 font-bold text-3xs">Esc</span>
           <span class="text-neutral-400">Close</span>
@@ -206,6 +260,38 @@
         </button>
       {/if}
     </div>
+
+    <!-- Store Filter Chips (Dual Cadence & Low Cognitive Load) -->
+    {#if storeResults.length > 0}
+      <div class="flex items-center space-x-2 pt-0.5">
+        <span class="text-3xs font-mono uppercase tracking-wider text-neutral-500 mr-1">Store:</span>
+        <button
+          type="button"
+          on:click={() => { activeStoreFilter = 'all'; focusedIndex = 0; }}
+          class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'all' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
+        >
+          All ({storeResults.length})
+        </button>
+        {#if steamCount > 0}
+          <button
+            type="button"
+            on:click={() => { activeStoreFilter = 'steam'; focusedIndex = 0; }}
+            class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'steam' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
+          >
+            Steam ({steamCount})
+          </button>
+        {/if}
+        {#if gogCount > 0}
+          <button
+            type="button"
+            on:click={() => { activeStoreFilter = 'gog'; focusedIndex = 0; }}
+            class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'gog' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
+          >
+            GOG ({gogCount})
+          </button>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- Content Area -->
@@ -214,16 +300,8 @@
     class="flex-1 max-w-5xl w-full mx-auto overflow-y-auto pr-2 custom-scrollbar"
   >
     {#if !query.trim()}
-      <!-- Clean Empty Discovery State with Wireframe Globe -->
-      <div class="h-64 flex flex-col items-center justify-center text-neutral-500 text-sm font-mono space-y-3 text-center">
-        <div class="w-14 h-14 rounded-2xl bg-surface-card/60 border border-surface-border flex items-center justify-center text-neutral-500 mb-1">
-          <Icon name="globe" className="w-7 h-7" />
-        </div>
-        <p class="font-bold text-neutral-300">Online Store Catalog Discovery</p>
-        <p class="text-xs text-neutral-500 max-w-md leading-relaxed">
-          Search Steam, GOG, and RAWG for uninstalled titles, explore metadata, or match store entries.
-        </p>
-      </div>
+      <!-- Clean Empty Discovery State with Quick Suggestions -->
+      <CatalogEmptyState on:suggest={handleSuggest} />
     {:else if isSearchingStore && storeResults.length === 0}
       <!-- Loading State -->
       <div class="h-64 flex flex-col items-center justify-center text-neutral-400 text-sm font-mono space-y-3">
@@ -232,63 +310,41 @@
       </div>
     {:else if storeResults.length === 0}
       <!-- No Matches Found -->
-      <div class="h-64 flex flex-col items-center justify-center text-neutral-500 text-sm font-mono text-center">
+      <div class="h-64 flex flex-col items-center justify-center text-neutral-500 text-sm font-mono text-center space-y-2">
         <p>No store catalog matches found for "{query}"</p>
+        <button
+          type="button"
+          on:click={() => { query = ''; searchInputEl?.focus(); }}
+          class="text-xs text-neutral-400 hover:text-white underline underline-offset-4 cursor-pointer"
+        >
+          Clear search query
+        </button>
+      </div>
+    {:else if filteredResults.length === 0}
+      <!-- Filter Yielded No Matches -->
+      <div class="h-64 flex flex-col items-center justify-center text-neutral-500 text-sm font-mono text-center space-y-2">
+        <p>No titles found from {activeStoreFilter.toUpperCase()} for "{query}"</p>
+        <button
+          type="button"
+          on:click={() => { activeStoreFilter = 'all'; }}
+          class="text-xs text-neutral-400 hover:text-white underline underline-offset-4 cursor-pointer"
+        >
+          Show all results ({storeResults.length})
+        </button>
       </div>
     {:else}
       <!-- Store Results Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 pb-8">
-        {#each storeResults as item, index (item.store + ':' + item.id || index)}
-          {@const isFocused = index === focusedIndex}
-          {@const localMatch = getMatchingLocalGame(item)}
-          {@const storeName = (item.store || 'steam').toUpperCase()}
-          <button
-            type="button"
-            on:click={() => selectAndClose(item)}
-            on:mouseenter={() => { focusedIndex = index; }}
-            class="group cursor-pointer flex flex-col items-center text-center transition-all duration-150 transform {isFocused ? 'scale-105' : 'hover:scale-102 opacity-85 hover:opacity-100'} bg-transparent border-0 p-0 text-left"
-          >
-            <!-- Card Cover -->
-            <div
-              class="relative w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-lg border transition-all duration-200 bg-surface-card"
-              style="
-                {isFocused
-                  ? 'border: 2px solid #ffffff; box-shadow: 0 8px 25px -4px rgba(255,255,255,0.25);'
-                  : 'border: 1px solid rgba(255, 255, 255, 0.1);'
-                }
-              "
-            >
-              {#if item.poster_url}
-                <img src={item.poster_url} alt={item.name} class="w-full h-full object-cover" />
-              {:else}
-                <div class="w-full h-full flex items-center justify-center p-3 text-center text-3xs text-neutral-500 font-mono">
-                  {item.name}
-                </div>
-              {/if}
-
-              <!-- Store Provider Badge (Top Left) -->
-              <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-3xs font-mono font-black uppercase tracking-wider text-white shadow-md backdrop-blur-md bg-black/70 border border-white/10">
-                {storeName}
-              </div>
-
-              <!-- Ownership Badge (Top Right) -->
-              {#if localMatch}
-                <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider shadow-md backdrop-blur-md {localMatch.isInstalled ? 'bg-emerald-500/90 text-neutral-950' : 'bg-neutral-800 text-neutral-200 border border-neutral-700'}">
-                  {localMatch.isInstalled ? 'Installed' : 'In Library'}
-                </div>
-              {/if}
-            </div>
-
-            <!-- Title & ID Subtitle -->
-            <div class="mt-2 flex flex-col items-center max-w-full px-1 space-y-0.5">
-              <span class="text-xs font-semibold text-neutral-200 group-hover:text-white line-clamp-2">
-                {item.name}
-              </span>
-              <span class="text-3xs font-mono text-neutral-500 truncate">
-                #{item.id} {item.release_date ? `· ${item.release_date.slice(0, 4)}` : ''}
-              </span>
-            </div>
-          </button>
+      <div class="catalog-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 pb-8">
+        {#each filteredResults as item, index (item.store + ':' + item.id || index)}
+          <div data-index={index} class="w-full">
+            <CatalogCard
+              {item}
+              isFocused={index === focusedIndex}
+              localMatch={getMatchingLocalGame(item)}
+              on:select={() => selectAndClose(item)}
+              on:focus={() => { focusedIndex = index; }}
+            />
+          </div>
         {/each}
       </div>
     {/if}

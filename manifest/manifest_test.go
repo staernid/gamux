@@ -818,6 +818,92 @@ func TestLanguagesMatch_Auto(t *testing.T) {
 	}
 }
 
+func TestMatchesOSList(t *testing.T) {
+	tests := []struct {
+		osList     string
+		targetPlat string
+		expected   bool
+	}{
+		{"", "win64", true},             // common matches everything
+		{"all", "win64", true},          // all matches everything
+		{"windows", "win64", true},
+		{"windows", "win32", true},
+		{"windows", "windows", true},
+		{"windows", "linux", false},
+		{"linux", "win64", false},
+		{"linux", "linux", true},
+		{"linux", "linuxnative", true},
+		{"macos", "win64", false},
+		{"macos", "macos", true},
+		{"windows,linux", "win64", true},
+		{"windows,linux", "linux", true},
+		{"windows,linux", "macos", false},
+	}
+
+	for _, tt := range tests {
+		got := MatchesOSList(tt.osList, tt.targetPlat)
+		if got != tt.expected {
+			t.Errorf("MatchesOSList(%q, %q) = %v; want %v", tt.osList, tt.targetPlat, got, tt.expected)
+		}
+	}
+}
+
+func TestShouldIncludeDepot_OSListPrecedence(t *testing.T) {
+	// Linux-native depot that happens to contain managed .dll files (e.g. Mono / Unity)
+	linuxMonoFiles := []ManifestFileEntry{
+		{Path: "game.x86_64", Size: 10000000},
+		{Path: "Assembly-CSharp.dll", Size: 5000000},
+	}
+
+	linuxDepotMeta := DepotMeta{
+		DepotID: 100,
+		Name:    "Game Linux",
+		OSList:  "linux",
+	}
+
+	windowsDepotMeta := DepotMeta{
+		DepotID: 101,
+		Name:    "Game Windows",
+		OSList:  "windows",
+	}
+
+	winFiles := []ManifestFileEntry{
+		{Path: "game.exe", Size: 10000000},
+	}
+
+	filterWin := DepotFilter{
+		Platform: "win64",
+		DepotMetadata: map[uint32]DepotMeta{
+			100: linuxDepotMeta,
+			101: windowsDepotMeta,
+		},
+	}
+
+	filterLinux := DepotFilter{
+		Platform: "linux",
+		DepotMetadata: map[uint32]DepotMeta{
+			100: linuxDepotMeta,
+			101: windowsDepotMeta,
+		},
+	}
+
+	// For Windows target:
+	if ShouldIncludeDepot(100, linuxMonoFiles, filterWin) {
+		t.Errorf("depot with OSList=linux must not be included when downloading for win64, even if it contains .dll files")
+	}
+	if !ShouldIncludeDepot(101, winFiles, filterWin) {
+		t.Errorf("depot with OSList=windows must be included when downloading for win64")
+	}
+
+	// For Linux target:
+	if !ShouldIncludeDepot(100, linuxMonoFiles, filterLinux) {
+		t.Errorf("depot with OSList=linux must be included when downloading for linux")
+	}
+	if ShouldIncludeDepot(101, winFiles, filterLinux) {
+		t.Errorf("depot with OSList=windows must not be included when downloading for linux")
+	}
+}
+
 func TestLoadManifestFromDirWithFilter_CorruptedManifestFallback(t *testing.T) {
 	tmpDir := t.TempDir()
 	manifestsDir := filepath.Join(tmpDir, "[Manifests]")

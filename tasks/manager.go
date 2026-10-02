@@ -216,6 +216,7 @@ func (m *Manager) runWorker(ctx context.Context, t *Task, slot chan struct{}) {
 	m.mu.Lock()
 	delete(m.controllers, taskID)
 	delete(m.cancels, taskID)
+	delete(m.lastProgress, taskID)
 
 	t.FinishedAt = time.Now().UnixMilli()
 
@@ -274,8 +275,10 @@ func (m *Manager) handleProgress(taskID string, currBytes, totalBytes int64, cur
 	t.Progress.Percent = pct
 
 	lastTick := m.lastProgress[taskID]
-	// Throttle event emissions to 10Hz (100ms)
-	shouldEmit := (now - lastTick) >= 100
+	// Throttle event emissions to ~6.7Hz (150ms) to prevent WebKitGTK IPC churn.
+	// Always emit if completion threshold reached (100% or currBytes >= totalBytes).
+	isTerminal := pct >= 100 || (totalBytes > 0 && currBytes >= totalBytes)
+	shouldEmit := isTerminal || (now-lastTick) >= 150
 	if shouldEmit {
 		m.lastProgress[taskID] = now
 		taskCopy := *t
@@ -302,6 +305,8 @@ func (m *Manager) handleStage(taskID string, stage, details string) {
 }
 
 func (m *Manager) handleStep(taskID string, step, total int, stage, details string) {
+	now := time.Now().UnixMilli()
+
 	m.mu.Lock()
 	t := m.findTaskLocked(taskID)
 	if t == nil {
@@ -315,6 +320,15 @@ func (m *Manager) handleStep(taskID string, step, total int, stage, details stri
 	if total > 0 {
 		t.Progress.Percent = float64(step) / float64(total) * 100
 	}
+
+	lastTick := m.lastProgress[taskID]
+	// Throttle intermediate steps to ~6.7Hz (150ms), but always emit the first step and final step
+	shouldEmit := step <= 1 || (total > 0 && step >= total) || (now-lastTick) >= 150
+	if !shouldEmit {
+		m.mu.Unlock()
+		return
+	}
+	m.lastProgress[taskID] = now
 	taskCopy := *t
 	m.mu.Unlock()
 
@@ -355,8 +369,11 @@ func (m *Manager) emitEvent(typ events.EventType, t *Task) {
 			Percent:      t.Progress.Percent,
 		},
 		Metadata:  t.Metadata,
-		Game:      t.Game,
 		Timestamp: time.Now().UnixMilli(),
+	}
+	// Only serialize domain.Game on task completion to keep progress telemetry lightweight
+	if typ == events.EventTaskCompleted {
+		ev.Game = t.Game
 	}
 
 	m.eventSink.Emit(ev)

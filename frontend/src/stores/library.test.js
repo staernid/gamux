@@ -12,6 +12,7 @@ import {
   isGamePathRunning,
   updateGameInStore,
   renameGameInStore,
+  patchGameInStore,
   activeFilter,
   searchQuery,
   sortBy,
@@ -190,4 +191,48 @@ describe('Decoupled Library Stores', () => {
     expect(next).toBe('last_played_desc');
     expect(get(sortBy)).toBe('last_played_desc');
   });
+
+  it('applies delta updates via patchGameInStore with reference preservation', () => {
+    const rawGame = {
+      name: 'Elden Ring',
+      app_id: '1245620',
+      game_dir: '/games/eldenring',
+      playtime_seconds: 3600,
+      last_played: 1700000000,
+    };
+    updateGameInStore(rawGame);
+    const initialList = get(games);
+    selectedGame.set(initialList[0]);
+
+    // 1. Patch with identical values -> should preserve array reference
+    const unchangedResult = patchGameInStore('/games/eldenring', {
+      playtimeSeconds: 3600,
+      lastPlayed: 1700000000,
+    });
+    expect(unchangedResult).toBe(initialList[0]);
+    expect(get(games)).toBe(initialList); // strict reference equality
+
+    // 2. Patch with new delta values using snake_case normalization
+    const patched = patchGameInStore('/games/eldenring', {
+      playtime_seconds: 7200,
+      last_played: 1700005000,
+    });
+    expect(patched).not.toBeNull();
+    expect(patched.playtimeSeconds).toBe(7200);
+    expect(patched.lastPlayed).toBe(1700005000);
+
+    // Array reference should now be updated
+    const updatedList = get(games);
+    expect(updatedList).not.toBe(initialList);
+    expect(updatedList[0].playtimeSeconds).toBe(7200);
+
+    // Selected game should also be reactively updated
+    expect(get(selectedGame).playtimeSeconds).toBe(7200);
+    expect(get(selectedGame).lastPlayed).toBe(1700005000);
+
+    // 3. Patch non-existent game -> returns null
+    const nonExistent = patchGameInStore('/games/unknown', { playtimeSeconds: 10 });
+    expect(nonExistent).toBeNull();
+  });
 });
+

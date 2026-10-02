@@ -8,7 +8,7 @@
   export let languagesList = [];
   export let countriesList = [];
 
-  $: active = $profilesStore.activeProfile;
+  $: active = profilesStore.activeProfile;
 
   function handlePersonaChange(e) {
     if (!active) return;

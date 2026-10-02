@@ -19,6 +19,8 @@ import {
 } from '../stores/library.js';
 import { isSamePath } from '../utils/game.js';
 
+const unwrap = (v) => (v && typeof v.subscribe === 'function' ? get(v) : v);
+
 class DebugTimeline {
   constructor(maxSize = 100) {
     this.maxSize = maxSize;
@@ -116,25 +118,25 @@ export class GamuxDevBridge {
       runningGames: Array.from(get(runningGames) || []),
       stats: get(stats),
       tasks: {
-        items: get(tasksStore.items),
-        active: get(tasksStore.active),
-        queued: get(tasksStore.queued),
-        paused: get(tasksStore.paused),
-        completed: get(tasksStore.completed),
-        activeTask: get(tasksStore.activeTask),
-        totalSpeedBps: get(tasksStore.totalSpeedBps),
-        activeCount: get(tasksStore.activeCount),
-        speedLimit: get(tasksStore.speedLimit),
+        items: unwrap(tasksStore.items),
+        active: unwrap(tasksStore.active),
+        queued: unwrap(tasksStore.queued),
+        paused: unwrap(tasksStore.paused),
+        completed: unwrap(tasksStore.completed),
+        activeTask: unwrap(tasksStore.activeTask),
+        totalSpeedBps: unwrap(tasksStore.totalSpeedBps),
+        activeCount: unwrap(tasksStore.activeCount),
+        speedLimit: unwrap(tasksStore.speedLimit),
       },
       transfers: {
-        items: get(tasksStore.items).filter(t => t.type === 'download' || t.operation === 'download'),
-        active: get(tasksStore.activeDownloads),
-        queued: get(tasksStore.queuedDownloads),
-        paused: get(tasksStore.pausedDownloads),
-        completed: get(tasksStore.completedDownloads),
-        totalSpeedBps: get(tasksStore.totalSpeedBps),
-        activeCount: get(tasksStore.activeTransfersCount),
-        speedLimit: get(tasksStore.speedLimit)
+        items: unwrap(tasksStore.items).filter(t => t.type === 'download' || t.operation === 'download'),
+        active: unwrap(tasksStore.activeDownloads),
+        queued: unwrap(tasksStore.queuedDownloads),
+        paused: unwrap(tasksStore.pausedDownloads),
+        completed: unwrap(tasksStore.completedDownloads),
+        totalSpeedBps: unwrap(tasksStore.totalSpeedBps),
+        activeCount: unwrap(tasksStore.activeTransfersCount),
+        speedLimit: unwrap(tasksStore.speedLimit)
       },
       notifications: get(notificationStore.items),
       config: get(configStore)

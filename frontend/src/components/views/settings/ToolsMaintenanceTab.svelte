@@ -16,7 +16,6 @@
   export let unpatchedGamesCount = 0;
 
   const dispatch = createEventDispatcher();
-  const isSettingsDirty = configStore.isDirty;
   const { items: taskList } = tasksStore;
 
   function checkIsInstalled(tool) {
@@ -62,7 +61,7 @@
   $: verifyTask = findActiveBatchTask('verify', $taskList);
 
   function handleViewTasks() {
-    if ($isSettingsDirty) {
+    if (configStore.isDirty) {
       modalStore.open('confirm', {
         title: 'Unsaved Changes',
         message: 'You have unsaved changes in Settings. Do you want to discard them or keep editing?',
