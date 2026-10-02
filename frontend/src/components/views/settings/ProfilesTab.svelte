@@ -5,10 +5,9 @@
   import { profilesStore } from '../../../stores/profiles.js';
   import { modalStore } from '../../../stores/modal.js';
 
-  export let languagesList = [];
-  export let countriesList = [];
+  let { languagesList = [], countriesList = [] } = $props();
 
-  $: active = profilesStore.activeProfile;
+  let active = $derived(profilesStore.activeProfile);
 
   function handlePersonaChange(e) {
     if (!active) return;
@@ -69,7 +68,7 @@
       {#if !active?.is_main}
         <button
           type="button"
-          on:click={confirmDeleteProfile}
+          onclick={confirmDeleteProfile}
           class="px-3 py-1.5 text-2xs rounded-xl bg-surface-input hover:bg-red-500/10 hover:text-red-400 text-neutral-400 border border-surface-border hover:border-red-500/30 transition-all flex items-center space-x-1.5 cursor-pointer"
         >
           <Icon name="trash" className="w-3.5 h-3.5" />
@@ -95,7 +94,7 @@
           avatarUrl={active.avatar_url || ''}
           {languagesList}
           {countriesList}
-          on:change={handlePersonaChange}
+          onchange={handlePersonaChange}
         />
       {/if}
     </div>

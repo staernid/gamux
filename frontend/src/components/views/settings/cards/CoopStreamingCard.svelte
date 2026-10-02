@@ -3,9 +3,7 @@
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
-  export let cfgDraft;
-  export let keyboardOptions = [];
-  export let mouseOptions = [];
+  let { cfgDraft = $bindable(), keyboardOptions = [], mouseOptions = [] } = $props();
 </script>
 
 <!-- 1. Dual Keyboards & Mice (Games Without Gamepad Support) -->
@@ -17,7 +15,7 @@
       </p>
       <button
         type="button"
-        on:click={() => { multiseatStore.refreshKeyboards(); multiseatStore.refreshMice(); }}
+        onclick={() => { multiseatStore.refreshKeyboards(); multiseatStore.refreshMice(); }}
         class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
         title="Rescan connected keyboards and mice"
       >
@@ -35,7 +33,7 @@
         <select
           id="seat1-kbd-select"
           bind:value={cfgDraft.multiseat.seat1_keyboard}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each keyboardOptions as opt}
@@ -49,7 +47,7 @@
         <select
           id="seat2-kbd-select"
           bind:value={cfgDraft.multiseat.seat2_keyboard}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each keyboardOptions as opt}
@@ -63,7 +61,7 @@
         <select
           id="seat1-mouse-select"
           bind:value={cfgDraft.multiseat.seat1_mouse}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each mouseOptions as opt}
@@ -77,7 +75,7 @@
         <select
           id="seat2-mouse-select"
           bind:value={cfgDraft.multiseat.seat2_mouse}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each mouseOptions as opt}
@@ -100,7 +98,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_force_grab_cursor}
             tooltip="Force Grab Cursor"
-            on:change={(e) => { cfgDraft.multiseat.seat2_force_grab_cursor = e.detail; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_force_grab_cursor = val; cfgDraft = { ...cfgDraft }; }}
           />
         </div>
 
@@ -112,7 +110,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_grab_keyboard}
             tooltip="Grab Keyboard"
-            on:change={(e) => { cfgDraft.multiseat.seat2_grab_keyboard = e.detail; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_grab_keyboard = val; cfgDraft = { ...cfgDraft }; }}
           />
         </div>
 
@@ -124,7 +122,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_show_cursor}
             tooltip="Software Cursor"
-            on:change={(e) => { cfgDraft.multiseat.seat2_show_cursor = e.detail; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_show_cursor = val; cfgDraft = { ...cfgDraft }; }}
           />
         </div>
 
@@ -135,7 +133,7 @@
           </div>
           <select
             bind:value={cfgDraft.multiseat.seat2_compositor}
-            on:change={() => { cfgDraft = { ...cfgDraft }; }}
+            onchange={() => { cfgDraft = { ...cfgDraft }; }}
             class="bg-surface-base border border-surface-border rounded-lg px-2 py-1 text-2xs text-white outline-none focus:border-neutral-400 cursor-pointer"
           >
             <option value="auto">Auto (Gamescope EIS, Cage fallback)</option>
@@ -161,7 +159,7 @@
       <SeamlessSwitch
         bind:value={cfgDraft.multiseat.broadcast_relay_enabled}
         tooltip="UDP Broadcast Relay"
-        on:change={(e) => { cfgDraft.multiseat.broadcast_relay_enabled = e.detail; cfgDraft = { ...cfgDraft }; }}
+        onchange={(val) => { cfgDraft.multiseat.broadcast_relay_enabled = val; cfgDraft = { ...cfgDraft }; }}
       />
     </div>
 

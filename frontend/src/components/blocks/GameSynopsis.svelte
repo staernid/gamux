@@ -1,11 +1,25 @@
 <script>
-  export let description = '';
-  export let developers = [];
-  export let publishers = [];
-  export let releaseDate = '';
-  export let buildId = '';
-  export let clampLines = null; // e.g. 3 or null for natural wrap
-  export let className = '';
+  /**
+   * @typedef {Object} Props
+   * @property {string} [description]
+   * @property {any} [developers]
+   * @property {any} [publishers]
+   * @property {string} [releaseDate]
+   * @property {string} [buildId]
+   * @property {any} [clampLines] - e.g. 3 or null for natural wrap
+   * @property {string} [className]
+   */
+
+  /** @type {Props} */
+  let {
+    description = '',
+    developers = [],
+    publishers = [],
+    releaseDate = '',
+    buildId = '',
+    clampLines = null,
+    className = ''
+  } = $props();
 
   function cleanText(raw) {
     if (!raw) return '';
@@ -19,10 +33,10 @@
       .trim();
   }
 
-  $: cleanDescription = cleanText(description);
-  $: devList = Array.isArray(developers) ? developers.filter(Boolean) : (developers ? [developers] : []);
-  $: pubList = Array.isArray(publishers) ? publishers.filter(Boolean) : (publishers ? [publishers] : []);
-  $: showPub = pubList.length > 0 && pubList.join(',') !== devList.join(',');
+  let cleanDescription = $derived(cleanText(description));
+  let devList = $derived(Array.isArray(developers) ? developers.filter(Boolean) : (developers ? [developers] : []));
+  let pubList = $derived(Array.isArray(publishers) ? publishers.filter(Boolean) : (publishers ? [publishers] : []));
+  let showPub = $derived(pubList.length > 0 && pubList.join(',') !== devList.join(','));
 </script>
 
 <div class="space-y-3 select-text {className}" data-testid="game-synopsis">

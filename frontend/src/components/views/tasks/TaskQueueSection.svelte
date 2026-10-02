@@ -1,23 +1,25 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { isDownloadTask } from '../../../stores/tasks.js';
+    import { isDownloadTask } from '../../../stores/tasks.js';
   import { formatBytes } from '../../../utils/format.js';
   import PosterArt from '../../common/PosterArt.svelte';
 
-  export let tasks = [];
-
-  const dispatch = createEventDispatcher();
+  let { tasks = [] ,
+    onresume,
+    onpause,
+    oncancel,
+    onreorder
+  } = $props();
 
   function handleResume(id) {
-    dispatch('resume', id);
+    onresume?.(id);
   }
 
   function handlePause(id) {
-    dispatch('pause', id);
+    onpause?.(id);
   }
 
   function handleCancel(id) {
-    dispatch('cancel', id);
+    oncancel?.(id);
   }
 
   function moveUp(index) {
@@ -26,7 +28,7 @@
     const temp = ids[index];
     ids[index] = ids[index - 1];
     ids[index - 1] = temp;
-    dispatch('reorder', ids);
+    onreorder?.(ids);
   }
 
   function moveDown(index) {
@@ -35,7 +37,7 @@
     const temp = ids[index];
     ids[index] = ids[index + 1];
     ids[index + 1] = temp;
-    dispatch('reorder', ids);
+    onreorder?.(ids);
   }
 
   function prioritize(index) {
@@ -43,7 +45,7 @@
     const ids = tasks.map((t) => t.id);
     const [item] = ids.splice(index, 1);
     ids.unshift(item);
-    dispatch('reorder', ids);
+    onreorder?.(ids);
   }
 </script>
 
@@ -93,7 +95,7 @@
             <div class="flex items-center space-x-0.5 mr-1 bg-surface-input p-0.5 rounded-lg border border-surface-border">
               <button
                 type="button"
-                on:click={() => moveUp(index)}
+                onclick={() => moveUp(index)}
                 disabled={index === 0}
                 class="p-1 rounded text-neutral-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition cursor-pointer"
                 title="Move Up"
@@ -105,7 +107,7 @@
               </button>
               <button
                 type="button"
-                on:click={() => moveDown(index)}
+                onclick={() => moveDown(index)}
                 disabled={index === tasks.length - 1}
                 class="p-1 rounded text-neutral-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition cursor-pointer"
                 title="Move Down"
@@ -118,7 +120,7 @@
               {#if index > 0}
                 <button
                   type="button"
-                  on:click={() => prioritize(index)}
+                  onclick={() => prioritize(index)}
                   class="px-1.5 py-0.5 rounded text-4xs font-mono font-bold text-neutral-300 hover:text-white hover:bg-surface-card transition cursor-pointer"
                   title="Download Next"
                   aria-label="Download Next"
@@ -132,7 +134,7 @@
           {#if tr.status === 'paused'}
             <button
               type="button"
-              on:click={() => handleResume(tr.id)}
+              onclick={() => handleResume(tr.id)}
               class="bg-surface-header hover:bg-surface-cardHover text-neutral-100 border border-surface-border text-xs px-2.5 py-1 rounded-xl font-bold transition cursor-pointer"
             >
               Resume
@@ -140,7 +142,7 @@
           {:else if isDownloadTask(tr)}
             <button
               type="button"
-              on:click={() => handlePause(tr.id)}
+              onclick={() => handlePause(tr.id)}
               class="bg-surface-header hover:bg-surface-cardHover text-neutral-200 border border-surface-border text-xs px-2.5 py-1 rounded-xl font-bold transition cursor-pointer"
             >
               Pause
@@ -148,7 +150,7 @@
           {/if}
           <button
             type="button"
-            on:click={() => handleCancel(tr.id)}
+            onclick={() => handleCancel(tr.id)}
             class="text-neutral-400 hover:text-rose-400 text-xs px-2 py-1 font-bold transition cursor-pointer"
           >
             Cancel

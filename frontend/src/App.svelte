@@ -1,4 +1,6 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import TopBar from './components/header/TopBar.svelte';
@@ -51,12 +53,12 @@
   import { GamepadTracker } from './input/gamepad.js';
   import { gamuxDev } from './debug/debugBridge.js';
 
-  let libraryViewRef;
+  let libraryViewRef = $state();
 
-  $: activeColors = $selectedGame ? getPlatformColors($selectedGame) : null;
-  $: platformType = $selectedGame ? getPlatformType($selectedGame) : '';
-  $: gameSource = $selectedGame ? getGameSource($selectedGame) : '';
-  $: metaInfo = $selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' };
+  let activeColors = $derived($selectedGame ? getPlatformColors($selectedGame) : null);
+  let platformType = $derived($selectedGame ? getPlatformType($selectedGame) : '');
+  let gameSource = $derived($selectedGame ? getGameSource($selectedGame) : '');
+  let metaInfo = $derived($selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' });
 
   const views = ['library', 'tasks', 'settings'];
 
@@ -110,7 +112,7 @@
     selectedGame.set(list[nextIndex]);
   }
 
-  let pendingTargetAppId = null;
+  let pendingTargetAppId = $state(null);
 
   function parseAppIdFromTarget(target) {
     if (!target) return '';
@@ -196,13 +198,15 @@
     });
   }
 
-  $: if (pendingTargetAppId && $games?.length > 0) {
-    const found = $games.find(g => g && String(g.appId) === String(pendingTargetAppId));
-    if (found) {
-      openSelectedGameHub(found);
-      pendingTargetAppId = null;
+  run(() => {
+    if (pendingTargetAppId && $games?.length > 0) {
+      const found = $games.find(g => g && String(g.appId) === String(pendingTargetAppId));
+      if (found) {
+        openSelectedGameHub(found);
+        pendingTargetAppId = null;
+      }
     }
-  }
+  });
 
   onMount(() => {
     // 1. Initialize UI scale & config

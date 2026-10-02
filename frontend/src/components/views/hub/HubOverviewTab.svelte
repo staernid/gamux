@@ -1,4 +1,4 @@
-<script context="module">
+<script module>
   // In-memory module cache across tab switches within the game hub
   export const overviewNewsCache = new Map();
   export const overviewAchievementsCache = new Map();
@@ -10,7 +10,9 @@
 </script>
 
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { run } from 'svelte/legacy';
+
+  import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
   import { openExternalUrl as openLink } from '../../../utils/navigation.js';
@@ -18,65 +20,34 @@
   import AchievementRibbon from '../../blocks/AchievementRibbon.svelte';
   import PatchNotesFeed from '../../blocks/PatchNotesFeed.svelte';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let { game = null ,
+    onnavigateTab
+  } = $props();
 
-  $: name = game?.name || '';
-  $: appId = game?.appId || '';
-  $: gogId = game?.gogId || '';
-  $: isGOG = Boolean(gogId || (game?.store && game.store.toLowerCase().includes('gog')));
 
-  $: pcgwUrl = isSteam
-    ? `https://www.pcgamingwiki.com/api/appid.php?appid=${encodeURIComponent(effectiveAppId)}`
-    : isGOG && gogId
-    ? `https://www.pcgamingwiki.com/api/gog.php?page=${encodeURIComponent(gogId)}`
-    : name ? `https://www.pcgamingwiki.com/w/index.php?search=${encodeURIComponent(name)}` : '';
 
-  $: protonDbUrl = isSteam ? `https://www.protondb.com/app/${encodeURIComponent(effectiveAppId)}` : (name ? `https://www.protondb.com/search?q=${encodeURIComponent(name)}` : '');
-  $: steamDbUrl = isSteam ? `https://steamdb.info/app/${encodeURIComponent(effectiveAppId)}/` : (name ? `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}` : '');
-  $: hltbUrl = name ? `https://howlongtobeat.com/?q=${encodeURIComponent(name)}` : '';
 
   // Achievements State
-  let achievements = [];
+  let achievements = $state([]);
   let isLoadingAchievements = false;
-  let loadedAchievementsDir = '';
+  let loadedAchievementsDir = $state('');
 
   // News State
-  let newsItems = [];
+  let newsItems = $state([]);
   let isLoadingNews = false;
-  let loadedNewsAppId = '';
+  let loadedNewsAppId = $state('');
 
-  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
-    ? String(game.appId).trim()
-    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
 
-  $: isSteam = Boolean(effectiveAppId);
 
-  // Restore cached items immediately to prevent UI flicker on tab return
-  $: if (effectiveAppId && overviewNewsCache.has(effectiveAppId)) {
-    const cached = overviewNewsCache.get(effectiveAppId);
-    if (cached && cached.length > 0 && newsItems.length === 0) {
-      newsItems = cached;
-    }
-  } else if (newsItems.length === 0 && game?.newsItems && game.newsItems.length > 0) {
-    newsItems = game.newsItems.slice(0, 3);
-  }
 
-  $: if (game?.gameDir && overviewAchievementsCache.has(game.gameDir)) {
-    const cachedAch = overviewAchievementsCache.get(game.gameDir);
-    if (cachedAch && cachedAch.length > 0 && achievements.length === 0) {
-      achievements = cachedAch;
-    }
-  }
 
-  $: if (game?.gameDir && game.gameDir !== loadedAchievementsDir) {
-    loadAchievements();
-  }
 
-  $: if (effectiveAppId && effectiveAppId !== loadedNewsAppId) {
-    loadNews();
-  }
 
   onMount(() => {
     if (game?.gameDir && game.gameDir !== loadedAchievementsDir) {
@@ -127,8 +98,53 @@
   }
 
   function navigateToCommunity(subTab = 'achievements', newsIndex = 0) {
-    dispatch('navigateTab', { tab: 'community', subTab, newsIndex });
+    onnavigateTab?.({ tab: 'community', subTab, newsIndex });
   }
+  let name = $derived(game?.name || '');
+  let appId = $derived(game?.appId || '');
+  let gogId = $derived(game?.gogId || '');
+  let isGOG = $derived(Boolean(gogId || (game?.store && game.store.toLowerCase().includes('gog'))));
+  let effectiveAppId = $derived((game?.appId && isSteamApp(game.appId))
+    ? String(game.appId).trim()
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : ''));
+  let isSteam = $derived(Boolean(effectiveAppId));
+  let pcgwUrl = $derived(isSteam
+    ? `https://www.pcgamingwiki.com/api/appid.php?appid=${encodeURIComponent(effectiveAppId)}`
+    : isGOG && gogId
+    ? `https://www.pcgamingwiki.com/api/gog.php?page=${encodeURIComponent(gogId)}`
+    : name ? `https://www.pcgamingwiki.com/w/index.php?search=${encodeURIComponent(name)}` : '');
+  let protonDbUrl = $derived(isSteam ? `https://www.protondb.com/app/${encodeURIComponent(effectiveAppId)}` : (name ? `https://www.protondb.com/search?q=${encodeURIComponent(name)}` : ''));
+  let steamDbUrl = $derived(isSteam ? `https://steamdb.info/app/${encodeURIComponent(effectiveAppId)}/` : (name ? `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}` : ''));
+  let hltbUrl = $derived(name ? `https://howlongtobeat.com/?q=${encodeURIComponent(name)}` : '');
+  // Restore cached items immediately to prevent UI flicker on tab return
+  run(() => {
+    if (effectiveAppId && overviewNewsCache.has(effectiveAppId)) {
+      const cached = overviewNewsCache.get(effectiveAppId);
+      if (cached && cached.length > 0 && newsItems.length === 0) {
+        newsItems = cached;
+      }
+    } else if (newsItems.length === 0 && game?.newsItems && game.newsItems.length > 0) {
+      newsItems = game.newsItems.slice(0, 3);
+    }
+  });
+  run(() => {
+    if (game?.gameDir && overviewAchievementsCache.has(game.gameDir)) {
+      const cachedAch = overviewAchievementsCache.get(game.gameDir);
+      if (cachedAch && cachedAch.length > 0 && achievements.length === 0) {
+        achievements = cachedAch;
+      }
+    }
+  });
+  run(() => {
+    if (game?.gameDir && game.gameDir !== loadedAchievementsDir) {
+      loadAchievements();
+    }
+  });
+  run(() => {
+    if (effectiveAppId && effectiveAppId !== loadedNewsAppId) {
+      loadNews();
+    }
+  });
 </script>
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
@@ -141,7 +157,7 @@
       {#if pcgwUrl}
         <button
           type="button"
-          on:click={() => openLink(pcgwUrl, 'PCGamingWiki')}
+          onclick={() => openLink(pcgwUrl, 'PCGamingWiki')}
           class="px-3 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer text-2xs font-semibold"
         >
           <span>PCGamingWiki</span>
@@ -151,7 +167,7 @@
       {#if protonDbUrl}
         <button
           type="button"
-          on:click={() => openLink(protonDbUrl, 'ProtonDB')}
+          onclick={() => openLink(protonDbUrl, 'ProtonDB')}
           class="px-3 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer text-2xs font-semibold"
         >
           <span>ProtonDB</span>
@@ -161,7 +177,7 @@
       {#if steamDbUrl}
         <button
           type="button"
-          on:click={() => openLink(steamDbUrl, 'SteamDB')}
+          onclick={() => openLink(steamDbUrl, 'SteamDB')}
           class="px-3 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer text-2xs font-semibold"
         >
           <span>SteamDB</span>
@@ -171,7 +187,7 @@
       {#if hltbUrl}
         <button
           type="button"
-          on:click={() => openLink(hltbUrl, 'HowLongToBeat')}
+          onclick={() => openLink(hltbUrl, 'HowLongToBeat')}
           class="px-3 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer text-2xs font-semibold"
         >
           <span>HowLongToBeat</span>
@@ -186,8 +202,8 @@
     <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
       <AchievementRibbon
         {achievements}
-        on:viewAll={() => navigateToCommunity('achievements')}
-        on:select={() => navigateToCommunity('achievements')}
+        onviewAll={() => navigateToCommunity('achievements')}
+        onselect={() => navigateToCommunity('achievements')}
       />
     </div>
   {/if}
@@ -197,8 +213,8 @@
     <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
       <PatchNotesFeed
         {newsItems}
-        on:viewAll={() => navigateToCommunity('news')}
-        on:read={(e) => navigateToCommunity('news', e.detail?.index ?? 0)}
+        onviewAll={() => navigateToCommunity('news')}
+        onread={(val) => navigateToCommunity('news', val?.index ?? 0)}
       />
     </div>
   {/if}

@@ -1,27 +1,35 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../common/Icon.svelte';
+    import Icon from '../common/Icon.svelte';
 
-  export let query = '';
-  export let placeholder = 'Search titles, genres, or developers...';
-  export let totalCount = 0;
-  export let filteredCount = 0;
-  export let className = '';
-  export let oninput = null;
+  /**
+   * @typedef {Object} Props
+   * @property {string} [query]
+   * @property {string} [placeholder]
+   * @property {number} [totalCount]
+   * @property {number} [filteredCount]
+   * @property {string} [className]
+   * @property {any} [oninput]
+   */
 
-  const dispatch = createEventDispatcher();
-  let inputEl;
+  /** @type {Props} */
+  let {
+    query = $bindable(''),
+    placeholder = 'Search titles, genres, or developers...',
+    totalCount = 0,
+    filteredCount = 0,
+    className = '',
+    oninput = null
+  } = $props();
+  let inputEl = $state();
 
   function handleInput(e) {
     query = e.target.value;
-    dispatch('input', { query });
-    if (typeof oninput === 'function') oninput({ query });
+    oninput?.({ query });
   }
 
   function handleClear() {
     query = '';
-    dispatch('input', { query: '' });
-    if (typeof oninput === 'function') oninput({ query: '' });
+    oninput?.({ query: '' });
     if (inputEl) inputEl.focus();
   }
 
@@ -51,8 +59,8 @@
     bind:this={inputEl}
     type="text"
     value={query}
-    on:input={handleInput}
-    on:keydown={handleKeydown}
+    oninput={handleInput}
+    onkeydown={handleKeydown}
     {placeholder}
     class="bg-transparent border-0 outline-none text-xs text-neutral-100 placeholder-neutral-500 w-full min-w-0 font-normal"
   />
@@ -68,7 +76,7 @@
     {#if query}
       <button
         type="button"
-        on:click={handleClear}
+        onclick={handleClear}
         class="text-neutral-400 hover:text-white p-0.5 rounded-full hover:bg-neutral-800 transition cursor-pointer"
         title="Clear Search (Esc)"
         aria-label="Clear Search"

@@ -1,22 +1,29 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {string} [value]
+   * @property {boolean} [disabled]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   */
 
-  export let property = {};
-  export let value = '';
-  export let disabled = false;
-  export let onChange = null;
-  export let onchange = null;
-
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    property = {},
+    value = $bindable(''),
+    disabled = false,
+    onChange = null,
+    onchange = null
+  } = $props();
   const inputId = `txt-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
 
   function handleInput(e) {
     if (disabled) return;
     const nextVal = e.target.value;
     value = nextVal;
-    dispatch('change', nextVal);
-    if (typeof onChange === 'function') onChange(nextVal);
-    if (typeof onchange === 'function') onchange(nextVal);
+    (onchange || onChange)?.(nextVal);
   }
 </script>
 
@@ -30,7 +37,7 @@
     value={value ?? ''}
     {disabled}
     placeholder={typeof property.default === 'string' ? property.default : ''}
-    on:input={handleInput}
+    oninput={handleInput}
     aria-label={property.label || property.key}
     class="w-full bg-[#121215] text-neutral-200 text-xs rounded-lg px-3 py-2 border border-neutral-700
       focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

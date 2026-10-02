@@ -1,23 +1,31 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {string} [title]
+   * @property {number} [overrideCount]
+   * @property {boolean} [isSaving]
+   * @property {boolean} [saveSuccess]
+   * @property {any} [onsave]
+   * @property {any} [onreset]
+   */
 
-  export let title = '';
-  export let overrideCount = 0;
-  export let isSaving = false;
-  export let saveSuccess = false;
-  export let onsave = undefined;
-  export let onreset = undefined;
-
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    title = '',
+    overrideCount = 0,
+    isSaving = false,
+    saveSuccess = false,
+    onsave = undefined,
+    onreset = undefined
+  } = $props();
 
   function handleSave() {
-    dispatch('save');
-    if (typeof onsave === 'function') onsave();
+    onsave?.();
   }
 
   function handleReset() {
-    dispatch('reset');
-    if (typeof onreset === 'function') onreset();
+    onreset?.();
   }
 </script>
 
@@ -50,7 +58,7 @@
 
     <button
       type="button"
-      on:click={handleReset}
+      onclick={handleReset}
       class="p-1.5 bg-surface-cardHover hover:bg-surface-elevated border border-surface-borderHighlight text-neutral-400 hover:text-white rounded-lg text-xs transition-colors cursor-pointer"
       title="Reset all settings to system defaults"
       aria-label="Reset all settings to system defaults"
@@ -62,7 +70,7 @@
 
     <button
       type="button"
-      on:click={handleSave}
+      onclick={handleSave}
       disabled={isSaving}
       class="px-3.5 py-1.5 rounded-lg bg-white hover:bg-neutral-200 active:bg-neutral-300 text-neutral-950 font-bold text-xs shadow-md transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
     >

@@ -1,4 +1,6 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { onMount } from 'svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
   import { profilesStore } from '../../../stores/profiles.js';
@@ -8,7 +10,7 @@
   import CoopSeatCard from './cards/CoopSeatCard.svelte';
   import CoopStreamingCard from './cards/CoopStreamingCard.svelte';
 
-  export let cfgDraft = {
+  let { cfgDraft = $bindable({
     multiseat: {
       player2_profile_id: 'p2',
       default_seat1_mode: 'local',
@@ -30,31 +32,8 @@
       sunshine_port_p1: 47989,
       sunshine_port_p2: 48010,
     }
-  };
+  }) } = $props();
 
-  // Ensure nested multiseat defaults exist
-  $: if (!cfgDraft.multiseat) {
-    cfgDraft.multiseat = {};
-  }
-  $: if (cfgDraft.multiseat.player2_profile_id === undefined) cfgDraft.multiseat.player2_profile_id = 'p2';
-  $: if (cfgDraft.multiseat.default_seat1_mode === undefined) cfgDraft.multiseat.default_seat1_mode = 'local';
-  $: if (cfgDraft.multiseat.default_seat2_mode === undefined) cfgDraft.multiseat.default_seat2_mode = 'local';
-  $: if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
-  $: if (cfgDraft.multiseat.broadcast_relay_enabled === undefined) cfgDraft.multiseat.broadcast_relay_enabled = true;
-  $: if (cfgDraft.multiseat.seat1_gamepad === undefined) cfgDraft.multiseat.seat1_gamepad = 'auto';
-  $: if (cfgDraft.multiseat.seat2_gamepad === undefined) cfgDraft.multiseat.seat2_gamepad = 'auto';
-  $: if (cfgDraft.multiseat.seat1_keyboard === undefined) cfgDraft.multiseat.seat1_keyboard = 'auto';
-  $: if (cfgDraft.multiseat.seat2_keyboard === undefined) cfgDraft.multiseat.seat2_keyboard = 'auto';
-  $: if (cfgDraft.multiseat.seat1_mouse === undefined) cfgDraft.multiseat.seat1_mouse = 'auto';
-  $: if (cfgDraft.multiseat.seat2_mouse === undefined) cfgDraft.multiseat.seat2_mouse = 'auto';
-  $: if (cfgDraft.multiseat.seat2_force_grab_cursor === undefined) cfgDraft.multiseat.seat2_force_grab_cursor = false;
-  $: if (cfgDraft.multiseat.seat2_grab_keyboard === undefined) cfgDraft.multiseat.seat2_grab_keyboard = false;
-  $: if (cfgDraft.multiseat.seat2_show_cursor === undefined) cfgDraft.multiseat.seat2_show_cursor = true;
-  $: if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'auto';
-  $: if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
-  $: if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 0;
-  $: if (cfgDraft.multiseat.sunshine_port_p1 === undefined) cfgDraft.multiseat.sunshine_port_p1 = 47989;
-  $: if (cfgDraft.multiseat.sunshine_port_p2 === undefined) cfgDraft.multiseat.sunshine_port_p2 = 48010;
 
   onMount(() => {
     multiseatStore.loadCapabilities();
@@ -75,73 +54,14 @@
     }
   });
 
-  $: if (seats.length === 2 && (cfgDraft.multiseat?.default_layout === 'three_player' || cfgDraft.multiseat?.default_layout === 'quad_grid')) {
-    cfgDraft.multiseat.default_layout = 'side_by_side';
-    multiseatStore.setLayout('side_by_side');
-  } else if (seats.length === 3 && cfgDraft.multiseat?.default_layout === 'quad_grid') {
-    cfgDraft.multiseat.default_layout = 'three_player';
-    multiseatStore.setLayout('three_player');
-  }
 
-  $: gamepads = $multiseatStore.gamepads;
-  $: displays = $multiseatStore.displays || [];
-  $: seats = $multiseatStore.staging?.seats || [
-    $multiseatStore.staging?.seat1 || { seat_id: 'p1', mode: 'local', display_index: 0 },
-    $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 0) }
-  ];
-  $: activeSeats = seats.filter(s => !s.disabled);
-  $: fallbackDisplays = [{ name: 'Primary Display', index: 0, width: 1920, height: 1080, refresh_rate: 60, scale: 1.0, is_primary: true }];
-  $: effectiveDisplays = displays.length > 0 ? displays : fallbackDisplays;
 
-  // Auto-clamp seat display index if host has fewer screens than assigned
-  $: if (effectiveDisplays.length > 0 && seats.length > 0) {
-    seats.forEach((s) => {
-      if ((s.display_index ?? 0) >= effectiveDisplays.length) {
-        multiseatStore.setSeatDisplay(s.seat_id, 0);
-      }
-    });
-  }
 
-  $: gamepadAssignments = resolveGamepadAssignments(
-    gamepads,
-    cfgDraft.multiseat?.seat1_gamepad || 'auto',
-    cfgDraft.multiseat?.seat2_gamepad || 'auto'
-  );
 
-  $: gamepadOptions = [
-    { value: 'auto', label: 'Auto (Smart Allocation)' },
-    { value: 'none', label: 'Keyboard & Mouse Only (No Gamepad)' },
-    ...(gamepads || []).map(pad => ({
-      value: pad.dev_node,
-      label: `${pad.name} (${pad.dev_node})`
-    }))
-  ];
 
-  $: keyboards = $multiseatStore.keyboards;
-  $: mice = $multiseatStore.mice;
 
-  $: keyboardOptions = [
-    { value: 'auto', label: 'Auto (Shared / Host Default)' },
-    { value: 'none', label: 'None (Mask All Keyboards)' },
-    ...(keyboards || []).map(k => ({
-      value: k.name ? `${k.name} (${k.dev_node})` : k.dev_node,
-      label: k.name ? `${k.name} (${k.dev_node})` : k.dev_node
-    }))
-  ];
 
-  $: mouseOptions = [
-    { value: 'auto', label: 'Auto (Shared / Host Default)' },
-    { value: 'none', label: 'None (Mask All Mice)' },
-    ...(mice || []).map(m => ({
-      value: m.name ? `${m.name} (${m.dev_node})` : m.dev_node,
-      label: m.name ? `${m.name} (${m.dev_node})` : m.dev_node
-    }))
-  ];
 
-  $: profileOptions = (profilesStore.profiles || []).map(p => ({
-    value: p.id,
-    label: `${p.name} (${p.is_main ? 'Primary Host' : `~/Games/umu-p${p.index}`})`
-  }));
 
   const visualLayouts = [
     {
@@ -187,6 +107,132 @@
       badge: 'Any',
     },
   ];
+  // Ensure nested multiseat defaults exist
+  run(() => {
+    if (!cfgDraft.multiseat) {
+      cfgDraft.multiseat = {};
+    }
+  });
+  run(() => {
+    if (cfgDraft.multiseat.player2_profile_id === undefined) cfgDraft.multiseat.player2_profile_id = 'p2';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.default_seat1_mode === undefined) cfgDraft.multiseat.default_seat1_mode = 'local';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.default_seat2_mode === undefined) cfgDraft.multiseat.default_seat2_mode = 'local';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.broadcast_relay_enabled === undefined) cfgDraft.multiseat.broadcast_relay_enabled = true;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_gamepad === undefined) cfgDraft.multiseat.seat1_gamepad = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_gamepad === undefined) cfgDraft.multiseat.seat2_gamepad = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_keyboard === undefined) cfgDraft.multiseat.seat1_keyboard = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_keyboard === undefined) cfgDraft.multiseat.seat2_keyboard = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_mouse === undefined) cfgDraft.multiseat.seat1_mouse = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_mouse === undefined) cfgDraft.multiseat.seat2_mouse = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_force_grab_cursor === undefined) cfgDraft.multiseat.seat2_force_grab_cursor = false;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_grab_keyboard === undefined) cfgDraft.multiseat.seat2_grab_keyboard = false;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_show_cursor === undefined) cfgDraft.multiseat.seat2_show_cursor = true;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'auto';
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 0;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.sunshine_port_p1 === undefined) cfgDraft.multiseat.sunshine_port_p1 = 47989;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.sunshine_port_p2 === undefined) cfgDraft.multiseat.sunshine_port_p2 = 48010;
+  });
+  let seats = $derived($multiseatStore.staging?.seats || [
+    $multiseatStore.staging?.seat1 || { seat_id: 'p1', mode: 'local', display_index: 0 },
+    $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 0) }
+  ]);
+  run(() => {
+    if (seats.length === 2 && (cfgDraft.multiseat?.default_layout === 'three_player' || cfgDraft.multiseat?.default_layout === 'quad_grid')) {
+      cfgDraft.multiseat.default_layout = 'side_by_side';
+      multiseatStore.setLayout('side_by_side');
+    } else if (seats.length === 3 && cfgDraft.multiseat?.default_layout === 'quad_grid') {
+      cfgDraft.multiseat.default_layout = 'three_player';
+      multiseatStore.setLayout('three_player');
+    }
+  });
+  let gamepads = $derived($multiseatStore.gamepads);
+  let displays = $derived($multiseatStore.displays || []);
+  let activeSeats = $derived(seats.filter(s => !s.disabled));
+  let fallbackDisplays = $derived([{ name: 'Primary Display', index: 0, width: 1920, height: 1080, refresh_rate: 60, scale: 1.0, is_primary: true }]);
+  let effectiveDisplays = $derived(displays.length > 0 ? displays : fallbackDisplays);
+  // Auto-clamp seat display index if host has fewer screens than assigned
+  run(() => {
+    if (effectiveDisplays.length > 0 && seats.length > 0) {
+      seats.forEach((s) => {
+        if ((s.display_index ?? 0) >= effectiveDisplays.length) {
+          multiseatStore.setSeatDisplay(s.seat_id, 0);
+        }
+      });
+    }
+  });
+  let gamepadAssignments = $derived(resolveGamepadAssignments(
+    gamepads,
+    cfgDraft.multiseat?.seat1_gamepad || 'auto',
+    cfgDraft.multiseat?.seat2_gamepad || 'auto'
+  ));
+  let gamepadOptions = $derived([
+    { value: 'auto', label: 'Auto (Smart Allocation)' },
+    { value: 'none', label: 'Keyboard & Mouse Only (No Gamepad)' },
+    ...(gamepads || []).map(pad => ({
+      value: pad.dev_node,
+      label: `${pad.name} (${pad.dev_node})`
+    }))
+  ]);
+  let keyboards = $derived($multiseatStore.keyboards);
+  let mice = $derived($multiseatStore.mice);
+  let keyboardOptions = $derived([
+    { value: 'auto', label: 'Auto (Shared / Host Default)' },
+    { value: 'none', label: 'None (Mask All Keyboards)' },
+    ...(keyboards || []).map(k => ({
+      value: k.name ? `${k.name} (${k.dev_node})` : k.dev_node,
+      label: k.name ? `${k.name} (${k.dev_node})` : k.dev_node
+    }))
+  ]);
+  let mouseOptions = $derived([
+    { value: 'auto', label: 'Auto (Shared / Host Default)' },
+    { value: 'none', label: 'None (Mask All Mice)' },
+    ...(mice || []).map(m => ({
+      value: m.name ? `${m.name} (${m.dev_node})` : m.dev_node,
+      label: m.name ? `${m.name} (${m.dev_node})` : m.dev_node
+    }))
+  ]);
+  let profileOptions = $derived((profilesStore.profiles || []).map(p => ({
+    value: p.id,
+    label: `${p.name} (${p.is_main ? 'Primary Host' : `~/Games/umu-p${p.index}`})`
+  })));
 </script>
 
 <div class="space-y-6">

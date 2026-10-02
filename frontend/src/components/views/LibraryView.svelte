@@ -32,19 +32,25 @@
   } from '../../utils/game.js';
   import { playTick, playSelect, playNav } from '../../utils/audio.js';
 
-  export let carouselRef = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [carouselRef]
+   */
+
+  /** @type {Props} */
+  let { carouselRef = $bindable(null) } = $props();
 
   // View mode: 'grid' (default for desktop) or 'shelf' (3D cover flow)
-  let libraryMode = (typeof localStorage !== 'undefined' && localStorage.getItem('gamux_library_mode')) || 'grid';
+  let libraryMode = $state((typeof localStorage !== 'undefined' && localStorage.getItem('gamux_library_mode')) || 'grid');
 
-  let searchInputEl;
+  let searchInputEl = $state();
   let focusedIndex = 0;
   let isSearchFocused = false;
 
-  $: activeColors = $selectedGame ? getPlatformColors($selectedGame) : null;
-  $: platformType = $selectedGame ? getPlatformType($selectedGame) : '';
-  $: gameSource = $selectedGame ? getGameSource($selectedGame) : '';
-  $: metaInfo = $selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' };
+  let activeColors = $derived($selectedGame ? getPlatformColors($selectedGame) : null);
+  let platformType = $derived($selectedGame ? getPlatformType($selectedGame) : '');
+  let gameSource = $derived($selectedGame ? getGameSource($selectedGame) : '');
+  let metaInfo = $derived($selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' });
 
   const sortOptions = [
     { id: 'name_asc', label: 'Name (A-Z)' },
@@ -135,14 +141,14 @@
         <div class="flex items-center space-x-1.5 overflow-x-auto py-0.5">
           <button
             type="button"
-            on:click={() => { $activeFilter = 'all'; }}
+            onclick={() => { $activeFilter = 'all'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer {$activeFilter === 'all' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             All
           </button>
           <button
             type="button"
-            on:click={() => { $activeFilter = 'patched'; }}
+            onclick={() => { $activeFilter = 'patched'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'patched' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             <span>Ready</span>
@@ -152,7 +158,7 @@
           </button>
           <button
             type="button"
-            on:click={() => { $activeFilter = 'clean'; }}
+            onclick={() => { $activeFilter = 'clean'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'clean' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
           >
             <span>Unpatched</span>
@@ -163,7 +169,7 @@
           {#if $stats.updatesCount > 0}
             <button
               type="button"
-              on:click={() => { $activeFilter = 'updates'; }}
+              onclick={() => { $activeFilter = 'updates'; }}
               class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer {$activeFilter === 'updates' ? 'bg-surface-cardHover text-white font-bold shadow-sm border border-surface-borderHighlight' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
             >
               <span>Updates</span>
@@ -198,7 +204,7 @@
           <div class="flex items-center bg-surface-card border border-surface-border rounded-lg p-0.5">
             <button
               type="button"
-              on:click={() => setLibraryMode('grid')}
+              onclick={() => setLibraryMode('grid')}
               class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer {libraryMode === 'grid' ? 'bg-[#27272a] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}"
               title="Desktop Grid View"
               aria-label="Desktop Grid View"
@@ -212,7 +218,7 @@
             </button>
             <button
               type="button"
-              on:click={() => setLibraryMode('shelf')}
+              onclick={() => setLibraryMode('shelf')}
               class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer {libraryMode === 'shelf' ? 'bg-[#27272a] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}"
               title="3D Cover Flow / Shelf Mode"
               aria-label="3D Cover Flow / Shelf Mode"
@@ -235,7 +241,7 @@
             {#if $searchQuery}
               <button
                 type="button"
-                on:click={() => { $searchQuery = ''; }}
+                onclick={() => { $searchQuery = ''; }}
                 class="text-xs text-neutral-300 hover:underline font-bold mt-1"
               >
                 Clear search filter
@@ -274,7 +280,7 @@
       <div class="absolute top-4 right-6 z-30 flex items-center bg-surface-card/90 border border-surface-border rounded-lg p-0.5 shadow-lg">
         <button
           type="button"
-          on:click={() => setLibraryMode('grid')}
+          onclick={() => setLibraryMode('grid')}
           class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer text-neutral-500 hover:text-neutral-300"
           title="Switch to Desktop Grid View"
           aria-label="Desktop Grid View"
@@ -288,7 +294,7 @@
         </button>
         <button
           type="button"
-          on:click={() => setLibraryMode('shelf')}
+          onclick={() => setLibraryMode('shelf')}
           class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer bg-[#27272a] text-white shadow-sm"
           title="3D Cover Flow / Shelf Mode"
           aria-label="3D Cover Flow / Shelf Mode"
@@ -302,7 +308,7 @@
       </div>
 
       <!-- Center 3D 5-Item Carousel -->
-      <Carousel3D bind:this={carouselRef} on:launch={(e) => openGameHub(e.detail)} />
+      <Carousel3D bind:this={carouselRef} onlaunch={(val) => openGameHub(val)} />
 
       <!-- Bottom HUD: Left Command Glossary & Right Game Details -->
       <div class="w-full px-8 pb-6 flex items-end justify-between z-20 flex-shrink-0">
@@ -311,7 +317,7 @@
           <div class="flex items-center space-x-3">
             <button
               type="button"
-              on:click={() => openGameHub($selectedGame)}
+              onclick={() => openGameHub($selectedGame)}
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Open Game Hub (A or Enter)"
             >
@@ -325,7 +331,7 @@
 
             <button
               type="button"
-              on:click={() => cycleSortOrder()}
+              onclick={() => cycleSortOrder()}
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Cycle library sort order (Y)"
             >
@@ -339,7 +345,7 @@
           <div class="flex items-center">
             <button
               type="button"
-              on:click={() => setLibraryMode('grid')}
+              onclick={() => setLibraryMode('grid')}
               class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
               title="Switch to Library Grid View (/)"
             >

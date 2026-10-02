@@ -1,12 +1,17 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { drawerDraft } from '../../../stores/drawerDraft.js';
+    import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { AppAPI } from '../../../api/app.js';
   import { notificationStore } from '../../../stores/notifications.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let { game = null ,
+    onclose
+  } = $props();
 
   const sourceOptions = [
     { id: '', label: 'Auto-Detect', desc: 'Detect from files' },
@@ -16,14 +21,14 @@
     { id: 'Standalone', label: 'Standalone', desc: 'Direct DRM-free' }
   ];
 
-  let searchQuery = $drawerDraft.name || game?.name || '';
-  let customAppId = $drawerDraft.appId || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '';
-  let searchResults = [];
-  let isSearching = false;
+  let searchQuery = $state($drawerDraft.name || game?.name || '');
+  let customAppId = $state($drawerDraft.appId || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '');
+  let searchResults = $state([]);
+  let isSearching = $state(false);
 
-  $: activeStoreType = ($drawerDraft.sourceOverride || game?.source || game?.store || 'Steam').toLowerCase();
-  $: storeToSearch = activeStoreType === 'gog' ? 'gog' : 'steam';
-  $: hasCustomAppId = !!($drawerDraft.appId || (game?.appId && game.appId !== '0'));
+  let activeStoreType = $derived(($drawerDraft.sourceOverride || game?.source || game?.store || 'Steam').toLowerCase());
+  let storeToSearch = $derived(activeStoreType === 'gog' ? 'gog' : 'steam');
+  let hasCustomAppId = $derived(!!($drawerDraft.appId || (game?.appId && game.appId !== '0')));
 
   async function handleStoreSearch() {
     if (!searchQuery.trim()) return;
@@ -94,13 +99,13 @@
       {#if hasCustomAppId}
         <button
           type="button"
-          on:click={handleResetAppId}
+          onclick={handleResetAppId}
           class="text-rose-400 hover:text-rose-300 text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 cursor-pointer"
         >
           Reset AppID
         </button>
       {/if}
-      <button type="button" on:click={() => dispatch('close')} class="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Close</button>
+      <button type="button" onclick={() => onclose?.()} class="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Close</button>
     </div>
   </div>
 
@@ -109,7 +114,7 @@
       {@const isSel = ($drawerDraft.sourceOverride || '') === opt.id}
       <button
         type="button"
-        on:click={() => drawerDraft.setField('sourceOverride', opt.id)}
+        onclick={() => drawerDraft.setField('sourceOverride', opt.id)}
         class="p-2.5 rounded-lg border text-left transition flex flex-col justify-between gap-1 cursor-pointer {isSel ? 'bg-cyan-950/40 border-cyan-400 text-white shadow-sm' : 'bg-[#0a0a0f] border-[#222232] text-slate-400 hover:text-slate-200 hover:border-slate-600'}"
       >
         <span class="font-bold text-xs">{opt.label}</span>
@@ -139,13 +144,13 @@
             type="text"
             bind:value={searchQuery}
             placeholder={`Search ${storeToSearch.toUpperCase()} catalogue for AppID (e.g. ${game?.name || ''})...`}
-            on:keydown={(e) => { if (e.key === 'Enter') handleStoreSearch(); }}
+            onkeydown={(e) => { if (e.key === 'Enter') handleStoreSearch(); }}
             class="w-full bg-[#0a0a0f] border border-[#222232] focus:border-cyan-500 rounded-lg px-3.5 py-1.5 text-xs text-white outline-none font-mono placeholder:text-slate-500"
           />
         </div>
         <button
           type="button"
-          on:click={handleStoreSearch}
+          onclick={handleStoreSearch}
           disabled={isSearching || !searchQuery.trim()}
           class="w-full sm:w-auto px-4 py-1.5 bg-[#1c1c28] hover:bg-[#28283a] text-white text-xs font-bold rounded-lg border border-[#2f2f42] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
         >
@@ -186,7 +191,7 @@
                 </div>
                 <button
                   type="button"
-                  on:click={() => handleSelectMatch(cand)}
+                  onclick={() => handleSelectMatch(cand)}
                   class="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg transition flex-shrink-0 cursor-pointer"
                 >
                   Match Store
@@ -210,7 +215,7 @@
         />
         <button
           type="button"
-          on:click={handleSetManualAppId}
+          onclick={handleSetManualAppId}
           disabled={!customAppId.trim()}
           class="px-3.5 py-1 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition flex-shrink-0 cursor-pointer"
         >

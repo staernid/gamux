@@ -2,11 +2,13 @@
   import SettingSection from '../../../common/SettingSection.svelte';
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
-  export let cfgDraft;
-  export let visualLayouts = [];
-  export let effectiveDisplays = [];
-  export let activeSeats = [];
-  export let seats = [];
+  let {
+    cfgDraft = $bindable(),
+    visualLayouts = [],
+    effectiveDisplays = [],
+    activeSeats = [],
+    seats = []
+  } = $props();
 
   function selectLayout(layoutId) {
     if (layoutId === 'quad_grid') {
@@ -27,7 +29,6 @@
       });
     }
     cfgDraft.multiseat.default_layout = layoutId;
-    cfgDraft = { ...cfgDraft };
     multiseatStore.setLayout(layoutId);
 
     // Synchronize display assignments based on selected layout
@@ -97,7 +98,7 @@
       </p>
       <button
         type="button"
-        on:click={() => multiseatStore.refreshDisplays()}
+        onclick={() => multiseatStore.refreshDisplays()}
         class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
         title="Rescan connected monitors"
       >
@@ -115,7 +116,7 @@
         {#each visualLayouts.filter(l => l.id !== 'windowed') as opt}
           <button
             type="button"
-            on:click={() => selectLayout(opt.id)}
+            onclick={() => selectLayout(opt.id)}
             class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between space-y-1.5 cursor-pointer {cfgDraft.multiseat.default_layout === opt.id ? 'bg-surface-header border-neutral-500 shadow-sm' : 'bg-surface-card border-surface-border hover:border-neutral-600'}"
           >
             <div class="flex items-center justify-between">
@@ -135,7 +136,7 @@
         {#if activeSeats.length >= 2 && (cfgDraft.multiseat.default_layout === 'side_by_side' || cfgDraft.multiseat.default_layout === 'top_bottom')}
           <button
             type="button"
-            on:click={() => swap2PSlots(0)}
+            onclick={() => swap2PSlots(0)}
             class="px-2.5 py-1 bg-surface-card hover:bg-surface-header border border-surface-border hover:border-neutral-500 text-neutral-300 hover:text-white rounded-lg text-3xs font-mono font-bold transition flex items-center space-x-1.5 cursor-pointer"
             title="Swap screen portions between Player 1 and Player 2"
           >
@@ -307,7 +308,7 @@
                   <div class="flex items-center justify-end pt-1">
                     <button
                       type="button"
-                      on:click={() => swap2PSlots(dIdx)}
+                      onclick={() => swap2PSlots(dIdx)}
                       class="px-2.5 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-3xs font-mono font-bold transition flex items-center space-x-1 cursor-pointer"
                       title="Swap viewport slot positions between players"
                     >

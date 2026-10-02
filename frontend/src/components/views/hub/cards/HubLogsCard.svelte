@@ -3,16 +3,22 @@
   import { AppAPI } from '../../../../api/app.js';
   import { notificationStore } from '../../../../stores/notifications.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  let logContent = '';
-  let isLoading = false;
-  let error = '';
-  let logContainerRef;
-  let copied = false;
+  /** @type {Props} */
+  let { game = null } = $props();
+
+  let logContent = $state('');
+  let isLoading = $state(false);
+  let error = $state('');
+  let logContainerRef = $state();
+  let copied = $state(false);
   let pollInterval = null;
 
-  $: isRunning = game?.isRunning || false;
+  let isRunning = $derived(game?.isRunning || false);
 
   async function fetchLog(scroll = false) {
     if (!game?.gameDir) return;
@@ -96,7 +102,7 @@
     <div class="flex items-center space-x-2">
       <button
         type="button"
-        on:click={handleRefresh}
+        onclick={handleRefresh}
         disabled={isLoading}
         class="bg-[#1a1a26] hover:bg-[#242436] text-slate-300 hover:text-white border border-[#2c2c3e] px-3 py-1.5 rounded-xl font-bold transition disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
         title="Reload log from disk"
@@ -109,7 +115,7 @@
 
       <button
         type="button"
-        on:click={handleCopy}
+        onclick={handleCopy}
         disabled={!logContent}
         class="bg-white hover:bg-neutral-200 text-black font-black px-3.5 py-1.5 rounded-xl transition disabled:opacity-40 flex items-center space-x-1.5 cursor-pointer shadow-sm"
         title="Copy full log to clipboard"

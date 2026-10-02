@@ -1,36 +1,45 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import { AppAPI } from '../../api/app.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { selectedGame } from '../../stores/library.js';
   import { isSamePath } from '../../utils/game.js';
   import Icon from '../common/Icon.svelte';
 
-  export let game = null;
-  export let onlinked = null;
-  export let onunlinked = null;
-  export let onupdated = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {any} [onlinked]
+   * @property {any} [onunlinked]
+   * @property {any} [onupdated]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = $bindable(null),
+    onlinked = null,
+    onunlinked = null,
+    onupdated = null
+  } = $props();
 
-  let targetStore = 'steam'; // 'steam' | 'gog' | 'rawg' | 'standalone'
-  let providers = [
+  let targetStore = $state('steam'); // 'steam' | 'gog' | 'rawg' | 'standalone'
+  let providers = $state([
     { id: 'steam', display_name: 'Steam', badge: 'AppID' },
     { id: 'gog', display_name: 'GOG.com', badge: 'GOG ID' },
     { id: 'rawg', display_name: 'RAWG Database', badge: 'Open DB' },
     { id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' },
-  ];
+  ]);
 
-  let metaQuery = '';
-  let customId = '';
-  let metaCandidates = [];
-  let isSearchingMeta = false;
-  let isLinkingMeta = false;
-  let selectedMetaCandidate = null;
+  let metaQuery = $state('');
+  let customId = $state('');
+  let metaCandidates = $state([]);
+  let isSearchingMeta = $state(false);
+  let isLinkingMeta = $state(false);
+  let selectedMetaCandidate = $state(null);
 
-  $: gameName = game?.name || '';
-  $: gameDir = game?.gameDir || '';
-  $: appId = game?.appId || '';
+  let gameName = $derived(game?.name || '');
+  let gameDir = $derived(game?.gameDir || '');
+  let appId = $derived(game?.appId || '');
 
   onMount(() => {
     const providerKey = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
@@ -106,10 +115,8 @@
         game = { ...game, ...updated };
         selectedGame.update(curr => (curr && isSamePath(curr.gameDir, gameDir) ? { ...curr, ...updated } : curr));
       }
-      dispatch('updated', updated);
-      dispatch('linked', { store: targetStore, id: idToLink, game: updated });
-      if (typeof onlinked === 'function') onlinked({ store: targetStore, id: idToLink, game: updated });
-      if (typeof onupdated === 'function') onupdated(updated);
+      onupdated?.(updated);
+      onlinked?.({ store: targetStore, id: idToLink, game: updated });
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
@@ -137,10 +144,8 @@
       }
       customId = '';
       metaCandidates = [];
-      dispatch('updated', updated);
-      dispatch('unlinked', updated);
-      if (typeof onunlinked === 'function') onunlinked(updated);
-      if (typeof onupdated === 'function') onupdated(updated);
+      onupdated?.(updated);
+      onunlinked?.(updated);
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
@@ -169,7 +174,7 @@
         {@const isActive = targetStore === prov.id}
         <button
           type="button"
-          on:click={() => handleStoreChange(prov.id)}
+          onclick={() => handleStoreChange(prov.id)}
           class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
         >
           <span>{prov.display_name}</span>
@@ -182,7 +187,7 @@
 
     <button
       type="button"
-      on:click={handleUnlinkMeta}
+      onclick={handleUnlinkMeta}
       disabled={isLinkingMeta}
       class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white text-xs font-bold transition-colors cursor-pointer flex-shrink-0"
       title="Reset metadata overrides to auto-detected origin"
@@ -208,7 +213,7 @@
       <div class="pt-3 border-t border-surface-border flex justify-end">
         <button
           type="button"
-          on:click={() => handleApplyMetaLink()}
+          onclick={() => handleApplyMetaLink()}
           disabled={isLinkingMeta}
           class="px-5 py-2 bg-white hover:bg-neutral-200 text-neutral-950 font-bold text-xs rounded-xl transition-all shadow cursor-pointer"
         >
@@ -224,14 +229,14 @@
           <input
             type="text"
             bind:value={metaQuery}
-            on:keydown={(e) => { if (e.key === 'Enter') handleSearchMeta(); }}
+            onkeydown={(e) => { if (e.key === 'Enter') handleSearchMeta(); }}
             placeholder={`Search ${targetStore.toUpperCase()} catalogue...`}
             class="w-full bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-4 py-2 text-xs text-white outline-none font-mono placeholder:text-neutral-500 transition-colors"
           />
         </div>
         <button
           type="button"
-          on:click={() => handleSearchMeta()}
+          onclick={() => handleSearchMeta()}
           disabled={isSearchingMeta}
           class="w-full sm:w-auto px-5 py-2 bg-surface-card hover:bg-surface-cardHover text-white text-xs font-bold rounded-xl border border-surface-border transition-colors flex-shrink-0 cursor-pointer"
         >
@@ -252,7 +257,7 @@
         />
         <button
           type="button"
-          on:click={() => handleApplyMetaLink()}
+          onclick={() => handleApplyMetaLink()}
           disabled={!customId.trim() || isLinkingMeta}
           class="px-5 py-1.5 bg-white hover:bg-neutral-200 disabled:opacity-40 text-neutral-950 text-xs font-bold rounded-lg transition-colors flex-shrink-0 shadow cursor-pointer"
         >
@@ -293,7 +298,7 @@
               <div class="flex items-center space-x-2 flex-shrink-0 pl-3">
                 <button
                   type="button"
-                  on:click={() => handleApplyMetaLink(cand)}
+                  onclick={() => handleApplyMetaLink(cand)}
                   class="px-4 py-1.5 bg-white hover:bg-neutral-200 text-neutral-950 text-xs font-bold rounded-lg transition-colors shadow cursor-pointer"
                 >
                   Link Game

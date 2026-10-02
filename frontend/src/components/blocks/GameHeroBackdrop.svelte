@@ -1,17 +1,36 @@
 <script>
-  export let heroUrl = '';
-  export let localHeroUrl = '';
-  export let glowColor = 'rgba(255, 255, 255, 0.05)';
-  export let accentColor = 'rgba(255, 255, 255, 0.03)';
-  export let dimLevel = 0.5; // 0.0 (bright) to 1.0 (black)
-  export let className = 'w-full h-full';
+  import { run } from 'svelte/legacy';
 
-  let imgFailed = false;
+  /**
+   * @typedef {Object} Props
+   * @property {string} [heroUrl]
+   * @property {string} [localHeroUrl]
+   * @property {string} [glowColor]
+   * @property {string} [accentColor]
+   * @property {number} [dimLevel] - 0.0 (bright) to 1.0 (black)
+   * @property {string} [className]
+   * @property {import('svelte').Snippet} [children]
+   */
 
-  $: activeUrl = (!imgFailed && (localHeroUrl || heroUrl)) || '';
-  $: if (heroUrl || localHeroUrl) {
-    imgFailed = false;
-  }
+  /** @type {Props} */
+  let {
+    heroUrl = '',
+    localHeroUrl = '',
+    glowColor = 'rgba(255, 255, 255, 0.05)',
+    accentColor = 'rgba(255, 255, 255, 0.03)',
+    dimLevel = 0.5,
+    className = 'w-full h-full',
+    children
+  } = $props();
+
+  let imgFailed = $state(false);
+
+  let activeUrl = $derived((!imgFailed && (localHeroUrl || heroUrl)) || '');
+  run(() => {
+    if (heroUrl || localHeroUrl) {
+      imgFailed = false;
+    }
+  });
 </script>
 
 <div class="relative overflow-hidden select-none {className}" data-testid="game-hero-backdrop">
@@ -22,7 +41,7 @@
       alt="Hero Backdrop"
       class="absolute inset-0 w-full h-full object-cover object-center filter transition-all duration-700 ease-out"
       style="filter: brightness({1 - dimLevel * 0.5});"
-      on:error={() => { imgFailed = true; }}
+      onerror={() => { imgFailed = true; }}
     />
   {:else}
     <!-- Dark fallback ambient surface -->
@@ -48,6 +67,6 @@
 
   <!-- Foreground Slot Content (if any) -->
   <div class="relative z-10 w-full h-full">
-    <slot />
+    {@render children?.()}
   </div>
 </div>

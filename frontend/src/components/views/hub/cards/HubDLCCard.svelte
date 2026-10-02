@@ -8,32 +8,38 @@
   import { formatBytes } from '../../../../utils/format.js';
   import { isSamePath } from '../../../../utils/game.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  let depots = [];
-  let dlcs = [];
-  let isLoading = true;
+  /** @type {Props} */
+  let { game = null } = $props();
+
+  let depots = $state([]);
+  let dlcs = $state([]);
+  let isLoading = $state(true);
   let isLoadingDLCs = false;
-  let isSyncingDLCs = false;
-  let isActionRunning = false;
-  let selectedCategoryFilter = 'all'; // 'all' | 'languages' | 'optional' | 'soundtrack' | 'core'
-  let selectedDepotIds = new Set();
-  let userPreferredLanguage = '';
+  let isSyncingDLCs = $state(false);
+  let isActionRunning = $state(false);
+  let selectedCategoryFilter = $state('all'); // 'all' | 'languages' | 'optional' | 'soundtrack' | 'core'
+  let selectedDepotIds = $state(new Set());
+  let userPreferredLanguage = $state('');
 
-  $: gameDir = game?.gameDir || '';
-  $: appID = game?.appId || '';
-  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
+  let gameDir = $derived(game?.gameDir || '');
+  let appID = $derived(game?.appId || '');
+  let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
 
-  $: activeTransfer = (tasksStore.activeDownloads || []).find(
+  let activeTransfer = $derived((tasksStore.activeDownloads || []).find(
     (t) => String(t.appId) === String(appID) || (t.gameDir && isSamePath(t.gameDir, gameDir))
-  );
+  ));
 
-  $: configuredLanguage = (
+  let configuredLanguage = $derived((
     userPreferredLanguage ||
     game?.currentLanguage ||
     configStore.current?.language ||
     'english'
-  ).toLowerCase();
+  ).toLowerCase());
 
   onMount(async () => {
     await Promise.all([loadDepots(), loadDLCs()]);
@@ -339,23 +345,23 @@
     });
   }
 
-  $: totalInstalledSize = depots.filter(d => d.installed).reduce((acc, d) => acc + (d.size || 0), 0);
-  $: installedCount = depots.filter(d => d.installed).length;
+  let totalInstalledSize = $derived(depots.filter(d => d.installed).reduce((acc, d) => acc + (d.size || 0), 0));
+  let installedCount = $derived(depots.filter(d => d.installed).length);
 
-  $: languageDepots = depots.filter(d => getContentCategory(d).startsWith('locale:'));
-  $: optionalDepots = depots.filter(d => getContentCategory(d) === 'optional_hd');
-  $: soundtrackDepots = depots.filter(d => getContentCategory(d) === 'soundtrack');
-  $: dlcDepots = depots.filter(d => getContentCategory(d) === 'dlc');
-  $: coreDepots = depots.filter(d => {
+  let languageDepots = $derived(depots.filter(d => getContentCategory(d).startsWith('locale:')));
+  let optionalDepots = $derived(depots.filter(d => getContentCategory(d) === 'optional_hd'));
+  let soundtrackDepots = $derived(depots.filter(d => getContentCategory(d) === 'soundtrack'));
+  let dlcDepots = $derived(depots.filter(d => getContentCategory(d) === 'dlc'));
+  let coreDepots = $derived(depots.filter(d => {
     const cat = getContentCategory(d);
     return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack' && cat !== 'dlc');
-  });
+  }));
 
-  $: availableLanguages = Array.from(new Set(
+  let availableLanguages = $derived(Array.from(new Set(
     languageDepots.map(d => getDepotLanguage(d)).filter(Boolean)
-  )).sort();
+  )).sort());
 
-  $: filteredDepots = depots.filter(depot => {
+  let filteredDepots = $derived(depots.filter(depot => {
     if (selectedCategoryFilter === 'all') return true;
     const cat = getContentCategory(depot);
     if (selectedCategoryFilter === 'languages') return cat.startsWith('locale:');
@@ -364,11 +370,11 @@
     if (selectedCategoryFilter === 'dlc') return cat === 'dlc';
     if (selectedCategoryFilter === 'core') return cat === 'core' || (!cat.startsWith('locale:') && cat !== 'optional_hd' && cat !== 'soundtrack' && cat !== 'dlc');
     return true;
-  });
+  }));
 
-  $: selectedDepotsSize = depots
+  let selectedDepotsSize = $derived(depots
     .filter(d => selectedDepotIds.has(Number(d.depot_id)))
-    .reduce((acc, d) => acc + (d.size || 0), 0);
+    .reduce((acc, d) => acc + (d.size || 0), 0));
 </script>
 
 <div class="space-y-4">
@@ -384,7 +390,7 @@
       {#if appID && appID !== '0'}
         <button
           type="button"
-          on:click={handleSyncDLCs}
+          onclick={handleSyncDLCs}
           disabled={isSyncingDLCs}
           class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover text-neutral-200 hover:text-white border border-surface-border transition-colors font-bold text-2xs flex items-center space-x-1.5 cursor-pointer"
         >
@@ -429,7 +435,7 @@
       {#if !isInstalled && appID && depots.length > 0}
         <button
           type="button"
-          on:click={handleDownloadSelected}
+          onclick={handleDownloadSelected}
           disabled={isActionRunning || selectedDepotIds.size === 0}
           class="px-3 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-neutral-950 font-bold text-2xs transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
         >
@@ -441,7 +447,7 @@
       {/if}
       <button
         type="button"
-        on:click={loadDepots}
+        onclick={loadDepots}
         disabled={isLoading}
         class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover text-neutral-200 hover:text-white border border-surface-border transition-colors font-bold text-2xs flex items-center space-x-1.5 cursor-pointer"
       >
@@ -479,7 +485,7 @@
       <div class="flex items-center space-x-1.5 overflow-x-auto py-0.5">
         <button
           type="button"
-          on:click={() => { selectedCategoryFilter = 'all'; }}
+          onclick={() => { selectedCategoryFilter = 'all'; }}
           class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all cursor-pointer {selectedCategoryFilter === 'all' ? 'bg-neutral-200 text-neutral-950 font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
         >
           All ({depots.length})
@@ -488,7 +494,7 @@
         {#if languageDepots.length > 0}
           <button
             type="button"
-            on:click={() => { selectedCategoryFilter = 'languages'; }}
+            onclick={() => { selectedCategoryFilter = 'languages'; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'languages' ? 'bg-blue-500 text-white font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
           >
             <span>🌐 Languages</span>
@@ -499,7 +505,7 @@
         {#if optionalDepots.length > 0}
           <button
             type="button"
-            on:click={() => { selectedCategoryFilter = 'optional'; }}
+            onclick={() => { selectedCategoryFilter = 'optional'; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'optional' ? 'bg-amber-500 text-neutral-950 font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
           >
             <span>🎨 High-Res / Optional</span>
@@ -510,7 +516,7 @@
         {#if soundtrackDepots.length > 0}
           <button
             type="button"
-            on:click={() => { selectedCategoryFilter = 'soundtrack'; }}
+            onclick={() => { selectedCategoryFilter = 'soundtrack'; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'soundtrack' ? 'bg-purple-500 text-white font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
           >
             <span>🎵 Soundtracks</span>
@@ -521,7 +527,7 @@
         {#if dlcDepots.length > 0}
           <button
             type="button"
-            on:click={() => { selectedCategoryFilter = 'dlc'; }}
+            onclick={() => { selectedCategoryFilter = 'dlc'; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'dlc' ? 'bg-emerald-500 text-neutral-950 font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
           >
             <span>📦 DLCs</span>
@@ -532,7 +538,7 @@
         {#if coreDepots.length > 0}
           <button
             type="button"
-            on:click={() => { selectedCategoryFilter = 'core'; }}
+            onclick={() => { selectedCategoryFilter = 'core'; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-bold transition-all flex items-center space-x-1 cursor-pointer {selectedCategoryFilter === 'core' ? 'bg-neutral-200 text-neutral-950 font-bold' : 'bg-surface-header hover:bg-surface-cardHover text-neutral-400 border border-surface-border'}"
           >
             <span>Core Content</span>
@@ -546,7 +552,7 @@
           <span class="font-bold">Voice Pack:</span>
           <select
             value={configuredLanguage}
-            on:change={(e) => handleLanguageChange(e.target.value)}
+            onchange={(e) => handleLanguageChange(e.target.value)}
             class="bg-surface-card border border-surface-border text-neutral-200 rounded-lg px-2.5 py-1 text-2xs outline-none cursor-pointer hover:border-neutral-500 transition-colors"
           >
             {#each availableLanguages as lang}
@@ -579,7 +585,7 @@
                 <input
                   type="checkbox"
                   checked={selectedDepotIds.has(Number(depot.depot_id))}
-                  on:change={() => toggleDepotSelection(depot.depot_id)}
+                  onchange={() => toggleDepotSelection(depot.depot_id)}
                   class="w-4 h-4 rounded bg-surface-input border border-surface-border text-white cursor-pointer accent-white"
                 />
               </label>
@@ -631,7 +637,7 @@
             {#if depot.category === 'soundtrack'}
               <button
                 type="button"
-                on:click={() => handleDownloadSoundtrack(depot)}
+                onclick={() => handleDownloadSoundtrack(depot)}
                 disabled={isActionRunning}
                 class="px-2.5 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover text-neutral-200 hover:text-white border border-surface-border font-bold text-2xs transition-colors flex items-center space-x-1 cursor-pointer"
               >
@@ -640,7 +646,7 @@
             {:else if !depot.installed}
               <button
                 type="button"
-                on:click={() => handleDownloadDepot(depot)}
+                onclick={() => handleDownloadDepot(depot)}
                 disabled={isActionRunning}
                 class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-neutral-950 font-bold text-2xs transition-colors flex items-center space-x-1 cursor-pointer"
               >
@@ -657,7 +663,7 @@
                 {#if depots.length > 1 || getContentCategory(depot) !== 'core' || depot.category !== 'common' || depot.osarch}
                   <button
                     type="button"
-                    on:click={() => handleUninstallDepot(depot)}
+                    onclick={() => handleUninstallDepot(depot)}
                     disabled={isActionRunning}
                     title="Remove depot files to free space"
                     class="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-bold text-3xs transition-colors cursor-pointer"

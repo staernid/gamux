@@ -3,7 +3,7 @@
   import StorageAutomationCard from './cards/StorageAutomationCard.svelte';
   import CredentialsCard from './cards/CredentialsCard.svelte';
 
-  export let cfgDraft;
+  let { cfgDraft = $bindable() } = $props();
 </script>
 
 <div class="space-y-4">

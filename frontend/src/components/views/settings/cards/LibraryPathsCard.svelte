@@ -1,12 +1,11 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { selectDirectoryDialog } from '../../../../utils/filesystem.js';
+    import { selectDirectoryDialog } from '../../../../utils/filesystem.js';
   import SettingSection from '../../../common/SettingSection.svelte';
 
-  export let libraryPaths = [];
-
-  const dispatch = createEventDispatcher();
-  let pendingRemovePath = null;
+  let { libraryPaths = $bindable([]) ,
+    onchange
+  } = $props();
+  let pendingRemovePath = $state(null);
 
   async function handleAddLibraryPath() {
     const selected = await selectDirectoryDialog('Select Library Directory', '');
@@ -14,7 +13,7 @@
       const current = libraryPaths || [];
       if (!current.includes(selected)) {
         libraryPaths = [...current, selected];
-        dispatch('change', libraryPaths);
+        onchange?.(libraryPaths);
       }
     }
   }
@@ -30,23 +29,25 @@
   function confirmRemoveLibraryPath(p) {
     libraryPaths = (libraryPaths || []).filter(item => item !== p);
     pendingRemovePath = null;
-    dispatch('change', libraryPaths);
+    onchange?.(libraryPaths);
   }
 </script>
 
 <SettingSection title="Library Directories">
-  <svelte:fragment slot="action">
-    <button
-      type="button"
-      on:click={handleAddLibraryPath}
-      class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
-    >
-      <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-      </svg>
-      <span>Add Folder</span>
-    </button>
-  </svelte:fragment>
+  {#snippet action()}
+  
+      <button
+        type="button"
+        onclick={handleAddLibraryPath}
+        class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
+      >
+        <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add Folder</span>
+      </button>
+    
+  {/snippet}
 
   {#if (libraryPaths || []).length === 0}
     <div class="p-3 bg-[#101013] border border-surface-border rounded-xl text-center">
@@ -69,7 +70,7 @@
               <span class="text-2xs font-bold text-rose-400 mr-1">Remove?</span>
               <button
                 type="button"
-                on:click={() => confirmRemoveLibraryPath(p)}
+                onclick={() => confirmRemoveLibraryPath(p)}
                 class="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-2xs font-black transition-colors cursor-pointer shadow-sm"
                 title="Confirm removal"
               >
@@ -77,7 +78,7 @@
               </button>
               <button
                 type="button"
-                on:click={cancelRemoveLibraryPath}
+                onclick={cancelRemoveLibraryPath}
                 class="px-2 py-0.5 rounded bg-surface-card hover:bg-surface-cardHover text-neutral-300 text-2xs font-bold transition-colors cursor-pointer border border-surface-border"
                 title="Cancel removal"
               >
@@ -87,7 +88,7 @@
           {:else}
             <button
               type="button"
-              on:click={() => requestRemoveLibraryPath(p)}
+              onclick={() => requestRemoveLibraryPath(p)}
               class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0 ml-2"
               title="Remove library directory"
               aria-label={`Remove library path ${p}`}

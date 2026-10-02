@@ -1,41 +1,62 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {string} [label]
+   * @property {string} [description]
+   * @property {string} [tooltip]
+   * @property {string} [value]
+   * @property {string} [placeholder]
+   * @property {string} [globalPlaceholder]
+   * @property {boolean} [disabled]
+   * @property {boolean} [mono]
+   * @property {string} [type]
+   * @property {string} [status]
+   * @property {boolean} [stacked]
+   * @property {any} [id]
+   * @property {import('svelte').Snippet} [action]
+   */
 
-  export let label = '';
-  export let description = '';
-  export let tooltip = '';
-  export let value = '';
-  export let placeholder = '';
-  export let globalPlaceholder = '';
-  export let disabled = false;
-  export let mono = false;
-  export let type = 'text';
-  export let status = '';
-  export let stacked = false;
-  export let id = `input-${Math.random().toString(36).slice(2, 9)}`;
+  /** @type {Props} */
+  let {
+    label = '',
+    description = '',
+    tooltip = '',
+    value = $bindable(''),
+    placeholder = '',
+    globalPlaceholder = '',
+    disabled = false,
+    mono = false,
+    type = 'text',
+    status = '',
+    stacked = false,
+    id = `input-${Math.random().toString(36).slice(2, 9)}`,
+    action
+  ,
+    oninput = null,
+    onchange = null
+  } = $props();
 
-  const dispatch = createEventDispatcher();
+  let showPassword = $state(false);
 
-  let showPassword = false;
-
-  $: hasInheritance = Boolean(globalPlaceholder);
-  $: isInherited = hasInheritance && (!value || value.trim() === '');
-  $: isOverridden = hasInheritance && !isInherited;
-  $: effectiveDescription = description || tooltip;
-  $: effectiveType = type === 'password' ? (showPassword ? 'text' : 'password') : type;
+  let hasInheritance = $derived(Boolean(globalPlaceholder));
+  let isInherited = $derived(hasInheritance && (!value || value.trim() === ''));
+  let isOverridden = $derived(hasInheritance && !isInherited);
+  let effectiveDescription = $derived(description || tooltip);
+  let effectiveType = $derived(type === 'password' ? (showPassword ? 'text' : 'password') : type);
 
   function handleInput(e) {
     if (disabled) return;
     value = e.target.value;
-    dispatch('input', value);
+    oninput?.(value);
   }
 
   function revertToInherit(e) {
     e.stopPropagation();
     if (disabled || !hasInheritance) return;
     value = '';
-    dispatch('input', '');
-    dispatch('change', '');
+    oninput?.('');
+    onchange?.('');
   }
 
   function togglePasswordVisibility(e) {
@@ -118,7 +139,7 @@
         {/if}
       </div>
 
-      <slot name="action" />
+      {@render action?.()}
 
       {#if isOverridden}
         <button
@@ -208,7 +229,7 @@
         </span>
       {/if}
 
-      <slot name="action" />
+      {@render action?.()}
 
       {#if isOverridden}
         <button

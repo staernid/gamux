@@ -1,9 +1,15 @@
 <script>
-  export let playerCount = 0;
-  export let label = 'playing right now';
-  export let className = '';
+  /**
+   * @typedef {Object} Props
+   * @property {number} [playerCount]
+   * @property {string} [label]
+   * @property {string} [className]
+   */
 
-  $: count = typeof playerCount === 'number' && !isNaN(playerCount) ? playerCount : 0;
+  /** @type {Props} */
+  let { playerCount = 0, label = 'playing right now', className = '' } = $props();
+
+  let count = $derived(typeof playerCount === 'number' && !isNaN(playerCount) ? playerCount : 0);
 </script>
 
 {#if count > 0}

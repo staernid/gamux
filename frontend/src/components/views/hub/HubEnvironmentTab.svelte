@@ -1,6 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { drawerDraft } from '../../../stores/drawerDraft.js';
+    import { drawerDraft } from '../../../stores/drawerDraft.js';
   import SettingSection from '../../common/SettingSection.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
   import EnvDiffEditor from '../../common/EnvDiffEditor.svelte';
@@ -8,31 +7,45 @@
   import PropertySheet from '../../schema/PropertySheet.svelte';
   import { PLATFORM_OPTIONS } from '../../../constants/options.js';
 
-  export let game = {};
-  export let globalCfg = {};
-  export let overrideCount = 0;
-  export let isSaving = false;
-  export let saveSuccess = false;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {any} [globalCfg]
+   * @property {number} [overrideCount]
+   * @property {boolean} [isSaving]
+   * @property {boolean} [saveSuccess]
+   */
+
+  /** @type {Props} */
+  let {
+    game = {},
+    globalCfg = {},
+    overrideCount = 0,
+    isSaving = false,
+    saveSuccess = false
+  ,
+    onsave = null,
+    onreset = null
+  } = $props();
 
   const platformOptions = PLATFORM_OPTIONS;
-  const dispatch = createEventDispatcher();
 
   function handleSave() {
-    dispatch('save');
+    onsave?.();
   }
 
   function handleReset() {
-    dispatch('reset');
+    onreset?.();
   }
 
-  $: isLinux = $drawerDraft.platform === 'linux';
-  $: effectiveRunner = isLinux ? 'linux' : ($drawerDraft.runner || game?.runner || globalCfg?.default_runner || 'umu');
-  $: isWine = !isLinux && effectiveRunner === 'wine';
-  $: isSteamGame = Boolean(
+  let isLinux = $derived($drawerDraft.platform === 'linux');
+  let effectiveRunner = $derived(isLinux ? 'linux' : ($drawerDraft.runner || game?.runner || globalCfg?.default_runner || 'umu'));
+  let isWine = $derived(!isLinux && effectiveRunner === 'wine');
+  let isSteamGame = $derived(Boolean(
     (game?.store && game.store.toLowerCase() === 'steam') ||
     (game?.source && game.source.toLowerCase() === 'steam') ||
     ($drawerDraft.appId && (!game?.store || game.store.toLowerCase() === 'steam'))
-  );
+  ));
 </script>
 
 <div class="space-y-4">
@@ -42,8 +55,8 @@
     {overrideCount}
     {isSaving}
     {saveSuccess}
-    on:save={handleSave}
-    on:reset={handleReset}
+    onsave={handleSave}
+    onreset={handleReset}
   />
 
   <!-- Sub-Tab Content -->

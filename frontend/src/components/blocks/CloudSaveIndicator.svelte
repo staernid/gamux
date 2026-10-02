@@ -1,27 +1,35 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { formatTimeAgo } from '../../utils/format.js';
+    import { formatTimeAgo } from '../../utils/format.js';
   import Icon from '../common/Icon.svelte';
 
-  export let backupCount = 0;
-  export let lastBackupTime = 0; // unix timestamp or 0
-  export let isSynced = true;
-  export let className = '';
-  export let onrestore = null;
+  /**
+   * @typedef {Object} Props
+   * @property {number} [backupCount]
+   * @property {number} [lastBackupTime] - unix timestamp or 0
+   * @property {boolean} [isSynced]
+   * @property {string} [className]
+   * @property {any} [onrestore]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    backupCount = 0,
+    lastBackupTime = 0,
+    isSynced = true,
+    className = '',
+    onrestore = null
+  } = $props();
 
-  $: formattedTime = lastBackupTime > 0 ? formatTimeAgo(lastBackupTime) : '';
+  let formattedTime = $derived(lastBackupTime > 0 ? formatTimeAgo(lastBackupTime) : '');
 
   function handleRestore() {
-    dispatch('restore');
-    if (typeof onrestore === 'function') onrestore();
+    onrestore?.();
   }
 </script>
 
 <button
   type="button"
-  on:click={handleRestore}
+  onclick={handleRestore}
   class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#121214]/90 hover:bg-[#1c1c20] border border-[#27272a] hover:border-neutral-500 text-3xs font-mono transition-all shadow-sm cursor-pointer select-none {className}"
   data-testid="cloud-save-indicator"
   title="Savegame Backups & Snapshots"

@@ -1,34 +1,41 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../common/Icon.svelte';
+    import Icon from '../common/Icon.svelte';
 
-  export let achievements = [];
-  export let maxBadges = 5;
-  export let className = '';
-  export let onselect = null;
-  export let onviewAll = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [achievements]
+   * @property {number} [maxBadges]
+   * @property {string} [className]
+   * @property {any} [onselect]
+   * @property {any} [onviewAll]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    achievements = [],
+    maxBadges = 5,
+    className = '',
+    onselect = null,
+    onviewAll = null
+  } = $props();
 
-  $: list = Array.isArray(achievements) ? achievements : [];
-  $: total = list.length;
-  $: unlocked = list.filter(a => a.unlocked).length;
-  $: percent = total > 0 ? Math.round((unlocked / total) * 100) : 0;
+  let list = $derived(Array.isArray(achievements) ? achievements : []);
+  let total = $derived(list.length);
+  let unlocked = $derived(list.filter(a => a.unlocked).length);
+  let percent = $derived(total > 0 ? Math.round((unlocked / total) * 100) : 0);
 
-  $: recentUnlocked = list
+  let recentUnlocked = $derived(list
     .filter(a => a.unlocked)
-    .sort((a, b) => (b.unlock_time || 0) - (a.unlock_time || 0));
+    .sort((a, b) => (b.unlock_time || 0) - (a.unlock_time || 0)));
 
-  $: spotlightBadges = (recentUnlocked.length > 0 ? recentUnlocked : list).slice(0, maxBadges);
+  let spotlightBadges = $derived((recentUnlocked.length > 0 ? recentUnlocked : list).slice(0, maxBadges));
 
   function handleBadgeClick(ach) {
-    dispatch('select', { achievement: ach });
-    if (typeof onselect === 'function') onselect({ achievement: ach });
+    onselect?.({ achievement: ach });
   }
 
   function handleViewAll() {
-    dispatch('viewAll');
-    if (typeof onviewAll === 'function') onviewAll();
+    onviewAll?.();
   }
 </script>
 
@@ -46,7 +53,7 @@
 
       <button
         type="button"
-        on:click={handleViewAll}
+        onclick={handleViewAll}
         class="text-3xs font-mono text-neutral-400 hover:text-white flex items-center space-x-1 transition cursor-pointer group"
       >
         <span>View All ({total})</span>
@@ -68,7 +75,7 @@
         {#each spotlightBadges as ach (ach.id || ach.name)}
           <button
             type="button"
-            on:click={() => handleBadgeClick(ach)}
+            onclick={() => handleBadgeClick(ach)}
             title="{ach.name}: {ach.description || 'Achievement'}"
             class="group flex items-center space-x-2 p-1.5 rounded-xl bg-[#121214] hover:bg-[#1c1c20] border border-[#27272a] hover:border-neutral-500 transition cursor-pointer flex-shrink-0"
           >

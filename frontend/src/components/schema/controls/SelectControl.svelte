@@ -1,17 +1,28 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import SelectControl from './SelectControl.svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {string} [value]
+   * @property {boolean} [disabled]
+   * @property {boolean} [hideHeader]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   */
 
-  export let property = {};
-  export let value = '';
-  export let disabled = false;
-  export let hideHeader = false;
-  export let onChange = null;
-  export let onchange = null;
-
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    property = {},
+    value = $bindable(''),
+    disabled = false,
+    hideHeader = false,
+    onChange = null,
+    onchange = null
+  } = $props();
   const selectId = `select-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
 
-  $: options = property.options || [];
+  let options = $derived(property.options || []);
 
   function handleChange(e) {
     if (disabled) return;
@@ -20,9 +31,7 @@
       selected = Number(selected);
     }
     value = selected;
-    dispatch('change', selected);
-    if (typeof onChange === 'function') onChange(selected);
-    if (typeof onchange === 'function') onchange(selected);
+    (onchange || onChange)?.(selected);
   }
 </script>
 
@@ -33,7 +42,7 @@
       value={value ?? ''}
       {disabled}
       aria-label={property.label || property.key}
-      on:change={handleChange}
+      onchange={handleChange}
       class="w-full bg-[#121215] text-neutral-200 text-xs rounded-lg px-3 py-2 border border-neutral-700
         focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors
         appearance-none pr-8 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
@@ -70,16 +79,14 @@
     </div>
 
     <div class="flex-shrink-0 w-full sm:w-auto min-w-[12rem]">
-      <svelte:self
+      <SelectControl
         {property}
         {value}
         {disabled}
         hideHeader={true}
-        on:change={(e) => {
-          value = e.detail;
-          dispatch('change', e.detail);
-          if (typeof onChange === 'function') onChange(e.detail);
-          if (typeof onchange === 'function') onchange(e.detail);
+        onchange={(val) => {
+          value = val;
+          (onchange || onChange)?.(val);
         }}
       />
     </div>

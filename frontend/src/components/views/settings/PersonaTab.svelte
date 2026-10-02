@@ -2,17 +2,15 @@
   import SettingSection from '../../common/SettingSection.svelte';
   import SteamPersonaCard from './SteamPersonaCard.svelte';
 
-  export let userCfgDraft = {
+
+  let { userCfgDraft = $bindable({
     account_name: 'GamuxPlayer',
     account_steamid: '76561197960287930',
     language: 'english',
     ip_country: 'US'
-  };
+  }), languagesList = [], countriesList = [] } = $props();
 
-  export let languagesList = [];
-  export let countriesList = [];
-
-  let importedAvatarUrl = '';
+  let importedAvatarUrl = $state('');
 </script>
 
 <div class="space-y-6">
@@ -31,7 +29,7 @@
         bind:avatarUrl={importedAvatarUrl}
         {languagesList}
         {countriesList}
-        on:change={() => { userCfgDraft = { ...userCfgDraft }; }}
+        onchange={() => { userCfgDraft = { ...userCfgDraft }; }}
       />
     </div>
   </SettingSection>

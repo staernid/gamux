@@ -1,6 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { drawerDraft } from '../../../stores/drawerDraft.js';
+    import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { modalStore } from '../../../stores/modal.js';
   import { getMetadataInfo, hasMetadataMatch, isSamePath } from '../../../utils/game.js';
   import SettingSection from '../../common/SettingSection.svelte';
@@ -10,35 +9,49 @@
   import GameMetadataWizard from './GameMetadataWizard.svelte';
   import HubActionToolbar from './HubActionToolbar.svelte';
 
-  export let game = null;
-  export let overrideCount = 0;
-  export let isSaving = false;
-  export let saveSuccess = false;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {number} [overrideCount]
+   * @property {boolean} [isSaving]
+   * @property {boolean} [saveSuccess]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = null,
+    overrideCount = 0,
+    isSaving = false,
+    saveSuccess = false
+  ,
+    onsave,
+    onreset,
+    onlinkMeta,
+    onunlinkMeta
+  } = $props();
 
-  let showSourceWizard = false;
-  let showMetadataWizard = false;
+  let showSourceWizard = $state(false);
+  let showMetadataWizard = $state(false);
 
-  $: candidates = game?.launchCandidates || [];
-  $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
-  $: hasMatch = game ? hasMetadataMatch(game) : false;
+  let candidates = $derived(game?.launchCandidates || []);
+  let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
+  let hasMatch = $derived(game ? hasMetadataMatch(game) : false);
 
   function handleSave() {
-    dispatch('save');
+    onsave?.();
   }
 
   function handleReset() {
-    dispatch('reset');
+    onreset?.();
   }
 
   function handleLinkMeta(e) {
-    dispatch('linkMeta', e.detail);
+    onlinkMeta?.(e.detail);
     showMetadataWizard = false;
   }
 
   function handleUnlinkMeta() {
-    dispatch('unlinkMeta');
+    onunlinkMeta?.();
     showMetadataWizard = false;
   }
 
@@ -60,8 +73,8 @@
     {overrideCount}
     {isSaving}
     {saveSuccess}
-    on:save={handleSave}
-    on:reset={handleReset}
+    onsave={handleSave}
+    onreset={handleReset}
   />
 
   <!-- Tab Content -->
@@ -105,7 +118,7 @@
             </div>
             <button
               type="button"
-              on:click={toggleSourceWizard}
+              onclick={toggleSourceWizard}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,7 +158,7 @@
             </div>
             <button
               type="button"
-              on:click={toggleMetadataWizard}
+              onclick={toggleMetadataWizard}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,7 +188,7 @@
             </div>
             <button
               type="button"
-              on:click={() => modalStore.open('artwork-picker', { game })}
+              onclick={() => modalStore.open('artwork-picker', { game })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,15 +200,15 @@
         </div>
 
         {#if showSourceWizard}
-          <GameSourceWizard {game} on:close={() => showSourceWizard = false} />
+          <GameSourceWizard {game} onclose={() => showSourceWizard = false} />
         {/if}
 
         {#if showMetadataWizard}
           <GameMetadataWizard
             {game}
-            on:linkMeta={handleLinkMeta}
-            on:unlinkMeta={handleUnlinkMeta}
-            on:close={() => showMetadataWizard = false}
+            onlinkMeta={handleLinkMeta}
+            onunlinkMeta={handleUnlinkMeta}
+            onclose={() => showMetadataWizard = false}
           />
         {/if}
       </SettingSection>
@@ -207,7 +220,7 @@
               {@const isSelected = isSamePath($drawerDraft.exePath, cand.executable)}
               <button
                 type="button"
-                on:click={() => drawerDraft.selectCandidate(cand)}
+                onclick={() => drawerDraft.selectCandidate(cand)}
                 class="p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 cursor-pointer {isSelected ? 'bg-surface-cardHover border-neutral-300 shadow-md text-white' : 'bg-surface-header border-surface-border hover:border-surface-borderHighlight text-neutral-300'}"
               >
                 <div class="space-y-0.5 min-w-0 flex-1">
@@ -262,7 +275,7 @@
           />
           <button
             type="button"
-            on:click={async () => { await drawerDraft.browseExecutable(game?.gameDir); }}
+            onclick={async () => { await drawerDraft.browseExecutable(game?.gameDir); }}
             class="bg-surface-cardHover hover:bg-surface-elevated text-neutral-200 px-3.5 py-2 rounded-lg font-bold border border-surface-borderHighlight text-xs flex-shrink-0 cursor-pointer"
           >
             Browse

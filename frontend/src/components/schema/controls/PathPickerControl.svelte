@@ -1,24 +1,32 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { selectDirectoryDialog } from '../../../utils/filesystem.js';
+    import { selectDirectoryDialog } from '../../../utils/filesystem.js';
 
-  export let property = {};
-  export let value = '';
-  export let disabled = false;
-  export let hideHeader = false;
-  export let onChange = null;
-  export let onchange = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {string} [value]
+   * @property {boolean} [disabled]
+   * @property {boolean} [hideHeader]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    property = {},
+    value = $bindable(''),
+    disabled = false,
+    hideHeader = false,
+    onChange = null,
+    onchange = null
+  } = $props();
   const inputId = `path-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
 
-  $: isList = property.type === 'path_list' || Array.isArray(value);
-  $: pathList = Array.isArray(value) ? value : (value ? [value] : []);
+  let isList = $derived(property.type === 'path_list' || Array.isArray(value));
+  let pathList = $derived(Array.isArray(value) ? value : (value ? [value] : []));
 
   function notifyChange(nextVal) {
-    dispatch('change', nextVal);
-    if (typeof onChange === 'function') onChange(nextVal);
-    if (typeof onchange === 'function') onchange(nextVal);
+    (onchange || onChange)?.(nextVal);
   }
 
   async function browseSingle() {
@@ -62,7 +70,7 @@
         <button
           type="button"
           {disabled}
-          on:click={browseAddToList}
+          onclick={browseAddToList}
           class="px-2 py-1 text-4xs font-mono font-bold uppercase tracking-wider bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded transition-colors cursor-pointer"
           aria-label="Add Folder"
         >
@@ -82,7 +90,7 @@
               <button
                 type="button"
                 {disabled}
-                on:click={() => removePath(p)}
+                onclick={() => removePath(p)}
                 class="p-0.5 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0 cursor-pointer"
                 aria-label={`Remove path ${p}`}
               >
@@ -102,7 +110,7 @@
           value={typeof value === 'string' ? value : ''}
           {disabled}
           placeholder={typeof property.default === 'string' ? property.default : '/path/to/directory'}
-          on:input={handleInputChange}
+          oninput={handleInputChange}
           aria-label={property.label || property.key}
           class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
             focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
@@ -110,7 +118,7 @@
         <button
           type="button"
           {disabled}
-          on:click={browseSingle}
+          onclick={browseSingle}
           class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors cursor-pointer"
         >
           Browse
@@ -141,7 +149,7 @@
         <button
           type="button"
           {disabled}
-          on:click={browseAddToList}
+          onclick={browseAddToList}
           class="flex-shrink-0 px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded transition-colors"
           aria-label="Add Folder"
         >
@@ -163,7 +171,7 @@
               <button
                 type="button"
                 {disabled}
-                on:click={() => removePath(p)}
+                onclick={() => removePath(p)}
                 class="p-1 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0"
                 aria-label={`Remove path ${p}`}
               >
@@ -183,14 +191,14 @@
           value={typeof value === 'string' ? value : ''}
           {disabled}
           placeholder={typeof property.default === 'string' ? property.default : '/path/to/directory'}
-          on:input={handleInputChange}
+          oninput={handleInputChange}
           class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
             focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         />
         <button
           type="button"
           {disabled}
-          on:click={browseSingle}
+          onclick={browseSingle}
           class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors"
         >
           Browse

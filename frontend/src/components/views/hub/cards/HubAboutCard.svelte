@@ -1,4 +1,4 @@
-<script context="module">
+<script module>
   // In-memory module cache for metadata responses across component remounts
   const metadataCache = {};
 
@@ -10,25 +10,33 @@
 </script>
 
 <script>
+  import { run } from 'svelte/legacy';
+
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../../api/app.js';
   import { modalStore } from '../../../../stores/modal.js';
   import { getMetadataInfo, isSteamApp, getGameSource } from '../../../../utils/game.js';
   import { GameSynopsis, GenrePillGroup } from '../../../blocks/index.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  let metadata = null;
-  let isLoading = false;
-  let currentLookupKey = '';
+  /** @type {Props} */
+  let { game = null } = $props();
 
-  $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
-  $: gameSource = game ? getGameSource(game) : 'Standalone';
-  $: providerKey = (metaInfo.provider || '').toLowerCase();
-  $: targetLookupId = metaInfo.id || '';
-  $: lookupKey = (providerKey && providerKey !== 'none' && targetLookupId && targetLookupId !== '0')
+  let metadata = $state(null);
+  let isLoading = $state(false);
+  let currentLookupKey = $state('');
+
+  let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
+  let gameSource = $derived(game ? getGameSource(game) : 'Standalone');
+  let providerKey = $derived((metaInfo.provider || '').toLowerCase());
+  let targetLookupId = $derived(metaInfo.id || '');
+  let lookupKey = $derived((providerKey && providerKey !== 'none' && targetLookupId && targetLookupId !== '0')
     ? `${providerKey}:${targetLookupId}`
-    : '';
+    : '');
 
   async function loadMetadata(prov, id, key) {
     if (!key || !prov || prov === 'none' || !id || id === '0') {
@@ -68,9 +76,11 @@
     }
   }
 
-  $: if (lookupKey !== currentLookupKey && !isLoading) {
-    loadMetadata(providerKey, targetLookupId, lookupKey);
-  }
+  run(() => {
+    if (lookupKey !== currentLookupKey && !isLoading) {
+      loadMetadata(providerKey, targetLookupId, lookupKey);
+    }
+  });
 
   onMount(() => {
     if (lookupKey) {
@@ -90,18 +100,18 @@
       .trim();
   }
 
-  $: summaryText = metadata?.short_description
+  let summaryText = $derived(metadata?.short_description
     ? cleanDescription(metadata.short_description)
     : metadata?.about_the_game
     ? cleanDescription(metadata.about_the_game)
     : game?.description
     ? cleanDescription(game.description)
-    : '';
+    : '');
 
-  $: developers = metadata?.developers || [];
-  $: publishers = metadata?.publishers || [];
-  $: genres = metadata?.genres || [];
-  $: releaseDate = metadata?.release_date || '';
+  let developers = $derived(metadata?.developers || []);
+  let publishers = $derived(metadata?.publishers || []);
+  let genres = $derived(metadata?.genres || []);
+  let releaseDate = $derived(metadata?.release_date || '');
 </script>
 
 <div class="space-y-4 animate-fade-in text-neutral-200">
@@ -140,14 +150,14 @@
         <div class="flex items-center space-x-2 flex-shrink-0">
           <button
             type="button"
-            on:click={() => modalStore.open('metadata-link', { game })}
+            onclick={() => modalStore.open('metadata-link', { game })}
             class="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 text-xs font-bold transition shadow-lg flex items-center space-x-1.5 cursor-pointer"
           >
             <span>Link Metadata</span>
           </button>
           <button
             type="button"
-            on:click={() => modalStore.open('artwork-picker', { game })}
+            onclick={() => modalStore.open('artwork-picker', { game })}
             class="px-3.5 py-2 rounded-xl bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition cursor-pointer"
           >
             <span>Artwork</span>

@@ -1,26 +1,30 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { formatBytes } from '../../../utils/format.js';
+  import { stopPropagation } from 'svelte/legacy';
+
+    import { formatBytes } from '../../../utils/format.js';
   import PosterArt from '../../common/PosterArt.svelte';
 
-  export let tasks = [];
-
-  const dispatch = createEventDispatcher();
+  let { tasks = [] ,
+    onopenGame,
+    onopenDirectory,
+    ondismiss,
+    onclearAll
+  } = $props();
 
   function handleOpenGame(task) {
-    dispatch('openGame', task);
+    onopenGame?.(task);
   }
 
   function handleOpenDirectory(dir) {
-    dispatch('openDirectory', dir);
+    onopenDirectory?.(dir);
   }
 
   function handleDismiss(id) {
-    dispatch('dismiss', id);
+    ondismiss?.(id);
   }
 
   function handleClearAll() {
-    dispatch('clearAll');
+    onclearAll?.();
   }
 </script>
 
@@ -31,7 +35,7 @@
     </h3>
     <button
       type="button"
-      on:click={handleClearAll}
+      onclick={handleClearAll}
       class="text-2xs font-bold text-neutral-400 hover:text-white transition cursor-pointer"
     >
       Clear All
@@ -43,8 +47,8 @@
       <div
         role="button"
         tabindex="0"
-        on:click={() => handleOpenGame(tr)}
-        on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleOpenGame(tr)}
+        onclick={() => handleOpenGame(tr)}
+        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleOpenGame(tr)}
         class="p-4 flex items-center justify-between hover:bg-surface-cardHover hover:border-surface-borderHighlight transition gap-4 cursor-pointer group"
         title="Open {tr.gameName || tr.title} in Game Hub"
       >
@@ -86,7 +90,7 @@
           {#if tr.gameDir}
             <button
               type="button"
-              on:click|stopPropagation={() => handleOpenDirectory(tr.gameDir)}
+              onclick={stopPropagation(() => handleOpenDirectory(tr.gameDir))}
               class="text-neutral-300 hover:text-white text-xs px-2.5 py-1.5 rounded-xl bg-surface-header hover:bg-surface-input border border-surface-border font-medium transition cursor-pointer"
               title="Open Installation Folder"
             >
@@ -96,7 +100,7 @@
 
           <button
             type="button"
-            on:click|stopPropagation={() => handleDismiss(tr.id)}
+            onclick={stopPropagation(() => handleDismiss(tr.id))}
             class="text-neutral-400 hover:text-white text-xs px-2.5 py-1.5 rounded-xl hover:bg-surface-input cursor-pointer transition"
             title="Dismiss from history"
           >

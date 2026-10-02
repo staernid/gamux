@@ -1,5 +1,7 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { run } from 'svelte/legacy';
+
+  import { onMount } from 'svelte';
   import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { modalStore } from '../../../stores/modal.js';
   import { AppAPI } from '../../../api/app.js';
@@ -13,37 +15,51 @@
   import GameMetadataWizard from './GameMetadataWizard.svelte';
   import { PLATFORM_OPTIONS } from '../../../constants/options.js';
 
-  export let game = null;
-  export let globalCfg = {};
-  export let overrideCount = 0;
-  export let isSaving = false;
-  export let saveSuccess = false;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {any} [globalCfg]
+   * @property {number} [overrideCount]
+   * @property {boolean} [isSaving]
+   * @property {boolean} [saveSuccess]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = null,
+    globalCfg = {},
+    overrideCount = 0,
+    isSaving = false,
+    saveSuccess = false
+  ,
+    onreset = null,
+    onlinkMeta = null,
+    onunlinkMeta = null
+  } = $props();
   const platformOptions = PLATFORM_OPTIONS;
 
-  let showSourceWizard = false;
-  let showMetadataWizard = false;
-  let filterOnlyOverrides = false;
-  let showPreview = false;
-  let launchPreview = null;
-  let isLoadingPreview = false;
-  let previewCopied = false;
+  let showSourceWizard = $state(false);
+  let showMetadataWizard = $state(false);
+  let filterOnlyOverrides = $state(false);
+  let showPreview = $state(false);
+  let launchPreview = $state(null);
+  let isLoadingPreview = $state(false);
+  let previewCopied = $state(false);
   let previewCopiedTimer = null;
 
-  $: candidates = game?.launchCandidates || [];
-  $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
-  $: hasMatch = game ? hasMetadataMatch(game) : false;
-  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
+  let candidates = $derived(game?.launchCandidates || []);
+  let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
+  let hasMatch = $derived(game ? hasMetadataMatch(game) : false);
+  let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
 
-  $: isLinux = $drawerDraft.platform === 'linux';
-  $: effectiveRunner = isLinux ? 'linux' : ($drawerDraft.runner || game?.runner || globalCfg?.default_runner || 'umu');
-  $: isWine = !isLinux && effectiveRunner === 'wine';
-  $: isSteamGame = Boolean(
+  let isLinux = $derived($drawerDraft.platform === 'linux');
+  let effectiveRunner = $derived(isLinux ? 'linux' : ($drawerDraft.runner || game?.runner || globalCfg?.default_runner || 'umu'));
+  let isWine = $derived(!isLinux && effectiveRunner === 'wine');
+  let isSteamGame = $derived(Boolean(
     (game?.store && game.store.toLowerCase() === 'steam') ||
     (game?.source && game.source.toLowerCase() === 'steam') ||
     ($drawerDraft.appId && (!game?.store || game.store.toLowerCase() === 'steam'))
-  );
+  ));
 
   async function loadPreview() {
     if (!game?.gameDir) return;
@@ -68,26 +84,28 @@
     }, 300);
   }
 
-  $: if ($drawerDraft && game?.gameDir) {
-    schedulePreviewUpdate();
-  }
+  run(() => {
+    if ($drawerDraft && game?.gameDir) {
+      schedulePreviewUpdate();
+    }
+  });
 
   onMount(() => {
     loadPreview();
   });
 
   function handleResetAll() {
-    dispatch('reset');
+    onreset?.();
     schedulePreviewUpdate();
   }
 
   function handleLinkMeta(e) {
-    dispatch('linkMeta', e.detail);
+    onlinkMeta?.(e.detail);
     showMetadataWizard = false;
   }
 
   function handleUnlinkMeta() {
-    dispatch('unlinkMeta');
+    onunlinkMeta?.();
     showMetadataWizard = false;
   }
 
@@ -183,7 +201,7 @@
         {#if overrideCount > 0}
           <button
             type="button"
-            on:click={() => { filterOnlyOverrides = !filterOnlyOverrides; }}
+            onclick={() => { filterOnlyOverrides = !filterOnlyOverrides; }}
             class="px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer flex items-center space-x-1.5 {filterOnlyOverrides ? 'bg-neutral-800 border-neutral-500 text-white' : 'bg-surface-header border-surface-border text-neutral-400 hover:text-white'}"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +212,7 @@
 
           <button
             type="button"
-            on:click={handleResetAll}
+            onclick={handleResetAll}
             class="px-3 py-1.5 rounded-lg text-xs font-bold bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition cursor-pointer flex items-center space-x-1.5"
             title="Reset all settings for this title back to global defaults"
           >
@@ -210,7 +228,7 @@
       <button
         type="button"
         class="w-full flex items-center justify-between pb-1.5 cursor-pointer select-none text-left"
-        on:click={() => { showPreview = !showPreview; }}
+        onclick={() => { showPreview = !showPreview; }}
       >
         <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +250,7 @@
               <pre class="font-mono text-2xs text-emerald-400/90 whitespace-pre-wrap break-all leading-relaxed flex-1 select-all">{launchPreview.command}</pre>
               <button
                 type="button"
-                on:click={copyLaunchCommand}
+                onclick={copyLaunchCommand}
                 class="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-3xs font-mono font-bold text-neutral-300 hover:text-white transition flex-shrink-0 cursor-pointer flex items-center space-x-1"
               >
                 {#if previewCopied}
@@ -283,7 +301,7 @@
                 {@const isSelected = isSamePath($drawerDraft.exePath, cand.executable)}
                 <button
                   type="button"
-                  on:click={() => drawerDraft.selectCandidate(cand)}
+                  onclick={() => drawerDraft.selectCandidate(cand)}
                   class="p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 cursor-pointer {isSelected ? 'bg-surface-cardHover border-neutral-300 shadow-md text-white' : 'bg-surface-header border-surface-border hover:border-surface-borderHighlight text-neutral-300'}"
                 >
                   <div class="space-y-0.5 min-w-0 flex-1">
@@ -316,7 +334,7 @@
             />
             <button
               type="button"
-              on:click={() => drawerDraft.browseExecutable(game?.gameDir)}
+              onclick={() => drawerDraft.browseExecutable(game?.gameDir)}
               class="px-3.5 py-2 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition cursor-pointer flex-shrink-0"
             >
               Browse...
@@ -400,7 +418,7 @@
             </div>
             <button
               type="button"
-              on:click={toggleSourceWizard}
+              onclick={toggleSourceWizard}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>{showSourceWizard ? 'Close Matcher' : 'Match Store...'}</span>
@@ -425,7 +443,7 @@
             </div>
             <button
               type="button"
-              on:click={toggleMetadataWizard}
+              onclick={toggleMetadataWizard}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>{showMetadataWizard ? 'Close Matcher' : (hasMatch ? 'Change Match...' : 'Match Metadata...')}</span>
@@ -447,7 +465,7 @@
             </div>
             <button
               type="button"
-              on:click={() => modalStore.open('artwork-picker', { game })}
+              onclick={() => modalStore.open('artwork-picker', { game })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>Open Artwork Hub...</span>
@@ -456,15 +474,15 @@
         </div>
 
         {#if showSourceWizard}
-          <GameSourceWizard {game} on:close={() => showSourceWizard = false} />
+          <GameSourceWizard {game} onclose={() => showSourceWizard = false} />
         {/if}
 
         {#if showMetadataWizard}
           <GameMetadataWizard
             {game}
-            on:linkMeta={handleLinkMeta}
-            on:unlinkMeta={handleUnlinkMeta}
-            on:close={() => showMetadataWizard = false}
+            onlinkMeta={handleLinkMeta}
+            onunlinkMeta={handleUnlinkMeta}
+            onclose={() => showMetadataWizard = false}
           />
         {/if}
       </SettingSection>

@@ -268,9 +268,9 @@
             <TaskCard
               task={tr}
               {expandedDepots}
-              on:pause={(e) => tasksStore.pause(e.detail)}
-              on:cancel={(e) => tasksStore.cancel(e.detail)}
-              on:toggleDepots={toggleDepots}
+              onpause={(val) => tasksStore.pause(val)}
+              oncancel={(val) => tasksStore.cancel(val)}
+              ontoggleDepots={toggleDepots}
             />
           {/each}
         </div>
@@ -280,10 +280,10 @@
       {#if displayedQueued.length > 0}
         <TaskQueueSection
           tasks={displayedQueued}
-          on:resume={(e) => tasksStore.resume(e.detail)}
-          on:pause={(e) => tasksStore.pause(e.detail)}
-          on:cancel={(e) => tasksStore.cancel(e.detail)}
-          on:reorder={(e) => tasksStore.reorder(e.detail)}
+          onresume={(val) => tasksStore.resume(val)}
+          onpause={(val) => tasksStore.pause(val)}
+          oncancel={(val) => tasksStore.cancel(val)}
+          onreorder={(val) => tasksStore.reorder(val)}
         />
       {/if}
 
@@ -291,10 +291,10 @@
       {#if displayedCompleted.length > 0}
         <TaskHistorySection
           tasks={displayedCompleted}
-          on:openGame={handleOpenGame}
-          on:openDirectory={handleOpenDirectory}
-          on:dismiss={(e) => tasksStore.remove(e.detail)}
-          on:clearAll={() => tasksStore.clearFinished()}
+          onopenGame={handleOpenGame}
+          onopenDirectory={handleOpenDirectory}
+          ondismiss={(val) => tasksStore.remove(val)}
+          onclearAll={() => tasksStore.clearFinished()}
         />
       {/if}
     {/if}

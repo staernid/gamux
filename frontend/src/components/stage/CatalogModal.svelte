@@ -1,5 +1,7 @@
 <script>
-  import { onMount, onDestroy, createEventDispatcher, tick } from 'svelte';
+  import { run } from 'svelte/legacy';
+
+  import { onMount, onDestroy, tick } from 'svelte';
   import ModalShell from '../common/ModalShell.svelte';
   import Icon from '../common/Icon.svelte';
   import CatalogCard from './catalog/CatalogCard.svelte';
@@ -8,31 +10,34 @@
   import { normalizeGame } from '../../utils/game.js';
   import { AppAPI } from '../../api/app.js';
 
-  const dispatch = createEventDispatcher();
+  /**
+   * @typedef {Object} Props
+   * @property {string} [initialQuery]
+   * @property {any} [onclose]
+   */
 
-  export let initialQuery = '';
-  export let onclose = null;
+  /** @type {Props} */
+  let { initialQuery = '', onclose = null } = $props();
 
   function handleClose() {
-    dispatch('close');
-    if (typeof onclose === 'function') onclose();
+    onclose?.();
   }
 
-  let searchInputEl;
-  let query = initialQuery || '';
-  let focusedIndex = 0;
-  let gridContainerEl;
-  let storeResults = [];
-  let isSearchingStore = false;
-  let storeSearchTimeout = null;
-  let lastStoreQuery = '';
-  let activeStoreFilter = 'all'; // 'all' | 'steam' | 'gog'
+  let searchInputEl = $state();
+  let query = $state(initialQuery || '');
+  let focusedIndex = $state(0);
+  let gridContainerEl = $state();
+  let storeResults = $state([]);
+  let isSearchingStore = $state(false);
+  let storeSearchTimeout = $state(null);
+  let lastStoreQuery = $state('');
+  let activeStoreFilter = $state('all'); // 'all' | 'steam' | 'gog'
 
-  $: allGames = $games || [];
+  let allGames = $derived($games || []);
 
   // Debounced Store Catalog Search
-  $: {
-    const q = query.trim();
+  run(() => {
+    const q = (query || '').trim();
     if (q !== lastStoreQuery) {
       lastStoreQuery = q;
       if (storeSearchTimeout) clearTimeout(storeSearchTimeout);
@@ -56,18 +61,18 @@
         }, 250);
       }
     }
-  }
+  });
 
   // Filtered Store Results by Provider
-  $: filteredResults = storeResults.filter(item => {
+  let filteredResults = $derived(storeResults.filter(item => {
     if (activeStoreFilter === 'all') return true;
     const store = (item.store || 'steam').toLowerCase();
     return store === activeStoreFilter;
-  });
+  }));
 
   // Store counts for filter chips
-  $: steamCount = storeResults.filter(item => (item.store || 'steam').toLowerCase() === 'steam').length;
-  $: gogCount = storeResults.filter(item => (item.store || '').toLowerCase() === 'gog').length;
+  let steamCount = $derived(storeResults.filter(item => (item.store || 'steam').toLowerCase() === 'steam').length);
+  let gogCount = $derived(storeResults.filter(item => (item.store || '').toLowerCase() === 'gog').length);
 
   function getMatchingLocalGame(res) {
     if (!res) return null;
@@ -81,21 +86,23 @@
     });
   }
 
-  $: {
+  run(() => {
     if (focusedIndex >= filteredResults.length) {
       focusedIndex = Math.max(0, filteredResults.length - 1);
     }
-  }
+  });
 
   // Scroll focused card into view smoothly
-  $: if (gridContainerEl && filteredResults.length > 0) {
-    tick().then(() => {
-      const activeCard = gridContainerEl?.querySelector(`[data-index="${focusedIndex}"]`);
-      if (activeCard && typeof activeCard.scrollIntoView === 'function') {
-        activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    });
-  }
+  run(() => {
+    if (gridContainerEl && filteredResults.length > 0) {
+      tick().then(() => {
+        const activeCard = gridContainerEl?.querySelector(`[data-index="${focusedIndex}"]`);
+        if (activeCard && typeof activeCard.scrollIntoView === 'function') {
+          activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      });
+    }
+  });
 
   onMount(() => {
     if (searchInputEl) {
@@ -137,7 +144,7 @@
   }
 
   function handleSuggest(e) {
-    query = e.detail;
+    query = (e && typeof e === 'object' && 'detail' in e) ? e.detail : (e || '');
     if (searchInputEl) {
       searchInputEl.focus();
     }
@@ -195,9 +202,9 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
-<ModalShell customHeader={true} padding="p-6 sm:p-10" on:close={handleClose}>
+<ModalShell customHeader={true} padding="p-6 sm:p-10" onclose={handleClose}>
   <!-- Header Bar -->
   <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-4 flex-shrink-0">
     <div class="flex items-center justify-between border-b border-surface-border pb-3">
@@ -228,7 +235,7 @@
         {/if}
         <button
           type="button"
-          on:click={handleClose}
+          onclick={handleClose}
           class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm active:scale-95"
         >
           <span class="px-1.5 py-0.5 rounded bg-surface-input border border-surface-border text-neutral-400 font-bold text-3xs">Esc</span>
@@ -252,7 +259,7 @@
       {#if query}
         <button
           type="button"
-          on:click={() => { query = ''; searchInputEl?.focus(); }}
+          onclick={() => { query = ''; searchInputEl?.focus(); }}
           class="absolute right-4 text-neutral-400 hover:text-white p-1 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
           aria-label="Clear search"
         >
@@ -267,7 +274,7 @@
         <span class="text-3xs font-mono uppercase tracking-wider text-neutral-500 mr-1">Store:</span>
         <button
           type="button"
-          on:click={() => { activeStoreFilter = 'all'; focusedIndex = 0; }}
+          onclick={() => { activeStoreFilter = 'all'; focusedIndex = 0; }}
           class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'all' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
         >
           All ({storeResults.length})
@@ -275,7 +282,7 @@
         {#if steamCount > 0}
           <button
             type="button"
-            on:click={() => { activeStoreFilter = 'steam'; focusedIndex = 0; }}
+            onclick={() => { activeStoreFilter = 'steam'; focusedIndex = 0; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'steam' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
           >
             Steam ({steamCount})
@@ -284,7 +291,7 @@
         {#if gogCount > 0}
           <button
             type="button"
-            on:click={() => { activeStoreFilter = 'gog'; focusedIndex = 0; }}
+            onclick={() => { activeStoreFilter = 'gog'; focusedIndex = 0; }}
             class="px-2.5 py-1 rounded-lg text-2xs font-mono transition-all cursor-pointer {activeStoreFilter === 'gog' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight font-bold' : 'bg-surface-card text-neutral-400 hover:text-white border border-surface-border'}"
           >
             GOG ({gogCount})
@@ -301,7 +308,7 @@
   >
     {#if !query.trim()}
       <!-- Clean Empty Discovery State with Quick Suggestions -->
-      <CatalogEmptyState on:suggest={handleSuggest} />
+      <CatalogEmptyState onsuggest={handleSuggest} />
     {:else if isSearchingStore && storeResults.length === 0}
       <!-- Loading State -->
       <div class="h-64 flex flex-col items-center justify-center text-neutral-400 text-sm font-mono space-y-3">
@@ -314,7 +321,7 @@
         <p>No store catalog matches found for "{query}"</p>
         <button
           type="button"
-          on:click={() => { query = ''; searchInputEl?.focus(); }}
+          onclick={() => { query = ''; searchInputEl?.focus(); }}
           class="text-xs text-neutral-400 hover:text-white underline underline-offset-4 cursor-pointer"
         >
           Clear search query
@@ -326,7 +333,7 @@
         <p>No titles found from {activeStoreFilter.toUpperCase()} for "{query}"</p>
         <button
           type="button"
-          on:click={() => { activeStoreFilter = 'all'; }}
+          onclick={() => { activeStoreFilter = 'all'; }}
           class="text-xs text-neutral-400 hover:text-white underline underline-offset-4 cursor-pointer"
         >
           Show all results ({storeResults.length})
@@ -341,8 +348,8 @@
               {item}
               isFocused={index === focusedIndex}
               localMatch={getMatchingLocalGame(item)}
-              on:select={() => selectAndClose(item)}
-              on:focus={() => { focusedIndex = index; }}
+              onselect={() => selectAndClose(item)}
+              onfocus={() => { focusedIndex = index; }}
             />
           </div>
         {/each}

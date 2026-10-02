@@ -1,19 +1,27 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import { hasMetadataMatch } from '../../../utils/game.js';
   import { AppAPI } from '../../../api/app.js';
   import { notificationStore } from '../../../stores/notifications.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let { game = null ,
+    onlinkMeta,
+    onunlinkMeta,
+    onclose
+  } = $props();
 
   const initialProvider = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
-  let metaTargetStore = initialProvider === 'gog' ? 'gog' : initialProvider === 'rawg' ? 'rawg' : (initialProvider === 'none' || initialProvider === 'standalone') ? 'none' : 'steam';
-  let metaSearchQuery = game?.name || '';
-  let metaCustomId = game?.metadataId || game?.metadata_id || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '';
-  let metaSearchResults = [];
-  let isSearchingMeta = false;
+  let metaTargetStore = $state(initialProvider === 'gog' ? 'gog' : initialProvider === 'rawg' ? 'rawg' : (initialProvider === 'none' || initialProvider === 'standalone') ? 'none' : 'steam');
+  let metaSearchQuery = $state(game?.name || '');
+  let metaCustomId = $state(game?.metadataId || game?.metadata_id || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '');
+  let metaSearchResults = $state([]);
+  let isSearchingMeta = $state(false);
   let isLinkingMeta = false;
 
   const metadataProviders = [
@@ -23,7 +31,7 @@
     { id: 'none', display_name: 'None', badge: 'Unlinked' }
   ];
 
-  $: hasMatch = game ? hasMetadataMatch(game) : false;
+  let hasMatch = $derived(game ? hasMetadataMatch(game) : false);
 
   onMount(() => {
     if (metaTargetStore !== 'none' && metaSearchQuery.trim()) {
@@ -55,11 +63,11 @@
 
   function handleApplyMetaLink(idToUse = null) {
     const targetId = idToUse !== null ? String(idToUse) : (metaTargetStore === 'none' || metaTargetStore === 'standalone' ? '0' : metaCustomId.trim());
-    dispatch('linkMeta', { targetStore: metaTargetStore, targetId });
+    onlinkMeta?.({ targetStore: metaTargetStore, targetId });
   }
 
   function handleUnlinkMeta() {
-    dispatch('unlinkMeta');
+    onunlinkMeta?.();
   }
 </script>
 
@@ -73,14 +81,14 @@
       {#if hasMatch}
         <button
           type="button"
-          on:click={handleUnlinkMeta}
+          onclick={handleUnlinkMeta}
           disabled={isLinkingMeta}
           class="text-rose-400 hover:text-rose-300 text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 cursor-pointer"
         >
           Reset to Auto
         </button>
       {/if}
-      <button type="button" on:click={() => dispatch('close')} class="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Close</button>
+      <button type="button" onclick={() => onclose?.()} class="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Close</button>
     </div>
   </div>
 
@@ -90,7 +98,7 @@
       {@const isAct = metaTargetStore === prov.id}
       <button
         type="button"
-        on:click={() => { metaTargetStore = prov.id; if (metaTargetStore !== 'none' && metaTargetStore !== 'standalone' && metaSearchQuery.trim()) handleMetaSearch(prov.id); }}
+        onclick={() => { metaTargetStore = prov.id; if (metaTargetStore !== 'none' && metaTargetStore !== 'standalone' && metaSearchQuery.trim()) handleMetaSearch(prov.id); }}
         class="px-3 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer {isAct ? 'bg-purple-600 text-white shadow border border-purple-400/40' : 'bg-[#0a0a0f] border border-[#222232] text-slate-400 hover:text-white'}"
       >
         <span>{prov.display_name}</span>
@@ -104,7 +112,7 @@
       <p class="text-2xs text-slate-400">Unlinks external store metadata. Game will display local library title and fallback artwork.</p>
       <button
         type="button"
-        on:click={() => handleApplyMetaLink('0')}
+        onclick={() => handleApplyMetaLink('0')}
         disabled={isLinkingMeta}
         class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition cursor-pointer"
       >
@@ -119,13 +127,13 @@
           type="text"
           bind:value={metaSearchQuery}
           placeholder={`Search ${metaTargetStore.toUpperCase()} catalogue (e.g. ${game?.name || ''})...`}
-          on:keydown={(e) => { if (e.key === 'Enter') handleMetaSearch(); }}
+          onkeydown={(e) => { if (e.key === 'Enter') handleMetaSearch(); }}
           class="w-full bg-[#0a0a0f] border border-[#222232] focus:border-purple-500 rounded-lg px-3.5 py-1.5 text-xs text-white outline-none font-mono placeholder:text-slate-500"
         />
       </div>
       <button
         type="button"
-        on:click={handleMetaSearch}
+        onclick={handleMetaSearch}
         disabled={isSearchingMeta || !metaSearchQuery.trim()}
         class="w-full sm:w-auto px-4 py-1.5 bg-[#1c1c28] hover:bg-[#28283a] text-white text-xs font-bold rounded-lg border border-[#2f2f42] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
       >
@@ -166,7 +174,7 @@
               </div>
               <button
                 type="button"
-                on:click={() => handleApplyMetaLink(cand.id)}
+                onclick={() => handleApplyMetaLink(cand.id)}
                 disabled={isLinkingMeta}
                 class="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition flex-shrink-0 cursor-pointer"
               >
@@ -191,7 +199,7 @@
       />
       <button
         type="button"
-        on:click={() => handleApplyMetaLink()}
+        onclick={() => handleApplyMetaLink()}
         disabled={!metaCustomId.trim() || isLinkingMeta}
         class="px-3.5 py-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition flex-shrink-0 cursor-pointer"
       >

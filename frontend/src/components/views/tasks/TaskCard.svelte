@@ -1,21 +1,31 @@
 <script>
-  import { createEventDispatcher, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { formatBytes, formatETA } from '../../../utils/format.js';
   import { isDownloadTask } from '../../../stores/tasks.js';
   import PosterArt from '../../common/PosterArt.svelte';
 
-  export let task;
-  export let expandedDepots = {};
-  export let onpause = null;
-  export let oncancel = null;
-  export let ontoggleDepots = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} task
+   * @property {any} [expandedDepots]
+   * @property {any} [onpause]
+   * @property {any} [oncancel]
+   * @property {any} [ontoggleDepots]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    task,
+    expandedDepots = {},
+    onpause = null,
+    oncancel = null,
+    ontoggleDepots = null
+  } = $props();
 
-  $: isDl = isDownloadTask(task);
-  $: isIndeterminate = !isDl && (!task.percent || task.percent === 0);
+  let isDl = $derived(isDownloadTask(task));
+  let isIndeterminate = $derived(!isDl && (!task.percent || task.percent === 0));
 
-  let confirmingCancel = false;
+  let confirmingCancel = $state(false);
   let cancelTimeout = null;
 
   function getTaskTypeLabel(type) {
@@ -33,13 +43,11 @@
   }
 
   function toggleDepots() {
-    if (typeof ontoggleDepots === 'function') ontoggleDepots(task.id);
-    dispatch('toggleDepots', task.id);
+    ontoggleDepots?.(task.id);
   }
 
   function handlePause() {
-    if (typeof onpause === 'function') onpause(task.id);
-    dispatch('pause', task.id);
+    onpause?.(task.id);
   }
 
   function handleCancel() {
@@ -53,8 +61,7 @@
     }
     clearTimeout(cancelTimeout);
     confirmingCancel = false;
-    if (typeof oncancel === 'function') oncancel(task.id);
-    dispatch('cancel', task.id);
+    oncancel?.(task.id);
   }
 
   onDestroy(() => {
@@ -108,7 +115,7 @@
           {#if isDl}
             <button
               type="button"
-              on:click={handlePause}
+              onclick={handlePause}
               class="bg-surface-elevated hover:bg-surface-cardHover border border-surface-border text-amber-400 hover:text-amber-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
               aria-label="Pause {task.gameName || task.title || 'task'}"
             >
@@ -117,7 +124,7 @@
           {/if}
           <button
             type="button"
-            on:click={handleCancel}
+            onclick={handleCancel}
             class="font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer {confirmingCancel
               ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500 shadow-md animate-pulse'
               : 'bg-surface-elevated hover:bg-rose-950/40 border border-surface-border hover:border-rose-900/50 text-neutral-400 hover:text-rose-400'}"
@@ -181,7 +188,7 @@
     <div class="pt-2 border-t border-surface-borderSubtle">
       <button
         type="button"
-        on:click={toggleDepots}
+        onclick={toggleDepots}
         class="flex items-center justify-between w-full text-xs font-bold text-neutral-400 hover:text-neutral-200 transition py-0.5 cursor-pointer"
         aria-expanded={expandedDepots[task.id] ? "true" : "false"}
         aria-controls="depots-{task.id}"

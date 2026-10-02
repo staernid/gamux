@@ -4,17 +4,23 @@
   import { notificationStore } from '../../../../stores/notifications.js';
   import { formatBytes, formatTimeAgo } from '../../../../utils/format.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  let isLoading = true;
-  let errorMsg = '';
-  let saveResult = null;
-  let backups = [];
-  let isCreatingBackup = false;
-  let isRestoring = false;
-  let showBackupInput = false;
-  let backupNote = '';
-  let copiedPath = '';
+  /** @type {Props} */
+  let { game = null } = $props();
+
+  let isLoading = $state(true);
+  let errorMsg = $state('');
+  let saveResult = $state(null);
+  let backups = $state([]);
+  let isCreatingBackup = $state(false);
+  let isRestoring = $state(false);
+  let showBackupInput = $state(false);
+  let backupNote = $state('');
+  let copiedPath = $state('');
   let copyTimeout = null;
 
   onMount(async () => {
@@ -195,7 +201,7 @@
         </span>
         <button
           type="button"
-          on:click={handleUpdateManifest}
+          onclick={handleUpdateManifest}
           class="text-3xs text-neutral-300 hover:text-white font-bold transition-colors cursor-pointer"
           title="Force update Ludusavi database from GitHub"
         >
@@ -237,7 +243,7 @@
               <div class="flex items-center space-x-2 flex-shrink-0 self-end sm:self-center">
                 <button
                   type="button"
-                  on:click={() => handleCopyPath(loc.path)}
+                  onclick={() => handleCopyPath(loc.path)}
                   class="px-2.5 py-1.5 rounded-lg bg-[#1a1a24] hover:bg-[#252535] text-slate-300 hover:text-white border border-[#2b2b3c] text-2xs font-bold transition-colors flex items-center space-x-1"
                   title="Copy directory path to clipboard"
                 >
@@ -255,7 +261,7 @@
 
                 <button
                   type="button"
-                  on:click={() => handleOpenPath(loc.path)}
+                  onclick={() => handleOpenPath(loc.path)}
                   disabled={!loc.exists}
                   class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover disabled:opacity-40 disabled:cursor-not-allowed text-neutral-200 hover:text-white border border-surface-border text-2xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
                   title="Open folder in File Manager"
@@ -287,7 +293,7 @@
 
         <button
           type="button"
-          on:click={() => { showBackupInput = !showBackupInput; }}
+          onclick={() => { showBackupInput = !showBackupInput; }}
           class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-2xs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer"
         >
           <span>+ Create Backup</span>
@@ -310,7 +316,7 @@
             />
             <button
               type="button"
-              on:click={handleCreateBackup}
+              onclick={handleCreateBackup}
               disabled={isCreatingBackup}
               class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-neutral-950 font-black text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0 cursor-pointer"
             >
@@ -318,7 +324,7 @@
             </button>
             <button
               type="button"
-              on:click={() => { showBackupInput = false; }}
+              onclick={() => { showBackupInput = false; }}
               class="text-neutral-400 hover:text-white text-xs px-2 py-1.5 rounded-lg cursor-pointer"
             >
               Cancel
@@ -353,7 +359,7 @@
               <div class="flex items-center space-x-1.5 flex-shrink-0">
                 <button
                   type="button"
-                  on:click={() => handleRestoreBackup(bk.id)}
+                  onclick={() => handleRestoreBackup(bk.id)}
                   disabled={isRestoring}
                   class="px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 text-2xs font-bold transition-colors"
                   title="Restore this save snapshot"
@@ -363,7 +369,7 @@
 
                 <button
                   type="button"
-                  on:click={() => handleDeleteBackup(bk.id)}
+                  onclick={() => handleDeleteBackup(bk.id)}
                   class="p-1 rounded-lg bg-[#181822] hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-[#2b2b3c] transition-colors"
                   title="Delete Snapshot"
                 >

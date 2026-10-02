@@ -1,25 +1,33 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {any} [value]
+   * @property {boolean} [disabled]
+   * @property {boolean} [hideHeader]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   */
 
-  export let property = {};
-  export let value = {};
-  export let disabled = false;
-  export let hideHeader = false;
-  export let onChange = null;
-  export let onchange = null;
+  /** @type {Props} */
+  let {
+    property = {},
+    value = $bindable({}),
+    disabled = false,
+    hideHeader = false,
+    onChange = null,
+    onchange = null
+  } = $props();
 
-  const dispatch = createEventDispatcher();
+  let newKey = $state('');
+  let newValue = $state('');
 
-  let newKey = '';
-  let newValue = '';
-
-  $: envMap = (value && typeof value === 'object' && !Array.isArray(value)) ? value : {};
-  $: envKeys = Object.keys(envMap).sort();
+  let envMap = $derived((value && typeof value === 'object' && !Array.isArray(value)) ? value : {});
+  let envKeys = $derived(Object.keys(envMap).sort());
 
   function notifyChange(nextVal) {
-    dispatch('change', nextVal);
-    if (typeof onChange === 'function') onChange(nextVal);
-    if (typeof onchange === 'function') onchange(nextVal);
+    (onchange || onChange)?.(nextVal);
   }
 
   function addPair() {
@@ -68,7 +76,7 @@
             <button
               type="button"
               {disabled}
-              on:click={() => removePair(k)}
+              onclick={() => removePair(k)}
               class="p-0.5 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0 cursor-pointer"
               aria-label={`Remove variable ${k}`}
             >
@@ -88,7 +96,7 @@
         placeholder="VARIABLE_NAME"
         bind:value={newKey}
         {disabled}
-        on:keydown={handleKeyDown}
+        onkeydown={handleKeyDown}
         class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-neutral-700
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Name"
@@ -98,7 +106,7 @@
         placeholder="value"
         bind:value={newValue}
         {disabled}
-        on:keydown={handleKeyDown}
+        onkeydown={handleKeyDown}
         class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-neutral-700
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Value"
@@ -106,7 +114,7 @@
       <button
         type="button"
         {disabled}
-        on:click={addPair}
+        onclick={addPair}
         class="px-2.5 py-1.5 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
         aria-label="Add Variable"
       >
@@ -149,7 +157,7 @@
             <button
               type="button"
               {disabled}
-              on:click={() => removePair(k)}
+              onclick={() => removePair(k)}
               class="p-1 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0"
               aria-label={`Remove variable ${k}`}
             >
@@ -169,7 +177,7 @@
         placeholder="VARIABLE_NAME"
         bind:value={newKey}
         {disabled}
-        on:keydown={handleKeyDown}
+        onkeydown={handleKeyDown}
         class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Name"
@@ -179,7 +187,7 @@
         placeholder="value"
         bind:value={newValue}
         {disabled}
-        on:keydown={handleKeyDown}
+        onkeydown={handleKeyDown}
         class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Value"
@@ -187,7 +195,7 @@
       <button
         type="button"
         {disabled}
-        on:click={addPair}
+        onclick={addPair}
         class="px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors whitespace-nowrap"
         aria-label="Add Variable"
       >

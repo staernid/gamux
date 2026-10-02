@@ -1,41 +1,34 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
   import HubAchievementsCard from './cards/HubAchievementsCard.svelte';
   import HubNewsCard from './cards/HubNewsCard.svelte';
 
-  export let game = null;
-  export let initialSubTab = 'achievements';
-  export let initialNewsIndex = 0;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {string} [initialSubTab]
+   * @property {number} [initialNewsIndex]
+   */
 
-  let activeCommunitySubTab = initialSubTab || 'achievements'; // 'achievements' | 'news'
-  let prevInitialSubTab = initialSubTab;
-  let newsItems = [];
-  let isLoadingNews = false;
-  let expandedNewsIndex = initialNewsIndex ?? 0;
-  let prevInitialNewsIndex = initialNewsIndex;
-  let loadedNewsAppID = '';
-  let newsError = '';
+  /** @type {Props} */
+  let { game = null, initialSubTab = 'achievements', initialNewsIndex = 0 } = $props();
 
-  $: if (initialSubTab !== prevInitialSubTab) {
-    prevInitialSubTab = initialSubTab;
-    activeCommunitySubTab = initialSubTab || 'achievements';
-  }
+  let activeCommunitySubTab = $state(initialSubTab || 'achievements'); // 'achievements' | 'news'
+  let prevInitialSubTab = $state(initialSubTab);
+  let newsItems = $state([]);
+  let isLoadingNews = $state(false);
+  let expandedNewsIndex = $state(initialNewsIndex ?? 0);
+  let prevInitialNewsIndex = $state(initialNewsIndex);
+  let loadedNewsAppID = $state('');
+  let newsError = $state('');
 
-  $: if (initialNewsIndex !== prevInitialNewsIndex) {
-    prevInitialNewsIndex = initialNewsIndex;
-    expandedNewsIndex = initialNewsIndex ?? 0;
-  }
 
-  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
-    ? String(game.appId).trim()
-    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
 
-  $: isSteam = Boolean(effectiveAppId);
 
-  $: if (activeCommunitySubTab === 'news' && loadedNewsAppID !== effectiveAppId && !isLoadingNews && effectiveAppId) {
-    loadNews();
-  }
+
 
   async function loadNews(force = false) {
     if (!effectiveAppId || (!force && loadedNewsAppID === effectiveAppId && newsItems.length > 0)) return;
@@ -60,6 +53,27 @@
   function toggleNewsExpand(idx) {
     expandedNewsIndex = expandedNewsIndex === idx ? -1 : idx;
   }
+  run(() => {
+    if (initialSubTab !== prevInitialSubTab) {
+      prevInitialSubTab = initialSubTab;
+      activeCommunitySubTab = initialSubTab || 'achievements';
+    }
+  });
+  run(() => {
+    if (initialNewsIndex !== prevInitialNewsIndex) {
+      prevInitialNewsIndex = initialNewsIndex;
+      expandedNewsIndex = initialNewsIndex ?? 0;
+    }
+  });
+  let effectiveAppId = $derived((game?.appId && isSteamApp(game.appId))
+    ? String(game.appId).trim()
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : ''));
+  let isSteam = $derived(Boolean(effectiveAppId));
+  run(() => {
+    if (activeCommunitySubTab === 'news' && loadedNewsAppID !== effectiveAppId && !isLoadingNews && effectiveAppId) {
+      loadNews();
+    }
+  });
 </script>
 
 <div class="bg-[#121215] border border-surface-border rounded-2xl p-6 shadow-sm space-y-6">
@@ -67,7 +81,7 @@
   <div class="flex items-center space-x-2 bg-surface-base p-1.5 rounded-xl border border-[#222226] w-fit">
     <button
       type="button"
-      on:click={() => { activeCommunitySubTab = 'achievements'; }}
+      onclick={() => { activeCommunitySubTab = 'achievements'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeCommunitySubTab === 'achievements' ? 'bg-[#222226] text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
     >
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,7 +93,7 @@
     {#if isSteam}
       <button
         type="button"
-        on:click={() => { activeCommunitySubTab = 'news'; }}
+        onclick={() => { activeCommunitySubTab = 'news'; }}
         class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeCommunitySubTab === 'news' ? 'bg-[#222226] text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

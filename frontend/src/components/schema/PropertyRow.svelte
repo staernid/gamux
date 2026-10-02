@@ -1,15 +1,29 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { playTick } from '../../utils/audio.js';
+    import { playTick } from '../../utils/audio.js';
 
-  export let property = {};
-  export let isOverridden = false;
-  export let inheritedValue = undefined;
-  export let scope = 'global';
-  export let disabled = false;
-  export let onReset = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {boolean} [isOverridden]
+   * @property {any} [inheritedValue]
+   * @property {string} [scope]
+   * @property {boolean} [disabled]
+   * @property {any} [onReset]
+   * @property {import('svelte').Snippet} [children]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    property = {},
+    isOverridden = false,
+    inheritedValue = undefined,
+    scope = 'global',
+    disabled = false,
+    onReset = null,
+    children
+  ,
+    onreset = null
+  } = $props();
 
   function formatInherited(val) {
     if (val === undefined || val === null) {
@@ -44,7 +58,7 @@
   function handleReset() {
     if (disabled) return;
     playTick();
-    dispatch('reset', { key: property.key });
+    onreset?.({ key: property.key });
     if (typeof onReset === 'function') onReset({ key: property.key });
   }
 </script>
@@ -73,7 +87,7 @@
           </span>
           <button
             type="button"
-            on:click={handleReset}
+            onclick={handleReset}
             {disabled}
             class="text-4xs font-mono text-neutral-400 hover:text-white px-1.5 py-0.2 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 transition cursor-pointer flex items-center space-x-1"
             title="Reset to inherited global setting"
@@ -103,6 +117,6 @@
 
   <!-- Control Slot -->
   <div class="flex-shrink-0 w-full sm:w-auto min-w-[10rem] flex justify-end">
-    <slot />
+    {@render children?.()}
   </div>
 </div>

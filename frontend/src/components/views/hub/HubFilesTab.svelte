@@ -1,48 +1,69 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { isSteamApp } from '../../../utils/game.js';
+  import { run } from 'svelte/legacy';
+
+    import { isSteamApp } from '../../../utils/game.js';
   import HubDLCCard from './cards/HubDLCCard.svelte';
   import HubIntegrityCard from './cards/HubIntegrityCard.svelte';
   import HubLogsCard from './cards/HubLogsCard.svelte';
   import HubBetasTab from './HubBetasTab.svelte';
 
-  export let game = null;
-  export let activeSubTab = 'depots'; // 'depots' | 'branch' | 'integrity' | 'logs'
-  export let isGameRunning = false;
-  export let isTaskActive = false;
-  export let activeGameTask = null;
-  export let isCheckingIntegrity = false;
-  export let isNormalizing = false;
-  export let integrityError = '';
-  export let integrityReport = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {string} [activeSubTab] - 'depots' | 'branch' | 'integrity' | 'logs'
+   * @property {boolean} [isGameRunning]
+   * @property {boolean} [isTaskActive]
+   * @property {any} [activeGameTask]
+   * @property {boolean} [isCheckingIntegrity]
+   * @property {boolean} [isNormalizing]
+   * @property {string} [integrityError]
+   * @property {any} [integrityReport]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = null,
+    activeSubTab = 'depots',
+    isGameRunning = false,
+    isTaskActive = false,
+    activeGameTask = null,
+    isCheckingIntegrity = false,
+    isNormalizing = false,
+    integrityError = '',
+    integrityReport = null
+  ,
+    onrunIntegrityCheck,
+    onupdateGame,
+    onnormalizeDirectory
+  } = $props();
 
-  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
+  let effectiveAppId = $derived((game?.appId && isSteamApp(game.appId))
     ? String(game.appId).trim()
-    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
-  $: isSteam = Boolean(effectiveAppId);
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : ''));
+  let isSteam = $derived(Boolean(effectiveAppId));
 
-  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
+  let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
 
-  let activeFilesSubTab = activeSubTab || (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots'));
-  let prevActiveSubTab = activeSubTab;
+  let activeFilesSubTab = $state(activeSubTab || (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots')));
+  let prevActiveSubTab = $state(activeSubTab);
 
-  $: if (activeSubTab !== prevActiveSubTab) {
-    prevActiveSubTab = activeSubTab;
-    activeFilesSubTab = activeSubTab || 'depots';
-  }
+  run(() => {
+    if (activeSubTab !== prevActiveSubTab) {
+      prevActiveSubTab = activeSubTab;
+      activeFilesSubTab = activeSubTab || 'depots';
+    }
+  });
 
   function handleRunIntegrityCheck() {
-    dispatch('runIntegrityCheck');
+    onrunIntegrityCheck?.();
   }
 
   function handleUpdateGame(e) {
-    dispatch('updateGame', e?.detail);
+    onupdateGame?.(e?.detail);
   }
 
   function handleNormalizeDirectory() {
-    dispatch('normalizeDirectory');
+    onnormalizeDirectory?.();
   }
 </script>
 
@@ -51,7 +72,7 @@
   <div class="flex items-center space-x-2 bg-surface-header p-1.5 rounded-xl border border-surface-border flex-wrap gap-y-1">
     <button
       type="button"
-      on:click={() => { activeFilesSubTab = 'depots'; }}
+      onclick={() => { activeFilesSubTab = 'depots'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'depots' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +84,7 @@
     {#if isSteam}
       <button
         type="button"
-        on:click={() => { activeFilesSubTab = 'branch'; }}
+        onclick={() => { activeFilesSubTab = 'branch'; }}
         class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'branch' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
       >
         <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,7 +101,7 @@
 
     <button
       type="button"
-      on:click={() => { activeFilesSubTab = 'integrity'; }}
+      onclick={() => { activeFilesSubTab = 'integrity'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'integrity' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,7 +112,7 @@
 
     <button
       type="button"
-      on:click={() => { activeFilesSubTab = 'logs'; }}
+      onclick={() => { activeFilesSubTab = 'logs'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,7 +131,7 @@
       {game}
       {isTaskActive}
       {activeGameTask}
-      on:updateGame={handleUpdateGame}
+      onupdateGame={handleUpdateGame}
     />
   {:else if activeFilesSubTab === 'depots'}
     {#if !isInstalled}

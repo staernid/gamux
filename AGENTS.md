@@ -4,7 +4,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 
 ## System Architecture
 
-- **Presentation**: CLI (`cmd/gamux`, `ui`) & GUI (Wails, Svelte 5, Tailwind v4).
+- **Presentation**: CLI (`cmd/gamux`, `ui`) & GUI (Wails v3, Svelte 5, Tailwind v4).
 - **Orchestration**: `Engine` (`engine/`), `App` (`gui/`), task workers (`tasks/`), telemetry bus (`events/`), and profile management (`profiles/`).
 - **Domain & Pipeline**: Composable pipeline operations (`pipeline/`: `[Scan] -> [Manifest] -> [Normalize] -> [Steamless] -> [GBE]`) operating on canonical domain entities (`domain.Game`, `domain.Profile`).
 - **Adapters & Services**: `gbe`, `steamless`, `store`, `downloader`, `manifest`, `steam`, `github`, `runner`, `multiseat` (bwrap/audio/gamescope), `saves`.

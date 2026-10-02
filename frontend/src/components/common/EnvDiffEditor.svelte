@@ -1,17 +1,22 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * @typedef {Object} Props
+   * @property {any} [globalEnv] - { KEY: VALUE }
+   * @property {any} [customEnv] - { KEY: VALUE }
+   * @property {boolean} [disabled]
+   */
 
-  export let globalEnv = {}; // { KEY: VALUE }
-  export let customEnv = {}; // { KEY: VALUE }
-  export let disabled = false;
+  /** @type {Props} */
+  let { globalEnv = {}, customEnv = $bindable({}), disabled = false ,
+    onchange = null
+  } = $props();
 
-  const dispatch = createEventDispatcher();
+  let newKey = $state('');
+  let newValue = $state('');
 
-  let newKey = '';
-  let newValue = '';
-
-  $: globalKeys = Object.keys(globalEnv || {}).sort();
-  $: customKeys = Object.keys(customEnv || {}).sort();
+  let globalKeys = $derived(Object.keys(globalEnv || {}).sort());
+  let customKeys = $derived(Object.keys(customEnv || {}).sort());
 
   function addVariable() {
     if (disabled) return;
@@ -21,7 +26,7 @@
     customEnv = updated;
     newKey = '';
     newValue = '';
-    dispatch('change', updated);
+    onchange?.(updated);
   }
 
   function removeVariable(k) {
@@ -29,7 +34,7 @@
     const updated = { ...(customEnv || {}) };
     delete updated[k];
     customEnv = updated;
-    dispatch('change', updated);
+    onchange?.(updated);
   }
 
   function handleKeydown(e) {
@@ -75,7 +80,7 @@
 
             <button
               type="button"
-              on:click={() => removeVariable(k)}
+              onclick={() => removeVariable(k)}
               {disabled}
               class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0"
               title="Remove variable"
@@ -97,19 +102,19 @@
           type="text"
           placeholder="VARIABLE_NAME"
           bind:value={newKey}
-          on:keydown={handleKeydown}
+          onkeydown={handleKeydown}
           class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono uppercase outline-none transition-colors"
         />
         <input
           type="text"
           placeholder="value"
           bind:value={newValue}
-          on:keydown={handleKeydown}
+          onkeydown={handleKeydown}
           class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white font-mono outline-none transition-colors"
         />
         <button
           type="button"
-          on:click={addVariable}
+          onclick={addVariable}
           class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-xl text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer flex items-center space-x-1"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

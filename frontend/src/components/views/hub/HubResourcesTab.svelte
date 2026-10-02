@@ -2,31 +2,37 @@
   import { openExternalUrl as openLink, copyToClipboard as copyLink } from '../../../utils/navigation.js';
   import { isSteamApp } from '../../../utils/game.js';
 
-  export let game = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   */
 
-  $: name = game?.name || '';
-  $: appId = game?.appId || '';
-  $: gogId = game?.gogId || '';
-  $: isSteam = isSteamApp(appId);
-  $: isGOG = Boolean(gogId || (game?.store && game.store.toLowerCase().includes('gog')));
+  /** @type {Props} */
+  let { game = null } = $props();
+
+  let name = $derived(game?.name || '');
+  let appId = $derived(game?.appId || '');
+  let gogId = $derived(game?.gogId || '');
+  let isSteam = $derived(isSteamApp(appId));
+  let isGOG = $derived(Boolean(gogId || (game?.store && game.store.toLowerCase().includes('gog'))));
 
   // Computed URL endpoints
-  $: pcgwUrl = isSteam
+  let pcgwUrl = $derived(isSteam
     ? `https://www.pcgamingwiki.com/api/appid.php?appid=${encodeURIComponent(appId)}`
     : isGOG && gogId
     ? `https://www.pcgamingwiki.com/api/gog.php?page=${encodeURIComponent(gogId)}`
-    : `https://www.pcgamingwiki.com/w/index.php?search=${encodeURIComponent(name)}`;
+    : `https://www.pcgamingwiki.com/w/index.php?search=${encodeURIComponent(name)}`);
 
-  $: protonDbUrl = isSteam ? `https://www.protondb.com/app/${encodeURIComponent(appId)}` : `https://www.protondb.com/search?q=${encodeURIComponent(name)}`;
-  $: steamDbUrl = isSteam ? `https://steamdb.info/app/${encodeURIComponent(appId)}/` : `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}`;
-  $: steamStoreUrl = isSteam ? `https://store.steampowered.com/app/${encodeURIComponent(appId)}` : null;
-  $: steamGuidesUrl = isSteam ? `https://steamcommunity.com/app/${encodeURIComponent(appId)}/guides/` : null;
-  $: steamDiscussionsUrl = isSteam ? `https://steamcommunity.com/app/${encodeURIComponent(appId)}/discussions/` : null;
-  $: gogStoreUrl = `https://www.gog.com/en/games?query=${encodeURIComponent(name)}`;
-  $: sgdbUrl = `https://www.steamgriddb.com/search/grids?term=${encodeURIComponent(name)}`;
-  $: hltbUrl = `https://howlongtobeat.com/?q=${encodeURIComponent(name)}`;
-  $: nexusModsUrl = `https://www.nexusmods.com/search/?gsearch=${encodeURIComponent(name)}`;
-  $: wineHqUrl = `https://appdb.winehq.org/objectManager.php?sClass=application&sTitle=${encodeURIComponent(name)}`;
+  let protonDbUrl = $derived(isSteam ? `https://www.protondb.com/app/${encodeURIComponent(appId)}` : `https://www.protondb.com/search?q=${encodeURIComponent(name)}`);
+  let steamDbUrl = $derived(isSteam ? `https://steamdb.info/app/${encodeURIComponent(appId)}/` : `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}`);
+  let steamStoreUrl = $derived(isSteam ? `https://store.steampowered.com/app/${encodeURIComponent(appId)}` : null);
+  let steamGuidesUrl = $derived(isSteam ? `https://steamcommunity.com/app/${encodeURIComponent(appId)}/guides/` : null);
+  let steamDiscussionsUrl = $derived(isSteam ? `https://steamcommunity.com/app/${encodeURIComponent(appId)}/discussions/` : null);
+  let gogStoreUrl = $derived(`https://www.gog.com/en/games?query=${encodeURIComponent(name)}`);
+  let sgdbUrl = $derived(`https://www.steamgriddb.com/search/grids?term=${encodeURIComponent(name)}`);
+  let hltbUrl = $derived(`https://howlongtobeat.com/?q=${encodeURIComponent(name)}`);
+  let nexusModsUrl = $derived(`https://www.nexusmods.com/search/?gsearch=${encodeURIComponent(name)}`);
+  let wineHqUrl = $derived(`https://appdb.winehq.org/objectManager.php?sClass=application&sTitle=${encodeURIComponent(name)}`);
 </script>
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
@@ -47,7 +53,7 @@
     <!-- Quick PCGW CTA Button -->
     <button
       type="button"
-      on:click={() => openLink(pcgwUrl, 'PCGamingWiki')}
+      onclick={() => openLink(pcgwUrl, 'PCGamingWiki')}
       class="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 text-xs font-bold transition shadow-sm flex items-center space-x-2 flex-shrink-0 cursor-pointer active:scale-95"
     >
       <svg class="w-3.5 h-3.5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +91,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(pcgwUrl, 'PCGamingWiki')}
+            onclick={() => openLink(pcgwUrl, 'PCGamingWiki')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Open Wiki</span>
@@ -95,7 +101,7 @@
           </button>
           <button
             type="button"
-            on:click={() => copyLink(pcgwUrl, 'PCGamingWiki')}
+            onclick={() => copyLink(pcgwUrl, 'PCGamingWiki')}
             title="Copy URL"
             class="p-1.5 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-400 hover:text-white rounded-xl transition cursor-pointer"
           >
@@ -120,7 +126,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(protonDbUrl, 'ProtonDB')}
+            onclick={() => openLink(protonDbUrl, 'ProtonDB')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>View Reports</span>
@@ -130,7 +136,7 @@
           </button>
           <button
             type="button"
-            on:click={() => copyLink(protonDbUrl, 'ProtonDB')}
+            onclick={() => copyLink(protonDbUrl, 'ProtonDB')}
             title="Copy URL"
             class="p-1.5 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-400 hover:text-white rounded-xl transition cursor-pointer"
           >
@@ -155,7 +161,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(steamDbUrl, 'SteamDB')}
+            onclick={() => openLink(steamDbUrl, 'SteamDB')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Explore SteamDB</span>
@@ -165,7 +171,7 @@
           </button>
           <button
             type="button"
-            on:click={() => copyLink(steamDbUrl, 'SteamDB')}
+            onclick={() => copyLink(steamDbUrl, 'SteamDB')}
             title="Copy URL"
             class="p-1.5 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-400 hover:text-white rounded-xl transition cursor-pointer"
           >
@@ -190,7 +196,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(wineHqUrl, 'WineHQ AppDB')}
+            onclick={() => openLink(wineHqUrl, 'WineHQ AppDB')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Search AppDB</span>
@@ -200,7 +206,7 @@
           </button>
           <button
             type="button"
-            on:click={() => copyLink(wineHqUrl, 'WineHQ AppDB')}
+            onclick={() => copyLink(wineHqUrl, 'WineHQ AppDB')}
             title="Copy URL"
             class="p-1.5 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-400 hover:text-white rounded-xl transition cursor-pointer"
           >
@@ -238,7 +244,7 @@
           <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
             <button
               type="button"
-              on:click={() => openLink(steamStoreUrl, 'Steam Store')}
+              onclick={() => openLink(steamStoreUrl, 'Steam Store')}
               class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
             >
               <span>View Store Page</span>
@@ -262,7 +268,7 @@
           <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
             <button
               type="button"
-              on:click={() => openLink(gogStoreUrl, 'GOG Store')}
+              onclick={() => openLink(gogStoreUrl, 'GOG Store')}
               class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
             >
               <span>Search GOG</span>
@@ -289,7 +295,7 @@
           <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
             <button
               type="button"
-              on:click={() => openLink(steamGuidesUrl, 'Steam Guides')}
+              onclick={() => openLink(steamGuidesUrl, 'Steam Guides')}
               class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
             >
               <span>Open Guides</span>
@@ -316,7 +322,7 @@
           <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
             <button
               type="button"
-              on:click={() => openLink(steamDiscussionsUrl, 'Steam Discussions')}
+              onclick={() => openLink(steamDiscussionsUrl, 'Steam Discussions')}
               class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
             >
               <span>Open Discussions</span>
@@ -354,7 +360,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(sgdbUrl, 'SteamGridDB')}
+            onclick={() => openLink(sgdbUrl, 'SteamGridDB')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Search Grids</span>
@@ -379,7 +385,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(hltbUrl, 'HowLongToBeat')}
+            onclick={() => openLink(hltbUrl, 'HowLongToBeat')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Check Playtime</span>
@@ -404,7 +410,7 @@
         <div class="flex items-center space-x-2 pt-2 border-t border-[#222226]">
           <button
             type="button"
-            on:click={() => openLink(nexusModsUrl, 'Nexus Mods')}
+            onclick={() => openLink(nexusModsUrl, 'Nexus Mods')}
             class="flex-1 bg-[#1e1e22] hover:bg-[#28282e] text-neutral-200 hover:text-white py-1.5 px-3 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer text-xs"
           >
             <span>Search Mods</span>

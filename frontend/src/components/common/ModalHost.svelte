@@ -26,32 +26,32 @@
   {#if $modalStore.type === 'catalog'}
     <CatalogModal
       {...$modalStore.props}
-      on:close={handleClose}
+      onclose={handleClose}
     />
   {:else if $modalStore.type === 'metadata-artwork'}
     <MetadataArtworkModal
       {...$modalStore.props}
-      on:updated={handleUpdated}
-      on:close={handleClose}
+      onupdated={handleUpdated}
+      onclose={handleClose}
     />
   {:else if $modalStore.type === 'artwork-picker'}
     <MetadataArtworkModal
       initialTab="artwork"
       {...$modalStore.props}
-      on:updated={handleUpdated}
-      on:close={handleClose}
+      onupdated={handleUpdated}
+      onclose={handleClose}
     />
   {:else if $modalStore.type === 'metadata-link'}
     <MetadataArtworkModal
       initialTab="metadata"
       {...$modalStore.props}
-      on:updated={handleUpdated}
-      on:close={handleClose}
+      onupdated={handleUpdated}
+      onclose={handleClose}
     />
   {:else if $modalStore.type === 'confirm'}
     <ConfirmModal
       {...$modalStore.props}
-      on:close={handleClose}
+      onclose={handleClose}
     />
   {/if}
 {/if}

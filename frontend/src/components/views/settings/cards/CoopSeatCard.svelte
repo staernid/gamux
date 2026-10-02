@@ -3,11 +3,13 @@
   import { multiseatStore } from '../../../../stores/multiseat.js';
   import { profilesStore } from '../../../../stores/profiles.js';
 
-  export let cfgDraft;
-  export let seats = [];
-  export let activeSeats = [];
-  export let displays = [];
-  export let profileOptions = [];
+  let {
+    cfgDraft = $bindable(),
+    seats = [],
+    activeSeats = [],
+    displays = [],
+    profileOptions = []
+  } = $props();
 
   function toggleSeat(seatId) {
     const target = seats.find(s => s.seat_id === seatId);
@@ -28,7 +30,6 @@
     } else {
       multiseatStore.updateSeat(seatIdx, { mode });
     }
-    cfgDraft = { ...cfgDraft };
   }
 
   function getPortionOptions(layout, seatsCount) {
@@ -100,7 +101,7 @@
       {#if seats.length < 4}
         <button
           type="button"
-          on:click={() => multiseatStore.addSeat()}
+          onclick={() => multiseatStore.addSeat()}
           class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
           title="Add another player seat (up to 4)"
         >
@@ -135,7 +136,7 @@
             <div class="flex items-center space-x-2">
               <button
                 type="button"
-                on:click={() => toggleSeat(seat.seat_id)}
+                onclick={() => toggleSeat(seat.seat_id)}
                 class="px-2.5 py-0.5 rounded-full text-4xs font-mono font-bold transition flex items-center space-x-1.5 cursor-pointer {isBenched ? 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 border border-zinc-700/60' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'}"
                 title={isBenched ? 'Activate this seat' : 'Bench this seat (settings saved)'}
               >
@@ -146,7 +147,7 @@
               {#if idx >= 2}
                 <button
                   type="button"
-                  on:click={() => multiseatStore.removeSeat(idx)}
+                  onclick={() => multiseatStore.removeSeat(idx)}
                   class="px-2 py-0.5 text-3xs font-bold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-950/80 border border-rose-800/50 rounded transition cursor-pointer"
                   title="Remove this player seat"
                 >
@@ -159,7 +160,7 @@
           {#if isBenched}
             <div class="px-3 py-1.5 rounded-lg bg-surface-input/50 border border-surface-border text-3xs text-neutral-400 flex items-center justify-between">
               <span>Seat {seatId.toUpperCase()} is currently benched. Its gamepad bindings and profile are saved, but it will not launch.</span>
-              <button type="button" on:click={() => toggleSeat(seat.seat_id)} class="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer ml-2">Activate</button>
+              <button type="button" onclick={() => toggleSeat(seat.seat_id)} class="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer ml-2">Activate</button>
             </div>
           {/if}
 
@@ -179,7 +180,7 @@
                 <select
                   id="seat-2-prof"
                   bind:value={cfgDraft.multiseat.player2_profile_id}
-                  on:change={() => { multiseatStore.updateSeat('p2', { profile_id: cfgDraft.multiseat.player2_profile_id }); cfgDraft = { ...cfgDraft }; }}
+                  onchange={() => { multiseatStore.updateSeat('p2', { profile_id: cfgDraft.multiseat.player2_profile_id }); cfgDraft = { ...cfgDraft }; }}
                   class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   {#each (profileOptions.length > 0 ? profileOptions : [{ value: 'p2', label: 'PlayerTwo (~/Games/umu-p2)' }]) as opt}
@@ -190,7 +191,7 @@
                 <select
                   id={`seat-${idx}-prof`}
                   bind:value={seat.profile_id}
-                  on:change={() => multiseatStore.updateSeat(idx, { profile_id: seat.profile_id })}
+                  onchange={() => multiseatStore.updateSeat(idx, { profile_id: seat.profile_id })}
                   class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   {#each profileOptions as opt}
@@ -206,14 +207,14 @@
               <div class="grid grid-cols-2 gap-1.5 bg-surface-input p-1 rounded-xl border border-surface-border">
                 <button
                   type="button"
-                  on:click={() => setSeatOutputMode(idx, 'local')}
+                  onclick={() => setSeatOutputMode(idx, 'local')}
                   class="py-1.5 text-xs font-bold rounded-lg transition text-center cursor-pointer {currentMode === 'local' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}"
                 >
                   Local Screen
                 </button>
                 <button
                   type="button"
-                  on:click={() => setSeatOutputMode(idx, 'stream')}
+                  onclick={() => setSeatOutputMode(idx, 'stream')}
                   class="py-1.5 text-xs font-bold rounded-lg transition text-center cursor-pointer {currentMode === 'stream' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}"
                 >
                   Sunshine Stream
@@ -230,7 +231,7 @@
                     <select
                       id={`seat-${idx}-disp-idx`}
                       value={isP1 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (isP2 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : (seat.display_index ?? idx))}
-                      on:change={(e) => {
+                      onchange={(e) => {
                         const val = Number(e.target.value);
                         if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); cfgDraft = { ...cfgDraft }; }
                         else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); cfgDraft = { ...cfgDraft }; }
@@ -249,7 +250,7 @@
                       min="0"
                       max="10"
                       value={isP1 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (isP2 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : (seat.display_index ?? idx))}
-                      on:change={(e) => {
+                      onchange={(e) => {
                         const val = Number(e.target.value);
                         if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); cfgDraft = { ...cfgDraft }; }
                         else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); cfgDraft = { ...cfgDraft }; }
@@ -265,7 +266,7 @@
                   <select
                     id={`seat-${idx}-portion`}
                     value={seat.screen_slot ?? idx}
-                    on:change={(e) => multiseatStore.setSeatSlot(seat.seat_id || seatId, Number(e.target.value))}
+                    onchange={(e) => multiseatStore.setSeatSlot(seat.seat_id || seatId, Number(e.target.value))}
                     class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                   >
                     {#each getPortionOptions(cfgDraft.multiseat.default_layout, seats.length) as opt}

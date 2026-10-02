@@ -1,14 +1,16 @@
 <script>
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { run, nonpassive } from 'svelte/legacy';
+
+  import { onMount, onDestroy } from 'svelte';
   import PosterArt from '../common/PosterArt.svelte';
   import ArchScrollbar from './ArchScrollbar.svelte';
   import { filteredGames, selectedGame, runningGames, isGamePathRunning } from '../../stores/library.js';
   import { getPlatformColors, isSamePath, extractCoverColorPalette, getCachedCoverPalette, formatPlaytime } from '../../utils/game.js';
   import { playTick, playSelect } from '../../utils/audio.js';
 
-  const dispatch = createEventDispatcher();
+  let { onlaunch = null } = $props();
 
-  let containerEl;
+  let containerEl = $state();
   let animFrameId = null;
   let isLoopRunning = false;
 
@@ -21,9 +23,9 @@
   }
 
   // High-speed smooth target-following physics
-  let currentPos = 0;
-  let targetPos = 0;
-  let isDragging = false;
+  let currentPos = $state(0);
+  let targetPos = $state(0);
+  let isDragging = $state(false);
   let dragStartX = 0;
   let dragStartPos = 0;
   let lastDragTime = 0;
@@ -35,32 +37,12 @@
   let wheelResetTimeout = null;
 
   // Store synchronization guard to prevent circular reactive feedback
-  let lastEmittedDir = null;
+  let lastEmittedDir = $state(null);
   let lastSyncIndex = -1;
   let lastSoundIndex = -1;
-  let lastList = null;
+  let lastList = $state(null);
 
-  $: list = $filteredGames || [];
-  $: count = list.length;
 
-  // Synchronize when selectedGame changes externally (e.g. keyboard navigation, search grid, drawer, or sort)
-  $: if ($selectedGame && count > 0) {
-    const dir = $selectedGame.gameDir;
-    const listChanged = list !== lastList;
-    if (dir !== lastEmittedDir || listChanged) {
-      lastEmittedDir = dir;
-      lastList = list;
-      const idx = list.findIndex(g => isSamePath(g.gameDir, dir));
-      if (idx >= 0 && !isDragging) {
-        const currWrapped = wrapIndex(Math.round(currentPos));
-        let diff = idx - currWrapped;
-        if (diff > count / 2) diff -= count;
-        if (diff < -count / 2) diff += count;
-        targetPos = Math.round(currentPos) + diff;
-        wakeLoop();
-      }
-    }
-  }
 
   function wrapIndex(i) {
     if (count === 0) return 0;
@@ -135,64 +117,10 @@
     };
   }
 
-  // Render only 5 visible active games within view window with stable DOM identity (O(1) instead of O(N) library scan)
-  $: visibleCards = (() => {
-    if (count === 0) return [];
-    if (count <= 5) {
-      return list.map((game, index) => {
-        const diff = getGameDiff(index, currentPos, count);
-        return {
-          game,
-          index,
-          diff,
-          style: getCardTransform(diff),
-          platformColors: getPlatformColors(game),
-          key: game.gameDir || index,
-        };
-      });
-    }
 
-    const baseIdx = Math.round(currentPos);
-    const cards = [];
-    for (let offset = -2; offset <= 2; offset++) {
-      const idx = wrapIndex(baseIdx + offset);
-      const game = list[idx];
-      if (game) {
-        const diff = getGameDiff(idx, currentPos, count);
-        cards.push({
-          game,
-          index: idx,
-          diff,
-          style: getCardTransform(diff),
-          platformColors: getPlatformColors(game),
-          key: game.gameDir || idx,
-        });
-      }
-    }
-    return cards;
-  })();
 
-  // Instant reactive active game name for title pill
-  $: activeGame = count > 0 ? list[wrapIndex(Math.round(currentPos))] : null;
-  $: activeColors = activeGame ? getPlatformColors(activeGame) : null;
+  let activePalette = $state([]);
 
-  let activePalette = [];
-  $: activeCoverUrl = activeGame?.localCoverUrl || activeGame?.coverUrl || '';
-
-  $: if (activeCoverUrl) {
-    const cached = getCachedCoverPalette(activeCoverUrl);
-    if (cached && cached.length > 0) {
-      activePalette = cached;
-    } else {
-      extractCoverColorPalette(activeCoverUrl).then(pal => {
-        if (pal && pal.length > 0 && (activeGame?.localCoverUrl === activeCoverUrl || activeGame?.coverUrl === activeCoverUrl)) {
-          activePalette = pal;
-        }
-      });
-    }
-  } else {
-    activePalette = [];
-  }
 
   function parseRgb(colorStr) {
     if (!colorStr || typeof colorStr !== 'string') return { r: 26, g: 159, b: 255 };
@@ -203,15 +131,6 @@
     return { r: 160, g: 160, b: 165 };
   }
 
-  // Reactive Ambient Glow derived directly from active game palette
-  $: glowRgb = (() => {
-    const pal = activePalette.length > 0 ? activePalette : (activeColors?.border ? [activeColors.border] : []);
-    if (pal.length > 0) {
-      const c = parseRgb(pal[0]);
-      return `${c.r}, ${c.g}, ${c.b}`;
-    }
-    return '160, 160, 165';
-  })();
 
   let stickStopTimeout = null;
 
@@ -262,7 +181,7 @@
     if (!game) return;
     if (Math.abs(diff) < 0.25) {
       playSelect();
-      dispatch('launch', game);
+      onlaunch?.(game);
     } else {
       const stepDelta = Math.round(diff);
       targetPos = Math.round(currentPos) + stepDelta;
@@ -492,18 +411,105 @@
     if (wheelResetTimeout) clearTimeout(wheelResetTimeout);
     if (stickStopTimeout) clearTimeout(stickStopTimeout);
   });
+  let list = $derived($filteredGames || []);
+  let count = $derived(list.length);
+  // Synchronize when selectedGame changes externally (e.g. keyboard navigation, search grid, drawer, or sort)
+  run(() => {
+    if ($selectedGame && count > 0) {
+      const dir = $selectedGame.gameDir;
+      const listChanged = list !== lastList;
+      if (dir !== lastEmittedDir || listChanged) {
+        lastEmittedDir = dir;
+        lastList = list;
+        const idx = list.findIndex(g => isSamePath(g.gameDir, dir));
+        if (idx >= 0 && !isDragging) {
+          const currWrapped = wrapIndex(Math.round(currentPos));
+          let diff = idx - currWrapped;
+          if (diff > count / 2) diff -= count;
+          if (diff < -count / 2) diff += count;
+          targetPos = Math.round(currentPos) + diff;
+          wakeLoop();
+        }
+      }
+    }
+  });
+  // Render only 5 visible active games within view window with stable DOM identity (O(1) instead of O(N) library scan)
+  let visibleCards = $derived((() => {
+    if (count === 0) return [];
+    if (count <= 5) {
+      return list.map((game, index) => {
+        const diff = getGameDiff(index, currentPos, count);
+        return {
+          game,
+          index,
+          diff,
+          style: getCardTransform(diff),
+          platformColors: getPlatformColors(game),
+          key: game.gameDir || index,
+        };
+      });
+    }
+
+    const baseIdx = Math.round(currentPos);
+    const cards = [];
+    for (let offset = -2; offset <= 2; offset++) {
+      const idx = wrapIndex(baseIdx + offset);
+      const game = list[idx];
+      if (game) {
+        const diff = getGameDiff(idx, currentPos, count);
+        cards.push({
+          game,
+          index: idx,
+          diff,
+          style: getCardTransform(diff),
+          platformColors: getPlatformColors(game),
+          key: game.gameDir || idx,
+        });
+      }
+    }
+    return cards;
+  })());
+  // Instant reactive active game name for title pill
+  let activeGame = $derived(count > 0 ? list[wrapIndex(Math.round(currentPos))] : null);
+  let activeColors = $derived(activeGame ? getPlatformColors(activeGame) : null);
+  let activeCoverUrl = $derived(activeGame?.localCoverUrl || activeGame?.coverUrl || '');
+  run(() => {
+    if (activeCoverUrl) {
+      const cached = getCachedCoverPalette(activeCoverUrl);
+      if (cached && cached.length > 0) {
+        activePalette = cached;
+      } else {
+        extractCoverColorPalette(activeCoverUrl).then(pal => {
+          if (pal && pal.length > 0 && (activeGame?.localCoverUrl === activeCoverUrl || activeGame?.coverUrl === activeCoverUrl)) {
+            activePalette = pal;
+          }
+        });
+      }
+    } else {
+      activePalette = [];
+    }
+  });
+  // Reactive Ambient Glow derived directly from active game palette
+  let glowRgb = $derived((() => {
+    const pal = activePalette.length > 0 ? activePalette : (activeColors?.border ? [activeColors.border] : []);
+    if (pal.length > 0) {
+      const c = parseRgb(pal[0]);
+      return `${c.r}, ${c.g}, ${c.b}`;
+    }
+    return '160, 160, 165';
+  })());
 </script>
 
 <div
   bind:this={containerEl}
   role="region"
   aria-label="Game Carousel"
-  on:wheel|nonpassive={handleWheel}
-  on:pointerdown={handlePointerDown}
-  on:pointermove={handleContainerPointerMove}
-  on:pointerleave={handleContainerPointerLeave}
-  on:pointerup={handlePointerUp}
-  on:pointercancel={handlePointerUp}
+  use:nonpassive={['wheel', () => handleWheel]}
+  onpointerdown={handlePointerDown}
+  onpointermove={handleContainerPointerMove}
+  onpointerleave={handleContainerPointerLeave}
+  onpointerup={handlePointerUp}
+  onpointercancel={handlePointerUp}
   class="relative w-full flex-1 flex flex-col items-center justify-center select-none overflow-visible touch-none my-auto"
   style="perspective: 1200px; perspective-origin: center 46%;"
 >
@@ -534,10 +540,10 @@
         {@const style = card.style}
         {#if style}
           <div
-            on:click={() => handleCardClick(card.diff, card.game)}
+            onclick={() => handleCardClick(card.diff, card.game)}
             role="button"
             tabindex="0"
-            on:keydown={(e) => e.key === 'Enter' && handleCardClick(card.diff, card.game)}
+            onkeydown={(e) => e.key === 'Enter' && handleCardClick(card.diff, card.game)}
             class="absolute top-1/2 left-1/2 cursor-pointer will-change-transform"
             style="
               transform: {style.transform};

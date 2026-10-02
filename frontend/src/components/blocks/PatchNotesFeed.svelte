@@ -1,17 +1,26 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { formatDate } from '../../utils/format.js';
+    import { formatDate } from '../../utils/format.js';
   import Icon from '../common/Icon.svelte';
 
-  export let newsItems = [];
-  export let maxItems = 3;
-  export let className = '';
-  export let onread = null;
-  export let onviewAll = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [newsItems]
+   * @property {number} [maxItems]
+   * @property {string} [className]
+   * @property {any} [onread]
+   * @property {any} [onviewAll]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    newsItems = [],
+    maxItems = 3,
+    className = '',
+    onread = null,
+    onviewAll = null
+  } = $props();
 
-  $: list = Array.isArray(newsItems) ? newsItems.slice(0, maxItems) : [];
+  let list = $derived(Array.isArray(newsItems) ? newsItems.slice(0, maxItems) : []);
 
   function cleanExcerpt(raw) {
     if (!raw) return '';
@@ -28,13 +37,11 @@
   }
 
   function handleCardClick(item, index) {
-    dispatch('read', { item, index });
-    if (typeof onread === 'function') onread({ item, index });
+    onread?.({ item, index });
   }
 
   function handleViewAll() {
-    dispatch('viewAll');
-    if (typeof onviewAll === 'function') onviewAll();
+    onviewAll?.();
   }
 </script>
 
@@ -48,7 +55,7 @@
 
       <button
         type="button"
-        on:click={handleViewAll}
+        onclick={handleViewAll}
         class="text-3xs font-mono text-neutral-400 hover:text-white flex items-center space-x-1 transition cursor-pointer group"
       >
         <span>View All</span>
@@ -61,7 +68,7 @@
         {@const excerpt = cleanExcerpt(item.contents)}
         <button
           type="button"
-          on:click={() => handleCardClick(item, idx)}
+          onclick={() => handleCardClick(item, idx)}
           class="bg-[#121214] hover:bg-[#18181b] border border-[#27272a] hover:border-neutral-500 p-3.5 rounded-2xl transition-all shadow-sm flex flex-col justify-between space-y-2.5 text-left group cursor-pointer"
         >
           <div class="space-y-1.5">

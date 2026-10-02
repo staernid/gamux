@@ -1,27 +1,33 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import ModalShell from '../common/ModalShell.svelte';
+    import ModalShell from '../common/ModalShell.svelte';
   import MetadataLinker from '../domain/MetadataLinker.svelte';
   import ArtworkPicker from '../domain/ArtworkPicker.svelte';
 
-  export let game = null;
-  export let initialTab = 'metadata'; // 'metadata' | 'artwork' | 'cover' | 'banner' | 'hero' | 'logo'
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {string} [initialTab] - 'metadata' | 'artwork' | 'cover' | 'banner' | 'hero' | 'logo'
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let { game = $bindable(null), initialTab = 'metadata' ,
+    onupdated,
+    onclose
+  } = $props();
 
   const isArtworkInitial = initialTab === 'cover' || initialTab === 'banner' || initialTab === 'hero' || initialTab === 'logo' || initialTab === 'artwork';
-  let activeTab = isArtworkInitial ? 'artwork' : 'metadata';
-  let assetType = (initialTab === 'cover' || initialTab === 'banner' || initialTab === 'hero' || initialTab === 'logo') ? initialTab : 'cover';
+  let activeTab = $state(isArtworkInitial ? 'artwork' : 'metadata');
+  let assetType = $state((initialTab === 'cover' || initialTab === 'banner' || initialTab === 'hero' || initialTab === 'logo') ? initialTab : 'cover');
 
-  $: gameName = game?.name || '';
-  $: appId = game?.appId || '';
+  let gameName = $derived(game?.name || '');
+  let appId = $derived(game?.appId || '');
 
   function handleUpdated(e) {
     const updated = e.detail;
     if (updated) {
       game = { ...game, ...updated };
     }
-    dispatch('updated', updated);
+    onupdated?.(updated);
   }
 </script>
 
@@ -30,14 +36,14 @@
   badge="Game Identity"
   subtitle="Configure store bindings, AppID detection, and visual box art."
   maxWidth="max-w-4xl"
-  on:close={() => dispatch('close')}
+  onclose={() => onclose?.()}
 >
   <!-- Primary Tab Selector (Store Link vs Artwork Gallery) -->
   <div class="max-w-4xl w-full mx-auto mb-4 flex items-center justify-between border-b border-surface-border pb-3 flex-shrink-0 gap-4">
     <div class="flex items-center space-x-2">
       <button
         type="button"
-        on:click={() => { activeTab = 'metadata'; }}
+        onclick={() => { activeTab = 'metadata'; }}
         class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'metadata' ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,7 +54,7 @@
 
       <button
         type="button"
-        on:click={() => { activeTab = 'artwork'; }}
+        onclick={() => { activeTab = 'artwork'; }}
         class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeTab === 'artwork' ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white'}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,13 +79,13 @@
     {#if activeTab === 'metadata'}
       <MetadataLinker
         {game}
-        on:updated={handleUpdated}
+        onupdated={handleUpdated}
       />
     {:else if activeTab === 'artwork'}
       <ArtworkPicker
         {game}
         bind:assetType
-        on:updated={handleUpdated}
+        onupdated={handleUpdated}
       />
     {/if}
   </div>

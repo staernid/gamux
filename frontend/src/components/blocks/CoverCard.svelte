@@ -1,30 +1,48 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import PosterArt from '../common/PosterArt.svelte';
+    import PosterArt from '../common/PosterArt.svelte';
   import { formatPlaytime, formatLastPlayed } from '../../utils/game.js';
   import { formatBytes } from '../../utils/format.js';
 
-  export let appId = '';
-  export let name = '';
-  export let coverUrl = '';
-  export let localCoverUrl = '';
-  export let platform = 'win64';
-  export let isRunning = false;
-  export let isReady = true;
-  export let isStub = false;
-  export let playtimeSeconds = 0;
-  export let lastPlayed = 0;
-  export let diskSizeBytes = 0;
-  export let selected = false;
-  export let size = 'md'; // 'sm' | 'md' | 'lg'
-  export let className = '';
-  export let onclick = null;
+  /**
+   * @typedef {Object} Props
+   * @property {string} [appId]
+   * @property {string} [name]
+   * @property {string} [coverUrl]
+   * @property {string} [localCoverUrl]
+   * @property {string} [platform]
+   * @property {boolean} [isRunning]
+   * @property {boolean} [isReady]
+   * @property {boolean} [isStub]
+   * @property {number} [playtimeSeconds]
+   * @property {number} [lastPlayed]
+   * @property {number} [diskSizeBytes]
+   * @property {boolean} [selected]
+   * @property {string} [size] - 'sm' | 'md' | 'lg'
+   * @property {string} [className]
+   * @property {any} [onclick]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    appId = '',
+    name = '',
+    coverUrl = '',
+    localCoverUrl = '',
+    platform = 'win64',
+    isRunning = false,
+    isReady = true,
+    isStub = false,
+    playtimeSeconds = 0,
+    lastPlayed = 0,
+    diskSizeBytes = 0,
+    selected = false,
+    size = 'md',
+    className = '',
+    onclick = null
+  } = $props();
 
   function handleClick() {
-    dispatch('click');
-    if (typeof onclick === 'function') onclick();
+    onclick?.();
   }
 
   function handleKeydown(e) {
@@ -34,20 +52,20 @@
     }
   }
 
-  $: sizeClasses = (() => {
+  let sizeClasses = $derived((() => {
     switch (size) {
       case 'sm': return 'w-28 sm:w-36';
       case 'lg': return 'w-44 sm:w-56';
       case 'full': return 'w-full';
       default: return 'w-36 sm:w-44';
     }
-  })();
+  })());
 </script>
 
 <button
   type="button"
-  on:click={handleClick}
-  on:keydown={handleKeydown}
+  onclick={handleClick}
+  onkeydown={handleKeydown}
   class="group cursor-pointer flex flex-col items-center text-left transition-all duration-200 transform hover:-translate-y-1.5 focus:outline-none select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
   data-testid="cover-card"
 >

@@ -1,6 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { AppAPI } from '../../../api/app.js';
+    import { AppAPI } from '../../../api/app.js';
   import { openExternalUrl } from '../../../utils/navigation.js';
   import { activeView } from '../../../stores/library.js';
   import { modalStore } from '../../../stores/modal.js';
@@ -8,14 +7,33 @@
   import { tasksStore } from '../../../stores/tasks.js';
   import SettingSection from '../../common/SettingSection.svelte';
 
-  export let toolStatuses = [];
-  export let isCheckingTools = false;
-  export let updatingTools = {};
-  export let isSubmittingBatch = false;
-  export let gamesCount = 0;
-  export let unpatchedGamesCount = 0;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [toolStatuses]
+   * @property {boolean} [isCheckingTools]
+   * @property {any} [updatingTools]
+   * @property {boolean} [isSubmittingBatch]
+   * @property {number} [gamesCount]
+   * @property {number} [unpatchedGamesCount]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    toolStatuses = [],
+    isCheckingTools = false,
+    updatingTools = {},
+    isSubmittingBatch = false,
+    gamesCount = 0,
+    unpatchedGamesCount = 0
+  ,
+    oncheckAll = null,
+    onupdateTool = null,
+    onbatchAchievements = null,
+    onbatchArtwork = null,
+    onbatchApply = null,
+    onbatchNormalize = null,
+    onbatchVerify = null
+  } = $props();
   const { items: taskList } = tasksStore;
 
   function checkIsInstalled(tool) {
@@ -54,11 +72,11 @@
     }) || null;
   }
 
-  $: achievementsTask = findActiveBatchTask('achievements', $taskList);
-  $: artworkTask = findActiveBatchTask('artwork', $taskList);
-  $: applyTask = findActiveBatchTask('apply', $taskList);
-  $: normalizeTask = findActiveBatchTask('normalize', $taskList);
-  $: verifyTask = findActiveBatchTask('verify', $taskList);
+  let achievementsTask = $derived(findActiveBatchTask('achievements', $taskList));
+  let artworkTask = $derived(findActiveBatchTask('artwork', $taskList));
+  let applyTask = $derived(findActiveBatchTask('apply', $taskList));
+  let normalizeTask = $derived(findActiveBatchTask('normalize', $taskList));
+  let verifyTask = $derived(findActiveBatchTask('verify', $taskList));
 
   function handleViewTasks() {
     if (configStore.isDirty) {
@@ -79,31 +97,31 @@
   }
 
   function checkAllTools() {
-    dispatch('checkAll');
+    oncheckAll?.();
   }
 
   function updateTool(key, name) {
-    dispatch('updateTool', { key, name });
+    onupdateTool?.({ key, name });
   }
 
   function runBatchAchievements() {
-    dispatch('batchAchievements');
+    onbatchAchievements?.();
   }
 
   function runBatchArtwork() {
-    dispatch('batchArtwork');
+    onbatchArtwork?.();
   }
 
   function runBatchApply() {
-    dispatch('batchApply');
+    onbatchApply?.();
   }
 
   function runBatchNormalize() {
-    dispatch('batchNormalize');
+    onbatchNormalize?.();
   }
 
   function runBatchVerify() {
-    dispatch('batchVerify');
+    onbatchVerify?.();
   }
 </script>
 
@@ -113,27 +131,29 @@
     title="Helper Tools"
     tooltip="External tools for Steam emulation, DRM removal, and Proton execution."
   >
-    <svelte:fragment slot="action">
-      <button
-        type="button"
-        on:click={checkAllTools}
-        disabled={isCheckingTools}
-        class="px-2.5 py-1 bg-[#1a1a26] hover:bg-[#242436] border border-[#303046] text-slate-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-      >
-        {#if isCheckingTools}
-          <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-          </svg>
-          <span>Checking...</span>
-        {:else}
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Check All</span>
-        {/if}
-      </button>
-    </svelte:fragment>
+    {#snippet action()}
+      
+        <button
+          type="button"
+          onclick={checkAllTools}
+          disabled={isCheckingTools}
+          class="px-2.5 py-1 bg-[#1a1a26] hover:bg-[#242436] border border-[#303046] text-slate-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+        >
+          {#if isCheckingTools}
+            <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Checking...</span>
+          {:else}
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Check All</span>
+          {/if}
+        </button>
+      
+      {/snippet}
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
       {#each toolStatuses as tool}
@@ -175,7 +195,7 @@
             {#if tool.release_url}
               <button
                 type="button"
-                on:click={() => openExternalUrl(tool.release_url, { title: tool.name || 'GitHub Release' })}
+                onclick={() => openExternalUrl(tool.release_url, { title: tool.name || 'GitHub Release' })}
                 class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-surface-border bg-surface-input transition-colors cursor-pointer"
                 title="Open GitHub Release"
               >
@@ -184,7 +204,7 @@
             {/if}
             <button
               type="button"
-              on:click={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
+              onclick={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
               disabled={isUpdating}
               class="flex-1 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-400 hover:text-white' : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 shadow-sm'}"
             >
@@ -209,19 +229,21 @@
     title="Batch Maintenance"
     tooltip="Automated multi-game library operations executed in the background."
   >
-    <svelte:fragment slot="action">
-      <button
-        type="button"
-        on:click={handleViewTasks}
-        class="px-2 py-0.5 rounded-lg bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs text-neutral-300 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
-        title="View active background tasks"
-      >
-        <span>View Tasks</span>
-        <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-        </svg>
-      </button>
-    </svelte:fragment>
+    {#snippet action()}
+      
+        <button
+          type="button"
+          onclick={handleViewTasks}
+          class="px-2 py-0.5 rounded-lg bg-surface-card hover:bg-surface-cardHover border border-surface-border text-2xs text-neutral-300 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer"
+          title="View active background tasks"
+        >
+          <span>View Tasks</span>
+          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      
+      {/snippet}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
       <!-- 1. Batch Achievements -->
       <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
@@ -254,7 +276,7 @@
                 <span class="truncate text-neutral-500">{achievementsTask.details || ''}</span>
                 <button
                   type="button"
-                  on:click={handleViewTasks}
+                  onclick={handleViewTasks}
                   class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
                 >
                   <span>View in Tasks</span>
@@ -266,7 +288,7 @@
         </div>
         <button
           type="button"
-          on:click={runBatchAchievements}
+          onclick={runBatchAchievements}
           disabled={Boolean(achievementsTask) || isSubmittingBatch || gamesCount === 0}
           class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
@@ -313,7 +335,7 @@
                 <span class="truncate text-neutral-500">{artworkTask.details || ''}</span>
                 <button
                   type="button"
-                  on:click={handleViewTasks}
+                  onclick={handleViewTasks}
                   class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
                 >
                   <span>View in Tasks</span>
@@ -325,7 +347,7 @@
         </div>
         <button
           type="button"
-          on:click={runBatchArtwork}
+          onclick={runBatchArtwork}
           disabled={Boolean(artworkTask) || isSubmittingBatch || gamesCount === 0}
           class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
@@ -377,7 +399,7 @@
                 <span class="truncate text-neutral-500">{applyTask.details || ''}</span>
                 <button
                   type="button"
-                  on:click={handleViewTasks}
+                  onclick={handleViewTasks}
                   class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
                 >
                   <span>View in Tasks</span>
@@ -389,7 +411,7 @@
         </div>
         <button
           type="button"
-          on:click={runBatchApply}
+          onclick={runBatchApply}
           disabled={Boolean(applyTask) || isSubmittingBatch || gamesCount === 0}
           class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
@@ -436,7 +458,7 @@
                 <span class="truncate text-neutral-500">{normalizeTask.details || ''}</span>
                 <button
                   type="button"
-                  on:click={handleViewTasks}
+                  onclick={handleViewTasks}
                   class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
                 >
                   <span>View in Tasks</span>
@@ -448,7 +470,7 @@
         </div>
         <button
           type="button"
-          on:click={runBatchNormalize}
+          onclick={runBatchNormalize}
           disabled={Boolean(normalizeTask) || isSubmittingBatch || gamesCount === 0}
           class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >
@@ -495,7 +517,7 @@
                 <span class="truncate text-neutral-500">{verifyTask.details || ''}</span>
                 <button
                   type="button"
-                  on:click={handleViewTasks}
+                  onclick={handleViewTasks}
                   class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
                 >
                   <span>View in Tasks</span>
@@ -507,7 +529,7 @@
         </div>
         <button
           type="button"
-          on:click={runBatchVerify}
+          onclick={runBatchVerify}
           disabled={Boolean(verifyTask) || isSubmittingBatch || gamesCount === 0}
           class="w-full bg-surface-card hover:bg-surface-cardHover disabled:opacity-50 text-neutral-200 hover:text-white font-bold text-xs py-1.5 px-2.5 rounded-lg border border-surface-border transition-all cursor-pointer flex items-center justify-center space-x-1.5"
         >

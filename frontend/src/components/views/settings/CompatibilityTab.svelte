@@ -2,7 +2,7 @@
   import GamescopeCard from './cards/GamescopeCard.svelte';
   import PropertySheet from '../../schema/PropertySheet.svelte';
 
-  export let cfgDraft = {};
+  let { cfgDraft = $bindable({}) } = $props();
   export const runnersList = [];
 </script>
 

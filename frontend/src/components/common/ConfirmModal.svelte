@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { modalStore } from '../../stores/modal.js';
 
   let {
@@ -10,9 +10,10 @@
     danger = false,
     onConfirm = null,
     onCancel = null
+  ,
+    onconfirm,
+    oncancel
   } = $props();
-
-  const dispatch = createEventDispatcher();
   let confirmBtn = $state();
   let cancelBtn = $state();
 
@@ -27,18 +28,12 @@
   });
 
   function handleConfirm() {
-    if (typeof onConfirm === 'function') {
-      onConfirm();
-    }
-    dispatch('confirm');
+    (onconfirm || onConfirm)?.();
     modalStore.close();
   }
 
   function handleCancel() {
-    if (typeof onCancel === 'function') {
-      onCancel();
-    }
-    dispatch('cancel');
+    (oncancel || onCancel)?.();
     modalStore.close();
   }
 

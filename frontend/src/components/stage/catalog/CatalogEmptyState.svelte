@@ -1,10 +1,13 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../../common/Icon.svelte';
+    import Icon from '../../common/Icon.svelte';
 
-  const dispatch = createEventDispatcher();
+  /**
+   * @typedef {Object} Props
+   * @property {any} [onsuggest]
+   */
 
-  export let onsuggest = null;
+  /** @type {Props} */
+  let { onsuggest = null } = $props();
 
   const suggestions = [
     { label: 'Hades II', query: 'Hades II' },
@@ -17,8 +20,7 @@
   ];
 
   function handleSelect(query) {
-    dispatch('suggest', query);
-    if (typeof onsuggest === 'function') onsuggest(query);
+    onsuggest?.(query);
   }
 </script>
 
@@ -45,7 +47,7 @@
       {#each suggestions as s}
         <button
           type="button"
-          on:click={() => handleSelect(s.query)}
+          onclick={() => handleSelect(s.query)}
           class="px-2.5 py-1 rounded-lg text-2xs font-mono bg-surface-card hover:bg-surface-cardHover border border-surface-border hover:border-surface-borderHighlight text-neutral-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
         >
           {s.label}

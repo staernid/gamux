@@ -16,9 +16,9 @@
 
   const uiScaleOptions = UI_SCALE_OPTIONS;
 
-  let sfxEnabled = isSfxEnabled();
-  let sfxVolume = getSfxVolume();
-  let sfxMuteInBackground = isMuteInBackground();
+  let sfxEnabled = $state(isSfxEnabled());
+  let sfxVolume = $state(getSfxVolume());
+  let sfxMuteInBackground = $state(isMuteInBackground());
 
   function handleScaleChange(size) {
     configStore.setScale(size);
@@ -54,7 +54,7 @@
         description="Base UI scale and font sizing for handhelds, desktops, or TVs (applies immediately)"
         value={configStore.uiScale}
         options={uiScaleOptions}
-        on:change={(e) => handleScaleChange(e.detail)}
+        onchange={(val) => handleScaleChange(val)}
       />
     </div>
   </SettingSection>
@@ -66,14 +66,14 @@
         label="UI Sound Effects"
         description="Synthesized mechanical clicks and chimes for navigation and interactions"
         value={sfxEnabled}
-        on:change={handleSfxToggle}
+        onchange={handleSfxToggle}
       />
 
       <SeamlessSwitch
         label="Mute in Background"
         description="Automatically silence UI audio when the Gamux window loses focus"
         value={sfxMuteInBackground}
-        on:change={handleMuteBgToggle}
+        onchange={handleMuteBgToggle}
       />
     </div>
 
@@ -91,13 +91,13 @@
             max="1"
             step="0.05"
             value={sfxVolume}
-            on:input={handleVolumeInput}
+            oninput={handleVolumeInput}
             class="w-24 sm:w-32 accent-white cursor-pointer"
             aria-label="Sound Effects Volume"
           />
           <button
             type="button"
-            on:click={handleTestSound}
+            onclick={handleTestSound}
             class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             title="Play test audio chime"
           >

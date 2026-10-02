@@ -1,18 +1,41 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
 
-  export let title = '';
-  export let badge = '';
-  export let subtitle = '';
-  export let maxWidth = 'max-w-5xl';
-  export let padding = 'p-5 sm:p-8';
-  export let showClose = true;
-  export let closeLabel = 'Done';
-  export let closeKeyHint = 'Esc';
-  export let customHeader = false;
+  /**
+   * @typedef {Object} Props
+   * @property {string} [title]
+   * @property {string} [badge]
+   * @property {string} [subtitle]
+   * @property {string} [maxWidth]
+   * @property {string} [padding]
+   * @property {boolean} [showClose]
+   * @property {string} [closeLabel]
+   * @property {string} [closeKeyHint]
+   * @property {boolean} [customHeader]
+   * @property {() => void} [onclose]
+   * @property {import('svelte').Snippet} [header]
+   * @property {import('svelte').Snippet} [headerActions]
+   * @property {import('svelte').Snippet} [children]
+   */
 
-  const dispatch = createEventDispatcher();
-  let dialogEl;
+  /** @type {Props} */
+  let {
+    title = '',
+    badge = '',
+    subtitle = '',
+    maxWidth = 'max-w-5xl',
+    padding = 'p-5 sm:p-8',
+    showClose = true,
+    closeLabel = 'Done',
+    closeKeyHint = 'Esc',
+    customHeader = false,
+    onclose,
+    header,
+    headerActions,
+    children
+  } = $props();
+
+  let dialogEl = $state();
 
   onMount(() => {
     if (dialogEl && typeof dialogEl.focus === 'function') {
@@ -23,12 +46,12 @@
   function handleKeydown(e) {
     if (e.key === 'Escape') {
       e.stopPropagation();
-      dispatch('close');
+      onclose?.();
     }
   }
 
   function handleClose() {
-    dispatch('close');
+    onclose?.();
   }
 </script>
 
@@ -37,15 +60,15 @@
   role="dialog"
   aria-modal="true"
   tabindex="-1"
-  on:keydown={handleKeydown}
+  onkeydown={handleKeydown}
   class="fixed inset-0 z-50 bg-[#09090b]/95 backdrop-blur-sm flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
 >
-  {#if !customHeader && (title || $$slots.header || $$slots.headerActions)}
+  {#if !customHeader && (title || header || headerActions)}
     <!-- Standard Modal Header Bar -->
     <div class="flex items-center justify-between {maxWidth} w-full mx-auto mb-5 flex-shrink-0">
       <div class="min-w-0 pr-4">
-        {#if $$slots.header}
-          <slot name="header" />
+        {#if header}
+          {@render header?.()}
         {:else}
           <div class="flex items-center space-x-2.5">
             {#if badge}
@@ -67,12 +90,12 @@
 
       <!-- Header Actions & Close Button -->
       <div class="flex items-center space-x-2 flex-shrink-0">
-        <slot name="headerActions" />
+        {@render headerActions?.()}
 
         {#if showClose}
           <button
             type="button"
-            on:click={handleClose}
+            onclick={handleClose}
             class="px-4 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
           >
             {#if closeKeyHint}
@@ -87,5 +110,5 @@
     </div>
   {/if}
 
-  <slot />
+  {@render children?.()}
 </div>

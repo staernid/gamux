@@ -1,14 +1,16 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import SettingSection from '../../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
 
-  export let cfgDraft = {};
+  let { cfgDraft = $bindable({}) } = $props();
 
-  let selectedResPreset = 'auto';
-  let isCustomRes = false;
+  let selectedResPreset = $state('auto');
+  let isCustomRes = $state(false);
 
-  $: {
+  run(() => {
     const w = cfgDraft?.gamescope_width || 0;
     const h = cfgDraft?.gamescope_height || 0;
     if (!w && !h) {
@@ -33,7 +35,7 @@
       selectedResPreset = 'custom';
       isCustomRes = true;
     }
-  }
+  });
 
   function handleResChange(val) {
     selectedResPreset = val;
@@ -62,10 +64,10 @@
     { value: 'custom', label: 'Custom Resolution...' }
   ];
 
-  let selectedFpsPreset = '0';
-  let isCustomFps = false;
+  let selectedFpsPreset = $state('0');
+  let isCustomFps = $state(false);
 
-  $: {
+  run(() => {
     const fps = cfgDraft?.gamescope_fps || 0;
     if ([0, 60, 100, 120, 144, 165, 240].includes(fps)) {
       selectedFpsPreset = String(fps);
@@ -74,7 +76,7 @@
       selectedFpsPreset = 'custom';
       isCustomFps = true;
     }
-  }
+  });
 
   function handleFpsChange(val) {
     selectedFpsPreset = val;
@@ -116,7 +118,7 @@
         <InheritSelect
           label="Base Screen Resolution"
           value={selectedResPreset}
-          on:change={(e) => handleResChange(e.detail)}
+          onchange={(val) => handleResChange(val)}
           options={resPresets}
         />
         {#if isCustomRes}
@@ -151,7 +153,7 @@
         <InheritSelect
           label="Target Refresh Rate / FPS"
           value={selectedFpsPreset}
-          on:change={(e) => handleFpsChange(e.detail)}
+          onchange={(val) => handleFpsChange(val)}
           options={fpsPresets}
         />
         {#if isCustomFps}

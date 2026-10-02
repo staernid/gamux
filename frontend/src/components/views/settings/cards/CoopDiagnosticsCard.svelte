@@ -2,13 +2,13 @@
   import SettingSection from '../../../common/SettingSection.svelte';
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
-  $: caps = $multiseatStore.capabilities;
-  $: hasBwrap = Boolean(caps?.has_bwrap ?? caps?.hasBwrap ?? caps?.HasBwrap);
-  $: hasPasta = Boolean(caps?.has_pasta ?? caps?.hasPasta ?? caps?.HasPasta);
-  $: hasGamescope = Boolean(caps?.has_gamescope ?? caps?.hasGamescope ?? caps?.HasGamescope);
-  $: hasCage = Boolean(caps?.has_cage ?? caps?.hasCage ?? caps?.HasCage);
-  $: hasSunshine = Boolean(caps?.has_sunshine ?? caps?.hasSunshine ?? caps?.HasSunshine);
-  $: hasPipewire = Boolean(caps?.has_pipewire ?? caps?.hasPipewire ?? caps?.HasPipewire);
+  let caps = $derived($multiseatStore.capabilities);
+  let hasBwrap = $derived(Boolean(caps?.has_bwrap ?? caps?.hasBwrap ?? caps?.HasBwrap));
+  let hasPasta = $derived(Boolean(caps?.has_pasta ?? caps?.hasPasta ?? caps?.HasPasta));
+  let hasGamescope = $derived(Boolean(caps?.has_gamescope ?? caps?.hasGamescope ?? caps?.HasGamescope));
+  let hasCage = $derived(Boolean(caps?.has_cage ?? caps?.hasCage ?? caps?.HasCage));
+  let hasSunshine = $derived(Boolean(caps?.has_sunshine ?? caps?.hasSunshine ?? caps?.HasSunshine));
+  let hasPipewire = $derived(Boolean(caps?.has_pipewire ?? caps?.hasPipewire ?? caps?.HasPipewire));
 </script>
 
 <SettingSection title="System Diagnostics & Isolation Tools">

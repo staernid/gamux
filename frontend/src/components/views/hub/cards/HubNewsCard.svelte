@@ -1,12 +1,25 @@
 <script>
   import { formatNewsHTML } from '../../../../utils/format.js';
 
-  export let isLoadingNews = false;
-  export let newsError = '';
-  export let newsItems = [];
-  export let expandedNewsIndex = 0;
-  export let onRefreshNews = () => {};
-  export let onToggleExpand = (idx) => {};
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isLoadingNews]
+   * @property {string} [newsError]
+   * @property {any} [newsItems]
+   * @property {number} [expandedNewsIndex]
+   * @property {any} [onRefreshNews]
+   * @property {any} [onToggleExpand]
+   */
+
+  /** @type {Props} */
+  let {
+    isLoadingNews = false,
+    newsError = '',
+    newsItems = [],
+    expandedNewsIndex = 0,
+    onRefreshNews = () => {},
+    onToggleExpand = (idx) => {}
+  } = $props();
 </script>
 
 <div class="space-y-3">
@@ -16,7 +29,7 @@
     </span>
     <button
       type="button"
-      on:click={onRefreshNews}
+      onclick={onRefreshNews}
       disabled={isLoadingNews}
       class="bg-surface-card hover:bg-surface-cardHover text-neutral-200 hover:text-white font-bold text-xs px-3 py-1 rounded-lg border border-surface-border transition-colors disabled:opacity-50 cursor-pointer"
     >
@@ -31,7 +44,7 @@
       <p class="text-xs text-rose-300 font-medium">{newsError}</p>
       <button
         type="button"
-        on:click={onRefreshNews}
+        onclick={onRefreshNews}
         class="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
       >
         Retry Fetch
@@ -45,7 +58,7 @@
           <button
             type="button"
             class="text-left space-y-0.5 flex-1 pr-3 truncate cursor-pointer select-none"
-            on:click={() => onToggleExpand(idx)}
+            onclick={() => onToggleExpand(idx)}
           >
             <div class="flex items-center space-x-2">
               <strong class="text-neutral-100 font-bold text-xs block truncate">{item.title}</strong>
@@ -77,7 +90,7 @@
             <button
               type="button"
               class="text-neutral-400 hover:text-white p-1 transition-colors flex items-center justify-center cursor-pointer"
-              on:click={() => onToggleExpand(idx)}
+              onclick={() => onToggleExpand(idx)}
               aria-label={isExpanded ? 'Collapse article' : 'Expand article'}
             >
               <svg class="w-3.5 h-3.5 transform transition-transform {isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">

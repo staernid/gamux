@@ -1,21 +1,32 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../common/Icon.svelte';
+    import Icon from '../common/Icon.svelte';
 
-  export let isCoop = false;
-  export let session = null;
-  export let p1Gamepad = 'auto';
-  export let p2Gamepad = 'auto';
-  export let className = '';
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isCoop]
+   * @property {any} [session]
+   * @property {string} [p1Gamepad]
+   * @property {string} [p2Gamepad]
+   * @property {string} [className]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    isCoop = false,
+    session = null,
+    p1Gamepad = 'auto',
+    p2Gamepad = 'auto',
+    className = ''
+  ,
+    onclick
+  } = $props();
 
-  $: isRunning = Boolean(session?.is_running);
+  let isRunning = $derived(Boolean(session?.is_running));
 </script>
 
 <button
   type="button"
-  on:click={() => dispatch('click')}
+  onclick={() => onclick?.()}
   class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#121214]/90 hover:bg-[#1c1c20] border border-[#27272a] hover:border-neutral-500 text-3xs font-mono transition-all shadow-sm cursor-pointer select-none {className}"
   data-testid="multiseat-status-pill"
   title="Multiseat Co-op Session Management"

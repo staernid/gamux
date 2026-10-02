@@ -2,10 +2,12 @@
   import SettingSection from '../../../common/SettingSection.svelte';
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
-  export let cfgDraft = { multiseat: {} };
-  export let gamepadOptions = [];
-  export let gamepadAssignments = {};
-  export let gamepads = [];
+  let {
+    cfgDraft = $bindable({ multiseat: {} }),
+    gamepadOptions = [],
+    gamepadAssignments = {},
+    gamepads = []
+  } = $props();
 </script>
 
 <SettingSection title="Host Controllers & Gamepads">
@@ -16,7 +18,7 @@
       </p>
       <button
         type="button"
-        on:click={() => multiseatStore.refreshGamepads()}
+        onclick={() => multiseatStore.refreshGamepads()}
         class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
         title="Rescan host input devices"
       >
@@ -34,7 +36,7 @@
         <select
           id="seat1-gamepad-select"
           bind:value={cfgDraft.multiseat.seat1_gamepad}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each gamepadOptions as opt}
@@ -57,7 +59,7 @@
         <select
           id="seat2-gamepad-select"
           bind:value={cfgDraft.multiseat.seat2_gamepad}
-          on:change={() => { cfgDraft = { ...cfgDraft }; }}
+          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each gamepadOptions as opt}

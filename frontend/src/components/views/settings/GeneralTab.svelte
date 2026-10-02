@@ -3,7 +3,7 @@
   import NetworkDownloadsCard from './cards/NetworkDownloadsCard.svelte';
   import PropertySheet from '../../schema/PropertySheet.svelte';
 
-  export let cfgDraft;
+  let { cfgDraft = $bindable() } = $props();
 </script>
 
 <div class="space-y-4">

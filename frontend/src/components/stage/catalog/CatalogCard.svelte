@@ -1,29 +1,36 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../../common/Icon.svelte';
+    import Icon from '../../common/Icon.svelte';
 
-  export let item;
-  export let isFocused = false;
-  export let localMatch = null;
-  export let onselect = null;
-  export let onfocus = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} item
+   * @property {boolean} [isFocused]
+   * @property {any} [localMatch]
+   * @property {any} [onselect]
+   * @property {any} [onfocus]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    item,
+    isFocused = false,
+    localMatch = null,
+    onselect = null,
+    onfocus = null
+  } = $props();
 
-  let imgFailed = false;
+  let imgFailed = $state(false);
 
-  $: storeName = (item?.store || 'steam').toUpperCase();
-  $: releaseYear = item?.release_date ? item.release_date.slice(0, 4) : '';
-  $: hasPoster = Boolean(item?.poster_url) && !imgFailed;
+  let storeName = $derived((item?.store || 'steam').toUpperCase());
+  let releaseYear = $derived(item?.release_date ? item.release_date.slice(0, 4) : '');
+  let hasPoster = $derived(Boolean(item?.poster_url) && !imgFailed);
 
   function handleClick() {
-    dispatch('select', item);
-    if (typeof onselect === 'function') onselect(item);
+    onselect?.(item);
   }
 
   function handleMouseEnter() {
-    dispatch('focus');
-    if (typeof onfocus === 'function') onfocus();
+    onfocus?.();
   }
 
   function handleImgError() {
@@ -33,8 +40,8 @@
 
 <button
   type="button"
-  on:click={handleClick}
-  on:mouseenter={handleMouseEnter}
+  onclick={handleClick}
+  onmouseenter={handleMouseEnter}
   class="group cursor-pointer flex flex-col items-center text-center transition-all duration-150 transform {isFocused ? 'scale-105 z-10' : 'hover:scale-102 opacity-90 hover:opacity-100'} bg-transparent border-0 p-0 text-left outline-none"
   aria-label="{item?.name || 'Game'} - {storeName} {localMatch ? (localMatch.isInstalled ? '(Installed)' : '(In Library)') : ''}"
 >
@@ -46,7 +53,7 @@
       <img
         src={item.poster_url}
         alt={item.name}
-        on:error={handleImgError}
+        onerror={handleImgError}
         loading="lazy"
         class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
       />

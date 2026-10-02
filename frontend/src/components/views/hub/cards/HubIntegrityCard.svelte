@@ -3,22 +3,39 @@
   import { formatBytes, formatETA } from '../../../../utils/format.js';
   import { extractTaskProgress, isActiveStatus } from '../../../../stores/tasks.js';
 
-  export let activeGameTask = null;
-  export let activeVerifyTask = null;
-  export let isCheckingIntegrity = false;
-  export let isNormalizing = false;
-  export let isUpdating = false;
-  export let integrityError = '';
-  export let integrityReport = null;
-  export let onRunIntegrityCheck = () => {};
-  export let onUpdateGame = () => {};
-  export let onNormalizeDirectory = () => {};
+  /**
+   * @typedef {Object} Props
+   * @property {any} [activeGameTask]
+   * @property {any} [activeVerifyTask]
+   * @property {boolean} [isCheckingIntegrity]
+   * @property {boolean} [isNormalizing]
+   * @property {boolean} [isUpdating]
+   * @property {string} [integrityError]
+   * @property {any} [integrityReport]
+   * @property {any} [onRunIntegrityCheck]
+   * @property {any} [onUpdateGame]
+   * @property {any} [onNormalizeDirectory]
+   */
 
-  let showDetails = false;
+  /** @type {Props} */
+  let {
+    activeGameTask = null,
+    activeVerifyTask = null,
+    isCheckingIntegrity = false,
+    isNormalizing = false,
+    isUpdating = false,
+    integrityError = '',
+    integrityReport = null,
+    onRunIntegrityCheck = () => {},
+    onUpdateGame = () => {},
+    onNormalizeDirectory = () => {}
+  } = $props();
 
-  $: verifyTask = activeVerifyTask || (activeGameTask?.type === 'verify' ? activeGameTask : null);
-  $: isVerifying = Boolean(isCheckingIntegrity || (verifyTask && isActiveStatus(verifyTask.status)));
-  $: progress = extractTaskProgress(verifyTask);
+  let showDetails = $state(false);
+
+  let verifyTask = $derived(activeVerifyTask || (activeGameTask?.type === 'verify' ? activeGameTask : null));
+  let isVerifying = $derived(Boolean(isCheckingIntegrity || (verifyTask && isActiveStatus(verifyTask.status))));
+  let progress = $derived(extractTaskProgress(verifyTask));
 
   async function handleCancelVerify() {
     if (verifyTask?.id) {
@@ -37,7 +54,7 @@
   <div class="flex items-center space-x-2 flex-wrap gap-y-2">
     <button
       type="button"
-      on:click={onRunIntegrityCheck}
+      onclick={onRunIntegrityCheck}
       disabled={isVerifying || isUpdating || isNormalizing}
       class="bg-white hover:bg-neutral-200 text-black font-black px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm"
     >
@@ -57,7 +74,7 @@
 
     <button
       type="button"
-      on:click={onUpdateGame}
+      onclick={onUpdateGame}
       disabled={isUpdating || isVerifying}
       class="bg-surface-header hover:bg-surface-cardHover text-neutral-200 border border-surface-border font-semibold px-4 py-2 rounded-xl transition-colors text-xs disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed"
       title="Check and download depot updates"
@@ -75,7 +92,7 @@
 
     <button
       type="button"
-      on:click={onNormalizeDirectory}
+      onclick={onNormalizeDirectory}
       disabled={isNormalizing}
       class="bg-surface-header hover:bg-surface-cardHover text-neutral-400 hover:text-neutral-200 border border-surface-border font-semibold px-3 py-2 rounded-xl transition-colors text-xs disabled:opacity-50 cursor-pointer"
       title="Rename game directory to Steam naming conventions"
@@ -98,7 +115,7 @@
           <span class="font-mono text-xs font-bold text-neutral-200">{progress.percent.toFixed(1)}%</span>
           <button
             type="button"
-            on:click={handleCancelVerify}
+            onclick={handleCancelVerify}
             class="text-neutral-400 hover:text-rose-400 text-2xs font-mono transition-colors cursor-pointer"
           >
             Cancel
@@ -173,7 +190,7 @@
             </div>
             <button
               type="button"
-              on:click={onUpdateGame}
+              onclick={onUpdateGame}
               disabled={isUpdating}
               class="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
             >
@@ -204,7 +221,7 @@
           <div>
             <button
               type="button"
-              on:click={() => showDetails = !showDetails}
+              onclick={() => showDetails = !showDetails}
               class="text-neutral-400 hover:text-neutral-300 text-2xs font-mono underline cursor-pointer"
             >
               {showDetails ? 'Hide damaged files list' : `Show ${damagedCount} damaged ${damagedCount === 1 ? 'file' : 'files'}`}

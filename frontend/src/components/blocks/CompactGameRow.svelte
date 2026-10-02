@@ -1,29 +1,37 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { formatPlaytime } from '../../utils/game.js';
+    import { formatPlaytime } from '../../utils/game.js';
   import { formatBytes } from '../../utils/format.js';
 
-  export let game = null;
-  export let selected = false;
-  export let isRunning = false;
-  export let className = '';
-  export let onclick = null;
-  export let onplay = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {boolean} [selected]
+   * @property {boolean} [isRunning]
+   * @property {string} [className]
+   * @property {any} [onclick]
+   * @property {any} [onplay]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = null,
+    selected = false,
+    isRunning = false,
+    className = '',
+    onclick = null,
+    onplay = null
+  } = $props();
 
-  $: isReady = game ? (game.isReady || game.isPatched) : false;
-  $: isStub = game ? Boolean(game.isStub) : false;
+  let isReady = $derived(game ? (game.isReady || game.isPatched) : false);
+  let isStub = $derived(game ? Boolean(game.isStub) : false);
 
   function handleClick() {
-    dispatch('click', { game });
-    if (typeof onclick === 'function') onclick({ game });
+    onclick?.({ game });
   }
 
   function handlePlay(e) {
     e.stopPropagation();
-    dispatch('play', { game });
-    if (typeof onplay === 'function') onplay({ game });
+    onplay?.({ game });
   }
 </script>
 
@@ -31,8 +39,8 @@
   <div
     role="row"
     tabindex="0"
-    on:click={handleClick}
-    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
+    onclick={handleClick}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
     class="group w-full h-10 px-4 flex items-center justify-between border-b border-[#18181b] hover:bg-[#18181b]/80 transition-colors text-xs font-mono select-none cursor-pointer focus:outline-none {selected ? 'bg-[#1c1c20] border-l-2 border-l-white' : ''} {className}"
     data-testid="compact-game-row"
   >
@@ -61,7 +69,7 @@
       <!-- Fast Play Trigger Button -->
       <button
         type="button"
-        on:click={handlePlay}
+        onclick={handlePlay}
         class="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-white hover:text-black text-neutral-300 transition-colors text-4xs font-bold uppercase tracking-wider"
       >
         Play

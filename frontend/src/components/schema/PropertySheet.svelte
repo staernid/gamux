@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import { AppAPI } from '../../api/app.js';
   import PropertyRow from './PropertyRow.svelte';
   import SwitchControl from './controls/SwitchControl.svelte';
@@ -11,37 +11,56 @@
   import { snakeToCamelKey } from '../../stores/drawerDraft.js';
   import { MOCK_CONFIG_SCHEMA } from '../../api/mockData.js';
 
-  export let schema = [];
-  export let values = {};
-  export let inheritedValues = {}; // Global configuration for inheritance resolution
-  export let category = null; // optional category filter: string | string[]
-  export let excludeKeys = []; // optional keys to exclude
-  export let includeKeys = []; // optional keys to exclusively include
-  export let scope = null; // optional scope filter: 'global' | 'game'
-  export let groupByCategory = true;
-  export let disabled = false;
-  export let onChange = null;
-  export let onchange = null;
-  export let onReset = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [schema]
+   * @property {any} [values]
+   * @property {any} [inheritedValues] - Global configuration for inheritance resolution
+   * @property {any} [category] - optional category filter: string | string[]
+   * @property {any} [excludeKeys] - optional keys to exclude
+   * @property {any} [includeKeys] - optional keys to exclusively include
+   * @property {any} [scope] - optional scope filter: 'global' | 'game'
+   * @property {boolean} [groupByCategory]
+   * @property {boolean} [disabled]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   * @property {any} [onReset]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    schema = [],
+    values = $bindable({}),
+    inheritedValues = {},
+    category = null,
+    excludeKeys = [],
+    includeKeys = [],
+    scope = null,
+    groupByCategory = true,
+    disabled = false,
+    onChange = null,
+    onchange = null,
+    onReset = null
+  ,
+    onreset = null
+  } = $props();
 
-  let loadedSchema = Array.isArray(MOCK_CONFIG_SCHEMA) ? MOCK_CONFIG_SCHEMA : [];
+  let loadedSchema = $state(Array.isArray(MOCK_CONFIG_SCHEMA) ? MOCK_CONFIG_SCHEMA : []);
 
-  $: effectiveSchema = (schema && schema.length > 0) ? schema : loadedSchema;
+  let effectiveSchema = $derived((schema && schema.length > 0) ? schema : loadedSchema);
 
   // Filter schema by scope ('global', 'game', or 'both')
-  $: scopedSchema = scope
+  let scopedSchema = $derived(scope
     ? effectiveSchema.filter(p => {
         if (!p.scope) return true;
         const s = p.scope.toLowerCase();
         const target = scope.toLowerCase();
         return s === target || s === 'both';
       })
-    : effectiveSchema;
+    : effectiveSchema);
 
   // Filter schema by category, includeKeys, and excludeKeys
-  $: filteredSchema = scopedSchema.filter(p => {
+  let filteredSchema = $derived(scopedSchema.filter(p => {
     if (Array.isArray(includeKeys) && includeKeys.length > 0) {
       if (!includeKeys.includes(p.key)) return false;
     }
@@ -57,12 +76,12 @@
       }
     }
     return true;
-  });
+  }));
 
   // Group by category if groupByCategory is true
-  $: categories = groupByCategory
+  let categories = $derived(groupByCategory
     ? Array.from(new Set(filteredSchema.map(p => p.category || 'General')))
-    : [];
+    : []);
 
   onMount(async () => {
     if (!schema || schema.length === 0) {
@@ -172,9 +191,7 @@
 
     values = updatedValues;
     const changeDetail = { key, value: nextVal, values: updatedValues };
-    dispatch('change', changeDetail);
-    if (typeof onChange === 'function') onChange(changeDetail);
-    if (typeof onchange === 'function') onchange(changeDetail);
+    (onchange || onChange)?.(changeDetail);
   }
 
   function handleResetProperty(key) {
@@ -198,8 +215,7 @@
     }
     values = updatedValues;
     const resetDetail = { key, values: updatedValues };
-    dispatch('reset', resetDetail);
-    if (typeof onReset === 'function') onReset(resetDetail);
+    (onreset || onReset)?.(resetDetail);
   }
 
   function resolveControlType(type) {
@@ -262,7 +278,7 @@
                 inheritedValue={inheritedVal}
                 scope={scope || 'global'}
                 {disabled}
-                on:reset={() => handleResetProperty(prop.key)}
+                onreset={() => handleResetProperty(prop.key)}
               >
                 {#if controlType === 'switch'}
                   <SwitchControl
@@ -270,7 +286,7 @@
                     value={currentVal}
                     {disabled}
                     hideHeader={true}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {:else if controlType === 'select'}
                   <SelectControl
@@ -278,7 +294,7 @@
                     value={currentVal}
                     {disabled}
                     hideHeader={true}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {:else if controlType === 'path'}
                   <PathPickerControl
@@ -286,7 +302,7 @@
                     value={currentVal}
                     {disabled}
                     hideHeader={true}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {:else if controlType === 'env'}
                   <EnvEditorControl
@@ -294,21 +310,21 @@
                     value={currentVal}
                     {disabled}
                     hideHeader={true}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {:else if controlType === 'slider'}
                   <SliderControl
                     property={prop}
                     value={currentVal}
                     {disabled}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {:else}
                   <TextControl
                     property={prop}
                     value={currentVal}
                     {disabled}
-                    on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+                    onchange={(val) => updatePropertyValue(prop.key, val)}
                   />
                 {/if}
               </PropertyRow>
@@ -331,7 +347,7 @@
           inheritedValue={inheritedVal}
           scope={scope || 'global'}
           {disabled}
-          on:reset={() => handleResetProperty(prop.key)}
+          onreset={() => handleResetProperty(prop.key)}
         >
           {#if controlType === 'switch'}
             <SwitchControl
@@ -339,7 +355,7 @@
               value={currentVal}
               {disabled}
               hideHeader={true}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {:else if controlType === 'select'}
             <SelectControl
@@ -347,7 +363,7 @@
               value={currentVal}
               {disabled}
               hideHeader={true}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {:else if controlType === 'path'}
             <PathPickerControl
@@ -355,7 +371,7 @@
               value={currentVal}
               {disabled}
               hideHeader={true}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {:else if controlType === 'env'}
             <EnvEditorControl
@@ -363,21 +379,21 @@
               value={currentVal}
               {disabled}
               hideHeader={true}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {:else if controlType === 'slider'}
             <SliderControl
               property={prop}
               value={currentVal}
               {disabled}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {:else}
             <TextControl
               property={prop}
               value={currentVal}
               {disabled}
-              on:change={(e) => updatePropertyValue(prop.key, e.detail)}
+              onchange={(val) => updatePropertyValue(prop.key, val)}
             />
           {/if}
         </PropertyRow>

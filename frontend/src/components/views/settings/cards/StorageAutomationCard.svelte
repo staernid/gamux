@@ -5,9 +5,9 @@
   import GhostInput from '../../../common/GhostInput.svelte';
   import { selectDirectoryDialog } from '../../../../utils/filesystem.js';
 
-  export let cfgDraft;
+  let { cfgDraft = $bindable() } = $props();
 
-  let showAdvancedStorage = false;
+  let showAdvancedStorage = $state(false);
 
   const retentionOptions = [
     { value: 1, label: '1 Snapshot' },
@@ -66,7 +66,7 @@
   <div class="pt-3 mt-3 border-t border-surface-border">
     <button
       type="button"
-      on:click={() => { showAdvancedStorage = !showAdvancedStorage; }}
+      onclick={() => { showAdvancedStorage = !showAdvancedStorage; }}
       class="text-xs font-semibold text-neutral-400 hover:text-neutral-200 flex items-center space-x-1.5 cursor-pointer"
     >
       <svg class="w-3.5 h-3.5 transform transition-transform {showAdvancedStorage ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,14 +84,16 @@
           placeholder="~/.local/share/gamux/art"
           mono={true}
         >
-          <button
-            slot="action"
-            type="button"
-            on:click={handleBrowseArtworkDir}
-            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
-          >
-            Browse
-          </button>
+          {#snippet action()}
+                    <button
+              
+              type="button"
+              onclick={handleBrowseArtworkDir}
+              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+            >
+              Browse
+            </button>
+                  {/snippet}
         </GhostInput>
 
         <GhostInput
@@ -101,14 +103,16 @@
           placeholder="~/.local/share/gamux/backups"
           mono={true}
         >
-          <button
-            slot="action"
-            type="button"
-            on:click={handleBrowseBackupDir}
-            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
-          >
-            Browse
-          </button>
+          {#snippet action()}
+                    <button
+              
+              type="button"
+              onclick={handleBrowseBackupDir}
+              class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+            >
+              Browse
+            </button>
+                  {/snippet}
         </GhostInput>
       </div>
     {/if}

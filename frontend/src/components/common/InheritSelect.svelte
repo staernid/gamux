@@ -1,6 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-
+  
   let {
     label = '',
     description = '',
@@ -12,9 +11,9 @@
     disabled = false,
     stacked = false,
     id = `select-${Math.random().toString(36).slice(2, 9)}`
+  ,
+    onchange = null
   } = $props();
-
-  const dispatch = createEventDispatcher();
 
   let hasInheritance = $derived(globalValue !== undefined && globalValue !== null && globalValue !== '');
   let isInherited = $derived(hasInheritance && (!value || value === '' || value === globalValue));
@@ -31,14 +30,14 @@
     } else {
       value = selectedVal;
     }
-    dispatch('change', value);
+    onchange?.(value);
   }
 
   function revertToInherit(e) {
     e.stopPropagation();
     if (disabled || !hasInheritance) return;
     value = '';
-    dispatch('change', '');
+    onchange?.('');
   }
 </script>
 

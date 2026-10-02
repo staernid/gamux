@@ -1,4 +1,6 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { onMount, onDestroy } from 'svelte';
   import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
@@ -14,26 +16,28 @@
   import PropertySheet from '../schema/PropertySheet.svelte';
   import { RUNNER_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS } from '../../constants/options.js';
 
-  let activeTab = 'general'; // 'general' | 'storage' | 'compatibility' | 'profiles' | 'advanced'
-  let advancedSubtab = 'coop'; // 'coop' | 'maintenance' | 'logs' | 'schema'
+  let activeTab = $state('general'); // 'general' | 'storage' | 'compatibility' | 'profiles' | 'advanced'
+  let advancedSubtab = $state('coop'); // 'coop' | 'maintenance' | 'logs' | 'schema'
 
   // Backward compatibility alias mapper
-  $: if (activeTab === 'credentials') {
-    activeTab = 'storage';
-  } else if (activeTab === 'coop') {
-    activeTab = 'advanced';
-    advancedSubtab = 'coop';
-  } else if (activeTab === 'tools' || activeTab === 'maintenance') {
-    activeTab = 'advanced';
-    advancedSubtab = 'maintenance';
-  } else if (activeTab === 'logs') {
-    activeTab = 'advanced';
-    advancedSubtab = 'logs';
-  } else if (activeTab === 'schema') {
-    activeTab = 'advanced';
-    advancedSubtab = 'schema';
-  }
-  let cfgDraft = {
+  run(() => {
+    if (activeTab === 'credentials') {
+      activeTab = 'storage';
+    } else if (activeTab === 'coop') {
+      activeTab = 'advanced';
+      advancedSubtab = 'coop';
+    } else if (activeTab === 'tools' || activeTab === 'maintenance') {
+      activeTab = 'advanced';
+      advancedSubtab = 'maintenance';
+    } else if (activeTab === 'logs') {
+      activeTab = 'advanced';
+      advancedSubtab = 'logs';
+    } else if (activeTab === 'schema') {
+      activeTab = 'advanced';
+      advancedSubtab = 'schema';
+    }
+  });
+  let cfgDraft = $state({
     library_paths: [],
     default_runner: 'umu',
     operating_mode: 'loader',
@@ -80,28 +84,30 @@
       sunshine_port_p1: 47989,
       sunshine_port_p2: 48010,
     }
-  };
-  let userCfgDraft = {
+  });
+  let userCfgDraft = $state({
     account_name: 'GamuxPlayer',
     account_steamid: '76561197960287930',
     language: 'english',
     ip_country: 'US'
-  };
+  });
 
-  let initialCfgJSON = '';
-  let initialUserCfgJSON = '';
+  let initialCfgJSON = $state('');
+  let initialUserCfgJSON = $state('');
 
-  let isSaving = false;
-  let saveSuccess = false;
+  let isSaving = $state(false);
+  let saveSuccess = $state(false);
   let saveSuccessTimer = null;
 
-  $: isDirty = Boolean(
+  let isDirty = $derived(Boolean(
     initialCfgJSON &&
     initialUserCfgJSON &&
     (JSON.stringify(cfgDraft) !== initialCfgJSON || JSON.stringify(userCfgDraft) !== initialUserCfgJSON)
-  );
+  ));
 
-  $: configStore.setDirty(isDirty);
+  run(() => {
+    configStore.setDirty(isDirty);
+  });
 
   onDestroy(() => {
     configStore.setDirty(false);
@@ -140,10 +146,10 @@
   }
 
   // Toolchain state
-  let toolStatuses = [];
-  let isCheckingTools = false;
-  let updatingTools = {};
-  let isSubmittingBatch = false;
+  let toolStatuses = $state([]);
+  let isCheckingTools = $state(false);
+  let updatingTools = $state({});
+  let isSubmittingBatch = $state(false);
 
   const runnersList = RUNNER_OPTIONS;
   const languagesList = LANGUAGE_OPTIONS;
@@ -222,9 +228,11 @@
     }, 350);
   }
 
-  $: if (isDirty) {
-    triggerAutoSave();
-  }
+  run(() => {
+    if (isDirty) {
+      triggerAutoSave();
+    }
+  });
 
   async function handleSave(silent = false) {
     if (!cfgDraft || !isDirty) return;
@@ -434,7 +442,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleWindowKeyDown} />
+<svelte:window onkeydown={handleWindowKeyDown} />
 
 <div class="flex-1 overflow-y-auto pt-16 sm:pt-20 px-4 sm:px-8 pb-20 max-w-4xl mx-auto w-full space-y-4 text-xs sm:text-sm animate-fade-in custom-scrollbar">
   <!-- Clean Title & Live Status Bar -->
@@ -474,8 +482,8 @@
       type="button"
       role="tab"
       aria-selected={activeTab === 'general'}
-      on:click={() => { activeTab = 'general'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 0)}
+      onclick={() => { activeTab = 'general'; }}
+      onkeydown={(e) => handleTabKeyDown(e, 0)}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'general' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <span class="text-4xs font-mono px-1 py-0.2 rounded bg-surface-input border border-surface-border text-neutral-400">1</span>
@@ -490,8 +498,8 @@
       type="button"
       role="tab"
       aria-selected={activeTab === 'storage' || activeTab === 'library'}
-      on:click={() => { activeTab = 'storage'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 1)}
+      onclick={() => { activeTab = 'storage'; }}
+      onkeydown={(e) => handleTabKeyDown(e, 1)}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'storage' || activeTab === 'library' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <span class="text-4xs font-mono px-1 py-0.2 rounded bg-surface-input border border-surface-border text-neutral-400">2</span>
@@ -506,8 +514,8 @@
       type="button"
       role="tab"
       aria-selected={activeTab === 'compatibility'}
-      on:click={() => { activeTab = 'compatibility'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 2)}
+      onclick={() => { activeTab = 'compatibility'; }}
+      onkeydown={(e) => handleTabKeyDown(e, 2)}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'compatibility' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <span class="text-4xs font-mono px-1 py-0.2 rounded bg-surface-input border border-surface-border text-neutral-400">3</span>
@@ -523,8 +531,8 @@
       type="button"
       role="tab"
       aria-selected={activeTab === 'profiles' || activeTab === 'persona'}
-      on:click={() => { activeTab = 'profiles'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 3)}
+      onclick={() => { activeTab = 'profiles'; }}
+      onkeydown={(e) => handleTabKeyDown(e, 3)}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'profiles' || activeTab === 'persona' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <span class="text-4xs font-mono px-1 py-0.2 rounded bg-surface-input border border-surface-border text-neutral-400">4</span>
@@ -539,8 +547,8 @@
       type="button"
       role="tab"
       aria-selected={activeTab === 'advanced'}
-      on:click={() => { activeTab = 'advanced'; }}
-      on:keydown={(e) => handleTabKeyDown(e, 4)}
+      onclick={() => { activeTab = 'advanced'; }}
+      onkeydown={(e) => handleTabKeyDown(e, 4)}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {activeTab === 'advanced' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <span class="text-4xs font-mono px-1 py-0.2 rounded bg-surface-input border border-surface-border text-neutral-400">5</span>
@@ -580,7 +588,7 @@
             type="button"
             role="tab"
             aria-selected={advancedSubtab === 'coop'}
-            on:click={() => { advancedSubtab = 'coop'; }}
+            onclick={() => { advancedSubtab = 'coop'; }}
             class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'coop' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
           >
             <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -594,7 +602,7 @@
             type="button"
             role="tab"
             aria-selected={advancedSubtab === 'maintenance'}
-            on:click={() => { advancedSubtab = 'maintenance'; }}
+            onclick={() => { advancedSubtab = 'maintenance'; }}
             class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'maintenance' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
           >
             <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -608,7 +616,7 @@
             type="button"
             role="tab"
             aria-selected={advancedSubtab === 'logs'}
-            on:click={() => { advancedSubtab = 'logs'; }}
+            onclick={() => { advancedSubtab = 'logs'; }}
             class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
           >
             <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -622,7 +630,7 @@
             type="button"
             role="tab"
             aria-selected={advancedSubtab === 'schema'}
-            on:click={() => { advancedSubtab = 'schema'; }}
+            onclick={() => { advancedSubtab = 'schema'; }}
             class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {advancedSubtab === 'schema' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200'}"
             title="Dynamic declarative settings schema"
           >
@@ -644,13 +652,13 @@
             {isSubmittingBatch}
             gamesCount={($games || []).length}
             unpatchedGamesCount={($games || []).filter(g => !g.is_patched && !g.isPatched).length}
-            on:checkAll={loadToolsStatus}
-            on:updateTool={handleUpdateTool}
-            on:batchAchievements={handleBatchAchievements}
-            on:batchArtwork={handleBatchArtwork}
-            on:batchApply={handleBatchApply}
-            on:batchNormalize={handleBatchNormalize}
-            on:batchVerify={handleBatchVerify}
+            oncheckAll={loadToolsStatus}
+            onupdateTool={handleUpdateTool}
+            onbatchAchievements={handleBatchAchievements}
+            onbatchArtwork={handleBatchArtwork}
+            onbatchApply={handleBatchApply}
+            onbatchNormalize={handleBatchNormalize}
+            onbatchVerify={handleBatchVerify}
           />
         {:else if advancedSubtab === 'logs'}
           <LogsTab />

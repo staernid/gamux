@@ -1,23 +1,31 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
+    import SeamlessSwitch from '../../common/SeamlessSwitch.svelte';
 
-  export let property = {};
-  export let value = false;
-  export let disabled = false;
-  export let hideHeader = false;
-  export let onChange = null;
-  export let onchange = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [property]
+   * @property {boolean} [value]
+   * @property {boolean} [disabled]
+   * @property {boolean} [hideHeader]
+   * @property {any} [onChange]
+   * @property {any} [onchange]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    property = {},
+    value = $bindable(false),
+    disabled = false,
+    hideHeader = false,
+    onChange = null,
+    onchange = null
+  } = $props();
 
-  $: isChecked = Boolean(value);
+  let isChecked = $derived(Boolean(value));
 
   function handleChange(nextVal) {
     value = nextVal;
-    dispatch('change', nextVal);
-    if (typeof onChange === 'function') onChange(nextVal);
-    if (typeof onchange === 'function') onchange(nextVal);
+    (onchange || onChange)?.(nextVal);
   }
 
   function toggle() {
@@ -47,8 +55,8 @@
       tabindex="0"
       aria-checked={isChecked}
       aria-label={property.label || 'Toggle switch'}
-      on:click={toggle}
-      on:keydown={handleKeyDown}
+      onclick={toggle}
+      onkeydown={handleKeyDown}
     >
       <div
         class="w-3.5 h-3.5 rounded-full shadow-sm transition-transform transform
@@ -64,7 +72,7 @@
       description={property.description || ''}
       value={isChecked}
       {disabled}
-      on:change={(e) => handleChange(e.detail)}
+      onchange={(val) => handleChange(val)}
     />
   </div>
 {/if}

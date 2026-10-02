@@ -2,13 +2,13 @@
   import { notificationStore } from '../../../stores/notifications.js';
   import SettingSection from '../../common/SettingSection.svelte';
 
-  let logFilter = 'all'; // 'all' | 'error' | 'warning' | 'info' | 'success'
+  let logFilter = $state('all'); // 'all' | 'error' | 'warning' | 'info' | 'success'
   const notifItems = notificationStore.items;
 
-  $: filteredLogs = ($notifItems || []).filter(item => {
+  let filteredLogs = $derived(($notifItems || []).filter(item => {
     if (logFilter === 'all') return true;
     return item.type === logFilter;
-  });
+  }));
 
   function copyLogsToClipboard() {
     const text = ($notifItems || [])
@@ -40,7 +40,7 @@
           {#each ['all', 'error', 'warning', 'info', 'success'] as f}
             <button
               type="button"
-              on:click={() => { logFilter = f; }}
+              onclick={() => { logFilter = f; }}
               class="px-2 py-0.5 rounded capitalize transition-colors cursor-pointer {logFilter === f ? 'bg-surface-cardHover text-white font-bold' : 'text-neutral-500 hover:text-neutral-300'}"
             >
               {f}
@@ -51,7 +51,7 @@
         {#if ($notifItems || []).length > 0}
           <button
             type="button"
-            on:click={copyLogsToClipboard}
+            onclick={copyLogsToClipboard}
             class="text-2xs font-bold bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg border border-surface-border transition-colors flex items-center space-x-1.5 cursor-pointer"
             title="Copy log to clipboard"
           >
@@ -62,7 +62,7 @@
           </button>
           <button
             type="button"
-            on:click={clearAllLogs}
+            onclick={clearAllLogs}
             class="text-2xs font-bold bg-surface-card hover:bg-rose-950/40 text-neutral-400 hover:text-rose-300 px-2.5 py-1 rounded-lg border border-surface-border hover:border-rose-900/50 transition-colors cursor-pointer"
           >
             Clear

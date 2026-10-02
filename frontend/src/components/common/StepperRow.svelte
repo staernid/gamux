@@ -1,6 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-
+  
   let {
     label = '',
     description = '',
@@ -11,9 +10,9 @@
     stepSize = 1,
     value = $bindable(null),
     disabled = false
+  ,
+    onchange
   } = $props();
-
-  const dispatch = createEventDispatcher();
 
   let resolvedOptions = $derived.by(() => {
     if (Array.isArray(options) && options.length > 0) {
@@ -51,7 +50,7 @@
 
     const nextVal = normalizedOptions[nextIdx].value;
     value = nextVal;
-    dispatch('change', nextVal);
+    onchange?.(nextVal);
   }
 
   function handleKeydown(e) {

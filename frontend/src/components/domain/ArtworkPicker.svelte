@@ -1,35 +1,46 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import { AppAPI } from '../../api/app.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { selectedGame, games } from '../../stores/library.js';
   import { isSamePath } from '../../utils/game.js';
   import Icon from '../common/Icon.svelte';
 
-  export let game = null;
-  export let assetType = 'cover'; // 'cover' | 'banner' | 'hero' | 'logo'
-  export let onapply = null;
-  export let onupdated = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {string} [assetType] - 'cover' | 'banner' | 'hero' | 'logo'
+   * @property {any} [onapply]
+   * @property {any} [onupdated]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = $bindable(null),
+    assetType = $bindable('cover'),
+    onapply = null,
+    onupdated = null
+  ,
+    onassetTypeChange
+  } = $props();
 
-  let artQuery = '';
-  let artOptions = [];
-  let isLoadingArt = false;
-  let customArtUrl = '';
-  let isApplyingArt = false;
-  let failedUrls = new Set();
-  let appliedMap = {};
+  let artQuery = $state('');
+  let artOptions = $state([]);
+  let isLoadingArt = $state(false);
+  let customArtUrl = $state('');
+  let isApplyingArt = $state(false);
+  let failedUrls = $state(new Set());
+  let appliedMap = $state({});
 
-  $: gameName = game?.name || '';
-  $: gameDir = game?.gameDir || '';
-  $: appId = game?.appId || '';
-  $: numericSteamAppId = (() => {
+  let gameName = $derived(game?.name || '');
+  let gameDir = $derived(game?.gameDir || '');
+  let appId = $derived(game?.appId || '');
+  let numericSteamAppId = $derived((() => {
     const n = parseInt(String(appId), 10);
     return !isNaN(n) && n > 0 ? n : 0;
-  })();
+  })());
 
-  $: currentActiveArtUrl = (() => {
+  let currentActiveArtUrl = $derived((() => {
     if (appliedMap[assetType]) return appliedMap[assetType];
     if (!game) return '';
     switch (assetType) {
@@ -44,7 +55,7 @@
       default:
         return '';
     }
-  })();
+  })());
 
   const assetTypes = [
     { id: 'cover', label: 'Cover Art', hint: '600×900' },
@@ -91,7 +102,7 @@
   function selectAssetType(type) {
     if (assetType === type) return;
     assetType = type;
-    dispatch('assetTypeChange', type);
+    onassetTypeChange?.(type);
     fetchArtworkOptions();
   }
 
@@ -161,10 +172,8 @@
           })
         );
       }
-      dispatch('apply', targetUrl);
-      dispatch('updated', updated);
-      if (typeof onapply === 'function') onapply(targetUrl);
-      if (typeof onupdated === 'function') onupdated(updated);
+      onapply?.(targetUrl);
+      onupdated?.(updated);
     } catch (err) {
       notificationStore.items.add({
         type: 'error',
@@ -211,7 +220,7 @@
         {@const isActive = assetType === type.id}
         <button
           type="button"
-          on:click={() => selectAssetType(type.id)}
+          onclick={() => selectAssetType(type.id)}
           class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1.5 flex-shrink-0 {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
         >
           <span>{type.label}</span>
@@ -226,14 +235,14 @@
         <input
           type="text"
           bind:value={artQuery}
-          on:keydown={(e) => { if (e.key === 'Enter') fetchArtworkOptions(); }}
+          onkeydown={(e) => { if (e.key === 'Enter') fetchArtworkOptions(); }}
           placeholder="Search artwork..."
           class="w-full bg-surface-input border border-surface-border focus:border-neutral-400 rounded-xl px-3 py-1.5 text-xs text-white outline-none font-mono placeholder:text-neutral-500 transition-colors"
         />
       </div>
       <button
         type="button"
-        on:click={fetchArtworkOptions}
+        onclick={fetchArtworkOptions}
         disabled={isLoadingArt}
         class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex-shrink-0"
       >
@@ -255,7 +264,7 @@
       />
       <button
         type="button"
-        on:click={handleCustomUrlApply}
+        onclick={handleCustomUrlApply}
         disabled={!customArtUrl.trim() || isApplyingArt}
         class="px-3.5 py-1 bg-surface-card hover:bg-surface-cardHover disabled:opacity-40 border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0 cursor-pointer"
       >
@@ -267,7 +276,7 @@
     <div class="flex items-center space-x-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-border">
       <button
         type="button"
-        on:click={handleBrowseLocalArt}
+        onclick={handleBrowseLocalArt}
         class="px-3 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5"
       >
         <Icon name="folder" className="w-3.5 h-3.5" />
@@ -276,7 +285,7 @@
 
       <button
         type="button"
-        on:click={() => handleApplyArtwork('none')}
+        onclick={() => handleApplyArtwork('none')}
         disabled={isApplyingArt}
         class="px-3 py-1 bg-rose-950/20 hover:bg-rose-900/40 border border-rose-800/30 text-rose-300 text-xs font-bold rounded-lg transition-colors cursor-pointer"
         title="Reset active asset to monogram fallback"
@@ -309,7 +318,7 @@
               alt=""
               class="w-full h-full {assetType === 'logo' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
-              on:error={() => handleImageError(opt.url, opt.thumb_url)}
+              onerror={() => handleImageError(opt.url, opt.thumb_url)}
             />
 
             <!-- Provider Badge -->
@@ -338,7 +347,7 @@
             <span class="text-3xs font-mono text-neutral-400 capitalize">{opt.style || 'Custom'}</span>
             <button
               type="button"
-              on:click={() => handleApplyArtwork(opt.url)}
+              onclick={() => handleApplyArtwork(opt.url)}
               disabled={isApplyingArt || isActive}
               class="px-3 py-1 font-bold text-xs rounded-lg transition-colors cursor-pointer {isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default' : 'bg-white hover:bg-neutral-200 text-neutral-950'}"
             >

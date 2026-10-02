@@ -1,11 +1,13 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import SettingSection from '../../../common/SettingSection.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
 
-  export let cfgDraft;
+  let { cfgDraft = $bindable() } = $props();
 
-  let customSpeedMB = '';
+  let customSpeedMB = $state('');
 
   const standardSpeedPresets = [0, 5242880, 10485760, 26214400, 52428800, 104857600];
 
@@ -19,13 +21,15 @@
     { value: -1, label: 'Custom Limit (MB/s)...' }
   ];
 
-  $: selectedSpeedMode = standardSpeedPresets.includes(cfgDraft.transfer_speed_limit)
+  let selectedSpeedMode = $derived(standardSpeedPresets.includes(cfgDraft.transfer_speed_limit)
     ? cfgDraft.transfer_speed_limit
-    : -1;
+    : -1);
 
-  $: if (selectedSpeedMode === -1 && !customSpeedMB && cfgDraft.transfer_speed_limit > 0) {
-    customSpeedMB = String(Math.round(cfgDraft.transfer_speed_limit / 1048576));
-  }
+  run(() => {
+    if (selectedSpeedMode === -1 && !customSpeedMB && cfgDraft.transfer_speed_limit > 0) {
+      customSpeedMB = String(Math.round(cfgDraft.transfer_speed_limit / 1048576));
+    }
+  });
 
   function handleSpeedSelect(val) {
     const num = Number(val);
@@ -56,7 +60,7 @@
         description="Global bandwidth throttle for game downloads and depot streaming"
         value={selectedSpeedMode}
         options={speedLimitOptions}
-        on:change={(e) => handleSpeedSelect(e.detail)}
+        onchange={(val) => handleSpeedSelect(val)}
       />
 
       {#if selectedSpeedMode === -1}
@@ -68,7 +72,7 @@
               min="1"
               max="1000"
               value={customSpeedMB}
-              on:input={handleCustomSpeedInput}
+              oninput={handleCustomSpeedInput}
               placeholder="15"
               class="w-20 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono text-right outline-none"
             />

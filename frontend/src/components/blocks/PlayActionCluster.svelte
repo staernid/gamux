@@ -1,28 +1,48 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import Icon from '../common/Icon.svelte';
+    import Icon from '../common/Icon.svelte';
 
-  export let isInstalled = true;
-  export let isReady = true;
-  export let isRunning = false;
-  export let isTaskActive = false;
-  export let taskStatus = ''; // 'downloading' | 'running' | 'queued' | 'pending'
-  export let taskProgress = 0; // 0 - 100
-  export let taskLabel = '';
-  export let primaryLabel = '';
-  export let pid = 0;
-  export let className = '';
 
-  export let onplay = null;
-  export let onstop = null;
-  export let onsetup = null;
-  export let oninstall = null;
-  export let onconfigure = null;
-  export let ontaskClick = null;
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isInstalled]
+   * @property {boolean} [isReady]
+   * @property {boolean} [isRunning]
+   * @property {boolean} [isTaskActive]
+   * @property {string} [taskStatus] - 'downloading' | 'running' | 'queued' | 'pending'
+   * @property {number} [taskProgress] - 0 - 100
+   * @property {string} [taskLabel]
+   * @property {string} [primaryLabel]
+   * @property {number} [pid]
+   * @property {string} [className]
+   * @property {any} [onplay]
+   * @property {any} [onstop]
+   * @property {any} [onsetup]
+   * @property {any} [oninstall]
+   * @property {any} [onconfigure]
+   * @property {any} [ontaskClick]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    isInstalled = true,
+    isReady = true,
+    isRunning = false,
+    isTaskActive = false,
+    taskStatus = '',
+    taskProgress = 0,
+    taskLabel = '',
+    primaryLabel = '',
+    pid = 0,
+    className = '',
+    onplay = null,
+    onstop = null,
+    onsetup = null,
+    oninstall = null,
+    onconfigure = null,
+    ontaskClick = null
+  } = $props();
 
-  $: computedLabel = (() => {
+  let computedLabel = $derived((() => {
     if (primaryLabel) return primaryLabel;
     if (isRunning) return pid ? `Stop Process (#${pid})` : 'Stop Process';
     if (isTaskActive) {
@@ -33,30 +53,24 @@
     if (!isInstalled) return 'Install Game';
     if (!isReady) return 'Setup & Apply DRM Fix';
     return 'Play Now';
-  })();
+  })());
 
   function handlePrimaryClick() {
     if (isRunning) {
-      dispatch('stop');
-      if (typeof onstop === 'function') onstop();
+      onstop?.();
     } else if (isTaskActive) {
-      dispatch('taskClick');
-      if (typeof ontaskClick === 'function') ontaskClick();
+      ontaskClick?.();
     } else if (!isInstalled) {
-      dispatch('install');
-      if (typeof oninstall === 'function') oninstall();
+      oninstall?.();
     } else if (!isReady) {
-      dispatch('setup');
-      if (typeof onsetup === 'function') onsetup();
+      onsetup?.();
     } else {
-      dispatch('play');
-      if (typeof onplay === 'function') onplay();
+      onplay?.();
     }
   }
 
   function handleConfigureClick() {
-    dispatch('configure');
-    if (typeof onconfigure === 'function') onconfigure();
+    onconfigure?.();
   }
 </script>
 
@@ -64,7 +78,7 @@
   <!-- Dominant Hero Action Button -->
   <button
     type="button"
-    on:click={handlePrimaryClick}
+    onclick={handlePrimaryClick}
     class="relative group px-6 py-3 rounded-2xl font-black text-xs sm:text-sm tracking-wide transition-all duration-200 flex items-center space-x-2.5 shadow-xl cursor-pointer overflow-hidden {isRunning ? 'bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 hover:border-rose-600' : isTaskActive ? 'bg-neutral-800 text-neutral-200 border border-neutral-700' : (!isReady && isInstalled) ? 'bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-amber-500/10' : 'bg-neutral-100 hover:bg-white text-neutral-950 hover:shadow-2xl active:scale-[0.98]'}"
   >
     <!-- Live Progress Bar Fill when Task Active -->
@@ -93,7 +107,7 @@
   <!-- Secondary Tuning Gear Trigger -->
   <button
     type="button"
-    on:click={handleConfigureClick}
+    onclick={handleConfigureClick}
     class="p-3 rounded-2xl bg-[#121214]/90 hover:bg-[#222225] border border-[#27272a] hover:border-neutral-500 text-neutral-400 hover:text-white transition-all shadow-md cursor-pointer flex items-center justify-center"
     title="Tuning & Compatibility Options"
     aria-label="Tuning & Compatibility Options"

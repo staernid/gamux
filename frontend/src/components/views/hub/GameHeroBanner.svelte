@@ -1,5 +1,9 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { run, stopPropagation, createBubbler } from 'svelte/legacy';
+
+  const bubble = createBubbler();
+  const dispatch = createEventDispatcher();
   import { modalStore } from '../../../stores/modal.js';
   import { formatBytes, formatETA } from '../../../utils/format.js';
   import {
@@ -20,38 +24,41 @@
   import LiveCommunityBadge from '../../blocks/LiveCommunityBadge.svelte';
   import MultiseatStatusPill from '../../blocks/MultiseatStatusPill.svelte';
 
-  export let game = null;
-  export let isGameRunning = false;
-  export let isTaskActive = false;
-  export let activeGameTask = null;
-  export let globalCfg = {};
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {boolean} [isGameRunning]
+   * @property {boolean} [isTaskActive]
+   * @property {any} [activeGameTask]
+   * @property {any} [globalCfg]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = null,
+    isGameRunning = false,
+    isTaskActive = false,
+    activeGameTask = null,
+    globalCfg = {}
+  ,
+    onreturnToShelf = null,
+    onprimaryAction = null,
+    onopenDirectory = null,
+    ontrash = null,
+    onopenBranchTab = null,
+    onopenBetasTab = null,
+    onaddToLibrary = null
+  } = $props();
 
-  let logoFailed = false;
-  let heroFailed = false;
-  let livePlayerCount = 0;
-  let loadedPlayerAppId = '';
-  let versionStatus = null;
-  let loadedVersionGameDir = '';
-  let showLaunchMenu = false;
+  let logoFailed = $state(false);
+  let heroFailed = $state(false);
+  let livePlayerCount = $state(0);
+  let loadedPlayerAppId = $state('');
+  let versionStatus = $state(null);
+  let loadedVersionGameDir = $state('');
+  let showLaunchMenu = $state(false);
 
-  $: if (game) {
-    logoFailed = false;
-    heroFailed = false;
-  }
 
-  $: if (game?.appId && isSteamApp(game.appId)) {
-    const aid = String(game.appId).trim();
-    if (aid !== loadedPlayerAppId) {
-      loadedPlayerAppId = aid;
-      livePlayerCount = 0;
-      fetchLivePlayers(aid);
-    }
-  } else if (!isSteamApp(game?.appId)) {
-    livePlayerCount = 0;
-    loadedPlayerAppId = '';
-  }
 
   async function fetchLivePlayers(appId) {
     try {
@@ -64,17 +71,6 @@
     }
   }
 
-  $: if (game?.gameDir && isSteam) {
-    const gdir = game.gameDir;
-    if (gdir !== loadedVersionGameDir) {
-      loadedVersionGameDir = gdir;
-      versionStatus = game.versionStatus || null;
-      checkGameUpdates(gdir);
-    }
-  } else if (!game?.gameDir || !isSteam) {
-    versionStatus = null;
-    loadedVersionGameDir = '';
-  }
 
   async function checkGameUpdates(gameDir) {
     try {
@@ -87,29 +83,81 @@
     }
   }
 
-  $: isCoop = $multiseatStore.isCoopEnabled;
-  $: multiseatSession = game?.gameDir ? getActiveSession($multiseatStore.activeSessions, game.gameDir) : null;
-  $: isMultiseatActive = Boolean(multiseatSession?.is_running);
 
-  $: pColors = game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' };
-  $: platformLabel = game ? getPlatformType(game) : 'Windows';
-  $: metaInfo = game ? getMetadataInfo(game) : { provider: 'None', id: '' };
-  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
-  $: isStub = game ? (game.isStub ?? (!isInstalled && Boolean(game.gameDir))) : false;
-  $: isVirtual = game ? (game.isVirtual ?? (!isInstalled && !isStub && !game.gameDir)) : false;
-  $: isReady = game ? (game.isReady || game.isPatched || !!game.exePath) : false;
-  $: isSteam = game ? isSteamApp(game.appId) : false;
-  $: heroBackdropUrl = game ? (game.localHeroUrl || game.heroUrl || game.localBannerUrl || game.bannerUrl || (isSteam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/library_hero.jpg` : '') || game.localCoverUrl || game.coverUrl || '') : '';
 
-  $: seatCount = ($multiseatStore.staging?.seats?.length) || 2;
-  $: isTaskPaused = activeGameTask?.status === 'paused';
-  $: isTaskQueued = activeGameTask?.status === 'queued' || activeGameTask?.status === 'pending';
-  $: isPausableTask = Boolean(activeGameTask && (isDownloadTask(activeGameTask) || ((activeGameTask.capabilities || 0) & 2) !== 0 || isTaskPaused));
-  $: taskPercent = typeof activeGameTask?.percent === 'number'
+
+
+  function handleReturnToShelf() {
+    onreturnToShelf?.();
+    dispatch('returnToShelf');
+  }
+
+  function handlePrimaryAction() {
+    onprimaryAction?.();
+    dispatch('primaryAction');
+  }
+
+  function handleOpenDirectory() {
+    onopenDirectory?.();
+    dispatch('openDirectory');
+  }
+
+  function handleTrash() {
+    ontrash?.();
+    dispatch('trash');
+  }
+  run(() => {
+    if (game) {
+      logoFailed = false;
+      heroFailed = false;
+    }
+  });
+  run(() => {
+    if (game?.appId && isSteamApp(game.appId)) {
+      const aid = String(game.appId).trim();
+      if (aid !== loadedPlayerAppId) {
+        loadedPlayerAppId = aid;
+        livePlayerCount = 0;
+        fetchLivePlayers(aid);
+      }
+    } else if (!isSteamApp(game?.appId)) {
+      livePlayerCount = 0;
+      loadedPlayerAppId = '';
+    }
+  });
+  let isSteam = $derived(game ? isSteamApp(game.appId) : false);
+  run(() => {
+    if (game?.gameDir && isSteam) {
+      const gdir = game.gameDir;
+      if (gdir !== loadedVersionGameDir) {
+        loadedVersionGameDir = gdir;
+        versionStatus = game.versionStatus || null;
+        checkGameUpdates(gdir);
+      }
+    } else if (!game?.gameDir || !isSteam) {
+      versionStatus = null;
+      loadedVersionGameDir = '';
+    }
+  });
+  let isCoop = $derived($multiseatStore.isCoopEnabled);
+  let multiseatSession = $derived(game?.gameDir ? getActiveSession($multiseatStore.activeSessions, game.gameDir) : null);
+  let isMultiseatActive = $derived(Boolean(multiseatSession?.is_running));
+  let pColors = $derived(game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' });
+  let platformLabel = $derived(game ? getPlatformType(game) : 'Windows');
+  let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
+  let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
+  let isStub = $derived(game ? (game.isStub ?? (!isInstalled && Boolean(game.gameDir))) : false);
+  let isVirtual = $derived(game ? (game.isVirtual ?? (!isInstalled && !isStub && !game.gameDir)) : false);
+  let isReady = $derived(game ? (game.isReady || game.isPatched || !!game.exePath) : false);
+  let heroBackdropUrl = $derived(game ? (game.localHeroUrl || game.heroUrl || game.localBannerUrl || game.bannerUrl || (isSteam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/library_hero.jpg` : '') || game.localCoverUrl || game.coverUrl || '') : '');
+  let seatCount = $derived(($multiseatStore.staging?.seats?.length) || 2);
+  let isTaskPaused = $derived(activeGameTask?.status === 'paused');
+  let isTaskQueued = $derived(activeGameTask?.status === 'queued' || activeGameTask?.status === 'pending');
+  let isPausableTask = $derived(Boolean(activeGameTask && (isDownloadTask(activeGameTask) || ((activeGameTask.capabilities || 0) & 2) !== 0 || isTaskPaused)));
+  let taskPercent = $derived(typeof activeGameTask?.percent === 'number'
     ? Math.min(100, Math.max(0, Math.round(activeGameTask.percent)))
-    : 0;
-
-  $: primaryButtonLabel = isTaskActive
+    : 0);
+  let primaryButtonLabel = $derived(isTaskActive
     ? (isTaskPaused
         ? (typeof activeGameTask?.percent === 'number' && activeGameTask.percent > 0
             ? `Resume (${Math.round(activeGameTask.percent)}%)`
@@ -127,26 +175,10 @@
     ? 'Download'
     : isReady
     ? (isCoop ? `Play (${seatCount}P)` : 'Play Now')
-    : (isCoop ? `Setup & Play (${seatCount}P)` : 'Setup & Play');
-
-  function handleReturnToShelf() {
-    dispatch('returnToShelf');
-  }
-
-  function handlePrimaryAction() {
-    dispatch('primaryAction');
-  }
-
-  function handleOpenDirectory() {
-    dispatch('openDirectory');
-  }
-
-  function handleTrash() {
-    dispatch('trash');
-  }
+    : (isCoop ? `Setup & Play (${seatCount}P)` : 'Setup & Play'));
 </script>
 
-<svelte:window on:click={() => { showLaunchMenu = false; }} on:keydown={(e) => { if (e.key === 'Escape') showLaunchMenu = false; }} />
+<svelte:window onclick={() => { showLaunchMenu = false; }} onkeydown={(e) => { if (e.key === 'Escape') showLaunchMenu = false; }} />
 
 <!-- Hero Banner Background & Vignette -->
 <div class="relative w-full h-96 sm:h-[420px] flex-shrink-0 overflow-hidden select-none">
@@ -164,7 +196,7 @@
   <div class="absolute top-4 left-6 z-20 flex items-center space-x-3">
     <button
       type="button"
-      on:click={handleReturnToShelf}
+      onclick={handleReturnToShelf}
       class="flex items-center space-x-2 bg-surface-header/90 hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-lg backdrop-blur-md group cursor-pointer"
       title="Back to Shelf (Esc / B)"
     >
@@ -183,11 +215,11 @@
         <div
           class="w-24 sm:w-32 aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border flex-shrink-0 hidden xs:block bg-black/40 group/poster relative cursor-pointer"
           style="border-color: {pColors.border}; box-shadow: 0 12px 30px -8px {pColors.glow};"
-          on:click={() => modalStore.open('artwork-picker', { game, initialTab: 'cover' })}
+          onclick={() => modalStore.open('artwork-picker', { game, initialTab: 'cover' })}
           title="Change Cover Artwork"
           role="button"
           tabindex="0"
-          on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); modalStore.open('artwork-picker', { game, initialTab: 'cover' }); } }}
+          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); modalStore.open('artwork-picker', { game, initialTab: 'cover' }); } }}
         >
           <PosterArt
             appId={game.appId}
@@ -283,7 +315,7 @@
               <span class="text-neutral-500">·</span>
               <button
                 type="button"
-                on:click={() => { dispatch('openBranchTab'); dispatch('openBetasTab'); }}
+                onclick={() => { onopenBranchTab?.(); onopenBetasTab?.(); dispatch('openBranchTab'); dispatch('openBetasTab'); }}
                 class="hover:text-neutral-200 transition-colors flex items-center gap-1 cursor-pointer"
                 title="Manage Steam Beta branch"
               >
@@ -317,7 +349,7 @@
         {#if isVirtual}
           <button
             type="button"
-            on:click={() => dispatch('addToLibrary')}
+            onclick={() => { onaddToLibrary?.(); dispatch('addToLibrary'); }}
             class="px-4 py-3 rounded-2xl font-bold text-xs bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
             title="Add skeleton metadata stub to your library without downloading files"
           >
@@ -354,7 +386,7 @@
           <div class="flex items-center rounded-2xl shadow-2xl overflow-hidden {isTaskActive ? 'bg-surface-card border border-neutral-700 min-w-[170px] sm:min-w-[200px]' : isGameRunning ? 'bg-rose-600' : 'bg-white'}">
             <button
               type="button"
-              on:click={handlePrimaryAction}
+              onclick={handlePrimaryAction}
               disabled={isTaskActive && !isPausableTask}
               class="relative overflow-hidden px-5 py-3 font-black text-sm transition-all flex items-center justify-center space-x-2 active:scale-95 focus:outline-none cursor-pointer disabled:cursor-not-allowed flex-1 {isTaskActive ? 'text-white' : isGameRunning ? 'hover:bg-rose-500 text-white' : 'hover:bg-neutral-200 text-neutral-950'}"
             >
@@ -414,7 +446,7 @@
               <!-- Cancel Transfer Button -->
               <button
                 type="button"
-                on:click|stopPropagation={() => tasksStore.cancel(activeGameTask.id)}
+                onclick={stopPropagation(() => tasksStore.cancel(activeGameTask.id))}
                 class="relative z-10 px-3 py-3.5 bg-neutral-900/80 hover:bg-rose-950 text-neutral-400 hover:text-rose-200 border-l border-neutral-700/80 transition-colors cursor-pointer flex items-center justify-center self-stretch"
                 title="Cancel Task"
                 aria-label="Cancel Task"
@@ -429,7 +461,7 @@
               <!-- Split Menu Trigger Button -->
               <button
                 type="button"
-                on:click|stopPropagation={() => { showLaunchMenu = !showLaunchMenu; }}
+                onclick={stopPropagation(() => { showLaunchMenu = !showLaunchMenu; })}
                 class="px-2.5 py-3.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-l border-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
                 title="Launch Options (Single Player / Co-Op)"
                 aria-label="Launch Options"
@@ -452,8 +484,8 @@
           {#if showLaunchMenu}
             <div
               class="absolute right-0 bottom-full mb-2 w-52 bg-[#121215]/95 backdrop-blur-md border border-[#27272a] rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in space-y-1 text-left"
-              on:click|stopPropagation
-              on:keydown|stopPropagation
+              onclick={stopPropagation(bubble('click'))}
+              onkeydown={stopPropagation(bubble('keydown'))}
               role="menu"
               tabindex="-1"
             >
@@ -465,7 +497,7 @@
               <button
                 type="button"
                 role="menuitem"
-                on:click={() => { if (isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
+                onclick={() => { if (isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
                 class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition cursor-pointer {!isCoop ? 'bg-surface-cardHover text-white font-bold' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
               >
                 <span>Single Player</span>
@@ -478,7 +510,7 @@
               <button
                 type="button"
                 role="menuitem"
-                on:click={() => { if (!isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
+                onclick={() => { if (!isCoop) multiseatStore.toggleCoop(); showLaunchMenu = false; }}
                 class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition cursor-pointer {isCoop ? 'bg-surface-cardHover text-white font-bold' : 'text-neutral-300 hover:bg-surface-input hover:text-white'}"
               >
                 <span>Co-Op ({seatCount}P)</span>
@@ -494,7 +526,7 @@
           <!-- Files Button (Y) -->
           <button
             type="button"
-            on:click={handleOpenDirectory}
+            onclick={handleOpenDirectory}
             class="px-4 py-3 rounded-2xl bg-surface-header/90 hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white transition shadow-xl flex items-center space-x-2 group cursor-pointer"
             title="Open Directory in File Manager (Y)"
           >
@@ -507,7 +539,7 @@
           <!-- Trash / Delete Game Button -->
           <button
             type="button"
-            on:click={handleTrash}
+            onclick={handleTrash}
             disabled={isGameRunning}
             class="p-3 rounded-2xl bg-surface-header/90 hover:bg-surface-card border border-surface-border hover:border-rose-900/50 text-neutral-300 hover:text-rose-400 transition shadow-xl flex items-center justify-center group cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             title="Move Game to Trash"

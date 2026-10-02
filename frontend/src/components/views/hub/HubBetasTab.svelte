@@ -1,71 +1,53 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { run } from 'svelte/legacy';
+
+  import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
   import { formatDate } from '../../../utils/format.js';
   import { notificationStore } from '../../../stores/notifications.js';
   import { updateGameInStore, selectedGame } from '../../../stores/library.js';
 
-  export let game = null;
-  export let isTaskActive = false;
-  export let activeGameTask = null;
-  export let onbranchChange = undefined;
-  export let onupdateGame = undefined;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [game]
+   * @property {boolean} [isTaskActive]
+   * @property {any} [activeGameTask]
+   * @property {any} [onbranchChange]
+   * @property {any} [onupdateGame]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    game = $bindable(null),
+    isTaskActive = false,
+    activeGameTask = null,
+    onbranchChange = undefined,
+    onupdateGame = undefined
+  } = $props();
 
-  let branches = [];
-  let isLoading = false;
-  let error = '';
-  let isSwitching = false;
-  let switchingBranch = '';
-  let searchQuery = '';
+  let branches = $state([]);
+  let isLoading = $state(false);
+  let error = $state('');
+  let isSwitching = $state(false);
+  let switchingBranch = $state('');
+  let searchQuery = $state('');
 
   // Private beta state
-  let privateBetaCode = '';
-  let isCheckingCode = false;
-  let codeFeedback = null; // { type: 'success' | 'error', message: string }
+  let privateBetaCode = $state('');
+  let isCheckingCode = $state(false);
+  let codeFeedback = $state(null); // { type: 'success' | 'error', message: string }
 
-  $: effectiveAppId = (game?.appId && isSteamApp(game.appId))
-    ? String(game.appId).trim()
-    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : '');
 
-  $: isSteam = Boolean(effectiveAppId);
 
-  $: isInstalled = game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false;
-  $: isStub = game ? (game.isStub ?? (Boolean(game.gameDir) && !isInstalled)) : false;
-  $: isVirtual = game ? (game.isVirtual ?? !game.gameDir) : false;
 
-  $: currentBranch = game?.branch || 'public';
 
-  $: activeBranchObj = branches.find(b => b.name === currentBranch) || null;
 
-  $: targetBuildId = activeBranchObj?.build_id || '';
-  $: installedBuildId = game?.buildId || '';
-  $: cleanInstalledBuild = (installedBuildId && installedBuildId !== '0' && installedBuildId !== 'unknown') ? String(installedBuildId).trim() : '';
-  $: isValidInstalledBuild = Boolean(cleanInstalledBuild);
-  $: isBuildMismatch = isInstalled && isValidInstalledBuild && Boolean(targetBuildId && targetBuildId !== '0' && targetBuildId !== cleanInstalledBuild);
 
-  $: sortedBranches = [...branches].sort((a, b) => {
-    if (a.name === currentBranch && b.name !== currentBranch) return -1;
-    if (b.name === currentBranch && a.name !== currentBranch) return 1;
-    if (a.name === 'public') return -1;
-    if (b.name === 'public') return 1;
-    return a.name.localeCompare(b.name);
-  });
 
-  $: filteredBranches = sortedBranches.filter(b => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return b.name.toLowerCase().includes(q) || (b.description && b.description.toLowerCase().includes(q)) || (b.build_id && b.build_id.includes(q));
-  });
 
-  let loadedAppId = '';
+  let loadedAppId = $state('');
 
-  $: if (effectiveAppId && effectiveAppId !== loadedAppId) {
-    loadedAppId = effectiveAppId;
-    loadBranches();
-  }
 
   async function loadBranches() {
     if (!effectiveAppId) return;
@@ -85,8 +67,7 @@
   }
 
   function dispatchBranchChange(detail) {
-    dispatch('branchChange', detail);
-    if (typeof onbranchChange === 'function') onbranchChange(detail);
+    onbranchChange?.(detail);
   }
 
   async function handleSelectBranch(branch) {
@@ -213,9 +194,40 @@
 
   function handleTriggerUpdate() {
     const detail = { branch: currentBranch };
-    dispatch('updateGame', detail);
-    if (typeof onupdateGame === 'function') onupdateGame(detail);
+    onupdateGame?.(detail);
   }
+  let effectiveAppId = $derived((game?.appId && isSteamApp(game.appId))
+    ? String(game.appId).trim()
+    : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : ''));
+  let isSteam = $derived(Boolean(effectiveAppId));
+  let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
+  let isStub = $derived(game ? (game.isStub ?? (Boolean(game.gameDir) && !isInstalled)) : false);
+  let isVirtual = $derived(game ? (game.isVirtual ?? !game.gameDir) : false);
+  let currentBranch = $derived(game?.branch || 'public');
+  let activeBranchObj = $derived(branches.find(b => b.name === currentBranch) || null);
+  let targetBuildId = $derived(activeBranchObj?.build_id || '');
+  let installedBuildId = $derived(game?.buildId || '');
+  let cleanInstalledBuild = $derived((installedBuildId && installedBuildId !== '0' && installedBuildId !== 'unknown') ? String(installedBuildId).trim() : '');
+  let isValidInstalledBuild = $derived(Boolean(cleanInstalledBuild));
+  let isBuildMismatch = $derived(isInstalled && isValidInstalledBuild && Boolean(targetBuildId && targetBuildId !== '0' && targetBuildId !== cleanInstalledBuild));
+  let sortedBranches = $derived([...branches].sort((a, b) => {
+    if (a.name === currentBranch && b.name !== currentBranch) return -1;
+    if (b.name === currentBranch && a.name !== currentBranch) return 1;
+    if (a.name === 'public') return -1;
+    if (b.name === 'public') return 1;
+    return a.name.localeCompare(b.name);
+  }));
+  let filteredBranches = $derived(sortedBranches.filter(b => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return b.name.toLowerCase().includes(q) || (b.description && b.description.toLowerCase().includes(q)) || (b.build_id && b.build_id.includes(q));
+  }));
+  run(() => {
+    if (effectiveAppId && effectiveAppId !== loadedAppId) {
+      loadedAppId = effectiveAppId;
+      loadBranches();
+    }
+  });
 </script>
 
 <div class="space-y-5">
@@ -259,7 +271,7 @@
 
         <button
           type="button"
-          on:click={loadBranches}
+          onclick={loadBranches}
           disabled={isLoading}
           class="px-3 py-1.5 rounded-xl bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white text-xs font-semibold transition-colors flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer disabled:opacity-50"
           title="Refresh branch list from Steam"
@@ -330,7 +342,7 @@
 
           <button
             type="button"
-            on:click={handleTriggerUpdate}
+            onclick={handleTriggerUpdate}
             disabled={isTaskActive}
             class="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-black text-xs transition-colors flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer disabled:opacity-50"
           >
@@ -376,7 +388,7 @@
         <p class="text-xs text-neutral-400">{error}</p>
         <button
           type="button"
-          on:click={loadBranches}
+          onclick={loadBranches}
           class="px-3 py-1.5 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-xs text-neutral-200 font-semibold cursor-pointer"
         >
           Try Again
@@ -485,7 +497,7 @@
                   {:else}
                     <button
                       type="button"
-                      on:click={() => handleSelectBranch(branch)}
+                      onclick={() => handleSelectBranch(branch)}
                       disabled={isSwitching}
                       class="px-3.5 py-1.5 rounded-xl bg-surface-header hover:bg-surface-elevated border border-surface-border hover:border-surface-borderHighlight text-neutral-200 hover:text-white font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
                     >
@@ -525,11 +537,11 @@
             bind:value={privateBetaCode}
             placeholder="Enter beta access code..."
             class="flex-1 bg-surface-input border border-surface-border focus:border-surface-borderHighlight rounded-xl px-3 py-2 text-neutral-100 text-xs outline-none transition-colors font-mono"
-            on:keydown={(e) => { if (e.key === 'Enter') handleCheckPrivateCode(); }}
+            onkeydown={(e) => { if (e.key === 'Enter') handleCheckPrivateCode(); }}
           />
           <button
             type="button"
-            on:click={handleCheckPrivateCode}
+            onclick={handleCheckPrivateCode}
             disabled={isCheckingCode || !privateBetaCode.trim()}
             class="px-4 py-2 rounded-xl bg-surface-header hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-1.5"
           >

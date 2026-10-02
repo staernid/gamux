@@ -1,49 +1,28 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../../api/app.js';
   import { formatLastPlayed } from '../../../../utils/game.js';
 
-  export let gameDir = '';
+  /**
+   * @typedef {Object} Props
+   * @property {string} [gameDir]
+   */
 
-  let achievements = [];
-  let isLoading = false;
-  let error = '';
-  let loadedGameDir = '';
-  let filterMode = 'all'; // 'all' | 'unlocked' | 'locked'
-  let sortBy = 'default'; // 'default' | 'rarest'
+  /** @type {Props} */
+  let { gameDir = '' } = $props();
 
-  $: unlockedCount = achievements.filter(a => a.unlocked).length;
-  $: totalCount = achievements.length;
-  $: lockedCount = totalCount - unlockedCount;
-  $: percent = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
+  let achievements = $state([]);
+  let isLoading = $state(false);
+  let error = $state('');
+  let loadedGameDir = $state('');
+  let filterMode = $state('all'); // 'all' | 'unlocked' | 'locked'
+  let sortBy = $state('default'); // 'default' | 'rarest'
 
-  // Sorting: rarest first or default (unlocked first desc, then locked)
-  $: sortedAchievements = [...achievements].sort((a, b) => {
-    if (sortBy === 'rarest') {
-      const pctA = typeof a.global_percent === 'number' && a.global_percent > 0 ? a.global_percent : 100.1;
-      const pctB = typeof b.global_percent === 'number' && b.global_percent > 0 ? b.global_percent : 100.1;
-      if (pctA !== pctB) {
-        return pctA - pctB;
-      }
-    }
-    if (a.unlocked !== b.unlocked) {
-      return a.unlocked ? -1 : 1;
-    }
-    if (a.unlocked) {
-      return (b.unlock_time || 0) - (a.unlock_time || 0);
-    }
-    return 0;
-  });
 
-  $: filteredAchievements = sortedAchievements.filter(a => {
-    if (filterMode === 'unlocked') return a.unlocked;
-    if (filterMode === 'locked') return !a.unlocked;
-    return true;
-  });
 
-  $: if (gameDir && gameDir !== loadedGameDir) {
-    loadAchievements();
-  }
+
 
   onMount(() => {
     if (gameDir && gameDir !== loadedGameDir) {
@@ -65,6 +44,37 @@
       isLoading = false;
     }
   }
+  let unlockedCount = $derived(achievements.filter(a => a.unlocked).length);
+  let totalCount = $derived(achievements.length);
+  let lockedCount = $derived(totalCount - unlockedCount);
+  let percent = $derived(totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0);
+  // Sorting: rarest first or default (unlocked first desc, then locked)
+  let sortedAchievements = $derived([...achievements].sort((a, b) => {
+    if (sortBy === 'rarest') {
+      const pctA = typeof a.global_percent === 'number' && a.global_percent > 0 ? a.global_percent : 100.1;
+      const pctB = typeof b.global_percent === 'number' && b.global_percent > 0 ? b.global_percent : 100.1;
+      if (pctA !== pctB) {
+        return pctA - pctB;
+      }
+    }
+    if (a.unlocked !== b.unlocked) {
+      return a.unlocked ? -1 : 1;
+    }
+    if (a.unlocked) {
+      return (b.unlock_time || 0) - (a.unlock_time || 0);
+    }
+    return 0;
+  }));
+  let filteredAchievements = $derived(sortedAchievements.filter(a => {
+    if (filterMode === 'unlocked') return a.unlocked;
+    if (filterMode === 'locked') return !a.unlocked;
+    return true;
+  }));
+  run(() => {
+    if (gameDir && gameDir !== loadedGameDir) {
+      loadAchievements();
+    }
+  });
 </script>
 
 <div class="space-y-6">
@@ -99,21 +109,21 @@
         <div class="flex items-center space-x-1.5 bg-surface-header p-1 rounded-xl border border-surface-border">
           <button
             type="button"
-            on:click={() => { filterMode = 'all'; }}
+            onclick={() => { filterMode = 'all'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'all' ? 'bg-surface-cardHover text-white shadow-sm font-bold border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white'}"
           >
             All <span class="font-mono text-2xs opacity-75">({totalCount})</span>
           </button>
           <button
             type="button"
-            on:click={() => { filterMode = 'unlocked'; }}
+            onclick={() => { filterMode = 'unlocked'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'unlocked' ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/50 shadow-sm font-bold' : 'text-neutral-400 hover:text-emerald-300'}"
           >
             Unlocked <span class="font-mono text-2xs opacity-75">({unlockedCount})</span>
           </button>
           <button
             type="button"
-            on:click={() => { filterMode = 'locked'; }}
+            onclick={() => { filterMode = 'locked'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all {filterMode === 'locked' ? 'bg-surface-cardHover text-white shadow-sm font-bold border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white'}"
           >
             Locked <span class="font-mono text-2xs opacity-75">({lockedCount})</span>
@@ -123,7 +133,7 @@
         <div class="flex items-center space-x-1.5 bg-surface-header p-1 rounded-xl border border-surface-border">
           <button
             type="button"
-            on:click={() => { sortBy = sortBy === 'default' ? 'rarest' : 'default'; }}
+            onclick={() => { sortBy = sortBy === 'default' ? 'rarest' : 'default'; }}
             class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 {sortBy === 'rarest' ? 'bg-surface-cardHover text-white shadow-sm font-bold border border-surface-borderHighlight' : 'text-neutral-400 hover:text-white'}"
             title="Toggle sorting between default and rarest first"
           >

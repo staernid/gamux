@@ -1,6 +1,12 @@
 <script>
-  export let count = 0;
-  export let currentPos = 0;
+  /**
+   * @typedef {Object} Props
+   * @property {number} [count]
+   * @property {number} [currentPos]
+   */
+
+  /** @type {Props} */
+  let { count = 0, currentPos = 0 } = $props();
 
   // Higher/deeper and slightly wider upward convex arch curve
   // Span: 250px width (20 to 270), Height rise: 46px (from y=58 up to y=12)
@@ -11,15 +17,15 @@
   const pathD = `M ${p0.x},${p0.y} Q ${p1.x},${p1.y} ${p2.x},${p2.y}`;
 
   // Normalized progress [0, 1]
-  $: progress = (() => {
+  let progress = $derived((() => {
     if (count <= 1) return 0.5;
     const wrapped = ((currentPos % count) + count) % count;
     return wrapped / (count - 1);
-  })();
+  })());
 
   // Thick, chunky, extremely rounded curved pill (pathLength=100)
   const thumbLength = 18; // Length of the curved capsule
-  $: dashOffset = -(progress * (100 - thumbLength));
+  let dashOffset = $derived(-(progress * (100 - thumbLength)));
 </script>
 
 {#if count > 1}

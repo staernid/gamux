@@ -1,24 +1,31 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import CoverCard from './CoverCard.svelte';
+    import CoverCard from './CoverCard.svelte';
   import Icon from '../common/Icon.svelte';
 
-  export let games = [];
-  export let selectedIndex = 0;
-  export let cardSize = 'md';
-  export let className = '';
-  export let onselect = null;
+  /**
+   * @typedef {Object} Props
+   * @property {any} [games]
+   * @property {number} [selectedIndex]
+   * @property {string} [cardSize]
+   * @property {string} [className]
+   * @property {any} [onselect]
+   */
 
-  const dispatch = createEventDispatcher();
-  let trackEl;
+  /** @type {Props} */
+  let {
+    games = [],
+    selectedIndex = $bindable(0),
+    cardSize = 'md',
+    className = '',
+    onselect = null
+  } = $props();
+  let trackEl = $state();
 
-  $: list = Array.isArray(games) ? games : [];
+  let list = $derived(Array.isArray(games) ? games : []);
 
   function handleCardClick(game, index) {
     selectedIndex = index;
-    dispatch('select', { game, index });
-    if (typeof onselect === 'function') onselect({ game, index });
-    scrollToIndex(index);
+    onselect?.({ game, index });scrollToIndex(index);
   }
 
   function scrollToIndex(idx) {
@@ -35,9 +42,7 @@
     if (next < 0) next = 0;
     if (next >= list.length) next = list.length - 1;
     selectedIndex = next;
-    dispatch('select', { game: list[next], index: next });
-    if (typeof onselect === 'function') onselect({ game: list[next], index: next });
-    scrollToIndex(next);
+    onselect?.({ game: list[next], index: next });scrollToIndex(next);
   }
 </script>
 
@@ -46,7 +51,7 @@
   {#if selectedIndex > 0}
     <button
       type="button"
-      on:click={() => step(-1)}
+      onclick={() => step(-1)}
       class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/70 hover:bg-black/95 border border-white/20 hover:border-white text-white flex items-center justify-center backdrop-blur-md shadow-xl transition-all cursor-pointer"
       title="Scroll Left"
       aria-label="Scroll Left"
@@ -84,7 +89,7 @@
   {#if selectedIndex < list.length - 1}
     <button
       type="button"
-      on:click={() => step(1)}
+      onclick={() => step(1)}
       class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/70 hover:bg-black/95 border border-white/20 hover:border-white text-white flex items-center justify-center backdrop-blur-md shadow-xl transition-all cursor-pointer"
       title="Scroll Right"
       aria-label="Scroll Right"

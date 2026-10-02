@@ -548,7 +548,7 @@
   const primaryTabs = ['overview', 'config', 'files', 'saves'];
 
   function handleNavigateTab(e) {
-    const { tab, subTab, newsIndex } = e.detail || {};
+    const { tab, subTab, newsIndex } = (e && typeof e === 'object' && 'detail' in e ? e.detail : e) || {};
     if (tab) activeTab = tab;
     if (subTab && tab === 'community') communitySubTab = subTab;
     if (subTab && tab === 'files') filesSubTab = subTab;
@@ -586,7 +586,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if game}
   <div class="flex-1 overflow-y-auto w-full relative flex flex-col animate-fade-in custom-scrollbar">
@@ -597,14 +597,14 @@
       {isTaskActive}
       {activeGameTask}
       {globalCfg}
-      on:returnToShelf={returnToShelf}
-      on:primaryAction={handlePrimaryAction}
-      on:addToLibrary={handleAddToLibrary}
-      on:openDirectory={openDirectory}
-      on:trash={handleTrashGame}
-      on:stopSeat={handleStopSeat}
-      on:openBranchTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
-      on:openBetasTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
+      onreturnToShelf={returnToShelf}
+      onprimaryAction={handlePrimaryAction}
+      onaddToLibrary={handleAddToLibrary}
+      onopenDirectory={openDirectory}
+      ontrash={handleTrashGame}
+      onstopSeat={handleStopSeat}
+      onopenBranchTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
+      onopenBetasTab={() => { activeTab = 'files'; filesSubTab = 'branch'; }}
     />
 
     <!-- Main Content & Consolidated Tabs Section -->
@@ -671,7 +671,7 @@
       <!-- Tab Content Area -->
       <div class="flex-1 pb-12">
         {#if activeTab === 'overview'}
-          <HubOverviewTab {game} on:navigateTab={handleNavigateTab} />
+          <HubOverviewTab {game} onnavigateTab={handleNavigateTab} />
         {:else if activeTab === 'community'}
           <div class="space-y-4">
             <button
@@ -698,9 +698,9 @@
             {isNormalizing}
             {integrityError}
             {integrityReport}
-            on:runIntegrityCheck={runIntegrityCheck}
-            on:updateGame={handleUpdateGame}
-            on:normalizeDirectory={handleNormalizeDirectory}
+            onrunIntegrityCheck={runIntegrityCheck}
+            onupdateGame={handleUpdateGame}
+            onnormalizeDirectory={handleNormalizeDirectory}
           />
         {:else if activeTab === 'config' || activeTab === 'general' || activeTab === 'environment'}
           <HubConfigTab
@@ -709,10 +709,10 @@
             {overrideCount}
             {isSaving}
             {saveSuccess}
-            on:save={() => handleSaveSettings(false)}
-            on:reset={handleResetSettings}
-            on:linkMeta={handleApplyMetaLink}
-            on:unlinkMeta={handleUnlinkMeta}
+            onsave={() => handleSaveSettings(false)}
+            onreset={handleResetSettings}
+            onlinkMeta={handleApplyMetaLink}
+            onunlinkMeta={handleUnlinkMeta}
           />
         {:else if activeTab === 'saves'}
           <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">

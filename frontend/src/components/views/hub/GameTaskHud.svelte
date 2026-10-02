@@ -1,15 +1,12 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
   import { activeView } from '../../../stores/library.js';
   import { tasksStore, isDownloadTask } from '../../../stores/tasks.js';
   import { formatBytes, formatETA } from '../../../utils/format.js';
 
-  export let task;
+  let { task } = $props();
 
-  const dispatch = createEventDispatcher();
-
-  $: isPaused = task?.status === 'paused';
-  $: isPausable = Boolean(task && (isDownloadTask(task) || ((task.capabilities || 0) & 2) !== 0 || isPaused));
+  let isPaused = $derived(task?.status === 'paused');
+  let isPausable = $derived(Boolean(task && (isDownloadTask(task) || ((task.capabilities || 0) & 2) !== 0 || isPaused)));
 
   function getTaskBadgeLabel(t) {
     if (!t) return 'TASK';
@@ -66,7 +63,7 @@
       {#if isPausable}
         <button
           type="button"
-          on:click={handleTogglePause}
+          onclick={handleTogglePause}
           class="px-2.5 py-1 rounded-xl text-2xs font-bold border transition flex items-center space-x-1 cursor-pointer active:scale-95 {isPaused ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40' : 'bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white border-surface-border'}"
           title={isPaused ? "Resume task" : "Pause task"}
         >
@@ -85,7 +82,7 @@
       {/if}
       <button
         type="button"
-        on:click={openTasksView}
+        onclick={openTasksView}
         class="px-2.5 py-1 rounded-xl bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white text-2xs font-bold border border-surface-border transition flex items-center space-x-1 cursor-pointer"
         title="Open full Tasks view (2)"
       >
@@ -94,7 +91,7 @@
       </button>
       <button
         type="button"
-        on:click={handleCancel}
+        onclick={handleCancel}
         class="px-2.5 py-1 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 text-rose-300 hover:text-white text-2xs font-bold border border-rose-900/40 transition flex items-center space-x-1 cursor-pointer active:scale-95"
         title="Cancel active task"
       >

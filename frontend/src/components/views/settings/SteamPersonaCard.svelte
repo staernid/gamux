@@ -1,55 +1,85 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import GhostInput from '../../common/GhostInput.svelte';
+    import GhostInput from '../../common/GhostInput.svelte';
   import InheritSelect from '../../common/InheritSelect.svelte';
   import { AppAPI } from '../../../api/app.js';
   import { generateRandomSteamID as createRandomSteamID, isValidSteamID64 } from '../../../utils/steam.js';
 
-  const dispatch = createEventDispatcher();
 
-  export let accountName = 'GamuxPlayer';
-  export let accountSteamId = '76561197960287930';
-  export let language = 'english';
-  export let ipCountry = 'US';
-  export let avatarUrl = '';
 
-  export let languagesList = [];
-  export let countriesList = [];
 
-  export let collisionSteamId = '';
 
-  export let nameLabel = 'Display Name';
-  export let nameDescription = 'Persona nickname used in single player, host LAN sessions, and offline saves';
-  export let namePlaceholder = 'GamuxPlayer';
 
-  export let langLabel = 'Emulation Language';
-  export let langDescription = 'Default language injected into Steam emulators and Goldberg Steamworks wrappers';
 
-  export let steamidLabel = 'Steam ID (64-Bit)';
-  export let steamidDescription = 'Unique 17-digit identifier for local emulator save isolation and DLC entitlement';
-  export let steamidPlaceholder = '76561197960287930';
 
-  export let countryLabel = 'Region Code (IP Country)';
-  export let countryDescription = 'Two-letter ISO country code reported by Steamworks emulation (e.g. US, DE, JP)';
+  /**
+   * @typedef {Object} Props
+   * @property {string} [accountName]
+   * @property {string} [accountSteamId]
+   * @property {string} [language]
+   * @property {string} [ipCountry]
+   * @property {string} [avatarUrl]
+   * @property {any} [languagesList]
+   * @property {any} [countriesList]
+   * @property {string} [collisionSteamId]
+   * @property {string} [nameLabel]
+   * @property {string} [nameDescription]
+   * @property {string} [namePlaceholder]
+   * @property {string} [langLabel]
+   * @property {string} [langDescription]
+   * @property {string} [steamidLabel]
+   * @property {string} [steamidDescription]
+   * @property {string} [steamidPlaceholder]
+   * @property {string} [countryLabel]
+   * @property {string} [countryDescription]
+   * @property {string} [syncTitle]
+   * @property {string} [syncSubtitle]
+   * @property {string} [syncPlaceholder]
+   * @property {boolean} [showSync]
+   * @property {import('svelte').Snippet} [children]
+   */
 
-  export let syncTitle = 'Auto-Sync from Steam Profile';
-  export let syncSubtitle = 'Enter custom URL, vanity name, or SteamID64 to sync persona and avatar';
-  export let syncPlaceholder = 'e.g. gaben or https://steamcommunity.com/id/...';
-  export let showSync = true;
+  /** @type {Props} */
+  let {
+    accountName = $bindable('GamuxPlayer'),
+    accountSteamId = $bindable('76561197960287930'),
+    language = $bindable('english'),
+    ipCountry = $bindable('US'),
+    avatarUrl = $bindable(''),
+    languagesList = [],
+    countriesList = [],
+    collisionSteamId = '',
+    nameLabel = 'Display Name',
+    nameDescription = 'Persona nickname used in single player, host LAN sessions, and offline saves',
+    namePlaceholder = 'GamuxPlayer',
+    langLabel = 'Emulation Language',
+    langDescription = 'Default language injected into Steam emulators and Goldberg Steamworks wrappers',
+    steamidLabel = 'Steam ID (64-Bit)',
+    steamidDescription = 'Unique 17-digit identifier for local emulator save isolation and DLC entitlement',
+    steamidPlaceholder = '76561197960287930',
+    countryLabel = 'Region Code (IP Country)',
+    countryDescription = 'Two-letter ISO country code reported by Steamworks emulation (e.g. US, DE, JP)',
+    syncTitle = 'Auto-Sync from Steam Profile',
+    syncSubtitle = 'Enter custom URL, vanity name, or SteamID64 to sync persona and avatar',
+    syncPlaceholder = 'e.g. gaben or https://steamcommunity.com/id/...',
+    showSync = true,
+    children
+  ,
+    onchange
+  } = $props();
 
-  let customCountryCode = '';
-  let steamProfileInput = '';
-  let isResolvingProfile = false;
-  let profileError = '';
-  let profileSuccess = '';
+  let customCountryCode = $state('');
+  let steamProfileInput = $state('');
+  let isResolvingProfile = $state(false);
+  let profileError = $state('');
+  let profileSuccess = $state('');
 
-  $: isCustomCountry = !countriesList.some(c => c.value === ipCountry) && ipCountry !== '';
-  $: isValidSteamId = isValidSteamID64(accountSteamId);
-  $: hasCollision = Boolean(collisionSteamId && accountSteamId && collisionSteamId === accountSteamId);
+  let isCustomCountry = $derived(!countriesList.some(c => c.value === ipCountry) && ipCountry !== '');
+  let isValidSteamId = $derived(isValidSteamID64(accountSteamId));
+  let hasCollision = $derived(Boolean(collisionSteamId && accountSteamId && collisionSteamId === accountSteamId));
 
   function handleRandomSteamID() {
     accountSteamId = createRandomSteamID();
-    dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl });
+    onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl });
   }
 
   async function handleImportSteamProfile() {
@@ -73,7 +103,7 @@
           avatarUrl = profile.avatar_url;
         }
         profileSuccess = `Imported profile: ${profile.persona_name} (${profile.steam_id})`;
-        dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl });
+        onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl });
       }
     } catch (err) {
       profileError = err?.message || 'Failed to resolve Steam profile.';
@@ -90,13 +120,13 @@
     } else {
       ipCountry = val;
     }
-    dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl });
+    onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl });
   }
 
   function handleCustomCountryInput(e) {
     customCountryCode = e.target.value.toUpperCase();
     ipCountry = customCountryCode;
-    dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl });
+    onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl });
   }
 </script>
 
@@ -127,12 +157,12 @@
           type="text"
           bind:value={steamProfileInput}
           placeholder={syncPlaceholder}
-          on:keydown={(e) => { if (e.key === 'Enter') handleImportSteamProfile(); }}
+          onkeydown={(e) => { if (e.key === 'Enter') handleImportSteamProfile(); }}
           class="flex-1 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-3 py-1.5 text-xs text-white placeholder-neutral-500 font-mono outline-none"
         />
         <button
           type="button"
-          on:click={handleImportSteamProfile}
+          onclick={handleImportSteamProfile}
           disabled={isResolvingProfile || !steamProfileInput.trim()}
           class="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
         >
@@ -167,7 +197,7 @@
       description={nameDescription}
       bind:value={accountName}
       placeholder={namePlaceholder}
-      on:input={() => dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl })}
+      oninput={() => onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl })}
     />
 
     <InheritSelect
@@ -175,9 +205,9 @@
       description={langDescription}
       bind:value={language}
       options={languagesList}
-      on:change={(e) => {
-        language = e.detail;
-        dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl });
+      onchange={(val) => {
+        language = val;
+        onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl });
       }}
     />
 
@@ -188,20 +218,22 @@
         bind:value={accountSteamId}
         placeholder={steamidPlaceholder}
         mono={true}
-        on:input={() => dispatch('change', { accountName, accountSteamId, language, ipCountry, avatarUrl })}
+        oninput={() => onchange?.({ accountName, accountSteamId, language, ipCountry, avatarUrl })}
       >
-        <button
-          slot="action"
-          type="button"
-          on:click={handleRandomSteamID}
-          class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
-          title="Generate a new randomized Steam ID"
-        >
-          <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Random</span>
-        </button>
+        {#snippet action()}
+                <button
+            
+            type="button"
+            onclick={handleRandomSteamID}
+            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+            title="Generate a new randomized Steam ID"
+          >
+            <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Random</span>
+          </button>
+              {/snippet}
       </GhostInput>
 
       {#if accountSteamId && !isValidSteamId}
@@ -229,7 +261,7 @@
         description={countryDescription}
         value={isCustomCountry ? 'CUSTOM' : ipCountry}
         options={[...countriesList, { value: 'CUSTOM', label: 'Other (Custom 2-Letter ISO)...' }]}
-        on:change={handleCountrySelect}
+        onchange={handleCountrySelect}
       />
 
       {#if isCustomCountry || ipCountry === 'CUSTOM'}
@@ -240,7 +272,7 @@
               type="text"
               maxlength="2"
               value={ipCountry === 'CUSTOM' ? customCountryCode : ipCountry}
-              on:input={handleCustomCountryInput}
+              oninput={handleCustomCountryInput}
               placeholder="US"
               class="w-16 bg-surface-input border border-surface-border focus:border-neutral-400 rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase text-center outline-none"
             />
@@ -249,6 +281,6 @@
       {/if}
     </div>
 
-    <slot />
+    {@render children?.()}
   </div>
 </div>

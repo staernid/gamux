@@ -1,28 +1,46 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import { run } from 'svelte/legacy';
 
-  export let label = '';
-  export let description = '';
-  export let tooltip = '';
-  export let value = false; // boolean or null (for inherit mode)
-  export let checked = undefined;
-  export let inheritedValue = undefined; // boolean global default if in inherit mode
-  export let disabled = false;
-  export let compact = false;
+  
+  /**
+   * @typedef {Object} Props
+   * @property {string} [label]
+   * @property {string} [description]
+   * @property {string} [tooltip]
+   * @property {boolean} [value] - boolean or null (for inherit mode)
+   * @property {any} [checked]
+   * @property {any} [inheritedValue] - boolean global default if in inherit mode
+   * @property {boolean} [disabled]
+   * @property {boolean} [compact]
+   */
 
-  const dispatch = createEventDispatcher();
+  /** @type {Props} */
+  let {
+    label = '',
+    description = '',
+    tooltip = '',
+    value = $bindable(),
+    checked = $bindable(undefined),
+    inheritedValue = undefined,
+    disabled = false,
+    compact = false
+  ,
+    onchange
+  } = $props();
 
   // If checked is passed, sync value from checked
-  $: if (checked !== undefined && value !== checked) {
-    value = checked;
-  }
+  run(() => {
+    if (checked !== undefined && value !== checked) {
+      value = checked;
+    }
+  });
 
-  $: hasInheritance = inheritedValue !== undefined && inheritedValue !== null;
-  $: isInherited = hasInheritance && (value === null || value === undefined);
-  $: effectiveValue = isInherited ? Boolean(inheritedValue) : Boolean(value);
-  $: isOverridden = hasInheritance && !isInherited;
-  $: effectiveDescription = description;
-  $: isCompact = compact || (!label && !description);
+  let hasInheritance = $derived(inheritedValue !== undefined && inheritedValue !== null);
+  let isInherited = $derived(hasInheritance && (value === null || value === undefined));
+  let effectiveValue = $derived(isInherited ? Boolean(inheritedValue) : Boolean(value));
+  let isOverridden = $derived(hasInheritance && !isInherited);
+  let effectiveDescription = $derived(description);
+  let isCompact = $derived(compact || (!label && !description));
 
   function toggleSwitch() {
     if (disabled) return;
@@ -38,7 +56,7 @@
     if (checked !== undefined) {
       checked = value;
     }
-    dispatch('change', value);
+    onchange?.(value);
   }
 
   function revertToInherit(e) {
@@ -48,7 +66,7 @@
     if (checked !== undefined) {
       checked = null;
     }
-    dispatch('change', null);
+    onchange?.(null);
   }
 
   function handleKeyDown(e) {
