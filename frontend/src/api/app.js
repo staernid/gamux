@@ -297,6 +297,39 @@ function toPascalCase(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+export function isWailsDesktop() {
+  if (typeof window === 'undefined') return false;
+  if (window.location?.protocol === 'wails:') return true;
+  if (window.location?.hostname === 'wails.localhost') return true;
+  if (Boolean(window.webkit?.messageHandlers)) return true;
+  if (Boolean(window.chrome?.webview?.postMessage)) return true;
+  if (Boolean(window.wails?.invoke)) return true;
+  return false;
+}
+
+async function callWailsBinding(prop, args) {
+  const pascal = toPascalCase(prop);
+  const candidateNames = [
+    `github.com/staernid/gamux/gui.App.${pascal}`,
+    `gui.App.${pascal}`,
+    `main.App.${pascal}`,
+  ];
+
+  let lastErr = null;
+  for (const name of candidateNames) {
+    try {
+      return await Call.ByName(name, ...args);
+    } catch (err) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      if (!msg.includes('unknown bound method') && err?.name !== 'ReferenceError') {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
+}
+
 function createMethodDispatcher(prop) {
   return async (...args) => {
     // Ensure InspectGame receives (gamePath, newsCount) defaults
@@ -308,15 +341,13 @@ function createMethodDispatcher(prop) {
       args = [args[0], ''];
     }
 
-    // 1. Try Wails v3 @wailsio/runtime binding
-    const isWailsV3 = typeof window !== 'undefined' && Boolean(window._wails?.call || window.wails?.Call);
-    if (isWailsV3) {
-      const pascal = toPascalCase(prop);
+    // 1. In native Wails v3 desktop environment, call Go backend directly
+    if (isWailsDesktop()) {
       try {
-        return await Call.ByName(`gui.App.${pascal}`, ...args);
+        return await callWailsBinding(prop, args);
       } catch (err) {
-        // Fall back to alternative naming or error handling if Call.ByName throws
-        console.warn(`Wails v3 Call.ByName gui.App.${pascal} error:`, err);
+        console.error(`Wails v3 binding call error for ${prop}:`, err);
+        throw err;
       }
     }
 
@@ -332,7 +363,7 @@ function createMethodDispatcher(prop) {
       }
     }
 
-    // 3. Try configured declarative mock handler
+    // 3. Fallback to declarative mocks in browser preview, Vitest, or offline evaluation
     if (typeof DEFAULT_MOCKS[prop] === 'function') {
       return await DEFAULT_MOCKS[prop](...args);
     }
@@ -387,7 +418,7 @@ export function initRuntimeEvents(listeners = {}) {
     }
 
     // Wails v3 @wailsio/runtime
-    if (typeof window !== 'undefined' && window._wails?.call) {
+    if (isWailsDesktop()) {
       try {
         Events.On(event, (ev) => {
           const payload = ev?.data !== undefined ? ev.data : ev;
