@@ -322,7 +322,7 @@
             />
 
             <!-- Provider Badge -->
-            <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-4xs font-mono font-bold uppercase tracking-wider text-white shadow-md backdrop-blur-md bg-black/70 border border-white/10">
+            <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-4xs font-mono font-bold uppercase tracking-wider text-white shadow-md bg-black/85 border border-white/10">
               {opt.provider === 'steam' ? 'Steam' : opt.provider === 'gog' ? 'GOG' : opt.provider === 'rawg' ? 'RAWG' : opt.provider === 'steamgriddb' ? 'SGDB' : opt.provider}
             </div>
 
@@ -336,7 +336,7 @@
 
             <!-- Dimensions Badge -->
             {#if opt.width && opt.height}
-              <div class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm text-4xs font-mono text-neutral-300 border border-white/10 font-bold">
+              <div class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/90 text-4xs font-mono text-neutral-300 border border-white/10 font-bold">
                 {opt.width}×{opt.height}
               </div>
             {/if}

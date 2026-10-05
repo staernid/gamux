@@ -61,7 +61,7 @@
   aria-modal="true"
   tabindex="-1"
   onkeydown={handleKeydown}
-  class="fixed inset-0 z-50 bg-[#09090b]/95 backdrop-blur-sm flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
+  class="fixed inset-0 z-50 bg-[#09090b]/98 flex flex-col {padding} select-none animate-in fade-in duration-150 outline-none"
 >
   {#if !customHeader && (title || header || headerActions)}
     <!-- Standard Modal Header Bar -->

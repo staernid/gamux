@@ -52,7 +52,7 @@
     <button
       type="button"
       onclick={() => step(-1)}
-      class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/70 hover:bg-black/95 border border-white/20 hover:border-white text-white flex items-center justify-center backdrop-blur-md shadow-xl transition-all cursor-pointer"
+      class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/85 hover:bg-black border border-white/20 hover:border-white text-white flex items-center justify-center shadow-xl transition-all cursor-pointer"
       title="Scroll Left"
       aria-label="Scroll Left"
     >
@@ -90,7 +90,7 @@
     <button
       type="button"
       onclick={() => step(1)}
-      class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/70 hover:bg-black/95 border border-white/20 hover:border-white text-white flex items-center justify-center backdrop-blur-md shadow-xl transition-all cursor-pointer"
+      class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/85 hover:bg-black border border-white/20 hover:border-white text-white flex items-center justify-center shadow-xl transition-all cursor-pointer"
       title="Scroll Right"
       aria-label="Scroll Right"
     >

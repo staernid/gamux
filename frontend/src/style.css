@@ -50,7 +50,6 @@
 
   html {
     font-size: 16px;
-    transition: font-size 0.15s ease;
   }
 
   body {
@@ -240,4 +239,15 @@ html.light [class*="border-[#27272"] {
 /* Performance: GPU compositing isolation for heavy 3D transform containers */
 .contain-paint {
   contain: layout style paint;
+}
+
+.contain-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+  contain: layout style paint;
+}
+
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }

@@ -128,7 +128,7 @@
 </script>
 
 <header class="absolute top-4 left-1/2 -translate-x-1/2 z-40 select-none pointer-events-none flex items-center justify-center">
-  <div class="pointer-events-auto flex items-center bg-surface-header/95 backdrop-blur-md border border-surface-border p-1 rounded-2xl shadow-2xl">
+  <div class="pointer-events-auto flex items-center bg-surface-header border border-surface-border p-1 rounded-2xl shadow-2xl">
     <!-- Centered Navigation Items (Icon-only) -->
     <nav class="flex items-center space-x-1">
       <!-- Shelf / Game Hub (1) -->

@@ -76,7 +76,7 @@
   <button
     type="button"
     onclick={toggleMenu}
-    class="w-9 h-9 rounded-full border border-surface-border hover:border-surface-borderHighlight overflow-hidden flex items-center justify-center bg-surface-header/90 hover:bg-surface-cardHover backdrop-blur-md shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-neutral-400 group"
+    class="w-9 h-9 rounded-full border border-surface-border hover:border-surface-borderHighlight overflow-hidden flex items-center justify-center bg-surface-header hover:bg-surface-cardHover shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-neutral-400 group"
     title={active?.name ? `Active Profile: ${active.name}` : 'Player Profiles'}
     aria-label="Player Profiles"
     aria-expanded={isOpen}
@@ -93,7 +93,7 @@
   <!-- Flyout Menu -->
   {#if isOpen}
     <div
-      class="absolute top-full right-0 mt-2 w-64 bg-surface-header/95 backdrop-blur-md border border-surface-border rounded-2xl shadow-2xl p-2 z-50 animate-fade-in flex flex-col space-y-1"
+      class="absolute top-full right-0 mt-2 w-64 bg-surface-header border border-surface-border rounded-2xl shadow-2xl p-2 z-50 animate-fade-in flex flex-col space-y-1"
       role="menu"
       tabindex="-1"
     >

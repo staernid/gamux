@@ -31,7 +31,7 @@
 
 {#if count > 0 && currentTask}
   <div
-    class="w-full h-9 bg-[#0e0e11]/95 border-t border-[#27272a] px-4 flex items-center justify-between text-xs font-mono select-none backdrop-blur-md transition-all {className}"
+    class="w-full h-9 bg-[#0e0e11] border-t border-[#27272a] px-4 flex items-center justify-between text-xs font-mono select-none transition-all {className}"
     data-testid="task-status-bar"
   >
     <!-- Left: Activity Ring & Active Task Description -->

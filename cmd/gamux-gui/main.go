@@ -22,12 +22,11 @@ import (
 var Version = "dev"
 
 func init() {
-	// WebKitGTK 2.40+ on Linux (especially with Mesa AMD/Intel drivers under Wayland)
-	// has a known regression where the hardware-accelerated DMA-BUF renderer leaks textures
-	// unboundedly (at ~220MB/s) and hangs ThreadedCompositor, freezing the UI and causing OOM.
-	// Disabling the DMA-BUF renderer forces the stable shared-memory compositing pipeline.
-	if _, exists := os.LookupEnv("WEBKIT_DISABLE_DMABUF_RENDERER"); !exists {
-		_ = os.Setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+	// Enable hardware GPU compositing pipeline on Linux.
+	// Users with legacy or problematic GPU drivers can still set
+	// WEBKIT_DISABLE_DMABUF_RENDERER=1 in their environment if needed.
+	if _, exists := os.LookupEnv("WEBKIT_FORCE_COMPOSITING_MODE"); !exists {
+		_ = os.Setenv("WEBKIT_FORCE_COMPOSITING_MODE", "1")
 	}
 }
 

@@ -66,12 +66,12 @@
   type="button"
   onclick={handleClick}
   onkeydown={handleKeydown}
-  class="group cursor-pointer flex flex-col items-center text-left transition-all duration-200 transform hover:-translate-y-1.5 focus:outline-none select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
+  class="contain-card group cursor-pointer flex flex-col items-center text-left transition-transform duration-150 ease-out transform hover:-translate-y-1.5 focus:outline-none select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
   data-testid="cover-card"
 >
   <!-- Poster Art Container -->
   <div
-    class="relative w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-lg group-hover:shadow-2xl border transition-all duration-200 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-[#27272a] group-hover:border-neutral-400'}"
+    class="gpu-layer relative w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-lg border transition-colors duration-150 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-[#27272a] group-hover:border-neutral-400'}"
   >
     <PosterArt
       {appId}
@@ -79,20 +79,20 @@
       posterUrl={coverUrl}
       {localCoverUrl}
       thumbnailWidth={size === 'sm' ? 200 : size === 'lg' ? 400 : 300}
-      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      className="w-full h-full object-cover"
     />
 
     <!-- Top Right Status Signifier -->
     {#if isRunning}
       <div
-        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-md backdrop-blur-md flex items-center space-x-1 animate-pulse"
+        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-md flex items-center space-x-1 animate-pulse"
       >
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
         <span>RUNNING</span>
       </div>
     {:else if !isReady && !isStub}
       <div
-        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-md backdrop-blur-md flex items-center space-x-1"
+        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-md flex items-center space-x-1"
         title="Setup Required"
       >
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>

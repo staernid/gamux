@@ -42,12 +42,12 @@
   type="button"
   onclick={handleClick}
   onmouseenter={handleMouseEnter}
-  class="group cursor-pointer flex flex-col items-center text-center transition-all duration-150 transform {isFocused ? 'scale-105 z-10' : 'hover:scale-102 opacity-90 hover:opacity-100'} bg-transparent border-0 p-0 text-left outline-none"
+  class="contain-card group cursor-pointer flex flex-col items-center text-center transition-transform duration-150 transform {isFocused ? 'scale-105 z-10' : 'hover:scale-102 opacity-90 hover:opacity-100'} bg-transparent border-0 p-0 text-left outline-none"
   aria-label="{item?.name || 'Game'} - {storeName} {localMatch ? (localMatch.isInstalled ? '(Installed)' : '(In Library)') : ''}"
 >
   <!-- Card Poster Container -->
   <div
-    class="relative w-full aspect-[2/3] rounded-2xl overflow-hidden transition-all duration-200 bg-surface-card border {isFocused ? 'border-white ring-2 ring-white/60 shadow-[0_8px_25px_-4px_rgba(255,255,255,0.25)]' : 'border-surface-border hover:border-surface-borderHighlight shadow-md'}"
+    class="gpu-layer relative w-full aspect-[2/3] rounded-2xl overflow-hidden transition-colors duration-150 bg-surface-card border {isFocused ? 'border-white ring-2 ring-white/60 shadow-[0_8px_25px_-4px_rgba(255,255,255,0.25)]' : 'border-surface-border hover:border-surface-borderHighlight shadow-md'}"
   >
     {#if hasPoster}
       <img
@@ -59,7 +59,7 @@
       />
     {:else}
       <!-- Sleek Fallback when Poster is Absent or Fails -->
-      <div class="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-surface-header/60 border border-dashed border-surface-border text-neutral-500 font-mono">
+      <div class="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-surface-header border border-dashed border-surface-border text-neutral-500 font-mono">
         <Icon name="gamepad" className="w-8 h-8 mb-2 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
         <span class="text-3xs line-clamp-3 font-semibold text-neutral-400 group-hover:text-neutral-200">
           {item?.name}
@@ -68,14 +68,14 @@
     {/if}
 
     <!-- Store Provider Badge (Top Left) -->
-    <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-4xs font-mono font-black uppercase tracking-wider text-white shadow-md backdrop-blur-md bg-black/75 border border-white/10">
+    <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-4xs font-mono font-black uppercase tracking-wider text-white shadow-md bg-black/85 border border-white/10">
       {storeName}
     </div>
 
     <!-- Ownership Badge (Top Right) -->
     {#if localMatch}
       <div
-        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider shadow-md backdrop-blur-md {localMatch.isInstalled ? 'bg-emerald-500/90 text-neutral-950 border border-emerald-400/40' : 'bg-surface-elevated text-neutral-200 border border-surface-borderHighlight'}"
+        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider shadow-md {localMatch.isInstalled ? 'bg-emerald-500/90 text-neutral-950 border border-emerald-400/40' : 'bg-surface-elevated text-neutral-200 border border-surface-borderHighlight'}"
       >
         {localMatch.isInstalled ? 'Installed' : 'In Library'}
       </div>
@@ -83,7 +83,7 @@
 
     <!-- Visual Action Cue on Hover/Focus -->
     <div
-      class="absolute inset-x-2 bottom-2 py-1 px-2 rounded-lg bg-surface-header/90 backdrop-blur-md border border-surface-borderHighlight text-neutral-200 text-4xs font-mono font-bold tracking-tight text-center shadow-lg transition-opacity duration-150 {isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
+      class="absolute inset-x-2 bottom-2 py-1 px-2 rounded-lg bg-surface-header border border-surface-borderHighlight text-neutral-200 text-4xs font-mono font-bold tracking-tight text-center shadow-lg transition-opacity duration-150 {isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
     >
       <span>✦ {localMatch ? 'Open in Library' : 'Open in Hub'}</span>
     </div>

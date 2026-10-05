@@ -53,7 +53,7 @@
   aria-modal="true"
   aria-labelledby="confirm-modal-title"
   aria-describedby="confirm-modal-desc"
-  class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
+  class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
 >
   <div class="bg-surface-header border {danger ? 'border-rose-500/40' : 'border-surface-border'} rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
     <!-- Header with Icon -->

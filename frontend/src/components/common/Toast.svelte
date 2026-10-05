@@ -128,7 +128,7 @@
 {#if $undoQueue && $undoQueue.length > 0}
   <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none" data-testid="undo-snackbar-container">
     {#each $undoQueue as item (item.id)}
-      <div class="pointer-events-auto bg-[#18181b]/95 border border-[#3f3f46] text-white shadow-2xl px-4 py-2.5 rounded-2xl flex items-center space-x-3 text-xs animate-fade-in backdrop-blur-md">
+      <div class="pointer-events-auto bg-[#18181b] border border-[#3f3f46] text-white shadow-2xl px-4 py-2.5 rounded-2xl flex items-center space-x-3 text-xs animate-fade-in">
         <span class="text-neutral-200 font-medium">{item.message}</span>
         <button
           type="button"
