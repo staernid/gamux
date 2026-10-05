@@ -4,6 +4,7 @@ import { notificationStore } from './notifications.js';
 export class ConfigState {
   current = $state(null);
   uiScale = $state(18);
+  skipInstallConfirm = $state(false);
   isDirty = $state(false);
 
   #subscribers = new Set();
@@ -17,6 +18,14 @@ export class ConfigState {
           this.uiScale = sz;
         }
       }
+      this.skipInstallConfirm = localStorage.getItem('gamux_skip_install_confirm') === 'true';
+    }
+  }
+
+  setSkipInstallConfirm(skip) {
+    this.skipInstallConfirm = Boolean(skip);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('gamux_skip_install_confirm', String(Boolean(skip)));
     }
   }
 

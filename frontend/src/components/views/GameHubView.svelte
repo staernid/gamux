@@ -9,11 +9,13 @@
     isGamePathRunning,
     refreshGame,
     libraryPath,
+    libraryPaths,
     updateGameInStore,
     trashGame
   } from '../../stores/library.js';
   import { tasksStore } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
+  import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { drawerDraft } from '../../stores/drawerDraft.js';
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
@@ -281,8 +283,15 @@
         return;
       }
 
+      // If user hasn't opted to skip install confirmation, open the InstallModal
+      if (!configStore.skipInstallConfirm) {
+        modalStore.open('install', { game });
+        return;
+      }
+
       let dest = game.gameDir;
-      const lib = $libraryPath || '/home/staernid/Games';
+      const configuredLib = ($libraryPaths && $libraryPaths.length > 0) ? $libraryPaths[0] : ($libraryPath || '/home/staernid/Games');
+      const lib = configuredLib;
 
       // If it's a virtual store title or lacks a directory, register the stub in the library first
       if (!dest || game.isVirtual) {
@@ -310,6 +319,7 @@
           game_name: game.name,
           target_dir: dest,
           platform: game.platform || 'win64',
+          language: (game.currentLanguage || configStore.current?.language || 'english').toLowerCase(),
           auto_apply: true,
           store_type: (game.store || 'steam').toLowerCase(),
           branch: game.branch || 'public',

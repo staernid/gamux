@@ -12,6 +12,7 @@
   import SettingSection from '../../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
+  import ThemeSwitch from '../../../common/ThemeSwitch.svelte';
   import { UI_SCALE_OPTIONS } from '../../../../constants/options.js';
 
   const uiScaleOptions = UI_SCALE_OPTIONS;
@@ -49,6 +50,7 @@
   <!-- Display & Interface -->
   <SettingSection title="Display & Interface">
     <div class="space-y-2.5">
+      <ThemeSwitch />
       <InheritSelect
         label="Interface Scale"
         description="Base UI scale and font sizing for handhelds, desktops, or TVs (applies immediately)"

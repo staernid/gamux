@@ -44,7 +44,9 @@
 
   let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
 
+  // svelte-ignore state_referenced_locally
   let activeFilesSubTab = $state(activeSubTab || (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots')));
+  // svelte-ignore state_referenced_locally
   let prevActiveSubTab = $state(activeSubTab);
 
   run(() => {

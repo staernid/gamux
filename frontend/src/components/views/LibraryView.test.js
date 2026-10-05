@@ -13,7 +13,6 @@ describe('LibraryView Component', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem('gamux_library_mode', 'grid');
     games.set(mockGames);
     selectedGame.set(mockGames[0]);
     activeView.set('library');
@@ -53,22 +52,6 @@ describe('LibraryView Component', () => {
     let currentSel = null;
     selectedGame.subscribe(v => currentSel = v)();
     expect(currentSel?.name).toBe('Balatro');
-  });
-
-  it('switches between grid and shelf modes via mode toggle buttons', async () => {
-    render(LibraryView);
-
-    const shelfBtn = screen.getByLabelText('3D Cover Flow / Shelf Mode');
-    expect(shelfBtn).toBeInTheDocument();
-    await fireEvent.click(shelfBtn);
-
-    expect(localStorage.getItem('gamux_library_mode')).toBe('shelf');
-
-    const gridBtn = screen.getByLabelText('Desktop Grid View');
-    expect(gridBtn).toBeInTheDocument();
-    await fireEvent.click(gridBtn);
-
-    expect(localStorage.getItem('gamux_library_mode')).toBe('grid');
   });
 
   it('filters titles using status filter chips (Ready / Unpatched)', async () => {

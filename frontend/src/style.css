@@ -3,14 +3,49 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  html.dark {
     color-scheme: dark;
+    --surface-base: 9 9 11;
+    --surface-header: 18 18 20;
+    --surface-card: 24 24 27;
+    --surface-card-hover: 34 34 37;
+    --surface-elevated: 32 32 36;
+    --surface-border: 39 39 42;
+    --surface-border-subtle: 31 31 35;
+    --surface-border-highlight: 63 63 70;
+    --surface-input: 20 20 23;
+    --surface-pill: 34 34 38;
+
     --bg-base: #09090b;
     --bg-surface: #121214;
     --bg-card: #18181b;
     --bg-card-hover: #222225;
     --border-subtle: #27272a;
     --border-active: #ffffff;
+    --text-primary: #f4f4f5;
+  }
+
+  html.light {
+    color-scheme: light;
+    --surface-base: 244 244 245; /* zinc-100 */
+    --surface-header: 255 255 255; /* white */
+    --surface-card: 255 255 255; /* white */
+    --surface-card-hover: 244 244 245; /* zinc-100 */
+    --surface-elevated: 255 255 255; /* white */
+    --surface-border: 228 228 231; /* zinc-200 */
+    --surface-border-subtle: 244 244 245; /* zinc-100 */
+    --surface-border-highlight: 212 212 216; /* zinc-300 */
+    --surface-input: 244 244 245; /* zinc-100 */
+    --surface-pill: 228 228 231; /* zinc-200 */
+
+    --bg-base: #f4f4f5;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f4f4f5;
+    --border-subtle: #e4e4e7;
+    --border-active: #09090b;
+    --text-primary: #09090b;
   }
 
   html {
@@ -22,7 +57,7 @@
     margin: 0;
     padding: 0;
     background-color: var(--bg-base);
-    color: #f4f4f5;
+    color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
     font-size: 1rem;
     line-height: 1.5;
@@ -33,7 +68,7 @@
 
   /* Global focus-visible ring for keyboard navigation accessibility */
   :focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline: 2px solid rgba(var(--surface-border-highlight) / 0.8);
     outline-offset: 2px;
     border-radius: inherit;
   }
@@ -62,6 +97,14 @@
   background: #3f3f46;
 }
 
+html.light ::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -73,8 +116,8 @@
 @layer components {
   /* Cartridge Tile Styling */
   .cartridge {
-    background-color: #121214;
-    border: 1.5px solid #27272a;
+    background-color: var(--bg-surface);
+    border: 1.5px solid var(--border-subtle);
     border-radius: 0.85rem;
     transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1),
                 border-color 0.14s ease,
@@ -83,16 +126,25 @@
   }
 
   .cartridge:hover {
-    background-color: #18181b;
-    border-color: #3f3f46;
+    background-color: var(--bg-card);
+    border-color: var(--surface-border-highlight);
     transform: translateY(-2px);
+    box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.12);
+  }
+
+  html.dark .cartridge:hover {
+    border-color: #3f3f46;
     box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.8);
   }
 
   .cartridge.active {
-    background-color: #222225;
-    border-color: #ffffff;
+    background-color: var(--bg-card-hover);
+    border-color: var(--border-active);
     transform: translateY(-4px);
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--border-active);
+  }
+
+  html.dark .cartridge.active {
     box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.9), 0 0 0 1px #ffffff;
   }
 
@@ -121,15 +173,41 @@
   }
 
   .panel-surface {
-    background-color: #121214;
-    border: 1px solid #27272a;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
   }
 
   .panel-elevated {
-    background-color: #18181b;
-    border: 1px solid #27272a;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
   }
 }
+
+/* Light Theme Contrast Refinements */
+html.light .bg-white.text-neutral-950 {
+  background-color: #09090b !important;
+  color: #ffffff !important;
+}
+
+html.light [class*="bg-[#12121"] {
+  background-color: rgb(var(--surface-card)) !important;
+}
+html.light [class*="bg-[#18181"] {
+  background-color: rgb(var(--surface-card)) !important;
+}
+html.light [class*="bg-[#09090"] {
+  background-color: rgb(var(--surface-base)) !important;
+}
+html.light [class*="bg-[#11141"] {
+  background-color: rgb(var(--surface-base)) !important;
+}
+html.light [class*="bg-[#14141"] {
+  background-color: rgb(var(--surface-input)) !important;
+}
+html.light [class*="border-[#27272"] {
+  border-color: rgb(var(--surface-border)) !important;
+}
+
 
 /* Animations */
 @keyframes fadeIn {

@@ -20,7 +20,8 @@
     onChange = null,
     onchange = null
   } = $props();
-  const inputId = `path-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
+  const uid = Math.random().toString(36).slice(2, 8);
+  let inputId = $derived(`path-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || uid}`);
 
   let isList = $derived(property.type === 'path_list' || Array.isArray(value));
   let pathList = $derived(Array.isArray(value) ? value : (value ? [value] : []));

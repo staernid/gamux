@@ -82,13 +82,6 @@
       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
     />
 
-    <!-- Top Left Badge: Platform / Stub -->
-    <div
-      class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider text-neutral-200 bg-neutral-900/85 border border-neutral-700/80 shadow-md backdrop-blur-md"
-    >
-      {isStub ? 'STUB' : (platform || 'WIN')}
-    </div>
-
     <!-- Top Right Status Signifier -->
     {#if isRunning}
       <div
@@ -111,8 +104,8 @@
     {#if playtimeSeconds > 0}
       <div class="absolute inset-x-0 bottom-0 pt-6 pb-2 px-2.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-end justify-between text-4xs font-mono text-neutral-300 pointer-events-none">
         <span>{formatPlaytime(playtimeSeconds)}</span>
-        {#if lastPlayed > 0}
-          <span class="text-neutral-400">{formatLastPlayed(lastPlayed)}</span>
+        {#if diskSizeBytes > 0}
+          <span class="text-neutral-400">{formatBytes(diskSizeBytes)}</span>
         {/if}
       </div>
     {/if}
@@ -120,13 +113,8 @@
 
   <!-- Title & Metadata Caption -->
   <div class="w-full mt-2 space-y-0.5 min-w-0">
-    <h4 class="text-xs font-bold text-neutral-200 group-hover:text-white truncate transition-colors" title={name}>
+    <h4 class="text-xs text-center font-bold text-neutral-200 group-hover:text-white truncate transition-colors" title={name}>
       {name}
     </h4>
-    {#if diskSizeBytes > 0}
-      <p class="text-4xs font-mono text-neutral-500 truncate">
-        {formatBytes(diskSizeBytes)}
-      </p>
-    {/if}
   </div>
 </button>

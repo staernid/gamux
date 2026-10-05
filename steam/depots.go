@@ -21,6 +21,7 @@ type SteamDepotInfo struct {
 	OSArch        string            `json:"osarch,omitempty"`
 	IsDLC         bool              `json:"is_dlc,omitempty"`
 	DLCAppID      uint32            `json:"dlc_app_id,omitempty"`
+	DLCName       string            `json:"dlc_name,omitempty"`
 	Optional      bool              `json:"optional,omitempty"`
 	Realm         string            `json:"realm,omitempty"`
 	Size          uint64            `json:"size,omitempty"`
@@ -119,8 +120,8 @@ func extractDepotSizes(manifests map[string]any) (size uint64, download uint64) 
 	return size, download
 }
 
-// SynthesizeDepotName produces a clean, human-readable depot description based on its metadata.
-func SynthesizeDepotName(depotID uint32, osList, osArch, lang string, isDLC bool, dlcAppID uint32, sharedInstall bool, depotFromApp uint32) string {
+// SynthesizeDepotNameWithDLC produces a clean, human-readable depot description based on its metadata and DLC name.
+func SynthesizeDepotNameWithDLC(depotID uint32, osList, osArch, lang string, isDLC bool, dlcAppID uint32, dlcName string, sharedInstall bool, depotFromApp uint32) string {
 	if sharedInstall || depotFromApp > 0 {
 		if depotFromApp > 0 {
 			return fmt.Sprintf("Shared Redistributables (App %d)", depotFromApp)
@@ -141,7 +142,9 @@ func SynthesizeDepotName(depotID uint32, osList, osArch, lang string, isDLC bool
 	}
 
 	prefix := ""
-	if isDLC && dlcAppID > 0 {
+	if isDLC && dlcName != "" {
+		prefix = fmt.Sprintf("%s - ", dlcName)
+	} else if isDLC && dlcAppID > 0 {
 		prefix = fmt.Sprintf("DLC #%d ", dlcAppID)
 	}
 
@@ -160,6 +163,11 @@ func SynthesizeDepotName(depotID uint32, osList, osArch, lang string, isDLC bool
 		}
 		return fmt.Sprintf("Base Content (%d)", depotID)
 	}
+}
+
+// SynthesizeDepotName produces a clean, human-readable depot description based on its metadata.
+func SynthesizeDepotName(depotID uint32, osList, osArch, lang string, isDLC bool, dlcAppID uint32, sharedInstall bool, depotFromApp uint32) string {
+	return SynthesizeDepotNameWithDLC(depotID, osList, osArch, lang, isDLC, dlcAppID, "", sharedInstall, depotFromApp)
 }
 
 // FetchAppDepotMetadata queries SteamCMD or cache for official Steam depot definitions for an AppID.
@@ -270,6 +278,16 @@ func fetchAppDepotMetadataRemote(ctx context.Context, appID uint32) (map[uint32]
 		}
 	}
 
+	// Pre-discover DLC names for this AppID to provide rich DLC titles
+	dlcNameMap := make(map[uint32]string)
+	if dlcItems, dErr := DiscoverDLCs(ctx, fmt.Sprintf("%d", appID)); dErr == nil && len(dlcItems) > 0 {
+		for _, item := range dlcItems {
+			if did, pErr := strconv.ParseUint(item.AppID, 10, 32); pErr == nil && did > 0 {
+				dlcNameMap[uint32(did)] = item.Name
+			}
+		}
+	}
+
 	for key, rawMsg := range appData.Depots {
 		if key == "branches" || key == "baselanguages" || key == "hasdepotsindlc" || key == "privatebranches" {
 			continue
@@ -304,6 +322,8 @@ func fetchAppDepotMetadataRemote(ctx context.Context, appID uint32) (map[uint32]
 			dlcID = appID
 		}
 
+		dlcName := dlcNameMap[dlcID]
+
 		depotFromApp := uint32(parseUint64(entry.DepotFromApp))
 		sharedInstall := parseUint64(entry.SharedInstall) > 0
 
@@ -324,7 +344,11 @@ func fetchAppDepotMetadataRemote(ctx context.Context, appID uint32) (map[uint32]
 		}
 
 		if name == "" {
-			name = SynthesizeDepotName(dID, osList, osArch, lang, isDLC, dlcID, sharedInstall, depotFromApp)
+			if dlcName != "" {
+				name = SynthesizeDepotNameWithDLC(dID, osList, osArch, lang, isDLC, dlcID, dlcName, sharedInstall, depotFromApp)
+			} else {
+				name = SynthesizeDepotName(dID, osList, osArch, lang, isDLC, dlcID, sharedInstall, depotFromApp)
+			}
 		}
 
 		// Don't overwrite higher-fidelity depot info if already populated from parent
@@ -342,6 +366,7 @@ func fetchAppDepotMetadataRemote(ctx context.Context, appID uint32) (map[uint32]
 			OSArch:        osArch,
 			IsDLC:         isDLC,
 			DLCAppID:      dlcID,
+			DLCName:       dlcName,
 			Optional:      isOptional,
 			Realm:         realm,
 			Size:          size,

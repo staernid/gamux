@@ -34,6 +34,7 @@
   import { modalStore } from './stores/modal.js';
   import { notificationStore } from './stores/notifications.js';
   import { configStore } from './stores/config.js';
+  import { themeStore } from './stores/theme.js';
   import { multiseatStore } from './stores/multiseat.js';
   import { profilesStore } from './stores/profiles.js';
   import { initRuntimeEvents, AppAPI } from './api/app.js';
@@ -209,7 +210,8 @@
   });
 
   onMount(() => {
-    // 1. Initialize UI scale & config
+    // 1. Initialize UI scale, theme & config
+    themeStore.init();
     const savedScale = localStorage.getItem('gamux_ui_scale') || '18';
     configStore.setScale(savedScale);
     configStore.load();
@@ -271,6 +273,11 @@
       },
       onOpenTarget: (target) => {
         handleOpenTarget(target);
+      },
+      onSystemThemeChanged: (data) => {
+        if (typeof data?.isDark === 'boolean') {
+          themeStore.handleSystemThemeChange(data.isDark);
+        }
       }
     });
 
@@ -368,11 +375,11 @@
           openCurrentDirectory();
         } else if ((e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') && $activeView === 'library') {
           e.preventDefault();
-          if (carouselRef) carouselRef.step(1);
+          if (libraryViewRef) libraryViewRef.step(1);
           else stepGameSelection(1);
         } else if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && $activeView === 'library') {
           e.preventDefault();
-          if (carouselRef) carouselRef.step(-1);
+          if (libraryViewRef) libraryViewRef.step(-1);
           else stepGameSelection(-1);
         } else if ((e.key === 'Enter' || e.key === ' ') && $activeView === 'library' && $selectedGame) {
           e.preventDefault();
@@ -381,13 +388,33 @@
       }
     }
 
-    // 6. Gamepad API Polling Loop
+    // 6. Gamepad API Polling Loop (connection-aware & idle-safe)
     const gamepadTracker = new GamepadTracker();
     let padLoopId = null;
+    let isGamepadConnected = false;
+
+    function hasConnectedGamepad() {
+      if (typeof navigator === 'undefined' || !navigator.getGamepads) return false;
+      const pads = navigator.getGamepads();
+      return Array.from(pads).some(p => p && p.connected);
+    }
 
     function pollGamepad() {
+      // If hidden in background/tray, yield until visible
+      if (typeof document !== 'undefined' && document.hidden) {
+        padLoopId = requestAnimationFrame(pollGamepad);
+        return;
+      }
+
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       const pad = Array.from(pads).find(p => p && p.connected);
+
+      if (!pad) {
+        // Sleep if no controller is present
+        isGamepadConnected = false;
+        padLoopId = null;
+        return;
+      }
 
       const actions = gamepadTracker.process(pad);
       if (actions) {
@@ -457,17 +484,44 @@
       padLoopId = requestAnimationFrame(pollGamepad);
     }
 
-    padLoopId = requestAnimationFrame(pollGamepad);
+    function wakeGamepadLoop() {
+      if (!padLoopId && hasConnectedGamepad()) {
+        isGamepadConnected = true;
+        padLoopId = requestAnimationFrame(pollGamepad);
+      }
+    }
+
+    function onGamepadConnected() {
+      wakeGamepadLoop();
+    }
+
+    function onGamepadDisconnected() {
+      if (!hasConnectedGamepad()) {
+        isGamepadConnected = false;
+        if (padLoopId) {
+          cancelAnimationFrame(padLoopId);
+          padLoopId = null;
+        }
+      }
+    }
+
+    // Initialize loop only if a gamepad is currently connected
+    wakeGamepadLoop();
+
+    window.addEventListener('gamepadconnected', onGamepadConnected);
+    window.addEventListener('gamepaddisconnected', onGamepadDisconnected);
     window.addEventListener('keydown', handleKeydown);
 
     return () => {
       window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('gamepadconnected', onGamepadConnected);
+      window.removeEventListener('gamepaddisconnected', onGamepadDisconnected);
       if (padLoopId) cancelAnimationFrame(padLoopId);
     };
   });
 </script>
 
-<div class="bg-surface-base text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
+<div class="bg-surface-base text-neutral-900 dark:text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
   <!-- Minimal Floating Navigation Pill at Top -->
   <TopBar />
 

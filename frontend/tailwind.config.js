@@ -14,16 +14,16 @@ export default {
       },
       colors: {
         surface: {
-          base: '#09090b',
-          header: '#121214',
-          card: '#18181b',
-          cardHover: '#222225',
-          elevated: '#202024',
-          border: '#27272a',
-          borderSubtle: '#1f1f23',
-          borderHighlight: '#3f3f46',
-          input: '#141417',
-          pill: '#222226',
+          base: 'rgb(var(--surface-base) / <alpha-value>)',
+          header: 'rgb(var(--surface-header) / <alpha-value>)',
+          card: 'rgb(var(--surface-card) / <alpha-value>)',
+          cardHover: 'rgb(var(--surface-card-hover) / <alpha-value>)',
+          elevated: 'rgb(var(--surface-elevated) / <alpha-value>)',
+          border: 'rgb(var(--surface-border) / <alpha-value>)',
+          borderSubtle: 'rgb(var(--surface-border-subtle) / <alpha-value>)',
+          borderHighlight: 'rgb(var(--surface-border-highlight) / <alpha-value>)',
+          input: 'rgb(var(--surface-input) / <alpha-value>)',
+          pill: 'rgb(var(--surface-pill) / <alpha-value>)',
         }
       }
     },

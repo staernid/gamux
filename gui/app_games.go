@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
@@ -356,10 +357,11 @@ func (a *App) GetGameDepots(gamePath string) ([]domain.DepotSummary, error) {
 }
 
 // GetAppDepots retrieves structured depot metadata for a Steam AppID from remote metadata.
-func (a *App) GetAppDepots(appID string) ([]domain.DepotSummary, error) {
-	parsed, ok := util.ParseAppID(appID)
+func (a *App) GetAppDepots(appID any) ([]domain.DepotSummary, error) {
+	str := strings.TrimSpace(fmt.Sprintf("%v", appID))
+	parsed, ok := util.ParseAppID(str)
 	if !ok || parsed == 0 {
-		return nil, fmt.Errorf("invalid appID %q", appID)
+		return nil, fmt.Errorf("invalid appID %v", appID)
 	}
 	return a.Engine.GetAppDepots(a.getContext(), parsed)
 }

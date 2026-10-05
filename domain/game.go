@@ -192,6 +192,7 @@ type DepotSummary struct {
 	OSArch          string `json:"osarch,omitempty"`
 	DLCAppID        uint32 `json:"dlc_app_id,omitempty"`
 	IsDLC           bool   `json:"is_dlc,omitempty"`
+	DLCName         string `json:"dlc_name,omitempty"`
 }
 
 // ManifestStatus holds depot manifest and file integrity state.

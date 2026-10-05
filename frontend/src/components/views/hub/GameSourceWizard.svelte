@@ -21,7 +21,9 @@
     { id: 'Standalone', label: 'Standalone', desc: 'Direct DRM-free' }
   ];
 
+  // svelte-ignore state_referenced_locally
   let searchQuery = $state($drawerDraft.name || game?.name || '');
+  // svelte-ignore state_referenced_locally
   let customAppId = $state($drawerDraft.appId || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '');
   let searchResults = $state([]);
   let isSearching = $state(false);

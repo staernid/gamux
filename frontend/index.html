@@ -4,8 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>gamux - Steam Game Manager</title>
+  <script>
+    (function() {
+      try {
+        var mode = localStorage.getItem('gamux_theme') || 'system';
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+        var root = document.documentElement;
+        if (resolved === 'dark') {
+          root.classList.add('dark');
+          root.classList.remove('light');
+          root.style.colorScheme = 'dark';
+        } else {
+          root.classList.remove('dark');
+          root.classList.add('light');
+          root.style.colorScheme = 'light';
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
-<body class="bg-[#11141a] text-slate-100 antialiased select-none">
+<body class="bg-surface-base text-neutral-900 dark:text-slate-100 antialiased select-none">
   <div id="app"></div>
   <script type="module" src="./src/main.js"></script>
 </body>

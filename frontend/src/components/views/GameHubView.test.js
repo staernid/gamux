@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GameHubView from './GameHubView.svelte';
 import { selectedGame, activeView } from '../../stores/library.js';
 import { tasksStore } from '../../stores/tasks.js';
+import { modalStore } from '../../stores/modal.js';
+import { configStore } from '../../stores/config.js';
 import { drawerDraft } from '../../stores/drawerDraft.js';
 import { normalizeGame } from '../../utils/game.js';
 import { AppAPI } from '../../api/app.js';
@@ -389,7 +391,34 @@ describe('GameHubView Component', () => {
     expect(screen.getByText('Online Store Title')).toBeInTheDocument();
   });
 
-  it('triggers download transfer and pre-creates stub when clicking Download on uninstalled virtual game', async () => {
+  it('opens install modal when clicking Download on uninstalled virtual game by default', async () => {
+    configStore.setSkipInstallConfirm(false);
+    const modalSpy = vi.spyOn(modalStore, 'open');
+
+    const virtualGame = normalizeGame({
+      name: 'Hades II',
+      app_id: '1145350',
+      store: 'Steam',
+      game_dir: '',
+      is_installed: false,
+      is_stub: false,
+      is_virtual: true,
+      is_ready: false,
+      file_count: 0,
+      disk_size_bytes: 0,
+    });
+    selectedGame.set(virtualGame);
+
+    render(GameHubView);
+
+    const downloadBtn = screen.getByText('Download');
+    await fireEvent.click(downloadBtn);
+
+    expect(modalSpy).toHaveBeenCalledWith('install', expect.objectContaining({ game: expect.anything() }));
+  });
+
+  it('triggers download transfer and pre-creates stub when skipInstallConfirm is true', async () => {
+    configStore.setSkipInstallConfirm(true);
     const virtualGame = normalizeGame({
       name: 'Hades II',
       app_id: '1145350',

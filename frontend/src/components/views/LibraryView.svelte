@@ -1,8 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import PosterArt from '../common/PosterArt.svelte';
-  import Carousel3D from '../stage/Carousel3D.svelte';
   import CoverCard from '../blocks/CoverCard.svelte';
   import SearchFilterBar from '../blocks/SearchFilterBar.svelte';
   import {
@@ -13,44 +10,16 @@
     sortBy,
     activeFilter,
     searchQuery,
-    cycleSortOrder,
-    getSortLabel,
     stats
   } from '../../stores/library.js';
-  import { configStore } from '../../stores/config.js';
-  import { AppAPI } from '../../api/app.js';
-  import { formatBytes } from '../../utils/format.js';
   import {
     getPlatformColors,
-    getPlatformType,
-    getGameSource,
-    getMetadataInfo,
-    isSamePath,
-    formatPlaytime,
-    formatLastPlayed,
-    formatInstallDate
+    isSamePath
   } from '../../utils/game.js';
-  import { playTick, playSelect, playNav } from '../../utils/audio.js';
-
-  /**
-   * @typedef {Object} Props
-   * @property {any} [carouselRef]
-   */
-
-  /** @type {Props} */
-  let { carouselRef = $bindable(null) } = $props();
-
-  // View mode: 'grid' (default for desktop) or 'shelf' (3D cover flow)
-  let libraryMode = $state((typeof localStorage !== 'undefined' && localStorage.getItem('gamux_library_mode')) || 'grid');
+  import { playTick, playSelect } from '../../utils/audio.js';
 
   let searchInputEl = $state();
   let focusedIndex = 0;
-  let isSearchFocused = false;
-
-  let activeColors = $derived($selectedGame ? getPlatformColors($selectedGame) : null);
-  let platformType = $derived($selectedGame ? getPlatformType($selectedGame) : '');
-  let gameSource = $derived($selectedGame ? getGameSource($selectedGame) : '');
-  let metaInfo = $derived($selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' });
 
   const sortOptions = [
     { id: 'name_asc', label: 'Name (A-Z)' },
@@ -61,15 +30,6 @@
     { id: 'size_desc', label: 'Size' }
   ];
 
-  function setLibraryMode(mode) {
-    if (mode === libraryMode) return;
-    playNav();
-    libraryMode = mode;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('gamux_library_mode', mode);
-    }
-  }
-
   function openGameHub(game) {
     if (!game) return;
     selectedGame.set(game);
@@ -77,44 +37,20 @@
     activeView.set('game-hub');
   }
 
-  function handleCardKeydown(e, game, index) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      openGameHub(game);
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      if (index < $filteredGames.length - 1) focusedIndex = index + 1;
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      if (index > 0) focusedIndex = index - 1;
-    }
-  }
-
   export function step(dir) {
-    if (libraryMode === 'shelf' && carouselRef) {
-      carouselRef.step(dir);
-    } else {
-      const list = $filteredGames || [];
-      if (list.length === 0) return;
-      const current = get(selectedGame);
-      const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
-      const nextIndex = (currentIndex + dir + list.length) % list.length;
-      playTick();
-      selectedGame.set(list[nextIndex]);
-      focusedIndex = nextIndex;
-    }
+    const list = $filteredGames || [];
+    if (list.length === 0) return;
+    const current = get(selectedGame);
+    const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
+    const nextIndex = (currentIndex + dir + list.length) % list.length;
+    playTick();
+    selectedGame.set(list[nextIndex]);
+    focusedIndex = nextIndex;
   }
 
-  export function addRotaryDelta(delta) {
-    if (libraryMode === 'shelf' && carouselRef) {
-      carouselRef.addRotaryDelta(delta);
-    }
-  }
+  export function addRotaryDelta(_delta) {}
 
   export function focusSearch() {
-    if (libraryMode !== 'grid') {
-      setLibraryMode('grid');
-    }
     setTimeout(() => {
       searchInputEl?.focus();
     }, 50);
@@ -122,20 +58,19 @@
 </script>
 
 <div class="flex-1 flex flex-col min-h-0 w-full relative">
-  {#if libraryMode === 'grid'}
-    <!-- Desktop Grid View Mode -->
-    <div class="flex-1 flex flex-col min-h-0 pt-16 sm:pt-20 px-6 sm:px-10 pb-6 max-w-7xl mx-auto w-full animate-fade-in">
-      <!-- Toolbar: Search, Filters, Sorters & View Switcher -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-surface-border">
-        <!-- Left: Search Filter Bar -->
-        <SearchFilterBar
-          bind:this={searchInputEl}
-          bind:query={$searchQuery}
-          placeholder="Search library by title, appid, platform..."
-          totalCount={$games.length}
-          filteredCount={$filteredGames.length}
-          className="flex-1 max-w-md"
-        />
+  <!-- Desktop Grid View Mode -->
+  <div class="flex-1 flex flex-col min-h-0 pt-16 sm:pt-20 px-6 sm:px-10 pb-6 max-w-7xl mx-auto w-full animate-fade-in">
+    <!-- Toolbar: Search, Filters & Sorters -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-surface-border">
+      <!-- Left: Search Filter Bar -->
+      <SearchFilterBar
+        bind:this={searchInputEl}
+        bind:query={$searchQuery}
+        placeholder="Search library by title, appid, platform..."
+        totalCount={$games.length}
+        filteredCount={$filteredGames.length}
+        className="flex-1 max-w-md"
+      />
 
         <!-- Middle: Status Filter Chips -->
         <div class="flex items-center space-x-1.5 overflow-x-auto py-0.5">
@@ -178,7 +113,7 @@
           {/if}
         </div>
 
-        <!-- Right: Sort Dropdown & Layout Mode Switcher -->
+        <!-- Right: Sort Dropdown -->
         <div class="flex items-center space-x-3 justify-between md:justify-end">
           <!-- Sort Dropdown -->
           <div class="flex items-center space-x-2">
@@ -199,37 +134,6 @@
               </div>
             </div>
           </div>
-
-          <!-- View Mode Toggle (Grid vs Shelf) -->
-          <div class="flex items-center bg-surface-card border border-surface-border rounded-lg p-0.5">
-            <button
-              type="button"
-              onclick={() => setLibraryMode('grid')}
-              class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer {libraryMode === 'grid' ? 'bg-[#27272a] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}"
-              title="Desktop Grid View"
-              aria-label="Desktop Grid View"
-            >
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onclick={() => setLibraryMode('shelf')}
-              class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer {libraryMode === 'shelf' ? 'bg-[#27272a] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}"
-              title="3D Cover Flow / Shelf Mode"
-              aria-label="3D Cover Flow / Shelf Mode"
-            >
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="5" width="20" height="14" rx="2" />
-                <line x1="8" y1="5" x2="8" y2="19" />
-                <line x1="16" y1="5" x2="16" y2="19" />
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -249,7 +153,7 @@
             {/if}
           </div>
         {:else}
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
             {#each $filteredGames as game, index (game.gameDir || index)}
               {@const pColors = getPlatformColors(game)}
               <CoverCard
@@ -271,131 +175,6 @@
             {/each}
           </div>
         {/if}
-      </div>
     </div>
-  {:else}
-    <!-- Shelf / Carousel Mode -->
-    <div class="flex-1 flex flex-col min-h-0 relative items-center justify-between">
-      <!-- Mode Toggle Pill Floating on Top Right -->
-      <div class="absolute top-4 right-6 z-30 flex items-center bg-surface-card/90 border border-surface-border rounded-lg p-0.5 shadow-lg">
-        <button
-          type="button"
-          onclick={() => setLibraryMode('grid')}
-          class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer text-neutral-500 hover:text-neutral-300"
-          title="Switch to Desktop Grid View"
-          aria-label="Desktop Grid View"
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onclick={() => setLibraryMode('shelf')}
-          class="p-1.5 rounded-md text-xs transition-colors flex items-center justify-center cursor-pointer bg-[#27272a] text-white shadow-sm"
-          title="3D Cover Flow / Shelf Mode"
-          aria-label="3D Cover Flow / Shelf Mode"
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="5" width="20" height="14" rx="2" />
-            <line x1="8" y1="5" x2="8" y2="19" />
-            <line x1="16" y1="5" x2="16" y2="19" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Center 3D 5-Item Carousel -->
-      <Carousel3D bind:this={carouselRef} onlaunch={(val) => openGameHub(val)} />
-
-      <!-- Bottom HUD: Left Command Glossary & Right Game Details -->
-      <div class="w-full px-8 pb-6 flex items-end justify-between z-20 flex-shrink-0">
-        <!-- Bottom Left: Command Glossary -->
-        <div class="flex flex-col space-y-1.5 text-xs text-neutral-400 font-mono select-none">
-          <div class="flex items-center space-x-3">
-            <button
-              type="button"
-              onclick={() => openGameHub($selectedGame)}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Open Game Hub (A or Enter)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                A / ↵
-              </span>
-              <span class="group-hover:text-neutral-200">Game Hub</span>
-            </button>
-
-            <span class="text-neutral-700">·</span>
-
-            <button
-              type="button"
-              onclick={() => cycleSortOrder()}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Cycle library sort order (Y)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                Y
-              </span>
-              <span class="group-hover:text-neutral-200">Sort: {getSortLabel($sortBy)}</span>
-            </button>
-          </div>
-
-          <div class="flex items-center">
-            <button
-              type="button"
-              onclick={() => setLibraryMode('grid')}
-              class="flex items-center space-x-1.5 hover:text-neutral-200 transition-colors group cursor-pointer"
-              title="Switch to Library Grid View (/)"
-            >
-              <span class="px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-neutral-300 group-hover:text-white text-3xs font-bold">
-                /
-              </span>
-              <span class="group-hover:text-neutral-200">Search Grid</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Bottom Right: Game Details & Telemetry -->
-        {#if $selectedGame}
-          <div class="flex flex-col items-end space-y-0.5 text-2xs text-neutral-400 font-mono text-right max-w-sm truncate">
-            <div>
-              <span class="text-neutral-500">Source:</span>
-              <span class="text-neutral-200 font-semibold">{gameSource}</span>
-              {#if metaInfo.provider && metaInfo.provider !== 'None'}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-500">Meta:</span>
-                <span class="text-neutral-300 font-semibold">{metaInfo.provider}{metaInfo.id ? ` #${metaInfo.id}` : ''}</span>
-              {/if}
-            </div>
-            <div>
-              <span class="text-neutral-500">Platform:</span>
-              <span class="text-neutral-300 font-semibold">{$selectedGame.platform || 'Linux'}</span>
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300">{$selectedGame.runner || configStore.current?.default_runner || 'UMU'}</span>
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-300 font-semibold">{formatBytes($selectedGame.diskSizeBytes)}</span>
-              {#if $selectedGame.playtimeSeconds > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-200 font-medium">{formatPlaytime($selectedGame.playtimeSeconds)}</span>
-              {/if}
-              {#if $selectedGame.lastPlayed > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-400">Played {formatLastPlayed($selectedGame.lastPlayed)}</span>
-              {/if}
-              {#if $selectedGame.installedAt > 0}
-                <span class="text-neutral-500">·</span>
-                <span class="text-neutral-400">Installed {formatInstallDate($selectedGame.installedAt)}</span>
-              {/if}
-            </div>
-            <div class="truncate max-w-full text-neutral-500" title={$selectedGame.gameDir}>
-              <span class="text-neutral-500">Path:</span>
-              <span class="text-neutral-500">{$selectedGame.gameDir}</span>
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
-  {/if}
+  </div>
 </div>

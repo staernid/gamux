@@ -20,7 +20,8 @@
     onChange = null,
     onchange = null
   } = $props();
-  const selectId = `select-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
+  const uid = Math.random().toString(36).slice(2, 8);
+  let selectId = $derived(`select-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || uid}`);
 
   let options = $derived(property.options || []);
 

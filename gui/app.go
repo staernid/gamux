@@ -128,6 +128,7 @@ func requireGamePath(gamePath string) (string, error) {
 // Startup is called when the Wails application starts up.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.monitorSystemThemeChanges(ctx)
 
 	// Bind central EventBus to Wails frontend event emitter
 	if a.Engine != nil && a.Engine.EventBus != nil {

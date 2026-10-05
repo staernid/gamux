@@ -152,7 +152,7 @@
     const confLang = configuredLanguage;
     for (const d of depotList) {
       const cat = getContentCategory(d);
-      if (cat === 'core' || cat === 'common') {
+      if (cat === 'core' || cat === 'common' || cat === 'dlc' || d.is_dlc) {
         selected.add(Number(d.depot_id));
       } else if (cat.startsWith('locale:')) {
         const lang = getDepotLanguage(d).toLowerCase();

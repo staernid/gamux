@@ -66,6 +66,7 @@
     class={className}
     onerror={handleImgError}
     onload={handleImgLoad}
+    loading="lazy"
     decoding="async"
     draggable="false"
   />

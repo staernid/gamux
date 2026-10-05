@@ -699,6 +699,59 @@ func TestShouldIncludeDepot(t *testing.T) {
 	if !ShouldIncludeDepot(4, hdFiles, filterWithOptional) {
 		t.Errorf("HD textures depot should be included when IncludeOptional is true")
 	}
+
+	// Case 5: DLC content depots are included by default (even when IncludeOptional is false)
+	dlcFiles := []ManifestFileEntry{
+		{Path: "Content/DLC/Expansion1.pak", Size: 4000000000},
+	}
+	dlcMeta := map[uint32]DepotMeta{
+		500: {
+			DepotID:  500,
+			Name:     "Expansion 1 Content",
+			IsDLC:    true,
+			DLCAppID: 999990,
+			OSList:   "windows",
+		},
+		501: {
+			DepotID:  501,
+			Name:     "Expansion 1 Linux Content",
+			IsDLC:    true,
+			DLCAppID: 999990,
+			OSList:   "linux",
+		},
+		502: {
+			DepotID:  502,
+			Name:     "Expansion 1 French Audio",
+			IsDLC:    true,
+			DLCAppID: 999990,
+			Language: "french",
+			OSList:   "windows",
+			Optional: true,
+		},
+	}
+	filterDLC := DepotFilter{
+		Platform:      "win64",
+		Language:      "english",
+		DepotMetadata: dlcMeta,
+	}
+	if !ShouldIncludeDepot(500, dlcFiles, filterDLC) {
+		t.Errorf("DLC content depot should be included by default on matching platform")
+	}
+	if ShouldIncludeDepot(501, dlcFiles, filterDLC) {
+		t.Errorf("DLC content depot for linux should be skipped on win64 platform")
+	}
+	if ShouldIncludeDepot(502, frenchFiles, filterDLC) {
+		t.Errorf("DLC french audio depot should be skipped when preferred language is english")
+	}
+
+	filterDLCFrench := DepotFilter{
+		Platform:      "win64",
+		Language:      "french",
+		DepotMetadata: dlcMeta,
+	}
+	if !ShouldIncludeDepot(502, frenchFiles, filterDLCFrench) {
+		t.Errorf("DLC french audio depot should be included when preferred language is french")
+	}
 }
 
 func TestInspectGameDepotsWithMetadata(t *testing.T) {

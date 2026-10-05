@@ -16,9 +16,13 @@
     onclose
   } = $props();
 
+  // svelte-ignore state_referenced_locally
   const initialProvider = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
+  // svelte-ignore state_referenced_locally
   let metaTargetStore = $state(initialProvider === 'gog' ? 'gog' : initialProvider === 'rawg' ? 'rawg' : (initialProvider === 'none' || initialProvider === 'standalone') ? 'none' : 'steam');
+  // svelte-ignore state_referenced_locally
   let metaSearchQuery = $state(game?.name || '');
+  // svelte-ignore state_referenced_locally
   let metaCustomId = $state(game?.metadataId || game?.metadata_id || (game?.appId && game.appId !== '0' ? String(game.appId) : '') || '');
   let metaSearchResults = $state([]);
   let isSearchingMeta = $state(false);

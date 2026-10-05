@@ -1345,3 +1345,13 @@ func TestEngine_LaunchGame_SecondaryProfile(t *testing.T) {
 		t.Errorf("expected game prefix %s to exist", expectedPrefix)
 	}
 }
+
+func TestGetAppDepots_RimworldLive(t *testing.T) {
+	eng := New(config.DefaultConfig())
+	depots, err := eng.GetAppDepots(context.Background(), 294100)
+	t.Logf("Rimworld GetAppDepots err: %v, count: %d", err, len(depots))
+	for _, d := range depots {
+		t.Logf("Depot: ID=%d, Name=%q, Cat=%q, ContentCat=%q, IsDLC=%v, DLCAppID=%d",
+			d.DepotID, d.Name, d.Category, d.ContentCategory, d.IsDLC, d.DLCAppID)
+	}
+}

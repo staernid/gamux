@@ -16,11 +16,15 @@
   /** @type {Props} */
   let { game = null, initialSubTab = 'achievements', initialNewsIndex = 0 } = $props();
 
+  // svelte-ignore state_referenced_locally
   let activeCommunitySubTab = $state(initialSubTab || 'achievements'); // 'achievements' | 'news'
+  // svelte-ignore state_referenced_locally
   let prevInitialSubTab = $state(initialSubTab);
   let newsItems = $state([]);
   let isLoadingNews = $state(false);
+  // svelte-ignore state_referenced_locally
   let expandedNewsIndex = $state(initialNewsIndex ?? 0);
+  // svelte-ignore state_referenced_locally
   let prevInitialNewsIndex = $state(initialNewsIndex);
   let loadedNewsAppID = $state('');
   let newsError = $state('');

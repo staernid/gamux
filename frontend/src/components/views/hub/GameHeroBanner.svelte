@@ -9,7 +9,6 @@
   import {
     getPlatformColors,
     getPlatformType,
-    getMetadataInfo,
     isSteamApp,
     formatPlaytime,
     formatLastPlayed,
@@ -144,7 +143,6 @@
   let isMultiseatActive = $derived(Boolean(multiseatSession?.is_running));
   let pColors = $derived(game ? getPlatformColors(game) : { border: '#1a9fff', badgeBg: '#1a9fff', label: 'WIN64', glow: 'rgba(26,159,255,0.4)' });
   let platformLabel = $derived(game ? getPlatformType(game) : 'Windows');
-  let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
   let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
   let isStub = $derived(game ? (game.isStub ?? (!isInstalled && Boolean(game.gameDir))) : false);
   let isVirtual = $derived(game ? (game.isVirtual ?? (!isInstalled && !isStub && !game.gameDir)) : false);
@@ -238,18 +236,8 @@
 
         <!-- Title/Logo & Meta Block -->
         <div class="space-y-2 min-w-0">
-          <!-- Store / Running Badge -->
+          <!-- Running Badge -->
           <div class="flex items-center space-x-2 flex-wrap gap-y-1">
-            <span
-              class="px-2.5 py-0.5 rounded-lg text-3xs font-black uppercase tracking-wider text-neutral-200 bg-surface-card border border-surface-border shadow-md"
-            >
-              {platformLabel} Source
-            </span>
-            {#if metaInfo.provider && metaInfo.provider !== 'None'}
-              <span class="px-2.5 py-0.5 rounded-lg text-3xs font-mono font-bold bg-surface-header/90 border border-surface-border text-neutral-300 shadow-md">
-                Meta: {metaInfo.provider}
-              </span>
-            {/if}
             {#if isGameRunning}
               <span class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono flex items-center space-x-1.5 animate-pulse">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -277,15 +265,11 @@
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-neutral-400 font-mono">
             {#if isInstalled && game.diskSizeBytes > 0}
               <span>{formatBytes(game.diskSizeBytes)}</span>
-              <span class="text-neutral-500">·</span>
             {:else if isStub}
               <span class="text-neutral-300 font-bold">In Library (Uninstalled)</span>
-              <span class="text-neutral-500">·</span>
             {:else if isVirtual}
               <span class="text-neutral-300 font-bold">Online Store Title</span>
-              <span class="text-neutral-500">·</span>
             {/if}
-            <span class="truncate max-w-sm">{game.platform === 'linux' ? 'Linux Native' : (game.runner || globalCfg?.default_runner || 'UMU')}</span>
             {#if isInstalled && !game.isReady}
               <span class="text-neutral-500">·</span>
               <span class="text-amber-400">Setup Required</span>
@@ -306,24 +290,6 @@
             {#if game.installedAt > 0}
               <span class="text-neutral-500">·</span>
               <span class="text-neutral-400">Installed {formatInstallDate(game.installedAt)}</span>
-            {/if}
-            {#if game.appId && game.appId !== '0'}
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-500">#{game.appId}</span>
-            {/if}
-            {#if game.appId && isSteamApp(game.appId)}
-              <span class="text-neutral-500">·</span>
-              <button
-                type="button"
-                onclick={() => { onopenBranchTab?.(); onopenBetasTab?.(); dispatch('openBranchTab'); dispatch('openBetasTab'); }}
-                class="hover:text-neutral-200 transition-colors flex items-center gap-1 cursor-pointer"
-                title="Manage Steam Beta branch"
-              >
-                <svg class="w-3.5 h-3.5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v10M8 7a3 3 0 100-6 3 3 0 000 6zm0 10a3 3 0 100 6 3 3 0 000-6zm8-6a3 3 0 100-6 3 3 0 000 6zm-8 4h3a5 5 0 005-5V7" />
-                </svg>
-                <span>Branch: {game.branch || 'public'}</span>
-              </button>
             {/if}
             {#if livePlayerCount > 0}
               <span class="text-neutral-500">·</span>

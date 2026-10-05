@@ -17,7 +17,8 @@
     onChange = null,
     onchange = null
   } = $props();
-  const inputId = `slider-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
+  const uid = Math.random().toString(36).slice(2, 8);
+  let inputId = $derived(`slider-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || uid}`);
 
   let numValue = $derived(Number(value ?? property.default ?? 0));
   let min = $derived(property.min ?? 0);

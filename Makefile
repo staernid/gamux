@@ -16,7 +16,7 @@ build-all: build-cli build-gui
 
 build-cli:
 	@mkdir -p bin
-	go build -ldflags "$(LDFLAGS)" -o $(CLI_BINARY) ./cmd/gamux
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(CLI_BINARY) ./cmd/gamux
 	@cp -f $(CLI_BINARY) gamux
 
 build-frontend:
@@ -25,7 +25,7 @@ build-frontend:
 
 build-gui: build-frontend
 	@mkdir -p bin
-	go build -ldflags "$(LDFLAGS)" $(GUI_TAGS) -o $(GUI_BINARY) ./cmd/gamux-gui
+	go build -trimpath -ldflags "$(LDFLAGS)" $(GUI_TAGS) -o $(GUI_BINARY) ./cmd/gamux-gui
 
 appimage: build-gui
 	@./scripts/build-appimage.sh $(GUI_BINARY) bin/gamux-gui-x86_64.AppImage

@@ -15,8 +15,11 @@
     onclose
   } = $props();
 
+  // svelte-ignore state_referenced_locally
   const isArtworkInitial = initialTab === 'cover' || initialTab === 'banner' || initialTab === 'hero' || initialTab === 'logo' || initialTab === 'artwork';
+  // svelte-ignore state_referenced_locally
   let activeTab = $state(isArtworkInitial ? 'artwork' : 'metadata');
+  // svelte-ignore state_referenced_locally
   let assetType = $state((initialTab === 'cover' || initialTab === 'banner' || initialTab === 'hero' || initialTab === 'logo') ? initialTab : 'cover');
 
   let gameName = $derived(game?.name || '');

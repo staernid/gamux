@@ -339,3 +339,11 @@ func TestFetchAppDepotMetadata_DLCParentResolution(t *testing.T) {
 	}
 }
 
+func TestDiscoverDLCs_Rimworld(t *testing.T) {
+	dlcs, err := DiscoverDLCs(context.Background(), "294100")
+	t.Logf("DiscoverDLCs Rimworld err: %v, count: %d", err, len(dlcs))
+	for _, d := range dlcs {
+		t.Logf("DLC: AppID=%s, Name=%q", d.AppID, d.Name)
+	}
+}
+

@@ -327,6 +327,20 @@ func ShouldIncludeDepot(depotID uint32, files []ManifestFileEntry, filter DepotF
 		}
 	}
 
+	// 3b. Architecture matching: if 64-bit platform requested, skip 32-bit depot IF an equivalent 64-bit depot exists
+	if filter.Platform != "" && strings.Contains(filter.Platform, "64") && meta != nil && meta.OSArch == "32" {
+		for otherID, otherMeta := range filter.DepotMetadata {
+			if otherID != depotID && otherMeta.OSArch == "64" &&
+				MatchesOSList(otherMeta.OSList, filter.Platform) &&
+				otherMeta.DLCAppID == meta.DLCAppID {
+				return false
+			}
+		}
+	}
+	if filter.Platform != "" && strings.Contains(filter.Platform, "32") && meta != nil && meta.OSArch == "64" {
+		return false
+	}
+
 	// 4. Content Category & Language filtering
 
 	contentCat, lang := ClassifyDepotContent(depotID, "", files, meta)
@@ -352,6 +366,11 @@ func ShouldIncludeDepot(depotID uint32, files []ManifestFileEntry, filter DepotF
 			prefLang = "english"
 		}
 		return LanguagesMatch(lang, prefLang)
+	}
+
+	// DLC content depots are included by default (matching target platform & architecture)
+	if contentCat == ContentCategoryDLC {
+		return true
 	}
 
 	// Core depots are always included

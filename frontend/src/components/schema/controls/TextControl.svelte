@@ -17,7 +17,8 @@
     onChange = null,
     onchange = null
   } = $props();
-  const inputId = `txt-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || Math.random().toString(36).slice(2, 8)}`;
+  const uid = Math.random().toString(36).slice(2, 8);
+  let inputId = $derived(`txt-${(property.key || '').replace(/[^a-zA-Z0-9_-]/g, '_') || uid}`);
 
   function handleInput(e) {
     if (disabled) return;

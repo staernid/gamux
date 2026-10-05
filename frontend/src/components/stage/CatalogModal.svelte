@@ -24,6 +24,7 @@
   }
 
   let searchInputEl = $state();
+  // svelte-ignore state_referenced_locally
   let query = $state(initialQuery || '');
   let focusedIndex = $state(0);
   let gridContainerEl = $state();

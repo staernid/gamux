@@ -405,6 +405,7 @@ const RUNTIME_EVENT_MAP = [
   { key: 'onStepProgress', event: 'gamux:step-progress' },
   { key: 'onGameStatus', event: 'gamux:game-status' },
   { key: 'onOpenTarget', event: 'gamux:open-target' },
+  { key: 'onSystemThemeChanged', event: 'gamux:system-theme-changed' },
 ];
 
 // Initialize and bind all runtime event listeners to Wails and dev bridge

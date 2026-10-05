@@ -88,6 +88,7 @@ type DepotMeta struct {
 	Optional     bool   `json:"optional,omitempty"`
 	IsDLC        bool   `json:"is_dlc,omitempty"`
 	DLCAppID     uint32 `json:"dlc_app_id,omitempty"`
+	DLCName      string `json:"dlc_name,omitempty"`
 	Size         uint64 `json:"size,omitempty"`
 	DownloadSize uint64 `json:"download_size,omitempty"`
 }
@@ -1141,11 +1142,13 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 			var osArch string
 			var dlcAppID uint32
 			var isDLC bool
+			var dlcName string
 			if meta != nil {
 				downloadSize = meta.DownloadSize
 				osArch = meta.OSArch
 				dlcAppID = meta.DLCAppID
 				isDLC = meta.IsDLC
+				dlcName = meta.DLCName
 				if meta.Size > 0 && totalBytes == 0 {
 					totalBytes = meta.Size
 				}
@@ -1165,6 +1168,7 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				OSArch:          osArch,
 				DLCAppID:        dlcAppID,
 				IsDLC:           isDLC,
+				DLCName:         dlcName,
 			})
 		}
 	}
@@ -1235,6 +1239,7 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				OSArch:          m.OSArch,
 				DLCAppID:        m.DLCAppID,
 				IsDLC:           m.IsDLC,
+				DLCName:         m.DLCName,
 			})
 		}
 	}

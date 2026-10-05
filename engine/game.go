@@ -343,6 +343,11 @@ func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.
 	} else {
 		numAppID, _ = util.ParseAppID(filepath.Base(gameDir))
 	}
+	if numAppID == 0 {
+		if prof, pErr := compat.LoadProfile(gameDir); pErr == nil && prof != nil {
+			numAppID, _ = util.ParseAppID(prof.AppID)
+		}
+	}
 
 	var metaMap map[uint32]manifest.DepotMeta
 	if numAppID > 0 {
@@ -358,6 +363,7 @@ func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.
 					Optional:     dInfo.Optional,
 					IsDLC:        dInfo.IsDLC,
 					DLCAppID:     dInfo.DLCAppID,
+					DLCName:      dInfo.DLCName,
 					Size:         dInfo.Size,
 					DownloadSize: dInfo.DownloadSize,
 				}
@@ -392,6 +398,7 @@ func (eng *Engine) GetAppDepots(ctx context.Context, appID uint32) ([]domain.Dep
 				Optional:     dInfo.Optional,
 				IsDLC:        dInfo.IsDLC,
 				DLCAppID:     dInfo.DLCAppID,
+				DLCName:      dInfo.DLCName,
 				Size:         dInfo.Size,
 				DownloadSize: dInfo.DownloadSize,
 			}
@@ -549,10 +556,15 @@ func (eng *Engine) GetGameAchievements(ctx context.Context, gameDir string) ([]d
 // It detects whether targetDir is empty, ".", or points directly to a configured games library root,
 // queries Steam metadata for canonical installdir and soundtrack type, and routes soundtracks to MusicDir.
 func ResolveDownloadTarget(ctx context.Context, cfg *config.Config, appID uint32, targetDir, platform string) (string, error) {
+	var libDirs []string
+	if cfg != nil {
+		libDirs = cfg.ResolvedLibraryDirs()
+	}
+
 	isLibraryRoot := false
-	if cfg != nil && targetDir != "" {
+	if len(libDirs) > 0 && targetDir != "" {
 		canonicalTarget := util.CanonicalPath(targetDir)
-		for _, lib := range cfg.LibraryPaths {
+		for _, lib := range libDirs {
 			if canonicalTarget != "" && canonicalTarget == util.CanonicalPath(lib) {
 				isLibraryRoot = true
 				break
@@ -568,8 +580,8 @@ func ResolveDownloadTarget(ctx context.Context, cfg *config.Config, appID uint32
 					targetDir = filepath.Join(util.GetMusicDir(), installDir)
 				} else if isLibraryRoot {
 					targetDir = filepath.Join(targetDir, installDir)
-				} else if targetDir == "" && cfg != nil && len(cfg.LibraryPaths) > 0 {
-					targetDir = filepath.Join(cfg.LibraryPaths[0], installDir)
+				} else if targetDir == "" && len(libDirs) > 0 {
+					targetDir = filepath.Join(libDirs[0], installDir)
 				} else {
 					targetDir = installDir
 				}
@@ -577,8 +589,8 @@ func ResolveDownloadTarget(ctx context.Context, cfg *config.Config, appID uint32
 				cleanName := util.SanitizeInstallDir(name)
 				if isLibraryRoot {
 					targetDir = filepath.Join(targetDir, cleanName)
-				} else if targetDir == "" && cfg != nil && len(cfg.LibraryPaths) > 0 {
-					targetDir = filepath.Join(cfg.LibraryPaths[0], cleanName)
+				} else if targetDir == "" && len(libDirs) > 0 {
+					targetDir = filepath.Join(libDirs[0], cleanName)
 				} else {
 					targetDir = cleanName
 				}
@@ -633,11 +645,17 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		depotMetaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
 		for dID, dInfo := range remoteDepots {
 			depotMetaMap[dID] = manifest.DepotMeta{
-				DepotID:  dInfo.DepotID,
-				Name:     dInfo.Name,
-				Language: dInfo.Language,
-				OSList:   dInfo.OSList,
-				Optional: dInfo.Optional,
+				DepotID:      dInfo.DepotID,
+				Name:         dInfo.Name,
+				Language:     dInfo.Language,
+				OSList:       dInfo.OSList,
+				OSArch:       dInfo.OSArch,
+				Optional:     dInfo.Optional,
+				IsDLC:        dInfo.IsDLC,
+				DLCAppID:     dInfo.DLCAppID,
+				DLCName:      dInfo.DLCName,
+				Size:         dInfo.Size,
+				DownloadSize: dInfo.DownloadSize,
 			}
 		}
 	}

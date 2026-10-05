@@ -87,3 +87,9 @@ export const BACKUP_RETENTION_OPTIONS = [
   { value: 20, label: '20 backups' },
   { value: 30, label: '30 backups' }
 ];
+
+export const THEME_OPTIONS = [
+  { value: 'system', label: 'System', icon: 'system', desc: 'Follow OS preference' },
+  { value: 'dark', label: 'Dark', icon: 'moon', desc: 'Monochrome dark' },
+  { value: 'light', label: 'Light', icon: 'sun', desc: 'Monochrome light' }
+];
