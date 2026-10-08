@@ -112,8 +112,8 @@ describe('SettingsView Component', () => {
     expect(coopSubtab).toBeInTheDocument();
     await fireEvent.click(coopSubtab);
 
-    expect(screen.getByText('Player 2 Pointer & Compositor Options')).toBeInTheDocument();
-    const softwareCursorText = screen.getByText('Software Cursor');
+    expect(screen.getByText('Cursor & Window Capture Options')).toBeInTheDocument();
+    const softwareCursorText = screen.getByText('Software Cursor (All Guests)');
     const softwareCursorContainer = softwareCursorText.closest('div.flex');
     const softwareCursorSwitch = softwareCursorContainer.querySelector('[role="switch"]');
 

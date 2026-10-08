@@ -94,10 +94,13 @@ type MultiseatConfig struct {
 	Seat2Keyboard         string           `json:"seat2_keyboard,omitempty"`
 	Seat1Mouse            string           `json:"seat1_mouse,omitempty"`
 	Seat2Mouse            string           `json:"seat2_mouse,omitempty"`
-	Seat2ForceGrabCursor  bool             `json:"seat2_force_grab_cursor"`
-	Seat2GrabKeyboard     bool             `json:"seat2_grab_keyboard"`
+	Seat1ForceGrabCursor  bool             `json:"seat1_force_grab_cursor"`
+	Seat1GrabKeyboard     bool             `json:"seat1_grab_keyboard"`
+	Seat1ShowCursor       bool             `json:"seat1_show_cursor"`
+	Seat2ForceGrabCursor  bool             `json:"seat2_force_grab_cursor,omitempty"`
+	Seat2GrabKeyboard     bool             `json:"seat2_grab_keyboard,omitempty"`
 	Seat2Compositor       string           `json:"seat2_compositor,omitempty"`
-	Seat2NestCage         bool             `json:"seat2_nest_cage"`
+	Seat2NestCage         bool             `json:"seat2_nest_cage,omitempty"`
 	Seat2ShowCursor       bool             `json:"seat2_show_cursor"`
 	Seat1DisplayIndex     int              `json:"seat1_display_index"`
 	Seat2DisplayIndex     int              `json:"seat2_display_index"`
@@ -181,6 +184,9 @@ func DefaultConfig() *Config {
 			Seat2Keyboard:         "auto",
 			Seat1Mouse:            "auto",
 			Seat2Mouse:            "auto",
+			Seat1ForceGrabCursor:  false,
+			Seat1GrabKeyboard:     false,
+			Seat1ShowCursor:       true,
 			Seat2ForceGrabCursor:  false,
 			Seat2GrabKeyboard:     false,
 			Seat2Compositor:       "auto",
@@ -327,16 +333,19 @@ func syncMultiseatSeats(ms *MultiseatConfig) {
 		}
 		ms.Seats = []SeatPreference{
 			{
-				SeatID:       "p1",
-				Mode:         s1Mode,
-				DisplayIndex: ms.Seat1DisplayIndex,
-				ScreenSlot:   0,
-				Disabled:     false,
-				GamepadNode:  ms.Seat1Gamepad,
-				KeyboardNode: ms.Seat1Keyboard,
-				MouseNode:    ms.Seat1Mouse,
-				ProfileID:    "main",
-				SunshinePort: p1Port,
+				SeatID:          "p1",
+				Mode:            s1Mode,
+				DisplayIndex:    ms.Seat1DisplayIndex,
+				ScreenSlot:      0,
+				Disabled:        false,
+				GamepadNode:     ms.Seat1Gamepad,
+				KeyboardNode:    ms.Seat1Keyboard,
+				MouseNode:       ms.Seat1Mouse,
+				ForceGrabCursor: ms.Seat1ForceGrabCursor,
+				GrabKeyboard:    ms.Seat1GrabKeyboard,
+				ShowCursor:      ms.Seat1ShowCursor,
+				ProfileID:       "main",
+				SunshinePort:    p1Port,
 			},
 			{
 				SeatID:          "p2",
@@ -347,10 +356,10 @@ func syncMultiseatSeats(ms *MultiseatConfig) {
 				GamepadNode:     ms.Seat2Gamepad,
 				KeyboardNode:    ms.Seat2Keyboard,
 				MouseNode:       ms.Seat2Mouse,
-				ForceGrabCursor: ms.Seat2ForceGrabCursor,
-				GrabKeyboard:    ms.Seat2GrabKeyboard,
-				Compositor:      ms.Seat2Compositor,
-				NestCage:        ms.Seat2NestCage,
+				ForceGrabCursor: false,
+				GrabKeyboard:    false,
+				Compositor:      "gamescope",
+				NestCage:        false,
 				ShowCursor:      ms.Seat2ShowCursor,
 				ProfileID:       p2Prof,
 				SunshinePort:    p2Port,
@@ -383,6 +392,9 @@ func syncMultiseatSeats(ms *MultiseatConfig) {
 		} else if s1.MouseNode != "" {
 			ms.Seat1Mouse = s1.MouseNode
 		}
+		s1.ForceGrabCursor = ms.Seat1ForceGrabCursor
+		s1.GrabKeyboard = ms.Seat1GrabKeyboard
+		s1.ShowCursor = ms.Seat1ShowCursor
 		if ms.SunshinePortP1 != 0 {
 			s1.SunshinePort = ms.SunshinePortP1
 		} else if s1.SunshinePort != 0 {
@@ -390,7 +402,7 @@ func syncMultiseatSeats(ms *MultiseatConfig) {
 		}
 	}
 
-	// When Seats has at least 2 seats, harmonize seat 2
+	// When Seats has at least 2 seats, harmonize seat 2 and guest seats
 	if len(ms.Seats) > 1 {
 		s1 := &ms.Seats[0]
 		s2 := &ms.Seats[1]
@@ -427,19 +439,20 @@ func syncMultiseatSeats(ms *MultiseatConfig) {
 		} else if s2.MouseNode != "" {
 			ms.Seat2Mouse = s2.MouseNode
 		}
-		s2.ForceGrabCursor = ms.Seat2ForceGrabCursor
-		s2.GrabKeyboard = ms.Seat2GrabKeyboard
-		if ms.Seat2Compositor != "" {
-			s2.Compositor = ms.Seat2Compositor
-		} else if s2.Compositor != "" {
-			ms.Seat2Compositor = s2.Compositor
-		}
-		s2.NestCage = ms.Seat2NestCage
-		s2.ShowCursor = ms.Seat2ShowCursor
 		if ms.SunshinePortP2 != 0 {
 			s2.SunshinePort = ms.SunshinePortP2
 		} else if s2.SunshinePort != 0 {
 			ms.SunshinePortP2 = s2.SunshinePort
+		}
+
+		// Non-main (guest) seats use Gamescope, no desktop cursor grab, and share guest show_cursor setting
+		for i := 1; i < len(ms.Seats); i++ {
+			sg := &ms.Seats[i]
+			sg.ForceGrabCursor = false
+			sg.GrabKeyboard = false
+			sg.Compositor = "gamescope"
+			sg.NestCage = false
+			sg.ShowCursor = ms.Seat2ShowCursor
 		}
 	}
 }

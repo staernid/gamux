@@ -22,10 +22,13 @@
       seat2_keyboard: 'auto',
       seat1_mouse: 'auto',
       seat2_mouse: 'auto',
+      seat1_force_grab_cursor: false,
+      seat1_grab_keyboard: false,
+      seat1_show_cursor: true,
       seat2_force_grab_cursor: false,
       seat2_grab_keyboard: false,
       seat2_show_cursor: true,
-      seat2_compositor: 'auto',
+      seat2_compositor: 'gamescope',
       seat1_display_index: 0,
       seat2_display_index: 1,
       sunshine_port_p1: 47989,
@@ -126,6 +129,15 @@
     if (cfgDraft.multiseat.seat2_mouse === undefined) cfgDraft.multiseat.seat2_mouse = 'auto';
   });
   run(() => {
+    if (cfgDraft.multiseat.seat1_force_grab_cursor === undefined) cfgDraft.multiseat.seat1_force_grab_cursor = false;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_grab_keyboard === undefined) cfgDraft.multiseat.seat1_grab_keyboard = false;
+  });
+  run(() => {
+    if (cfgDraft.multiseat.seat1_show_cursor === undefined) cfgDraft.multiseat.seat1_show_cursor = true;
+  });
+  run(() => {
     if (cfgDraft.multiseat.seat2_force_grab_cursor === undefined) cfgDraft.multiseat.seat2_force_grab_cursor = false;
   });
   run(() => {
@@ -135,7 +147,7 @@
     if (cfgDraft.multiseat.seat2_show_cursor === undefined) cfgDraft.multiseat.seat2_show_cursor = true;
   });
   run(() => {
-    if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'auto';
+    if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'gamescope';
   });
   run(() => {
     if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
@@ -165,11 +177,11 @@
         gamepad_node: s.gamepad_node || (idx === 0 ? (cfgDraft.multiseat.seat1_gamepad || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_gamepad || 'auto') : '')),
         keyboard_node: s.keyboard_node || (idx === 0 ? (cfgDraft.multiseat.seat1_keyboard || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_keyboard || 'auto') : '')),
         mouse_node: s.mouse_node || (idx === 0 ? (cfgDraft.multiseat.seat1_mouse || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_mouse || 'auto') : '')),
-        force_grab_cursor: Boolean(s.force_grab_cursor ?? (idx === 1 ? cfgDraft.multiseat.seat2_force_grab_cursor : false)),
-        grab_keyboard: Boolean(s.grab_keyboard ?? (idx === 1 ? cfgDraft.multiseat.seat2_grab_keyboard : false)),
-        compositor: s.compositor || (idx === 1 ? (cfgDraft.multiseat.seat2_compositor || 'auto') : 'auto'),
-        nest_cage: Boolean(s.nest_cage ?? (idx === 1 ? cfgDraft.multiseat.seat2_nest_cage : false)),
-        show_cursor: s.show_cursor ?? (idx === 1 ? (cfgDraft.multiseat.seat2_show_cursor ?? true) : true),
+        force_grab_cursor: Boolean(s.force_grab_cursor ?? (idx === 0 ? cfgDraft.multiseat.seat1_force_grab_cursor : false)),
+        grab_keyboard: Boolean(s.grab_keyboard ?? (idx === 0 ? cfgDraft.multiseat.seat1_grab_keyboard : false)),
+        compositor: 'gamescope',
+        nest_cage: false,
+        show_cursor: s.show_cursor ?? (idx === 0 ? (cfgDraft.multiseat.seat1_show_cursor ?? true) : (cfgDraft.multiseat.seat2_show_cursor ?? true)),
         profile_id: s.profile_id || (idx === 0 ? 'main' : (idx === 1 ? (cfgDraft.multiseat.player2_profile_id || 'p2') : `p${idx + 1}`)),
         sunshine_port: Number(s.sunshine_port) || (idx === 0 ? (cfgDraft.multiseat.sunshine_port_p1 || 47989) : (idx === 1 ? (cfgDraft.multiseat.sunshine_port_p2 || 48010) : 48010 + (idx - 1) * 10)),
       }));

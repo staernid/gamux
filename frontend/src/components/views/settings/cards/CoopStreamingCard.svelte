@@ -101,60 +101,90 @@
       </div>
     </div>
 
-    <!-- Player 2 Cursor & Gamescope Options -->
+    <!-- Cursor & Window Capture Options -->
     <div class="p-3 bg-surface-card border border-surface-border rounded-xl space-y-3">
-      <div class="text-xs font-bold text-neutral-200">Player 2 Pointer &amp; Compositor Options</div>
+      <div class="flex items-center justify-between pb-1 border-b border-surface-border/40">
+        <div class="text-xs font-bold text-neutral-200">Cursor &amp; Window Capture Options</div>
+        <span class="text-3xs font-mono text-neutral-400">Gamescope Composition</span>
+      </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
-          <div class="space-y-0.5 max-w-[200px]">
-            <div class="text-2xs font-bold text-neutral-200">Force Grab Cursor</div>
-            <div class="text-3xs text-neutral-400">Relative mouse mode for 3D/FPS camera control (--force-grab-cursor)</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <!-- Main Player (Host / P1) -->
+        <div class="space-y-2.5 p-3 bg-surface-input/60 rounded-xl border border-surface-border/60">
+          <div class="flex items-center space-x-2">
+            <span class="px-1.5 py-0.5 rounded text-4xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">HOST</span>
+            <span class="text-xs font-bold text-neutral-200">Main Player (Player 1)</span>
           </div>
-          <SeamlessSwitch
-            bind:value={cfgDraft.multiseat.seat2_force_grab_cursor}
-            tooltip="Force Grab Cursor"
-            onchange={(val) => { cfgDraft.multiseat.seat2_force_grab_cursor = val; }}
-          />
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between p-2 bg-surface-card rounded-lg border border-surface-border">
+              <div class="space-y-0.5 max-w-[200px]">
+                <div class="text-2xs font-bold text-neutral-200">Lock Host Mouse</div>
+                <div class="text-3xs text-neutral-400">Relative mouse lock (--force-grab-cursor) for 3D/FPS camera control. Super+F to unlock.</div>
+              </div>
+              <SeamlessSwitch
+                bind:value={cfgDraft.multiseat.seat1_force_grab_cursor}
+                tooltip="Lock Host Mouse"
+                onchange={(val) => {
+                  cfgDraft.multiseat.seat1_force_grab_cursor = val;
+                  cfgDraft.multiseat.seat2_force_grab_cursor = val;
+                }}
+              />
+            </div>
+
+            <div class="flex items-center justify-between p-2 bg-surface-card rounded-lg border border-surface-border">
+              <div class="space-y-0.5 max-w-[200px]">
+                <div class="text-2xs font-bold text-neutral-200">Capture Host Keyboard</div>
+                <div class="text-3xs text-neutral-400">Captures all keypresses inside window (-g) to prevent desktop hotkeys escaping.</div>
+              </div>
+              <SeamlessSwitch
+                bind:value={cfgDraft.multiseat.seat1_grab_keyboard}
+                tooltip="Capture Host Keyboard"
+                onchange={(val) => {
+                  cfgDraft.multiseat.seat1_grab_keyboard = val;
+                  cfgDraft.multiseat.seat2_grab_keyboard = val;
+                }}
+              />
+            </div>
+
+            <div class="flex items-center justify-between p-2 bg-surface-card rounded-lg border border-surface-border">
+              <div class="space-y-0.5 max-w-[200px]">
+                <div class="text-2xs font-bold text-neutral-200">Software Cursor</div>
+                <div class="text-3xs text-neutral-400">Enforces visible pointer rendering via WLR_NO_HARDWARE_CURSORS=1.</div>
+              </div>
+              <SeamlessSwitch
+                bind:value={cfgDraft.multiseat.seat1_show_cursor}
+                tooltip="Player 1 Software Cursor"
+                onchange={(val) => { cfgDraft.multiseat.seat1_show_cursor = val; }}
+              />
+            </div>
+          </div>
         </div>
 
-        <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
-          <div class="space-y-0.5 max-w-[200px]">
-            <div class="text-2xs font-bold text-neutral-200">Grab Keyboard (-g)</div>
-            <div class="text-3xs text-neutral-400">Captures all keypresses inside the window to prevent desktop shortcuts</div>
+        <!-- Guest Players (P2, P3, P4) -->
+        <div class="space-y-2.5 p-3 bg-surface-input/60 rounded-xl border border-surface-border/60">
+          <div class="flex items-center space-x-2">
+            <span class="px-1.5 py-0.5 rounded text-4xs font-mono font-bold bg-surface-header text-neutral-300 border border-surface-border">GUESTS</span>
+            <span class="text-xs font-bold text-neutral-200">Guest Players (Co-op Seats)</span>
           </div>
-          <SeamlessSwitch
-            bind:value={cfgDraft.multiseat.seat2_grab_keyboard}
-            tooltip="Grab Keyboard"
-            onchange={(val) => { cfgDraft.multiseat.seat2_grab_keyboard = val; }}
-          />
-        </div>
 
-        <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
-          <div class="space-y-0.5 max-w-[200px]">
-            <div class="text-2xs font-bold text-neutral-200">Software Cursor</div>
-            <div class="text-3xs text-neutral-400">Enforces visible pointer via WLR_NO_HARDWARE_CURSORS=1</div>
-          </div>
-          <SeamlessSwitch
-            bind:value={cfgDraft.multiseat.seat2_show_cursor}
-            tooltip="Software Cursor"
-            onchange={(val) => { cfgDraft.multiseat.seat2_show_cursor = val; }}
-          />
-        </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between p-2 bg-surface-card rounded-lg border border-surface-border">
+              <div class="space-y-0.5 max-w-[200px]">
+                <div class="text-2xs font-bold text-neutral-200">Software Cursor (All Guests)</div>
+                <div class="text-3xs text-neutral-400">Forces Gamescope manual cursor composition (gamescope_cursor_composite=2) across all guest windows.</div>
+              </div>
+              <SeamlessSwitch
+                bind:value={cfgDraft.multiseat.seat2_show_cursor}
+                tooltip="Guest Players Software Cursor"
+                onchange={(val) => { cfgDraft.multiseat.seat2_show_cursor = val; }}
+              />
+            </div>
 
-        <div class="flex items-center justify-between p-2.5 bg-surface-input rounded-lg border border-surface-border">
-          <div class="space-y-0.5 max-w-[170px]">
-            <div class="text-2xs font-bold text-neutral-200">Compositor Backend</div>
-            <div class="text-3xs text-neutral-400 leading-relaxed">Gamescope EIS auto-selected for dual KBM virtual input</div>
+            <div class="p-2.5 bg-surface-card/60 rounded-lg border border-surface-border/50 text-3xs text-neutral-400 leading-relaxed">
+              Guest input devices are isolated at the kernel level via dedicated evdev hardware grabs and injected directly into Gamescope via EIS.
+            </div>
           </div>
-          <select
-            bind:value={cfgDraft.multiseat.seat2_compositor}
-            class="bg-surface-base border border-surface-border rounded-lg px-2 py-1 text-2xs text-white outline-none focus:border-neutral-400 cursor-pointer"
-          >
-            <option value="auto">Auto (Gamescope EIS, Cage fallback)</option>
-            <option value="gamescope">Gamescope (Direct EIS)</option>
-            <option value="cage">Cage (Standalone Kiosk)</option>
-          </select>
         </div>
       </div>
     </div>

@@ -230,6 +230,9 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 
 	// Mutate to non-default values (including boolean false for Seat2ShowCursor)
 	cfg.Multiseat.Player2ProfileID = "p3"
+	cfg.Multiseat.Seat1ForceGrabCursor = true
+	cfg.Multiseat.Seat1GrabKeyboard = true
+	cfg.Multiseat.Seat1ShowCursor = false
 	cfg.Multiseat.Seat2ShowCursor = false
 	cfg.Multiseat.Seat2ForceGrabCursor = true
 	cfg.Multiseat.Seat2GrabKeyboard = true
@@ -253,6 +256,12 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	if !ok {
 		t.Fatalf("multiseat key missing from saved JSON")
 	}
+	if val, exists := multiseatRaw["seat1_force_grab_cursor"]; !exists || val != true {
+		t.Errorf("expected seat1_force_grab_cursor to be true in JSON, got exists=%v val=%v", exists, val)
+	}
+	if val, exists := multiseatRaw["seat1_show_cursor"]; !exists || val != false {
+		t.Errorf("expected seat1_show_cursor to be false in JSON, got exists=%v val=%v", exists, val)
+	}
 	if val, exists := multiseatRaw["seat2_show_cursor"]; !exists || val != false {
 		t.Errorf("expected seat2_show_cursor to be explicitly persisted as false in JSON, got exists=%v val=%v", exists, val)
 	}
@@ -269,6 +278,15 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	if loaded.Multiseat.Player2ProfileID != "p3" {
 		t.Errorf("expected loaded.Multiseat.Player2ProfileID 'p3', got %q", loaded.Multiseat.Player2ProfileID)
 	}
+	if !loaded.Multiseat.Seat1ForceGrabCursor {
+		t.Errorf("expected loaded.Multiseat.Seat1ForceGrabCursor to be true")
+	}
+	if !loaded.Multiseat.Seat1GrabKeyboard {
+		t.Errorf("expected loaded.Multiseat.Seat1GrabKeyboard to be true")
+	}
+	if loaded.Multiseat.Seat1ShowCursor != false {
+		t.Errorf("expected loaded.Multiseat.Seat1ShowCursor to be false, got %v", loaded.Multiseat.Seat1ShowCursor)
+	}
 	if loaded.Multiseat.Seat2ShowCursor != false {
 		t.Errorf("expected loaded.Multiseat.Seat2ShowCursor to be false, got %v", loaded.Multiseat.Seat2ShowCursor)
 	}
@@ -283,6 +301,9 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	}
 	if len(loaded.Multiseat.Seats) < 2 {
 		t.Fatalf("expected at least 2 seats in loaded.Multiseat.Seats, got %d", len(loaded.Multiseat.Seats))
+	}
+	if !loaded.Multiseat.Seats[0].ForceGrabCursor {
+		t.Errorf("expected loaded.Multiseat.Seats[0].ForceGrabCursor to be true")
 	}
 	if loaded.Multiseat.Seats[1].ProfileID != "p3" {
 		t.Errorf("expected loaded.Multiseat.Seats[1].ProfileID 'p3', got %q", loaded.Multiseat.Seats[1].ProfileID)
