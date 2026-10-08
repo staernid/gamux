@@ -33,12 +33,16 @@
         <select
           id="seat1-kbd-select"
           bind:value={cfgDraft.multiseat.seat1_keyboard}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each keyboardOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat1_keyboard && !['auto', 'none'].includes(cfgDraft.multiseat.seat1_keyboard) && !keyboardOptions.some(o => o.value === cfgDraft.multiseat.seat1_keyboard)}
+            <option value={cfgDraft.multiseat.seat1_keyboard} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat1_keyboard} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
       </div>
 
@@ -47,12 +51,16 @@
         <select
           id="seat2-kbd-select"
           bind:value={cfgDraft.multiseat.seat2_keyboard}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each keyboardOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat2_keyboard && !['auto', 'none'].includes(cfgDraft.multiseat.seat2_keyboard) && !keyboardOptions.some(o => o.value === cfgDraft.multiseat.seat2_keyboard)}
+            <option value={cfgDraft.multiseat.seat2_keyboard} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat2_keyboard} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
       </div>
 
@@ -61,12 +69,16 @@
         <select
           id="seat1-mouse-select"
           bind:value={cfgDraft.multiseat.seat1_mouse}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each mouseOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat1_mouse && !['auto', 'none'].includes(cfgDraft.multiseat.seat1_mouse) && !mouseOptions.some(o => o.value === cfgDraft.multiseat.seat1_mouse)}
+            <option value={cfgDraft.multiseat.seat1_mouse} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat1_mouse} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
       </div>
 
@@ -75,12 +87,16 @@
         <select
           id="seat2-mouse-select"
           bind:value={cfgDraft.multiseat.seat2_mouse}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each mouseOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat2_mouse && !['auto', 'none'].includes(cfgDraft.multiseat.seat2_mouse) && !mouseOptions.some(o => o.value === cfgDraft.multiseat.seat2_mouse)}
+            <option value={cfgDraft.multiseat.seat2_mouse} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat2_mouse} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
       </div>
     </div>
@@ -98,7 +114,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_force_grab_cursor}
             tooltip="Force Grab Cursor"
-            onchange={(val) => { cfgDraft.multiseat.seat2_force_grab_cursor = val; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_force_grab_cursor = val; }}
           />
         </div>
 
@@ -110,7 +126,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_grab_keyboard}
             tooltip="Grab Keyboard"
-            onchange={(val) => { cfgDraft.multiseat.seat2_grab_keyboard = val; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_grab_keyboard = val; }}
           />
         </div>
 
@@ -122,7 +138,7 @@
           <SeamlessSwitch
             bind:value={cfgDraft.multiseat.seat2_show_cursor}
             tooltip="Software Cursor"
-            onchange={(val) => { cfgDraft.multiseat.seat2_show_cursor = val; cfgDraft = { ...cfgDraft }; }}
+            onchange={(val) => { cfgDraft.multiseat.seat2_show_cursor = val; }}
           />
         </div>
 
@@ -133,7 +149,6 @@
           </div>
           <select
             bind:value={cfgDraft.multiseat.seat2_compositor}
-            onchange={() => { cfgDraft = { ...cfgDraft }; }}
             class="bg-surface-base border border-surface-border rounded-lg px-2 py-1 text-2xs text-white outline-none focus:border-neutral-400 cursor-pointer"
           >
             <option value="auto">Auto (Gamescope EIS, Cage fallback)</option>

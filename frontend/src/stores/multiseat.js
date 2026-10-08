@@ -111,6 +111,82 @@ function syncStaging(staging) {
   };
 }
 
+export function hydrateStagingFromConfig(mCfg) {
+  if (!mCfg) return null;
+  const layout = mCfg.default_layout || 'dual_monitor';
+  const p1Port = Number(mCfg.sunshine_port_p1) || 47989;
+  const p2Port = Number(mCfg.sunshine_port_p2) || 48010;
+
+  let seats;
+  if (Array.isArray(mCfg.seats) && mCfg.seats.length > 0) {
+    seats = mCfg.seats.map((s, idx) => ({
+      ...defaultSeats[Math.min(idx, 1)],
+      ...s,
+      seat_id: s.seat_id || `p${idx + 1}`,
+      mode: s.mode || 'local',
+      display_index: Number(s.display_index ?? (idx === 1 ? (mCfg.seat2_display_index ?? 1) : idx)),
+      screen_slot: Number(s.screen_slot ?? idx),
+      disabled: Boolean(s.disabled),
+      gamepad_node: s.gamepad_node ?? (idx === 0 ? (mCfg.seat1_gamepad || '') : (idx === 1 ? (mCfg.seat2_gamepad || '') : '')),
+      keyboard_node: s.keyboard_node ?? (idx === 0 ? (mCfg.seat1_keyboard || '') : (idx === 1 ? (mCfg.seat2_keyboard || '') : '')),
+      mouse_node: s.mouse_node ?? (idx === 0 ? (mCfg.seat1_mouse || '') : (idx === 1 ? (mCfg.seat2_mouse || '') : '')),
+      profile_id: s.profile_id || (idx === 0 ? 'main' : (idx === 1 ? (mCfg.player2_profile_id || 'p2') : `p${idx + 1}`)),
+      sunshine_port: Number(s.sunshine_port) || (idx === 0 ? p1Port : (idx === 1 ? p2Port : 48010 + (idx - 1) * 10)),
+      force_grab_cursor: Boolean(s.force_grab_cursor ?? (idx === 1 ? mCfg.seat2_force_grab_cursor : false)),
+      grab_keyboard: Boolean(s.grab_keyboard ?? (idx === 1 ? mCfg.seat2_grab_keyboard : false)),
+      compositor: s.compositor || (idx === 1 ? (mCfg.seat2_compositor || 'auto') : 'auto'),
+      nest_cage: Boolean(s.nest_cage ?? (idx === 1 ? mCfg.seat2_nest_cage : false)),
+      show_cursor: s.show_cursor ?? (idx === 1 ? (mCfg.seat2_show_cursor ?? true) : true),
+    }));
+    if (seats.length >= 2 && seats[0].display_index === seats[1].display_index && seats[0].screen_slot === seats[1].screen_slot) {
+      if (seats[0].screen_slot === 1) {
+        seats[1].screen_slot = 0;
+      } else {
+        seats[1].screen_slot = 1;
+      }
+    }
+  } else {
+    seats = [
+      {
+        ...defaultSeats[0],
+        mode: mCfg.default_seat1_mode || 'local',
+        display_index: Number(mCfg.seat1_display_index ?? 0),
+        screen_slot: 0,
+        disabled: false,
+        gamepad_node: mCfg.seat1_gamepad || '',
+        keyboard_node: mCfg.seat1_keyboard || '',
+        mouse_node: mCfg.seat1_mouse || '',
+        profile_id: 'main',
+        sunshine_port: p1Port,
+      },
+      {
+        ...defaultSeats[1],
+        mode: mCfg.default_seat2_mode || 'local',
+        display_index: Number(mCfg.seat2_display_index ?? 1),
+        screen_slot: 1,
+        disabled: false,
+        gamepad_node: mCfg.seat2_gamepad || '',
+        keyboard_node: mCfg.seat2_keyboard || '',
+        mouse_node: mCfg.seat2_mouse || '',
+        force_grab_cursor: Boolean(mCfg.seat2_force_grab_cursor),
+        grab_keyboard: Boolean(mCfg.seat2_grab_keyboard),
+        compositor: mCfg.seat2_compositor || 'auto',
+        nest_cage: Boolean(mCfg.seat2_nest_cage),
+        show_cursor: mCfg.seat2_show_cursor ?? true,
+        profile_id: mCfg.player2_profile_id || 'p2',
+        sunshine_port: p2Port,
+      },
+    ];
+  }
+
+  return syncStaging({
+    seats,
+    layout,
+    sunshine_port_p1: p1Port,
+    sunshine_port_p2: p2Port,
+  });
+}
+
 function createMultiseatStore() {
   const { subscribe, set, update } = writable({
     capabilities: {
@@ -142,6 +218,20 @@ function createMultiseatStore() {
   return {
     subscribe,
 
+    syncFromConfig(cfg) {
+      if (!cfg?.multiseat) return;
+      const hydrated = hydrateStagingFromConfig(cfg.multiseat);
+      if (hydrated) {
+        update(state => ({
+          ...state,
+          staging: {
+            ...state.staging,
+            ...hydrated,
+          },
+        }));
+      }
+    },
+
     async loadCapabilities() {
       try {
         const caps = await AppAPI.getMultiseatCapabilities();
@@ -166,20 +256,7 @@ function createMultiseatStore() {
       try {
         const displays = await AppAPI.getConnectedDisplays();
         if (Array.isArray(displays)) {
-          update(state => {
-            const maxDisp = displays.length > 0 ? displays.length - 1 : 0;
-            let staging = state.staging;
-            if (staging?.seats && staging.seats.length > 0) {
-              const updatedSeats = staging.seats.map(s => {
-                if ((s.display_index ?? 0) > maxDisp) {
-                  return { ...s, display_index: 0 };
-                }
-                return s;
-              });
-              staging = { ...staging, seats: updatedSeats, seat1: updatedSeats[0], seat2: updatedSeats[1] || updatedSeats[0] };
-            }
-            return { ...state, displays, staging };
-          });
+          update(state => ({ ...state, displays }));
         }
       } catch (err) {
         console.warn('Failed to probe displays:', err);
@@ -308,8 +385,43 @@ function createMultiseatStore() {
 
         currentSeats[seatIdx] = { ...currentSeats[seatIdx], screen_slot: targetSlot };
         if (otherIdx >= 0) {
-          currentSeats[otherIdx] = { ...currentSeats[otherIdx], screen_slot: oldSlot };
+          let fallbackSlot = oldSlot;
+          if (fallbackSlot === targetSlot) {
+            fallbackSlot = targetSlot === 0 ? 1 : 0;
+          }
+          currentSeats[otherIdx] = { ...currentSeats[otherIdx], screen_slot: fallbackSlot };
         }
+
+        return {
+          ...state,
+          staging: syncStaging({
+            ...state.staging,
+            seats: currentSeats,
+          }),
+        };
+      });
+    },
+
+    swapSeatsSlots(seatId1, seatId2) {
+      update(state => {
+        const currentSeats = [...(state.staging.seats || [state.staging.seat1, state.staging.seat2])];
+        const idx1 = currentSeats.findIndex(s => s.seat_id === seatId1);
+        const idx2 = currentSeats.findIndex(s => s.seat_id === seatId2);
+        if (idx1 < 0 || idx2 < 0) return state;
+
+        let slot1 = currentSeats[idx1].screen_slot ?? idx1;
+        let slot2 = currentSeats[idx2].screen_slot ?? idx2;
+        if (slot1 === slot2) {
+          slot1 = 0;
+          slot2 = 1;
+        } else {
+          const temp = slot1;
+          slot1 = slot2;
+          slot2 = temp;
+        }
+
+        currentSeats[idx1] = { ...currentSeats[idx1], screen_slot: slot1 };
+        currentSeats[idx2] = { ...currentSeats[idx2], screen_slot: slot2 };
 
         return {
           ...state,
@@ -736,3 +848,11 @@ function createMultiseatStore() {
 }
 
 export const multiseatStore = createMultiseatStore();
+
+if (typeof configStore?.subscribe === 'function') {
+  configStore.subscribe(cfg => {
+    if (cfg?.multiseat) {
+      multiseatStore.syncFromConfig(cfg);
+    }
+  });
+}

@@ -180,7 +180,7 @@
                 <select
                   id="seat-2-prof"
                   bind:value={cfgDraft.multiseat.player2_profile_id}
-                  onchange={() => { multiseatStore.updateSeat('p2', { profile_id: cfgDraft.multiseat.player2_profile_id }); cfgDraft = { ...cfgDraft }; }}
+                  onchange={() => multiseatStore.updateSeat('p2', { profile_id: cfgDraft.multiseat.player2_profile_id })}
                   class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   {#each (profileOptions.length > 0 ? profileOptions : [{ value: 'p2', label: 'PlayerTwo (Seat 2)' }]) as opt}
@@ -225,16 +225,17 @@
             <!-- Column 3: Screen Portion / Display Assignment -->
             {#if currentMode === 'local'}
               {#if cfgDraft.multiseat.default_layout === 'multi_monitor' || cfgDraft.multiseat.default_layout === 'dual_monitor'}
+                {@const curDispVal = isP1 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (isP2 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : (seat.display_index ?? idx))}
                 <div class="space-y-1.5">
                   <label for={`seat-${idx}-disp-idx`} class="block text-2xs font-bold text-neutral-300">Physical Monitor</label>
                   {#if displays.length > 0}
                     <select
                       id={`seat-${idx}-disp-idx`}
-                      value={isP1 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (isP2 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : (seat.display_index ?? idx))}
+                      value={curDispVal}
                       onchange={(e) => {
                         const val = Number(e.target.value);
-                        if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); cfgDraft = { ...cfgDraft }; }
-                        else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); cfgDraft = { ...cfgDraft }; }
+                        if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); }
+                        else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); }
                         else { multiseatStore.updateSeat(idx, { display_index: val }); }
                       }}
                       class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
@@ -242,6 +243,9 @@
                       {#each displays as d, dIdx}
                         <option value={dIdx} class="bg-surface-base text-neutral-200">Display {dIdx}: {d.name} ({d.width}x{d.height})</option>
                       {/each}
+                      {#if curDispVal >= displays.length}
+                        <option value={curDispVal} class="bg-surface-base text-neutral-400">Display {curDispVal} (Offline / Disconnected)</option>
+                      {/if}
                     </select>
                   {:else}
                     <input
@@ -249,11 +253,11 @@
                       type="number"
                       min="0"
                       max="10"
-                      value={isP1 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (isP2 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : (seat.display_index ?? idx))}
+                      value={curDispVal}
                       onchange={(e) => {
                         const val = Number(e.target.value);
-                        if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); cfgDraft = { ...cfgDraft }; }
-                        else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); cfgDraft = { ...cfgDraft }; }
+                        if (isP1) { cfgDraft.multiseat.seat1_display_index = val; multiseatStore.updateSeat(0, { display_index: val }); }
+                        else if (isP2) { cfgDraft.multiseat.seat2_display_index = val; multiseatStore.updateSeat(1, { display_index: val }); }
                         else { multiseatStore.updateSeat(idx, { display_index: val }); }
                       }}
                       class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-neutral-400"
@@ -266,7 +270,9 @@
                   <select
                     id={`seat-${idx}-portion`}
                     value={seat.screen_slot ?? idx}
-                    onchange={(e) => multiseatStore.setSeatSlot(seat.seat_id || seatId, Number(e.target.value))}
+                    onchange={(e) => {
+                      multiseatStore.setSeatSlot(seat.seat_id || seatId, Number(e.target.value));
+                    }}
                     class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                   >
                     {#each getPortionOptions(cfgDraft.multiseat.default_layout, seats.length) as opt}

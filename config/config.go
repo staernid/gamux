@@ -63,27 +63,47 @@ type Config struct {
 	Multiseat MultiseatConfig `json:"multiseat,omitempty"`
 }
 
+// SeatPreference defines persistent preferences and device bindings for an individual player seat.
+type SeatPreference struct {
+	SeatID          string `json:"seat_id"`
+	Mode            string `json:"mode,omitempty"`
+	DisplayIndex    int    `json:"display_index"`
+	ScreenSlot      int    `json:"screen_slot"`
+	Disabled        bool   `json:"disabled,omitempty"`
+	GamepadNode     string `json:"gamepad_node,omitempty"`
+	KeyboardNode    string `json:"keyboard_node,omitempty"`
+	MouseNode       string `json:"mouse_node,omitempty"`
+	ForceGrabCursor bool   `json:"force_grab_cursor,omitempty"`
+	GrabKeyboard    bool   `json:"grab_keyboard,omitempty"`
+	Compositor      string `json:"compositor,omitempty"`
+	NestCage        bool   `json:"nest_cage,omitempty"`
+	ShowCursor      bool   `json:"show_cursor,omitempty"`
+	ProfileID       string `json:"profile_id,omitempty"`
+	SunshinePort    int    `json:"sunshine_port,omitempty"`
+}
+
 // MultiseatConfig holds preferences and layout/device options for 2-player local and streaming sessions.
 type MultiseatConfig struct {
-	Player2ProfileID      string `json:"player2_profile_id,omitempty"`
-	DefaultSeat1Mode      string `json:"default_seat1_mode,omitempty"` // "local" | "stream"
-	DefaultSeat2Mode      string `json:"default_seat2_mode,omitempty"` // "local" | "stream"
-	DefaultLayout        string `json:"default_layout,omitempty"` // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
-	Seat1Gamepad         string `json:"seat1_gamepad,omitempty"`
-	Seat2Gamepad          string `json:"seat2_gamepad,omitempty"`
-	Seat1Keyboard         string `json:"seat1_keyboard,omitempty"`
-	Seat2Keyboard         string `json:"seat2_keyboard,omitempty"`
-	Seat1Mouse            string `json:"seat1_mouse,omitempty"`
-	Seat2Mouse            string `json:"seat2_mouse,omitempty"`
-	Seat2ForceGrabCursor  bool   `json:"seat2_force_grab_cursor"`
-	Seat2GrabKeyboard     bool   `json:"seat2_grab_keyboard"`
-	Seat2Compositor       string `json:"seat2_compositor,omitempty"`
-	Seat2NestCage         bool   `json:"seat2_nest_cage"`
-	Seat2ShowCursor       bool   `json:"seat2_show_cursor"`
-	Seat1DisplayIndex     int    `json:"seat1_display_index"`
-	Seat2DisplayIndex     int    `json:"seat2_display_index"`
-	SunshinePortP1        int    `json:"sunshine_port_p1,omitempty"`
-	SunshinePortP2        int    `json:"sunshine_port_p2,omitempty"`
+	Player2ProfileID      string           `json:"player2_profile_id,omitempty"`
+	DefaultSeat1Mode      string           `json:"default_seat1_mode,omitempty"` // "local" | "stream"
+	DefaultSeat2Mode      string           `json:"default_seat2_mode,omitempty"` // "local" | "stream"
+	DefaultLayout         string           `json:"default_layout,omitempty"`    // "dual_monitor" | "side_by_side" | "top_bottom" | "quad_grid" | "three_player" | "windowed"
+	Seat1Gamepad          string           `json:"seat1_gamepad,omitempty"`
+	Seat2Gamepad          string           `json:"seat2_gamepad,omitempty"`
+	Seat1Keyboard         string           `json:"seat1_keyboard,omitempty"`
+	Seat2Keyboard         string           `json:"seat2_keyboard,omitempty"`
+	Seat1Mouse            string           `json:"seat1_mouse,omitempty"`
+	Seat2Mouse            string           `json:"seat2_mouse,omitempty"`
+	Seat2ForceGrabCursor  bool             `json:"seat2_force_grab_cursor"`
+	Seat2GrabKeyboard     bool             `json:"seat2_grab_keyboard"`
+	Seat2Compositor       string           `json:"seat2_compositor,omitempty"`
+	Seat2NestCage         bool             `json:"seat2_nest_cage"`
+	Seat2ShowCursor       bool             `json:"seat2_show_cursor"`
+	Seat1DisplayIndex     int              `json:"seat1_display_index"`
+	Seat2DisplayIndex     int              `json:"seat2_display_index"`
+	SunshinePortP1        int              `json:"sunshine_port_p1,omitempty"`
+	SunshinePortP2        int              `json:"sunshine_port_p2,omitempty"`
+	Seats                 []SeatPreference `json:"seats,omitempty"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -125,7 +145,7 @@ func DefaultConfig() *Config {
 		backupPath = filepath.Join(dataHome, "gamux", "backups")
 	}
 
-	return &Config{
+	cfg := &Config{
 		LibraryPaths:         nil,
 		GbeDir:               gbePath,
 		SteamlessDir:         steamlessPath,
@@ -172,6 +192,8 @@ func DefaultConfig() *Config {
 			SunshinePortP2:        48010,
 		},
 	}
+	syncMultiseatSeats(&cfg.Multiseat)
+	return cfg
 }
 
 // GetConfigPath returns the absolute path to the configuration file.
@@ -222,6 +244,7 @@ func LoadConfig(customPath string) (*Config, error) {
 		cfg.Multiseat.Seat2Compositor = "auto"
 	}
 
+	syncMultiseatSeats(&cfg.Multiseat)
 	hydrateAPIKeys(cfg)
 	return cfg, nil
 }
@@ -265,6 +288,7 @@ func SaveConfig(cfg *Config, path string) error {
 	if cfg == nil {
 		return nil
 	}
+	syncMultiseatSeats(&cfg.Multiseat)
 	path = GetConfigPath(path)
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -273,6 +297,151 @@ func SaveConfig(cfg *Config, path string) error {
 	}
 
 	return util.WriteFileAtomic(path, data, 0644)
+}
+
+// syncMultiseatSeats ensures that the Multiseat.Seats slice and top-level Multiseat fields stay bidirectionally synchronized.
+func syncMultiseatSeats(ms *MultiseatConfig) {
+	if ms == nil {
+		return
+	}
+	if len(ms.Seats) == 0 {
+		p2Prof := ms.Player2ProfileID
+		if p2Prof == "" {
+			p2Prof = "p2"
+		}
+		s1Mode := ms.DefaultSeat1Mode
+		if s1Mode == "" {
+			s1Mode = "local"
+		}
+		s2Mode := ms.DefaultSeat2Mode
+		if s2Mode == "" {
+			s2Mode = "local"
+		}
+		p1Port := ms.SunshinePortP1
+		if p1Port == 0 {
+			p1Port = 47989
+		}
+		p2Port := ms.SunshinePortP2
+		if p2Port == 0 {
+			p2Port = 48010
+		}
+		ms.Seats = []SeatPreference{
+			{
+				SeatID:       "p1",
+				Mode:         s1Mode,
+				DisplayIndex: ms.Seat1DisplayIndex,
+				ScreenSlot:   0,
+				Disabled:     false,
+				GamepadNode:  ms.Seat1Gamepad,
+				KeyboardNode: ms.Seat1Keyboard,
+				MouseNode:    ms.Seat1Mouse,
+				ProfileID:    "main",
+				SunshinePort: p1Port,
+			},
+			{
+				SeatID:          "p2",
+				Mode:            s2Mode,
+				DisplayIndex:    ms.Seat2DisplayIndex,
+				ScreenSlot:      1,
+				Disabled:        false,
+				GamepadNode:     ms.Seat2Gamepad,
+				KeyboardNode:    ms.Seat2Keyboard,
+				MouseNode:       ms.Seat2Mouse,
+				ForceGrabCursor: ms.Seat2ForceGrabCursor,
+				GrabKeyboard:    ms.Seat2GrabKeyboard,
+				Compositor:      ms.Seat2Compositor,
+				NestCage:        ms.Seat2NestCage,
+				ShowCursor:      ms.Seat2ShowCursor,
+				ProfileID:       p2Prof,
+				SunshinePort:    p2Port,
+			},
+		}
+		return
+	}
+
+	// When Seats has at least 1 seat, harmonize seat 1
+	if len(ms.Seats) > 0 {
+		s1 := &ms.Seats[0]
+		if ms.DefaultSeat1Mode != "" {
+			s1.Mode = ms.DefaultSeat1Mode
+		} else if s1.Mode != "" {
+			ms.DefaultSeat1Mode = s1.Mode
+		}
+		s1.DisplayIndex = ms.Seat1DisplayIndex
+		if ms.Seat1Gamepad != "" {
+			s1.GamepadNode = ms.Seat1Gamepad
+		} else if s1.GamepadNode != "" {
+			ms.Seat1Gamepad = s1.GamepadNode
+		}
+		if ms.Seat1Keyboard != "" {
+			s1.KeyboardNode = ms.Seat1Keyboard
+		} else if s1.KeyboardNode != "" {
+			ms.Seat1Keyboard = s1.KeyboardNode
+		}
+		if ms.Seat1Mouse != "" {
+			s1.MouseNode = ms.Seat1Mouse
+		} else if s1.MouseNode != "" {
+			ms.Seat1Mouse = s1.MouseNode
+		}
+		if ms.SunshinePortP1 != 0 {
+			s1.SunshinePort = ms.SunshinePortP1
+		} else if s1.SunshinePort != 0 {
+			ms.SunshinePortP1 = s1.SunshinePort
+		}
+	}
+
+	// When Seats has at least 2 seats, harmonize seat 2
+	if len(ms.Seats) > 1 {
+		s1 := &ms.Seats[0]
+		s2 := &ms.Seats[1]
+		if s1.DisplayIndex == s2.DisplayIndex && s1.ScreenSlot == s2.ScreenSlot {
+			if s1.ScreenSlot == 1 {
+				s2.ScreenSlot = 0
+			} else {
+				s2.ScreenSlot = 1
+			}
+		}
+		if ms.Player2ProfileID != "" {
+			s2.ProfileID = ms.Player2ProfileID
+		} else if s2.ProfileID != "" {
+			ms.Player2ProfileID = s2.ProfileID
+		}
+		if ms.DefaultSeat2Mode != "" {
+			s2.Mode = ms.DefaultSeat2Mode
+		} else if s2.Mode != "" {
+			ms.DefaultSeat2Mode = s2.Mode
+		}
+		s2.DisplayIndex = ms.Seat2DisplayIndex
+		if ms.Seat2Gamepad != "" {
+			s2.GamepadNode = ms.Seat2Gamepad
+		} else if s2.GamepadNode != "" {
+			ms.Seat2Gamepad = s2.GamepadNode
+		}
+		if ms.Seat2Keyboard != "" {
+			s2.KeyboardNode = ms.Seat2Keyboard
+		} else if s2.KeyboardNode != "" {
+			ms.Seat2Keyboard = s2.KeyboardNode
+		}
+		if ms.Seat2Mouse != "" {
+			s2.MouseNode = ms.Seat2Mouse
+		} else if s2.MouseNode != "" {
+			ms.Seat2Mouse = s2.MouseNode
+		}
+		s2.ForceGrabCursor = ms.Seat2ForceGrabCursor
+		s2.GrabKeyboard = ms.Seat2GrabKeyboard
+		if ms.Seat2Compositor != "" {
+			s2.Compositor = ms.Seat2Compositor
+		} else if s2.Compositor != "" {
+			ms.Seat2Compositor = s2.Compositor
+		}
+		s2.NestCage = ms.Seat2NestCage
+		s2.ShowCursor = ms.Seat2ShowCursor
+		if ms.SunshinePortP2 != 0 {
+			s2.SunshinePort = ms.SunshinePortP2
+		} else if s2.SunshinePort != 0 {
+			ms.SunshinePortP2 = s2.SunshinePort
+		}
+	}
 }
 
 // UpdateConfig loads the existing configuration from disk (or uses DefaultConfig if non-existent),

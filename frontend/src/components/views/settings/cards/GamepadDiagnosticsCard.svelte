@@ -36,12 +36,16 @@
         <select
           id="seat1-gamepad-select"
           bind:value={cfgDraft.multiseat.seat1_gamepad}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each gamepadOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat1_gamepad && !['auto', 'none'].includes(cfgDraft.multiseat.seat1_gamepad) && !gamepadOptions.some(o => o.value === cfgDraft.multiseat.seat1_gamepad)}
+            <option value={cfgDraft.multiseat.seat1_gamepad} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat1_gamepad} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
         <p class="text-3xs text-neutral-400 leading-relaxed">
           {#if cfgDraft.multiseat.seat1_gamepad === 'none'}
@@ -59,12 +63,16 @@
         <select
           id="seat2-gamepad-select"
           bind:value={cfgDraft.multiseat.seat2_gamepad}
-          onchange={() => { cfgDraft = { ...cfgDraft }; }}
           class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
         >
           {#each gamepadOptions as opt}
             <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
           {/each}
+          {#if cfgDraft.multiseat.seat2_gamepad && !['auto', 'none'].includes(cfgDraft.multiseat.seat2_gamepad) && !gamepadOptions.some(o => o.value === cfgDraft.multiseat.seat2_gamepad)}
+            <option value={cfgDraft.multiseat.seat2_gamepad} class="bg-surface-base text-neutral-400">
+              {cfgDraft.multiseat.seat2_gamepad} (Disconnected / Saved)
+            </option>
+          {/if}
         </select>
         <p class="text-3xs text-neutral-400 leading-relaxed">
           {#if cfgDraft.multiseat.seat2_gamepad === 'none'}

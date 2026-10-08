@@ -547,6 +547,8 @@ var masterSchema = []PropertyDescriptor{
 			{Value: "dual_monitor", Label: "Dual Dedicated Monitors"},
 			{Value: "side_by_side", Label: "Side-by-Side (Horizontal Split)"},
 			{Value: "top_bottom", Label: "Top & Bottom (Vertical Split)"},
+			{Value: "quad_grid", Label: "2x2 Quad Grid (4 Players)"},
+			{Value: "three_player", Label: "3-Player Split (3 Players)"},
 			{Value: "windowed", Label: "Windowed Overlay"},
 		},
 	},
@@ -702,6 +704,14 @@ var masterSchema = []PropertyDescriptor{
 		Min:         floatPtr(1024),
 		Max:         floatPtr(65535),
 		Step:        floatPtr(1),
+	},
+	{
+		Key:         "multiseat.seats",
+		Label:       "Player Seats Configuration",
+		Description: "Detailed seat definitions, controller bindings, and display assignments for local and remote players.",
+		Type:        "json",
+		Category:    "Multi-Seat",
+		Scope:       ScopeGlobal,
 	},
 }
 

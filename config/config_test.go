@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -279,6 +280,71 @@ func TestMultiseatConfig_PersistenceAndDefaults(t *testing.T) {
 	}
 	if loaded.Multiseat.Seat2Compositor != "cage" {
 		t.Errorf("expected loaded.Multiseat.Seat2Compositor 'cage', got %q", loaded.Multiseat.Seat2Compositor)
+	}
+	if len(loaded.Multiseat.Seats) < 2 {
+		t.Fatalf("expected at least 2 seats in loaded.Multiseat.Seats, got %d", len(loaded.Multiseat.Seats))
+	}
+	if loaded.Multiseat.Seats[1].ProfileID != "p3" {
+		t.Errorf("expected loaded.Multiseat.Seats[1].ProfileID 'p3', got %q", loaded.Multiseat.Seats[1].ProfileID)
+	}
+}
+
+func TestMultiseatConfig_NPlayerSeatsPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	cfg := DefaultConfig()
+	cfg.Multiseat.DefaultLayout = "quad_grid"
+	cfg.Multiseat.Seats = []SeatPreference{
+		{SeatID: "p1", Mode: "local", DisplayIndex: 0, ScreenSlot: 0, ProfileID: "main"},
+		{SeatID: "p2", Mode: "local", DisplayIndex: 0, ScreenSlot: 1, ProfileID: "p2"},
+		{SeatID: "p3", Mode: "stream", DisplayIndex: 0, ScreenSlot: 2, ProfileID: "p3", SunshinePort: 48020},
+		{SeatID: "p4", Mode: "local", DisplayIndex: 0, ScreenSlot: 3, ProfileID: "p4", Disabled: true},
+	}
+
+	if err := SaveConfig(cfg, configFile); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	loaded, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if loaded.Multiseat.DefaultLayout != "quad_grid" {
+		t.Errorf("expected DefaultLayout 'quad_grid', got %q", loaded.Multiseat.DefaultLayout)
+	}
+	if loaded.Multiseat.Seats[0].ScreenSlot != 0 {
+		t.Errorf("expected seat 1 screen_slot 0, got %d", loaded.Multiseat.Seats[0].ScreenSlot)
+	}
+	if loaded.Multiseat.Seats[1].ScreenSlot != 1 {
+		t.Errorf("expected seat 2 screen_slot 1, got %d", loaded.Multiseat.Seats[1].ScreenSlot)
+	}
+
+	// Verify that raw JSON file actually contains "screen_slot": 0 (not omitted)
+	rawBytes, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	if !strings.Contains(string(rawBytes), `"screen_slot": 0`) {
+		t.Errorf("expected JSON to contain '\"screen_slot\": 0', but was omitted:\n%s", string(rawBytes))
+	}
+
+	// Verify swapped slot persistence: Seat 1 on right (1), Seat 2 on left (0)
+	loaded.Multiseat.Seats[0].ScreenSlot = 1
+	loaded.Multiseat.Seats[1].ScreenSlot = 0
+	if err := SaveConfig(loaded, configFile); err != nil {
+		t.Fatalf("SaveConfig failed after swap: %v", err)
+	}
+	swappedLoaded, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed after swap: %v", err)
+	}
+	if swappedLoaded.Multiseat.Seats[0].ScreenSlot != 1 {
+		t.Errorf("expected swapped seat 1 screen_slot 1, got %d", swappedLoaded.Multiseat.Seats[0].ScreenSlot)
+	}
+	if swappedLoaded.Multiseat.Seats[1].ScreenSlot != 0 {
+		t.Errorf("expected swapped seat 2 screen_slot 0, got %d", swappedLoaded.Multiseat.Seats[1].ScreenSlot)
 	}
 }
 

@@ -40,27 +40,10 @@
     multiseatStore.refreshGamepads();
     multiseatStore.refreshKeyboards();
     multiseatStore.refreshMice();
-    if (cfgDraft.multiseat?.default_layout) {
-      let layout = cfgDraft.multiseat.default_layout;
-      if (seats.length === 2 && (layout === 'three_player' || layout === 'quad_grid')) {
-        layout = 'side_by_side';
-        cfgDraft.multiseat.default_layout = layout;
-      } else if (seats.length === 3 && layout === 'quad_grid') {
-        layout = 'three_player';
-        cfgDraft.multiseat.default_layout = layout;
-      }
-      multiseatStore.setLayout(layout);
+    if (cfgDraft?.multiseat) {
+      multiseatStore.syncFromConfig(cfgDraft);
     }
   });
-
-
-
-
-
-
-
-
-
 
   const visualLayouts = [
     {
@@ -158,7 +141,7 @@
     if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
   });
   run(() => {
-    if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 0;
+    if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 1;
   });
   run(() => {
     if (cfgDraft.multiseat.sunshine_port_p1 === undefined) cfgDraft.multiseat.sunshine_port_p1 = 47989;
@@ -168,15 +151,28 @@
   });
   let seats = $derived($multiseatStore.staging?.seats || [
     $multiseatStore.staging?.seat1 || { seat_id: 'p1', mode: 'local', display_index: 0 },
-    $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 0) }
+    $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 1) }
   ]);
+  // Sync seats into cfgDraft.multiseat.seats
   run(() => {
-    if (seats.length === 2 && (cfgDraft.multiseat?.default_layout === 'three_player' || cfgDraft.multiseat?.default_layout === 'quad_grid')) {
-      cfgDraft.multiseat.default_layout = 'side_by_side';
-      multiseatStore.setLayout('side_by_side');
-    } else if (seats.length === 3 && cfgDraft.multiseat?.default_layout === 'quad_grid') {
-      cfgDraft.multiseat.default_layout = 'three_player';
-      multiseatStore.setLayout('three_player');
+    if (cfgDraft?.multiseat && Array.isArray(seats)) {
+      cfgDraft.multiseat.seats = seats.map((s, idx) => ({
+        seat_id: s.seat_id || `p${idx + 1}`,
+        mode: s.mode || (idx === 0 ? (cfgDraft.multiseat.default_seat1_mode || 'local') : (idx === 1 ? (cfgDraft.multiseat.default_seat2_mode || 'local') : 'local')),
+        display_index: Number(s.display_index ?? (idx === 0 ? (cfgDraft.multiseat.seat1_display_index ?? 0) : (idx === 1 ? (cfgDraft.multiseat.seat2_display_index ?? 1) : idx))),
+        screen_slot: Number(s.screen_slot ?? idx),
+        disabled: Boolean(s.disabled),
+        gamepad_node: s.gamepad_node || (idx === 0 ? (cfgDraft.multiseat.seat1_gamepad || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_gamepad || 'auto') : '')),
+        keyboard_node: s.keyboard_node || (idx === 0 ? (cfgDraft.multiseat.seat1_keyboard || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_keyboard || 'auto') : '')),
+        mouse_node: s.mouse_node || (idx === 0 ? (cfgDraft.multiseat.seat1_mouse || 'auto') : (idx === 1 ? (cfgDraft.multiseat.seat2_mouse || 'auto') : '')),
+        force_grab_cursor: Boolean(s.force_grab_cursor ?? (idx === 1 ? cfgDraft.multiseat.seat2_force_grab_cursor : false)),
+        grab_keyboard: Boolean(s.grab_keyboard ?? (idx === 1 ? cfgDraft.multiseat.seat2_grab_keyboard : false)),
+        compositor: s.compositor || (idx === 1 ? (cfgDraft.multiseat.seat2_compositor || 'auto') : 'auto'),
+        nest_cage: Boolean(s.nest_cage ?? (idx === 1 ? cfgDraft.multiseat.seat2_nest_cage : false)),
+        show_cursor: s.show_cursor ?? (idx === 1 ? (cfgDraft.multiseat.seat2_show_cursor ?? true) : true),
+        profile_id: s.profile_id || (idx === 0 ? 'main' : (idx === 1 ? (cfgDraft.multiseat.player2_profile_id || 'p2') : `p${idx + 1}`)),
+        sunshine_port: Number(s.sunshine_port) || (idx === 0 ? (cfgDraft.multiseat.sunshine_port_p1 || 47989) : (idx === 1 ? (cfgDraft.multiseat.sunshine_port_p2 || 48010) : 48010 + (idx - 1) * 10)),
+      }));
     }
   });
   let gamepads = $derived($multiseatStore.gamepads);
@@ -184,16 +180,6 @@
   let activeSeats = $derived(seats.filter(s => !s.disabled));
   let fallbackDisplays = $derived([{ name: 'Primary Display', index: 0, width: 1920, height: 1080, refresh_rate: 60, scale: 1.0, is_primary: true }]);
   let effectiveDisplays = $derived(displays.length > 0 ? displays : fallbackDisplays);
-  // Auto-clamp seat display index if host has fewer screens than assigned
-  run(() => {
-    if (effectiveDisplays.length > 0 && seats.length > 0) {
-      seats.forEach((s) => {
-        if ((s.display_index ?? 0) >= effectiveDisplays.length) {
-          multiseatStore.setSeatDisplay(s.seat_id, 0);
-        }
-      });
-    }
-  });
   let gamepadAssignments = $derived(resolveGamepadAssignments(
     gamepads,
     cfgDraft.multiseat?.seat1_gamepad || 'auto',

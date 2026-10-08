@@ -223,6 +223,15 @@ describe('CoopTab Component', () => {
     expect(portionLabels.length).toBeGreaterThanOrEqual(2);
 
     await fireEvent.click(swapBtn);
+    const staging = get(multiseatStore).staging;
+    expect(staging.seats[0].screen_slot).toBe(1);
+    expect(staging.seats[1].screen_slot).toBe(0);
+
+    // Swap back
+    await fireEvent.click(swapBtn);
+    const stagingBack = get(multiseatStore).staging;
+    expect(stagingBack.seats[0].screen_slot).toBe(0);
+    expect(stagingBack.seats[1].screen_slot).toBe(1);
   });
 
   it('normalizes legacy formatted keyboard and mouse label strings to dev_node', async () => {

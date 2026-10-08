@@ -80,12 +80,7 @@
   function swap2PSlots(dispIdx = 0) {
     const dispSeats = activeSeats.filter(s => (s.display_index ?? 0) === dispIdx);
     if (dispSeats.length >= 2) {
-      const s0 = dispSeats[0];
-      const s1 = dispSeats[1];
-      const slot0 = s0.screen_slot ?? 0;
-      const slot1 = s1.screen_slot ?? 1;
-      multiseatStore.setSeatSlot(s0.seat_id, slot1);
-      multiseatStore.setSeatSlot(s1.seat_id, slot0);
+      multiseatStore.swapSeatsSlots(dispSeats[0].seat_id, dispSeats[1].seat_id);
     }
   }
 </script>
@@ -284,14 +279,17 @@
                     <div class="h-28 flex gap-1.5">
                       {#each dispSeats as sSeat, sIdx}
                         {@const slotIdx = sSeat.screen_slot ?? sIdx}
-                        {@const isFirst = sIdx === 0}
+                        {@const isP1 = sSeat.seat_id === 'p1'}
                         <div class="flex-1 rounded-lg bg-surface-card border border-neutral-700/80 p-2.5 flex flex-col items-center justify-center space-y-1">
                           <div class="flex items-center space-x-2">
-                            <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isFirst ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border'}">
+                            <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border'}">
                               {sSeat.seat_id.toUpperCase()}
                             </span>
                             <span class="text-xs font-bold text-white truncate max-w-[140px]">
                               {sSeat.player?.account_name || sSeat.profile_id || `Player ${sIdx + 1}`}
+                            </span>
+                            <span class="text-4xs font-mono text-neutral-400">
+                              ({slotIdx === 0 ? 'Left' : (slotIdx === 1 ? 'Right' : `Col ${slotIdx + 1}`)})
                             </span>
                           </div>
                           <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
