@@ -516,7 +516,7 @@ func MaterializeIsolatedHome(homeDir string, userCfg *gbe.GSEUserConfig) error {
 	_ = os.WriteFile(filepath.Join(gseDir, "account_name.txt"), []byte(userCfg.AccountName), 0644)
 	_ = os.WriteFile(filepath.Join(gseDir, "user_steam_id.txt"), []byte(userCfg.AccountSteamID), 0644)
 	_ = os.WriteFile(filepath.Join(gseDir, "language.txt"), []byte(userCfg.Language), 0644)
-	_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n10.0.2.2\n"), 0644)
+	_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n127.255.255.255\n"), 0644)
 
 	// Ensure steam_settings symlink points to settings inside GSE Saves
 	gseRoot := filepath.Join(homeDir, ".local", "share", "GSE Saves")
@@ -641,7 +641,7 @@ func (m *Manager) Materialize(id string) error {
 		_ = os.WriteFile(filepath.Join(gseDir, "account_name.txt"), []byte(p.Name), 0644)
 		_ = os.WriteFile(filepath.Join(gseDir, "user_steam_id.txt"), []byte(p.SteamID), 0644)
 		_ = os.WriteFile(filepath.Join(gseDir, "language.txt"), []byte(p.Language), 0644)
-		_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n10.0.2.2\n"), 0644)
+		_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n127.255.255.255\n"), 0644)
 	} else {
 		if err := MaterializeIsolatedHome(homeDir, userCfg); err != nil {
 			return err

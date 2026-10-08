@@ -5,7 +5,6 @@ export namespace config {
 	    default_seat1_mode?: string;
 	    default_seat2_mode?: string;
 	    default_layout?: string;
-	    broadcast_relay_enabled: boolean;
 	    seat1_gamepad?: string;
 	    seat2_gamepad?: string;
 	    seat1_keyboard?: string;
@@ -32,7 +31,6 @@ export namespace config {
 	        this.default_seat1_mode = source["default_seat1_mode"];
 	        this.default_seat2_mode = source["default_seat2_mode"];
 	        this.default_layout = source["default_layout"];
-	        this.broadcast_relay_enabled = source["broadcast_relay_enabled"];
 	        this.seat1_gamepad = source["seat1_gamepad"];
 	        this.seat2_gamepad = source["seat2_gamepad"];
 	        this.seat1_keyboard = source["seat1_keyboard"];
@@ -1182,7 +1180,6 @@ export namespace multiseat {
 	    seats?: SeatConfig[];
 	    seat1?: SeatConfig;
 	    seat2?: SeatConfig;
-	    enable_broadcast_relay: boolean;
 	    sunshine_port_p1?: number;
 	    sunshine_port_p2?: number;
 	
@@ -1202,7 +1199,6 @@ export namespace multiseat {
 	        this.seats = this.convertValues(source["seats"], SeatConfig);
 	        this.seat1 = this.convertValues(source["seat1"], SeatConfig);
 	        this.seat2 = this.convertValues(source["seat2"], SeatConfig);
-	        this.enable_broadcast_relay = source["enable_broadcast_relay"];
 	        this.sunshine_port_p1 = source["sunshine_port_p1"];
 	        this.sunshine_port_p2 = source["sunshine_port_p2"];
 	    }
@@ -1304,7 +1300,6 @@ export namespace multiseat {
 	
 	export class SystemCapabilities {
 	    has_bwrap: boolean;
-	    has_pasta: boolean;
 	    has_gamescope: boolean;
 	    has_cage: boolean;
 	    has_sunshine: boolean;
@@ -1317,7 +1312,6 @@ export namespace multiseat {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.has_bwrap = source["has_bwrap"];
-	        this.has_pasta = source["has_pasta"];
 	        this.has_gamescope = source["has_gamescope"];
 	        this.has_cage = source["has_cage"];
 	        this.has_sunshine = source["has_sunshine"];

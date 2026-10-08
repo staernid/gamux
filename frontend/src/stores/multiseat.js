@@ -115,7 +115,6 @@ function createMultiseatStore() {
   const { subscribe, set, update } = writable({
     capabilities: {
       has_bwrap: true,
-      has_pasta: true,
       has_gamescope: true,
       has_cage: false,
       has_sunshine: true,
@@ -134,7 +133,6 @@ function createMultiseatStore() {
       seat1: { ...defaultSeats[0] },
       seat2: { ...defaultSeats[1] },
       layout: 'dual_monitor', // 'dual_monitor' | 'side_by_side' | 'top_bottom' | 'quad_grid' | 'three_player' | 'windowed'
-      enable_broadcast_relay: true,
       sunshine_port_p1: 47989,
       sunshine_port_p2: 48010,
     },
@@ -152,7 +150,6 @@ function createMultiseatStore() {
             ...state,
             capabilities: {
               has_bwrap: Boolean(caps.has_bwrap ?? caps.HasBwrap ?? caps.hasBwrap),
-              has_pasta: Boolean(caps.has_pasta ?? caps.HasPasta ?? caps.hasPasta),
               has_gamescope: Boolean(caps.has_gamescope ?? caps.HasGamescope ?? caps.hasGamescope),
               has_cage: Boolean(caps.has_cage ?? caps.HasCage ?? caps.hasCage),
               has_sunshine: Boolean(caps.has_sunshine ?? caps.HasSunshine ?? caps.hasSunshine),
@@ -605,7 +602,6 @@ function createMultiseatStore() {
       } else if (effectiveRawSeats.length === 3 && layout === 'quad_grid') {
         layout = 'three_player';
       }
-      const enableRelay = mCfg.broadcast_relay_enabled ?? state.staging?.enable_broadcast_relay ?? true;
       const isNative = game.platform === 'linux';
 
       const sessionConfig = {
@@ -617,7 +613,6 @@ function createMultiseatStore() {
         exe_args: game.exeArgs || '',
         runner: isNative ? 'linux' : (game.runner || cfg?.default_runner || 'umu'),
         layout,
-        enable_broadcast_relay: enableRelay,
         sunshine_port_p1: seatConfigs[0]?.sunshine_port || 47989,
         sunshine_port_p2: seatConfigs[1]?.sunshine_port || 48010,
         seats: seatConfigs,

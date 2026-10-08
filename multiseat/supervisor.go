@@ -170,7 +170,6 @@ func waitForNewEISocket(existing map[string]bool, timeout time.Duration) (string
 // CheckCapabilities probes the host system for multi-seat support dependencies.
 func CheckCapabilities() SystemCapabilities {
 	_, bwrapErr := exec.LookPath("bwrap")
-	_, pastaErr := exec.LookPath("pasta")
 	_, gamescopeErr := exec.LookPath("gamescope")
 	_, cageErr := exec.LookPath("cage")
 	_, sunshineErr := exec.LookPath("sunshine")
@@ -178,7 +177,6 @@ func CheckCapabilities() SystemCapabilities {
 
 	return SystemCapabilities{
 		HasBwrap:     bwrapErr == nil,
-		HasPasta:     pastaErr == nil,
 		HasGamescope: gamescopeErr == nil,
 		HasCage:      cageErr == nil,
 		HasSunshine:  sunshineErr == nil,
@@ -822,25 +820,7 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	}
 	winW, winH, winX, winY := CalculateSeatGeometry(sessionCfg.Layout, seatID, calcSlot, totalSeats, dispWidth, dispHeight)
 
-	// 3. Wrap in Pasta network namespace (for seats > 0 to prevent port collisions; or if explicitly requested)
-	if caps.HasPasta && (seatIndex > 0 || sessionCfg.EnableBroadcastRelay) {
-		pastaOpts := PastaOptions{
-			EnableBroadcastRelay: sessionCfg.EnableBroadcastRelay,
-			BroadcastPort:        47584,
-			Command:              cmdArgs,
-		}
-		pArgs, pErr := BuildPastaArgs(pastaOpts)
-		if pErr != nil {
-			return nil, nil, "", fmt.Errorf("build pasta args: %w", pErr)
-		}
-		pastaBin, pErr := ResolvePastaBinary()
-		if pErr != nil || pastaBin == "" {
-			pastaBin = "pasta"
-		}
-		cmdArgs = append([]string{pastaBin}, pArgs...)
-	}
-
-	// 4. Wrap in compositors:
+	// 3. Wrap in compositors:
 	//   Path 1: gamescope (scaling/resolution/FPS limit, split-screen or dual monitor, EIS input redirection)
 	//   Path 2: cage (standalone kiosk Wayland compositor, fallback or explicit)
 	useCage := resolveCageDecision(seatCfg, seatID, caps)

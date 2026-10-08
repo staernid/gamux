@@ -62,7 +62,6 @@ func isHelperDaemon(name string) bool {
 		"gamemoded",
 		"systemd-inhibit",
 		"bwrap",
-		"pasta",
 		"reaper":
 		return true
 	}

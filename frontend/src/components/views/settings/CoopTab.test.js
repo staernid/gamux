@@ -12,7 +12,6 @@ describe('CoopTab Component', () => {
       default_seat1_mode: 'local',
       default_seat2_mode: 'local',
       default_layout: 'dual_monitor',
-      broadcast_relay_enabled: true,
       seat1_display_index: 0,
       seat2_display_index: 1,
       sunshine_port_p1: 47989,
@@ -62,7 +61,6 @@ describe('CoopTab Component', () => {
 
     expect(screen.getByText('System Diagnostics & Isolation Tools')).toBeInTheDocument();
     expect(screen.getByText('Bubblewrap')).toBeInTheDocument();
-    expect(screen.getByText('Pasta (NetNS)')).toBeInTheDocument();
     expect(screen.getByText('Gamescope')).toBeInTheDocument();
   });
 

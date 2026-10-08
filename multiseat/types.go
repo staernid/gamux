@@ -87,11 +87,10 @@ type MultiseatSessionConfig struct {
 	Runner               string        `json:"runner,omitempty"` // "umu", "wine", "proton", "native"
 	Layout               DisplayLayout `json:"layout"`
 	Seats                []SeatConfig  `json:"seats,omitempty"`
-	Seat1                SeatConfig    `json:"seat1,omitempty"` // Backwards compatibility for 2-seat callers
-	Seat2                SeatConfig    `json:"seat2,omitempty"` // Backwards compatibility for 2-seat callers
-	EnableBroadcastRelay bool          `json:"enable_broadcast_relay"`
-	SunshinePortP1       int           `json:"sunshine_port_p1,omitempty"` // Base 47989
-	SunshinePortP2       int           `json:"sunshine_port_p2,omitempty"` // Base 48010
+	Seat1          SeatConfig    `json:"seat1,omitempty"` // Backwards compatibility for 2-seat callers
+	Seat2          SeatConfig    `json:"seat2,omitempty"` // Backwards compatibility for 2-seat callers
+	SunshinePortP1 int           `json:"sunshine_port_p1,omitempty"` // Base 47989
+	SunshinePortP2 int           `json:"sunshine_port_p2,omitempty"` // Base 48010
 }
 
 // EffectiveSeats returns the normalized slice of active (non-disabled) SeatConfigs for this session.
@@ -154,7 +153,6 @@ type MultiseatSessionStatus struct {
 // SystemCapabilities reports available host tools for multi-seat support.
 type SystemCapabilities struct {
 	HasBwrap     bool `json:"has_bwrap"`
-	HasPasta     bool `json:"has_pasta"`
 	HasGamescope bool `json:"has_gamescope"`
 	HasCage      bool `json:"has_cage"`
 	HasSunshine  bool `json:"has_sunshine"`

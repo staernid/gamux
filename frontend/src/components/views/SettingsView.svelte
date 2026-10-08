@@ -68,7 +68,6 @@
       default_seat1_mode: 'local',
       default_seat2_mode: 'local',
       default_layout: 'dual_monitor',
-      broadcast_relay_enabled: true,
       seat1_gamepad: 'auto',
       seat2_gamepad: 'auto',
       seat1_keyboard: 'auto',

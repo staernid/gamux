@@ -551,15 +551,6 @@ var masterSchema = []PropertyDescriptor{
 		},
 	},
 	{
-		Key:         "multiseat.broadcast_relay_enabled",
-		Label:       "LAN Broadcast Relay",
-		Description: "Relay local UDP broadcast packets across network namespaces for co-op discovery.",
-		Type:        "boolean",
-		Category:    "Multi-Seat",
-		Scope:       ScopeGlobal,
-		Default:     true,
-	},
-	{
 		Key:         "multiseat.seat1_gamepad",
 		Label:       "Seat 1 Gamepad",
 		Description: "Gamepad device node assignment for Seat 1 (or 'auto').",

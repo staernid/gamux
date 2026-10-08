@@ -101,37 +101,6 @@ func TestBuildCageArgs(t *testing.T) {
 	}
 }
 
-func TestBuildPastaArgs(t *testing.T) {
-	opts := PastaOptions{
-		EnableBroadcastRelay: true,
-		BroadcastPort:        47584,
-		ForwardTCPPorts:      []int{7777},
-		ForwardUDPPorts:      []int{27015},
-		Command:              []string{"bwrap", "--version"},
-	}
-
-	args, err := BuildPastaArgs(opts)
-	if err != nil {
-		t.Fatalf("BuildPastaArgs failed: %v", err)
-	}
-
-	str := strings.Join(args, " ")
-	if !strings.Contains(str, "--config-net") {
-		t.Errorf("expected --config-net in %s", str)
-	}
-	if !strings.Contains(str, "-t 7777") {
-		t.Errorf("expected -t 7777 in %s", str)
-	}
-	if !strings.Contains(str, "-u 27015") {
-		t.Errorf("expected -u 27015 in %s", str)
-	}
-	if !strings.Contains(str, "-u 47584") {
-		t.Errorf("expected -u 47584 in %s", str)
-	}
-	if !strings.Contains(str, "-- bwrap --version") {
-		t.Errorf("expected command terminator in %s", str)
-	}
-}
 
 func TestEnsureSeatProfile(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -171,8 +140,8 @@ func TestEnsureSeatProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read custom_broadcasts.txt: %v", err)
 	}
-	if !strings.Contains(string(bData), "127.0.0.1") {
-		t.Errorf("expected 127.0.0.1 in custom_broadcasts.txt, got: %s", string(bData))
+	if !strings.Contains(string(bData), "127.0.0.1") || !strings.Contains(string(bData), "127.255.255.255") {
+		t.Errorf("expected 127.0.0.1 and 127.255.255.255 in custom_broadcasts.txt, got: %s", string(bData))
 	}
 }
 
@@ -337,23 +306,6 @@ func TestBuildBwrapArgs_Player1_RealHome(t *testing.T) {
 	}
 }
 
-func TestResolvePastaBinary(t *testing.T) {
-	caps := CheckCapabilities()
-	if !caps.HasPasta {
-		t.Skip("pasta not installed on host")
-	}
-
-	bin, err := ResolvePastaBinary()
-	if err != nil {
-		t.Fatalf("ResolvePastaBinary failed: %v", err)
-	}
-	if bin == "" {
-		t.Fatal("expected non-empty pasta binary path")
-	}
-	if fi, err := os.Stat(bin); err != nil || fi.Mode()&0111 == 0 {
-		t.Fatalf("resolved pasta %s is not executable: %v", bin, err)
-	}
-}
 
 func TestGenerateSunshineConfig(t *testing.T) {
 	tmpDir := t.TempDir()

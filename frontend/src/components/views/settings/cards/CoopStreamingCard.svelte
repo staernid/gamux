@@ -149,20 +149,6 @@
 <!-- 2. Networking & Remote Streaming -->
 <SettingSection title="Networking & Sunshine Streaming">
   <div class="space-y-3">
-    <div class="flex items-center justify-between p-3 bg-surface-card border border-surface-border rounded-xl">
-      <div class="space-y-0.5 max-w-md">
-        <div class="text-xs font-bold text-neutral-200">UDP Broadcast Relay (Port 47584)</div>
-        <div class="text-2xs text-neutral-400 leading-relaxed">
-          Forwards LAN discovery packets between player instances for Goldberg Steamworks lobby auto-detection.
-        </div>
-      </div>
-      <SeamlessSwitch
-        bind:value={cfgDraft.multiseat.broadcast_relay_enabled}
-        tooltip="UDP Broadcast Relay"
-        onchange={(val) => { cfgDraft.multiseat.broadcast_relay_enabled = val; cfgDraft = { ...cfgDraft }; }}
-      />
-    </div>
-
     <div class="grid grid-cols-2 gap-3 pt-1">
       <div>
         <label for="sunshine-port-p1-cfg" class="block text-2xs font-bold text-neutral-300 mb-1">Player 1 Sunshine Port</label>

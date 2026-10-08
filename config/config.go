@@ -68,9 +68,8 @@ type MultiseatConfig struct {
 	Player2ProfileID      string `json:"player2_profile_id,omitempty"`
 	DefaultSeat1Mode      string `json:"default_seat1_mode,omitempty"` // "local" | "stream"
 	DefaultSeat2Mode      string `json:"default_seat2_mode,omitempty"` // "local" | "stream"
-	DefaultLayout         string `json:"default_layout,omitempty"`     // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
-	BroadcastRelayEnabled bool   `json:"broadcast_relay_enabled"`
-	Seat1Gamepad          string `json:"seat1_gamepad,omitempty"`
+	DefaultLayout        string `json:"default_layout,omitempty"` // "dual_monitor" | "side_by_side" | "top_bottom" | "windowed"
+	Seat1Gamepad         string `json:"seat1_gamepad,omitempty"`
 	Seat2Gamepad          string `json:"seat2_gamepad,omitempty"`
 	Seat1Keyboard         string `json:"seat1_keyboard,omitempty"`
 	Seat2Keyboard         string `json:"seat2_keyboard,omitempty"`
@@ -156,7 +155,6 @@ func DefaultConfig() *Config {
 			DefaultSeat1Mode:      "local",
 			DefaultSeat2Mode:      "local",
 			DefaultLayout:         "dual_monitor",
-			BroadcastRelayEnabled: true,
 			Seat1Gamepad:          "auto",
 			Seat2Gamepad:          "auto",
 			Seat1Keyboard:         "auto",

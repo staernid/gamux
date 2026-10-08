@@ -58,7 +58,6 @@ const DEFAULT_MOCKS = {
   ],
   getMultiseatCapabilities: () => ({
     has_bwrap: true,
-    has_pasta: true,
     has_gamescope: true,
     has_cage: true,
     has_sunshine: true,

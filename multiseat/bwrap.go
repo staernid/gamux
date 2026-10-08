@@ -71,7 +71,7 @@ func EnsureSeatProfile(profileDir string, profile PlayerProfile) error {
 	_ = os.WriteFile(filepath.Join(gseDir, "account_name.txt"), []byte(name), 0644)
 	_ = os.WriteFile(filepath.Join(gseDir, "user_steam_id.txt"), []byte(steamID), 0644)
 	_ = os.WriteFile(filepath.Join(gseDir, "language.txt"), []byte(lang), 0644)
-	_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n10.0.2.2\n"), 0644)
+	_ = os.WriteFile(filepath.Join(gseDir, "custom_broadcasts.txt"), []byte("127.0.0.1\n127.255.255.255\n"), 0644)
 
 	// 3. Ensure base cache and config directories exist for the seat
 	_ = os.MkdirAll(filepath.Join(homeDir, ".cache"), 0755)
@@ -118,7 +118,6 @@ func BuildBwrapArgs(opts BwrapOptions) ([]string, error) {
 	}
 
 	// Always ensure non-root execution inside sandbox:
-	// Network namespaces (such as pasta) map the caller to root (uid 0) inside their user namespace.
 	// Running as root causes Proton to abort ("ERROR: This script should never be run as the root user")
 	// and causes DBus security policy rejections for GameMode.
 	// Map back to the user's real host UID and GID via --unshare-user.

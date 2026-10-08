@@ -16,7 +16,6 @@
       default_seat1_mode: 'local',
       default_seat2_mode: 'local',
       default_layout: 'dual_monitor',
-      broadcast_relay_enabled: true,
       seat1_gamepad: 'auto',
       seat2_gamepad: 'auto',
       seat1_keyboard: 'auto',
@@ -124,9 +123,6 @@
   });
   run(() => {
     if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.broadcast_relay_enabled === undefined) cfgDraft.multiseat.broadcast_relay_enabled = true;
   });
   run(() => {
     if (cfgDraft.multiseat.seat1_gamepad === undefined) cfgDraft.multiseat.seat1_gamepad = 'auto';
