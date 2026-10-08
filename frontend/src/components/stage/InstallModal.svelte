@@ -311,10 +311,10 @@
   title="Install {game?.name || 'Game'}"
   badge={game?.store || 'Steam'}
   maxWidth="max-w-xl"
-  padding="p-6"
+  padding="p-4 sm:p-6"
   {onclose}
 >
-  <div class="space-y-5 text-xs text-neutral-300">
+  <div class="w-full max-w-xl mx-auto bg-surface-header border border-surface-border rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 text-xs text-neutral-300">
     <!-- Target Library Directory Selection -->
     <div class="space-y-1.5">
       <label for="install-library-select" class="block font-bold text-neutral-200 text-2xs uppercase tracking-wider">
@@ -324,14 +324,14 @@
         <select
           id="install-library-select"
           bind:value={selectedLibrary}
-          class="w-full bg-surface-header border border-surface-border text-neutral-100 rounded-xl px-3 py-2 text-xs outline-none focus:border-neutral-400 transition-colors cursor-pointer"
+          class="w-full bg-surface-input border border-surface-border text-neutral-100 rounded-xl px-3 py-2 text-xs outline-none focus:border-neutral-400 transition-colors cursor-pointer"
         >
           {#each configuredLibraries as lib}
             <option value={lib}>{lib}</option>
           {/each}
         </select>
       {:else}
-        <div class="p-2.5 bg-surface-header border border-surface-border rounded-xl font-mono text-2xs text-neutral-300 truncate">
+        <div class="p-2.5 bg-surface-input border border-surface-border rounded-xl font-mono text-2xs text-neutral-300 truncate">
           {selectedLibrary || configuredLibraries[0] || '/home/staernid/Games'}
         </div>
       {/if}
@@ -350,7 +350,7 @@
           id="install-language-select"
           value={selectedLanguage}
           onchange={(e) => handleLanguageChange(e.target.value)}
-          class="w-full bg-surface-header border border-surface-border text-neutral-100 rounded-xl px-3 py-2 text-xs outline-none focus:border-neutral-400 transition-colors cursor-pointer capitalize"
+          class="w-full bg-surface-input border border-surface-border text-neutral-100 rounded-xl px-3 py-2 text-xs outline-none focus:border-neutral-400 transition-colors cursor-pointer capitalize"
         >
           {#each availableLanguages as lang}
             <option value={lang}>{lang}</option>
@@ -361,7 +361,7 @@
 
     <!-- DLC Inclusion Summary & Toggle -->
     {#if dlcGroups.length > 0}
-      <div class="p-3.5 bg-surface-header border border-surface-border rounded-xl space-y-2.5">
+      <div class="p-3.5 bg-surface-card border border-surface-border rounded-xl space-y-2.5">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-2">
             <span class="px-2 py-0.5 rounded text-3xs font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
@@ -383,7 +383,7 @@
         {#if showDlcList}
           <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1 pt-1 border-t border-surface-border/60">
             {#each dlcGroups as group (group.id)}
-              <label class="flex items-center justify-between p-2 rounded-lg bg-surface-card hover:bg-surface-cardHover transition-colors cursor-pointer select-none">
+              <label class="flex items-center justify-between p-2 rounded-lg bg-surface-input hover:bg-surface-cardHover transition-colors cursor-pointer select-none">
                 <div class="flex items-center space-x-2.5 min-w-0">
                   <input
                     type="checkbox"

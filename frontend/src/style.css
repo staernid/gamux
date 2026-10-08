@@ -28,22 +28,22 @@
 
   html.light {
     color-scheme: light;
-    --surface-base: 244 244 245; /* zinc-100 */
-    --surface-header: 255 255 255; /* white */
-    --surface-card: 255 255 255; /* white */
-    --surface-card-hover: 244 244 245; /* zinc-100 */
-    --surface-elevated: 255 255 255; /* white */
-    --surface-border: 228 228 231; /* zinc-200 */
-    --surface-border-subtle: 244 244 245; /* zinc-100 */
-    --surface-border-highlight: 212 212 216; /* zinc-300 */
-    --surface-input: 244 244 245; /* zinc-100 */
-    --surface-pill: 228 228 231; /* zinc-200 */
+    --surface-base: 243 244 246; /* cool neutral zinc-100/gray-100 canvas */
+    --surface-header: 255 255 255; /* pure crisp white */
+    --surface-card: 255 255 255; /* pure crisp white card */
+    --surface-card-hover: 244 245 248;
+    --surface-elevated: 255 255 255;
+    --surface-border: 220 224 231; /* distinct, visible card border */
+    --surface-border-subtle: 233 236 241;
+    --surface-border-highlight: 185 192 203; /* tactile interactive border */
+    --surface-input: 246 247 250;
+    --surface-pill: 235 238 243;
 
-    --bg-base: #f4f4f5;
+    --bg-base: #f3f4f6;
     --bg-surface: #ffffff;
     --bg-card: #ffffff;
-    --bg-card-hover: #f4f4f5;
-    --border-subtle: #e4e4e7;
+    --bg-card-hover: #f4f5f8;
+    --border-subtle: #dcdfe6;
     --border-active: #09090b;
     --text-primary: #09090b;
   }
@@ -182,12 +182,186 @@ html.light ::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* Light Theme Contrast Refinements */
-html.light .bg-white.text-neutral-950 {
+/* Global Light Theme Contrast & Typography Remapping */
+html.light {
+  color: #09090b;
+}
+
+/* 1. Global Typography Inversion for Light Mode
+   Map white & light-gray text to dark zinc shades, while excluding elements
+   that are legitimately dark (posters, badges, dark buttons, tooltips). */
+html.light :not(
+  [class*="bg-emerald-95"],
+  [class*="bg-amber-95"],
+  [class*="bg-rose-95"],
+  [class*="bg-indigo-95"],
+  [class*="bg-red-600"],
+  [class*="bg-black"],
+  [class*="bg-neutral-900"],
+  [class*="from-black"],
+  [class*="bg-[#18181b]"],
+  [class*="bg-[#09090b]"]
+) > .text-white,
+html.light h1:not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-rose-"]),
+html.light h2:not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-rose-"]),
+html.light h3:not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-rose-"]),
+html.light h4:not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-rose-"]) {
+  color: #09090b;
+}
+
+html.light .text-neutral-100 {
+  color: #18181b;
+}
+
+html.light .text-neutral-200 {
+  color: #18181b;
+}
+
+html.light .text-neutral-300 {
+  color: #27272a;
+}
+
+html.light .text-neutral-400 {
+  color: #52525b;
+}
+
+html.light .text-neutral-500 {
+  color: #71717a;
+}
+
+/* Hover typography states */
+html.light .hover\:text-white:hover {
+  color: #09090b;
+}
+
+html.light .group:hover .group-hover\:text-white {
+  color: #09090b;
+}
+
+html.light .hover\:text-neutral-200:hover {
+  color: #18181b;
+}
+
+/* 2. Active Tab & Navigation Pill Indicators in Light Mode
+   Active items with bg-surface-cardHover and text-white should have crisp dark text
+   or distinct tactile elevation so they never render white-on-white. */
+html.light .bg-surface-cardHover.text-white,
+html.light [aria-selected="true"].text-white,
+html.light button.bg-surface-cardHover {
+  color: #09090b !important;
+  background-color: #e4e4e7 !important; /* solid contrasting zinc-200 active indicator */
+  border-color: #a1a1aa !important;
+}
+
+html.light .bg-surface-cardHover.text-white svg,
+html.light [aria-selected="true"].text-white svg,
+html.light button.bg-surface-cardHover svg {
+  color: #09090b !important;
+}
+
+/* 3. Toggle Switches (SeamlessSwitch) in Light Mode */
+html.light div[role="switch"] .bg-neutral-900,
+html.light div[role="switch"] .bg-neutral-900\/80 {
+  background-color: #e4e4e7 !important; /* light gray track when OFF */
+  border-color: #d4d4d8 !important;
+}
+html.light div[role="switch"] .bg-neutral-400,
+html.light div[role="switch"] .bg-neutral-500 {
+  background-color: #71717a !important; /* dark thumb when OFF */
+}
+html.light div[role="switch"] .bg-white {
+  background-color: #18181b !important; /* dark track when ON */
+  border-color: #18181b !important;
+}
+html.light div[role="switch"] .bg-white .bg-neutral-950,
+html.light div[role="switch"] span.bg-neutral-950 {
+  background-color: #ffffff !important; /* white thumb when ON */
+}
+
+/* 4. Form Controls, Inputs & Selects */
+html.light input,
+html.light select,
+html.light textarea {
+  color: #09090b !important;
+  background-color: rgb(var(--surface-input));
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #71717a !important;
+}
+html.light select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2352525b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+  padding-right: 2rem;
+}
+
+/* 5. Dark Badges, Steam Profile Sync Box & Environment Add Button in Light Mode */
+html.light .bg-neutral-800,
+html.light .bg-neutral-900 {
+  background-color: #e4e4e7 !important;
+  border-color: #d4d4d8 !important;
+  color: #18181b !important;
+}
+html.light .bg-neutral-800:hover,
+html.light .bg-neutral-900:hover {
+  background-color: #d4d4d8 !important;
+  color: #09090b !important;
+}
+html.light .bg-neutral-800 svg,
+html.light .bg-neutral-900 svg {
+  color: #18181b !important;
+}
+
+/* Ensure button and badge text inside formerly neutral-800 elements is crisp */
+html.light .bg-neutral-800 .text-white,
+html.light .bg-neutral-900 .text-white,
+html.light .bg-neutral-800 .text-neutral-200,
+html.light .bg-neutral-800 .text-neutral-300,
+html.light .bg-neutral-800 .text-neutral-400 {
+  color: #18181b !important;
+}
+
+/* Primary Dark Action Buttons (Keep high contrast inverted CTA buttons) */
+html.light .bg-white.text-neutral-950,
+html.light .bg-neutral-100.text-neutral-950 {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.15) !important;
+}
+html.light .bg-white.text-neutral-950:hover,
+html.light .bg-neutral-100.text-neutral-950:hover {
   background-color: #09090b !important;
   color: #ffffff !important;
 }
 
+html.light .bg-white.text-neutral-950 svg,
+html.light .bg-neutral-100.text-neutral-950 svg {
+  color: #ffffff !important;
+}
+
+/* 6. Poster Art, Overlays & Media Safeguards (Keep pure white text over dark image gradients/badges) */
+html.light .aspect-\[2\/3\] .text-neutral-300,
+html.light .aspect-\[2\/3\] .text-neutral-400,
+html.light .from-black .text-neutral-300,
+html.light .from-black .text-neutral-400,
+html.light [class*="bg-black"] .text-white,
+html.light [class*="bg-black"] .text-neutral-300,
+html.light [class*="bg-emerald-95"] .text-emerald-300,
+html.light [class*="bg-amber-95"] .text-amber-300,
+html.light [class*="bg-rose-95"] .text-rose-300,
+html.light [class*="bg-indigo-95"] .text-indigo-300 {
+  color: inherit;
+}
+
+/* 7. Legacy Hex backgrounds gracefully map to surface tokens */
+html.light [class*="bg-[#10101"] {
+  background-color: rgb(var(--surface-input)) !important;
+}
+html.light [class*="bg-[#11111"] {
+  background-color: rgb(var(--surface-card)) !important;
+}
 html.light [class*="bg-[#12121"] {
   background-color: rgb(var(--surface-card)) !important;
 }
@@ -203,7 +377,13 @@ html.light [class*="bg-[#11141"] {
 html.light [class*="bg-[#14141"] {
   background-color: rgb(var(--surface-input)) !important;
 }
+html.light [class*="bg-[#20202"] {
+  background-color: rgb(var(--surface-input)) !important;
+}
 html.light [class*="border-[#27272"] {
+  border-color: rgb(var(--surface-border)) !important;
+}
+html.light [class*="border-neutral-700"] {
   border-color: rgb(var(--surface-border)) !important;
 }
 
