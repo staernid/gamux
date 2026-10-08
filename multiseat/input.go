@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/staernid/gamux/util"
 )
 
 var (
@@ -551,5 +553,61 @@ func FindAllHostKBMNodes() (keyboards, mice []string) {
 	}
 
 	return keyboards, mice
+}
+
+// ResolveDeviceNode normalizes a device node reference, extracting any embedded
+// /dev/input/... path from formatted labels like "Keyboard Name (/dev/input/event4)",
+// or looking up the active event node by device name if the specified path no longer exists.
+func ResolveDeviceNode(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "none" || raw == "auto" {
+		return raw
+	}
+
+	candidate := raw
+	deviceName := ""
+
+	// Check if wrapped in "Name (/path/...)"
+	if idx := strings.Index(raw, "(/"); idx != -1 {
+		end := strings.Index(raw[idx:], ")")
+		if end != -1 {
+			candidate = raw[idx+1 : idx+end]
+			deviceName = strings.TrimSpace(raw[:idx])
+		}
+	} else if strings.HasPrefix(raw, "/") {
+		candidate = raw
+	} else {
+		// Possibly just a device name
+		deviceName = raw
+		candidate = ""
+	}
+
+	// If candidate path exists, return it directly
+	if candidate != "" && util.FileExists(candidate) {
+		return candidate
+	}
+
+	// If path doesn't exist or only name was provided, search EnumerateInputDevices
+	if deviceName != "" {
+		if devices, err := EnumerateInputDevices(); err == nil && len(devices) > 0 {
+			lowerName := strings.ToLower(deviceName)
+			for _, d := range devices {
+				if strings.ToLower(d.Name) == lowerName {
+					return d.DevNode
+				}
+			}
+			// Substring match fallback
+			for _, d := range devices {
+				if strings.Contains(strings.ToLower(d.Name), lowerName) || strings.Contains(lowerName, strings.ToLower(d.Name)) {
+					return d.DevNode
+				}
+			}
+		}
+	}
+
+	if candidate != "" {
+		return candidate
+	}
+	return raw
 }
 

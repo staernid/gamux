@@ -213,11 +213,49 @@
   ]);
   let keyboards = $derived($multiseatStore.keyboards);
   let mice = $derived($multiseatStore.mice);
+  function normalizeDeviceNode(val, availableList = []) {
+    if (!val || val === 'auto' || val === 'none') return val;
+    const match = String(val).match(/\((\/dev\/input\/[^)]+)\)/);
+    const candidatePath = match ? match[1] : (val.startsWith('/dev/') ? val : '');
+    const candidateName = match ? val.slice(0, match.index).trim() : (!val.startsWith('/dev/') ? val.trim() : '');
+
+    if (candidatePath && availableList.some(item => item.dev_node === candidatePath)) {
+      return candidatePath;
+    }
+    if (candidateName && availableList.length > 0) {
+      const found = availableList.find(item => item.name && item.name.toLowerCase() === candidateName.toLowerCase());
+      if (found) return found.dev_node;
+    }
+    if (candidatePath) return candidatePath;
+    return val;
+  }
+
+  run(() => {
+    if (cfgDraft?.multiseat) {
+      if (cfgDraft.multiseat.seat1_keyboard) {
+        const norm = normalizeDeviceNode(cfgDraft.multiseat.seat1_keyboard, keyboards || []);
+        if (norm !== cfgDraft.multiseat.seat1_keyboard) cfgDraft.multiseat.seat1_keyboard = norm;
+      }
+      if (cfgDraft.multiseat.seat2_keyboard) {
+        const norm = normalizeDeviceNode(cfgDraft.multiseat.seat2_keyboard, keyboards || []);
+        if (norm !== cfgDraft.multiseat.seat2_keyboard) cfgDraft.multiseat.seat2_keyboard = norm;
+      }
+      if (cfgDraft.multiseat.seat1_mouse) {
+        const norm = normalizeDeviceNode(cfgDraft.multiseat.seat1_mouse, mice || []);
+        if (norm !== cfgDraft.multiseat.seat1_mouse) cfgDraft.multiseat.seat1_mouse = norm;
+      }
+      if (cfgDraft.multiseat.seat2_mouse) {
+        const norm = normalizeDeviceNode(cfgDraft.multiseat.seat2_mouse, mice || []);
+        if (norm !== cfgDraft.multiseat.seat2_mouse) cfgDraft.multiseat.seat2_mouse = norm;
+      }
+    }
+  });
+
   let keyboardOptions = $derived([
     { value: 'auto', label: 'Auto (Shared / Host Default)' },
     { value: 'none', label: 'None (Mask All Keyboards)' },
     ...(keyboards || []).map(k => ({
-      value: k.name ? `${k.name} (${k.dev_node})` : k.dev_node,
+      value: k.dev_node,
       label: k.name ? `${k.name} (${k.dev_node})` : k.dev_node
     }))
   ]);
@@ -225,7 +263,7 @@
     { value: 'auto', label: 'Auto (Shared / Host Default)' },
     { value: 'none', label: 'None (Mask All Mice)' },
     ...(mice || []).map(m => ({
-      value: m.name ? `${m.name} (${m.dev_node})` : m.dev_node,
+      value: m.dev_node,
       label: m.name ? `${m.name} (${m.dev_node})` : m.dev_node
     }))
   ]);

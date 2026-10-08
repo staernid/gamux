@@ -164,6 +164,7 @@ type SystemCapabilities struct {
 // isExplicitDeviceNode reports whether a device node string points to a real device node path,
 // rather than an empty value, "none", or "auto".
 func isExplicitDeviceNode(node string) bool {
+	node = ResolveDeviceNode(node)
 	return node != "" && node != "none" && node != "auto"
 }
 

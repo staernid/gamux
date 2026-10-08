@@ -2212,4 +2212,77 @@ func TestSupervisor_GetRunningInstances(t *testing.T) {
 	}
 }
 
+func TestResolveDeviceNode(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeDev := filepath.Join(tmpDir, "event42")
+	_ = os.WriteFile(fakeDev, []byte(""), 0600)
+
+	// Case 1: Sentinel / special values
+	if got := ResolveDeviceNode(""); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+	if got := ResolveDeviceNode("auto"); got != "auto" {
+		t.Errorf("expected 'auto', got %q", got)
+	}
+	if got := ResolveDeviceNode("none"); got != "none" {
+		t.Errorf("expected 'none', got %q", got)
+	}
+
+	// Case 2: Direct existing path
+	if got := ResolveDeviceNode(fakeDev); got != fakeDev {
+		t.Errorf("expected %q, got %q", fakeDev, got)
+	}
+
+	// Case 3: Wrapped label format "Name (/dev/input/eventX)" with existing file
+	wrapped := fmt.Sprintf("Telink Wireless Gaming Keyboard (%s)", fakeDev)
+	if got := ResolveDeviceNode(wrapped); got != fakeDev {
+		t.Errorf("expected extracted %q, got %q", fakeDev, got)
+	}
+
+	// Case 4: isExplicitDeviceNode handles both clean and wrapped nodes
+	if !isExplicitDeviceNode(fakeDev) {
+		t.Errorf("expected isExplicitDeviceNode(%q) to be true", fakeDev)
+	}
+	if !isExplicitDeviceNode(wrapped) {
+		t.Errorf("expected isExplicitDeviceNode(%q) to be true", wrapped)
+	}
+	if isExplicitDeviceNode("none") {
+		t.Errorf("expected isExplicitDeviceNode('none') to be false")
+	}
+	if isExplicitDeviceNode("auto") {
+		t.Errorf("expected isExplicitDeviceNode('auto') to be false")
+	}
+	if isExplicitDeviceNode("") {
+		t.Errorf("expected isExplicitDeviceNode('') to be false")
+	}
+
+	// Case 5: When path does not exist, fall back to matching by device name in sysfs
+	origSys := sysClassInputDir
+	origDev := devInputDir
+	defer func() {
+		sysClassInputDir = origSys
+		devInputDir = origDev
+	}()
+
+	mockSys := filepath.Join(tmpDir, "sys", "class", "input")
+	mockDev := filepath.Join(tmpDir, "dev", "input")
+	_ = os.MkdirAll(mockSys, 0755)
+	_ = os.MkdirAll(mockDev, 0755)
+	sysClassInputDir = mockSys
+	devInputDir = mockDev
+
+	// Create mock event99 for "BrandX Special Keyboard"
+	ev99Sys := filepath.Join(mockSys, "event99", "device")
+	_ = os.MkdirAll(ev99Sys, 0755)
+	_ = os.WriteFile(filepath.Join(ev99Sys, "name"), []byte("BrandX Special Keyboard\n"), 0644)
+	ev99Dev := filepath.Join(mockDev, "event99")
+	_ = os.WriteFile(ev99Dev, []byte(""), 0600)
+
+	// Outdated path event999999 does not exist, but device name matches event99
+	outdated := "BrandX Special Keyboard (/dev/input/event999999)"
+	if got := ResolveDeviceNode(outdated); got != ev99Dev {
+		t.Errorf("expected fallback to active devNode %q, got %q", ev99Dev, got)
+	}
+}
+
 

@@ -226,5 +226,54 @@ describe('CoopTab Component', () => {
 
     await fireEvent.click(swapBtn);
   });
+
+  it('normalizes legacy formatted keyboard and mouse label strings to dev_node', async () => {
+    const draft = {
+      ...mockCfgDraft,
+      multiseat: {
+        ...mockCfgDraft.multiseat,
+        seat1_keyboard: 'SINOWEALTH Gaming KB  Consumer Control (/dev/input/event8)',
+        seat2_keyboard: 'Telink Wireless Gaming Keyboard (/dev/input/event266)',
+        seat1_mouse: 'Logitech Gaming Mouse G402 (/dev/input/event13)',
+        seat2_mouse: 'COOLER MASTER Cooler Master Mice Dongle (/dev/input/event262)',
+      }
+    };
+
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    expect(draft.multiseat.seat1_keyboard).toBe('/dev/input/event8');
+    expect(draft.multiseat.seat2_keyboard).toBe('/dev/input/event266');
+    expect(draft.multiseat.seat1_mouse).toBe('/dev/input/event13');
+    expect(draft.multiseat.seat2_mouse).toBe('/dev/input/event262');
+  });
+
+  it('binds clean dev_node value when selecting keyboard or mouse', async () => {
+    const draft = {
+      ...mockCfgDraft,
+      multiseat: {
+        ...mockCfgDraft.multiseat,
+        seat2_keyboard: 'auto',
+      }
+    };
+
+    render(CoopTab, {
+      cfgDraft: draft,
+      userCfgDraft: { ...mockUserCfgDraft },
+      languagesList,
+      countriesList
+    });
+
+    const kbdSelect = document.getElementById('seat2-kbd-select');
+    expect(kbdSelect).toBeInTheDocument();
+
+    // Select Keychron keyboard (/dev/input/event4 from mock api)
+    await fireEvent.change(kbdSelect, { target: { value: '/dev/input/event4' } });
+    expect(draft.multiseat.seat2_keyboard).toBe('/dev/input/event4');
+  });
 });
 

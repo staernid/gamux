@@ -90,6 +90,7 @@ func NewInputGrabber(devNodes ...string) *InputGrabber {
 	seen := make(map[string]bool)
 
 	addNode := func(p string) {
+		p = ResolveDeviceNode(p)
 		if !isExplicitDeviceNode(p) {
 			return
 		}
@@ -104,6 +105,7 @@ func NewInputGrabber(devNodes ...string) *InputGrabber {
 	}
 
 	for _, n := range devNodes {
+		n = ResolveDeviceNode(n)
 		if !isExplicitDeviceNode(n) {
 			continue
 		}

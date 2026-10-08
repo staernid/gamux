@@ -406,6 +406,9 @@ func (s *Supervisor) LaunchSession(ctx context.Context, sessionCfg MultiseatSess
 		}
 		sCfg.SeatID = seatID
 		sCfg.ProfileID = profileID
+		sCfg.KeyboardNode = ResolveDeviceNode(sCfg.KeyboardNode)
+		sCfg.MouseNode = ResolveDeviceNode(sCfg.MouseNode)
+		sCfg.GamepadNode = ResolveDeviceNode(sCfg.GamepadNode)
 
 		// Profile dir & GSE Saves
 		var pDir string
@@ -714,6 +717,10 @@ func (s *Supervisor) buildSeatCommand(ctx context.Context, sessionCfg MultiseatS
 	if seatID == "" {
 		seatID = fmt.Sprintf("p%d", seatIndex+1)
 	}
+	seatCfg.SeatID = seatID
+	seatCfg.KeyboardNode = ResolveDeviceNode(seatCfg.KeyboardNode)
+	seatCfg.MouseNode = ResolveDeviceNode(seatCfg.MouseNode)
+	seatCfg.GamepadNode = ResolveDeviceNode(seatCfg.GamepadNode)
 
 	numAppID, _ := util.ParseAppID(sessionCfg.AppID)
 	operatingMode := domain.ModeLoader

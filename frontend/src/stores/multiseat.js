@@ -527,6 +527,13 @@ function createMultiseatStore() {
 
       const isExplicitDeviceNode = (node) => Boolean(node && node !== 'none' && node !== 'auto');
 
+      const extractDevNode = (val) => {
+        if (!val || val === 'auto' || val === 'none') return val || '';
+        const match = String(val).match(/\((\/dev\/input\/[^)]+)\)/);
+        if (match) return match[1];
+        return String(val).trim();
+      };
+
       const seatConfigs = effectiveRawSeats.map((s, idx) => {
         const seatId = s.seat_id || `p${idx + 1}`;
         let prof;
@@ -550,9 +557,11 @@ function createMultiseatStore() {
           ip_country: prof.ip_country || 'US',
         };
 
-        const devPad = resolvedPads[idx] === 'none' ? '' : resolvedPads[idx];
-        const kbd = s.keyboard_node || (s.seat_id === 'p1' ? (mCfg.seat1_keyboard || '') : (s.seat_id === 'p2' ? (mCfg.seat2_keyboard || '') : ''));
-        const mouse = s.mouse_node || (s.seat_id === 'p1' ? (mCfg.seat1_mouse || '') : (s.seat_id === 'p2' ? (mCfg.seat2_mouse || '') : ''));
+        const devPad = resolvedPads[idx] === 'none' ? '' : extractDevNode(resolvedPads[idx]);
+        const rawKbd = s.keyboard_node || (s.seat_id === 'p1' ? (mCfg.seat1_keyboard || '') : (s.seat_id === 'p2' ? (mCfg.seat2_keyboard || '') : ''));
+        const rawMouse = s.mouse_node || (s.seat_id === 'p1' ? (mCfg.seat1_mouse || '') : (s.seat_id === 'p2' ? (mCfg.seat2_mouse || '') : ''));
+        const kbd = extractDevNode(rawKbd);
+        const mouse = extractDevNode(rawMouse);
 
         const mode = s.mode || (s.seat_id === 'p1' ? (mCfg.default_seat1_mode || 'local') : (s.seat_id === 'p2' ? (mCfg.default_seat2_mode || 'local') : 'local'));
         const maxDisp = (state.displays && state.displays.length > 0) ? state.displays.length - 1 : 0;
