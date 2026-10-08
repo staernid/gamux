@@ -61,7 +61,7 @@
   let gameSource = $derived($selectedGame ? getGameSource($selectedGame) : '');
   let metaInfo = $derived($selectedGame ? getMetadataInfo($selectedGame) : { provider: 'None', id: '' });
 
-  const views = ['library', 'tasks', 'settings'];
+  const views = ['library', 'tasks', 'game-hub', 'settings', 'catalog'];
 
   function navigateWithGuard(targetView, onProceed = null) {
     if (typeof onProceed === 'function') {
@@ -74,9 +74,9 @@
 
   function cycleView(dir) {
     const curr = get(activeView) || 'library';
-    const currentBase = curr === 'game-hub' ? 'library' : curr;
-    const idx = views.indexOf(currentBase);
-    let next = idx + dir;
+    const idx = views.indexOf(curr);
+    const validIdx = idx >= 0 ? idx : 0;
+    let next = validIdx + dir;
     if (next < 0) next = views.length - 1;
     if (next >= views.length) next = 0;
     navigateWithGuard(views[next]);
@@ -84,7 +84,15 @@
 
   function openSelectedGameHub(targetGame = null) {
     const game = targetGame || $selectedGame;
-    if (!game) return;
+    if (!game) {
+      const all = get(filteredGames) || [];
+      if (all.length > 0) {
+        selectedGame.set(all[0]);
+        playSelect();
+        $activeView = 'game-hub';
+      }
+      return;
+    }
     if (targetGame) selectedGame.set(targetGame);
     playSelect();
     $activeView = 'game-hub';
@@ -98,7 +106,7 @@
 
   function openSearchGrid() {
     playNav();
-    modalStore.open('catalog');
+    activeView.set('catalog');
   }
 
   function stepGameSelection(dir) {
@@ -306,14 +314,14 @@
     // 3. Check URL query parameters for view / drawer previewing
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
-    if (viewParam && ['library', 'game-hub', 'tasks', 'settings'].includes(viewParam)) {
+    if (viewParam && ['library', 'game-hub', 'tasks', 'settings', 'catalog'].includes(viewParam)) {
       activeView.set(viewParam);
     }
     if (urlParams.get('properties') === '1' || urlParams.get('properties') === 'true' || urlParams.get('drawer') === '1') {
       activeView.set('game-hub');
     }
     if (urlParams.get('search') === '1' || urlParams.get('search') === 'true') {
-      modalStore.open('catalog');
+      activeView.set('catalog');
     }
 
     // 4. Scan library if path exists
@@ -327,9 +335,8 @@
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if ($modalStore && $modalStore.type === 'catalog') {
-          playBack();
-          modalStore.close();
+        if ($activeView === 'catalog' && libraryViewRef?.focusSearch) {
+          libraryViewRef.focusSearch();
         } else {
           openSearchGrid();
         }
@@ -367,7 +374,11 @@
         } else if (e.key === '2') {
           navigateWithGuard('tasks');
         } else if (e.key === '3') {
+          openSelectedGameHub();
+        } else if (e.key === '4') {
           navigateWithGuard('settings');
+        } else if (e.key === '5') {
+          navigateWithGuard('catalog');
         } else if ((e.key === 'y' || e.key === 'Y') && $activeView === 'library') {
           playTick();
           cycleSortOrder();
@@ -527,7 +538,9 @@
 
   <!-- Main View Area -->
   {#if $activeView === 'library'}
-    <LibraryView bind:this={libraryViewRef} />
+    <LibraryView bind:this={libraryViewRef} mode="local" />
+  {:else if $activeView === 'catalog'}
+    <LibraryView bind:this={libraryViewRef} mode="catalog" />
   {:else if $activeView === 'game-hub'}
     <GameHubView />
   {:else if $activeView === 'tasks'}

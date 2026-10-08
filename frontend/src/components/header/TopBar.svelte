@@ -101,15 +101,14 @@
     }
   }
 
-  function handleShelfOrHubClick() {
-    if ($activeView === 'game-hub') {
-      navigateWithGuard('library');
-    } else if ($activeView === 'library') {
-      if ($selectedGame) {
-        $activeView = 'game-hub';
-      }
-    } else {
-      navigateWithGuard('library');
+  let hasSelectedOrAnyGame = $derived(Boolean($selectedGame || (catalogStore.games && catalogStore.games.length > 0)));
+
+  function handleSelectedGameClick() {
+    if ($selectedGame) {
+      navigateWithGuard('game-hub');
+    } else if (catalogStore.games && catalogStore.games.length > 0) {
+      $selectedGame = catalogStore.games[0];
+      navigateWithGuard('game-hub');
     }
   }
 
@@ -131,13 +130,13 @@
   <div class="pointer-events-auto flex items-center bg-surface-header border border-surface-border p-1 rounded-2xl shadow-2xl">
     <!-- Centered Navigation Items (Icon-only) -->
     <nav class="flex items-center space-x-1">
-      <!-- Shelf / Game Hub (1) -->
+      <!-- Local Library (1) - Leftmost -->
       <button
         type="button"
-        onclick={handleShelfOrHubClick}
-        class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' || $activeView === 'game-hub' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        title={$activeView === 'game-hub' ? 'Back to Shelf' : 'Shelf (1)'}
-        aria-label={$activeView === 'game-hub' ? 'Back to Shelf' : 'Shelf (1)'}
+        onclick={() => navigateWithGuard('library')}
+        class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'library' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+        title="Shelf (1)"
+        aria-label="Shelf (1)"
       >
         <Icon name="shelf" className="w-4 h-4 flex-shrink-0" />
       </button>
@@ -158,24 +157,36 @@
         {/if}
       </button>
 
-      <!-- Settings (3) -->
+      <!-- Selected Game / Hub (3) - Middle Gamepad Icon -->
+      <button
+        type="button"
+        onclick={handleSelectedGameClick}
+        class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'game-hub' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'} {!hasSelectedOrAnyGame ? 'opacity-40 cursor-not-allowed' : ''}"
+        title={$selectedGame ? `Selected: ${$selectedGame.name} (3)` : 'Selected Game (3)'}
+        aria-label={$selectedGame ? `Selected: ${$selectedGame.name} (3)` : 'Selected Game (3)'}
+        disabled={!hasSelectedOrAnyGame}
+      >
+        <Icon name="gamepad" className="w-4 h-4 flex-shrink-0" />
+      </button>
+
+      <!-- Settings (4) -->
       <button
         type="button"
         onclick={() => navigateWithGuard('settings')}
         class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'settings' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
-        title="Settings (3)"
-        aria-label="Settings (3)"
+        title="Settings (4)"
+        aria-label="Settings (4)"
       >
         <Icon name="settings" className="w-4 h-4 flex-shrink-0" />
       </button>
 
-      <!-- Store Catalog (Wireframe Globe) -->
+      <!-- Online Catalog (5) - Rightmost -->
       <button
         type="button"
-        onclick={() => modalStore.open('catalog')}
-        class="p-2 rounded-xl transition-all flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-surface-input cursor-pointer"
-        title="Catalog"
-        aria-label="Catalog"
+        onclick={() => navigateWithGuard('catalog')}
+        class="p-2 rounded-xl transition-all flex items-center justify-center cursor-pointer {$activeView === 'catalog' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
+        title="Catalog (5)"
+        aria-label="Catalog (5)"
       >
         <Icon name="globe" className="w-4 h-4 flex-shrink-0" />
       </button>

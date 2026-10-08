@@ -10,12 +10,14 @@ describe('TopBar Component', () => {
     tasksStore.reset();
   });
 
-  it('renders navigation buttons (1: Shelf, 2: Downloads, 3: Settings)', () => {
+  it('renders navigation buttons (1: Shelf, 2: Downloads, 3: Selected Game, 4: Settings, 5: Catalog)', () => {
     render(TopBar);
 
     expect(screen.getByTitle(/Shelf \(1\)/i)).toBeInTheDocument();
     expect(screen.getByTitle(/Downloads \(2\)/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Settings \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Selected Game \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings \(4\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Catalog \(5\)/i)).toBeInTheDocument();
   });
 
   it('navigates to downloads view on button click', async () => {
@@ -40,17 +42,39 @@ describe('TopBar Component', () => {
     expect(badge).toBeInTheDocument();
   });
 
-  it('morphs first button into Back to Shelf when activeView is game-hub', async () => {
+  it('navigates to library on shelf click when activeView is game-hub and highlights gamepad', async () => {
+    const { games, selectedGame } = await import('../../stores/library.js');
+    const mockGame = { gameDir: '/games/hl2', name: 'Half-Life 2' };
+    games.set([mockGame]);
+    selectedGame.set(mockGame);
     activeView.set('game-hub');
     render(TopBar);
 
-    const hubBtn = screen.getByTitle(/Back to Shelf/i);
-    expect(hubBtn).toBeInTheDocument();
+    const gamepadBtn = screen.getByTitle(/Selected: Half-Life 2/i);
+    expect(gamepadBtn).toBeInTheDocument();
+    expect(gamepadBtn.className).toContain('bg-surface-cardHover');
 
-    await fireEvent.click(hubBtn);
+    const shelfBtn = screen.getByTitle(/Shelf \(1\)/i);
+    await fireEvent.click(shelfBtn);
     let currentView = '';
     activeView.subscribe(v => currentView = v)();
     expect(currentView).toBe('library');
+  });
+
+  it('navigates to game-hub on middle gamepad button click', async () => {
+    const { games, selectedGame } = await import('../../stores/library.js');
+    const mockGame = { gameDir: '/games/portal', name: 'Portal' };
+    games.set([mockGame]);
+    selectedGame.set(mockGame);
+    activeView.set('library');
+    render(TopBar);
+
+    const gamepadBtn = screen.getByTitle(/Selected: Portal/i);
+    await fireEvent.click(gamepadBtn);
+
+    let currentView = '';
+    activeView.subscribe(v => currentView = v)();
+    expect(currentView).toBe('game-hub');
   });
 
   it('renders vertically stacked running games on the right when games are active', async () => {
@@ -88,17 +112,16 @@ describe('TopBar Component', () => {
     runningInstances.set([]);
   });
 
-  it('renders catalog button and opens catalog modal on click', async () => {
-    const { modalStore } = await import('../../stores/modal.js');
-    const openSpy = vi.spyOn(modalStore, 'open');
-
+  it('renders catalog button and navigates to catalog view on click', async () => {
     render(TopBar);
 
-    const catalogBtn = screen.getByTitle(/^Catalog$/i);
+    const catalogBtn = screen.getByTitle(/Catalog \(5\)/i);
     expect(catalogBtn).toBeInTheDocument();
 
     await fireEvent.click(catalogBtn);
-    expect(openSpy).toHaveBeenCalledWith('catalog');
+    let currentView = '';
+    activeView.subscribe(v => currentView = v)();
+    expect(currentView).toBe('catalog');
   });
 
   it('does not render visible text labels like "Back to Shelf" or "Ctrl+K" in navigation', () => {

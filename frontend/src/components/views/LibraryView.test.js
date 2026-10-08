@@ -54,21 +54,55 @@ describe('LibraryView Component', () => {
     expect(currentSel?.name).toBe('Balatro');
   });
 
-  it('filters titles using status filter chips (Ready / Unpatched)', async () => {
+  it('filters titles using status filter dropdown (Ready / Unpatched)', async () => {
     const { activeFilter } = await import('../../stores/library.js');
     render(LibraryView);
 
-    const readyChip = screen.getByRole('button', { name: /Ready/i });
-    expect(readyChip).toBeInTheDocument();
-    await fireEvent.click(readyChip);
+    const filterSelect = screen.getByLabelText(/Filter games by status/i);
+    expect(filterSelect).toBeInTheDocument();
 
+    await fireEvent.change(filterSelect, { target: { value: 'patched' } });
     let currentFilter = '';
     activeFilter.subscribe(v => currentFilter = v)();
     expect(currentFilter).toBe('patched');
 
-    const unpatchedChip = screen.getByRole('button', { name: /Unpatched/i });
-    await fireEvent.click(unpatchedChip);
+    await fireEvent.change(filterSelect, { target: { value: 'clean' } });
     activeFilter.subscribe(v => currentFilter = v)();
     expect(currentFilter).toBe('clean');
+  });
+
+  it('renders online catalog mode with discovery suggestions when mode is catalog', () => {
+    render(LibraryView, { props: { mode: 'catalog' } });
+
+    expect(screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Online Store Catalog Discovery/i)).toBeInTheDocument();
+    expect(screen.getByText('Hades II')).toBeInTheDocument();
+  });
+
+  it('searches store games in catalog mode and allows selecting a game', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    const searchSpy = vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
+      { id: '1091500', name: 'Cyberpunk 2077', store: 'steam', poster_url: 'https://img.test/cp.jpg' }
+    ]);
+
+    render(LibraryView, { props: { mode: 'catalog' } });
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Cyberpunk' } });
+
+    // Wait for debounced search
+    await vi.waitFor(() => expect(searchSpy).toHaveBeenCalledWith('Cyberpunk'));
+
+    const cardTitle = await screen.findByText('Cyberpunk 2077');
+    expect(cardTitle).toBeInTheDocument();
+
+    const cardButton = cardTitle.closest('button');
+    await fireEvent.click(cardButton);
+
+    let currentView = null;
+    activeView.subscribe(v => currentView = v)();
+    expect(currentView).toBe('game-hub');
+
+    searchSpy.mockRestore();
   });
 });

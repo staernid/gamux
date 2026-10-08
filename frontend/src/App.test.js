@@ -22,7 +22,9 @@ describe('App Root Shell', () => {
 
     expect(screen.getByTitle(/Shelf \(1\)/i)).toBeInTheDocument();
     expect(screen.getByTitle(/Downloads \(2\)/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Settings \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Selected: Balatro \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Settings \(4\)/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Catalog \(5\)/i)).toBeInTheDocument();
   });
 
   it('switches views smoothly via activeView store', async () => {
@@ -36,10 +38,14 @@ describe('App Root Shell', () => {
     activeView.set('settings');
     expect(await screen.findByText('System Settings')).toBeInTheDocument();
 
+    // Switch to catalog view
+    activeView.set('catalog');
+    expect(await screen.findByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i)).toBeInTheDocument();
+
     // Switch to game-hub
     selectedGame.set(mockGames[0]);
     activeView.set('game-hub');
-    expect(await screen.findByRole('button', { name: /Back to Shelf/i })).toBeInTheDocument();
+    expect(await screen.findByTitle(/Selected: Balatro \(3\)/i)).toBeInTheDocument();
     expect(await screen.findByText('Play Now')).toBeInTheDocument();
 
     // Escape returns to library

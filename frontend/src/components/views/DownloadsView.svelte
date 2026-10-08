@@ -246,7 +246,7 @@
         <div class="pt-2 flex items-center justify-center space-x-3">
           <button
             type="button"
-            onclick={() => modalStore.open('catalog')}
+            onclick={() => activeView.set('catalog')}
             class="px-4 py-2 rounded-xl bg-white text-neutral-950 font-bold hover:bg-neutral-200 transition shadow cursor-pointer text-xs"
           >
             Browse Catalog
