@@ -46,6 +46,7 @@ func TestEnsurePrefix(t *testing.T) {
 func TestEnsureSeatPrefix(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, ".local", "share"))
 
 	cfg := config.DefaultConfig()
 	game := domain.NewGame("Half-Life", filepath.Join(tmpDir, "Half-Life"), "70", "win64")
@@ -60,12 +61,12 @@ func TestEnsureSeatPrefix(t *testing.T) {
 		t.Errorf("expected p1 prefix %s, got %s", expectedP1, p1Prefix)
 	}
 
-	// 2. Seat 2 (Player 2) default prefix -> ~/Games/umu-p2/70
+	// 2. Seat 2 (Player 2) default prefix -> ~/.local/share/gamux/profiles/p2/home/Games/umu/70
 	p2Prefix, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", "")
 	if err != nil {
 		t.Fatalf("EnsureSeatPrefix(p2) failed: %v", err)
 	}
-	expectedP2 := filepath.Join(tmpDir, "Games", "umu-p2", "70")
+	expectedP2 := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", "Games", "umu", "70")
 	if p2Prefix != expectedP2 {
 		t.Errorf("expected p2 prefix %s, got %s", expectedP2, p2Prefix)
 	}
@@ -80,8 +81,8 @@ func TestEnsureSeatPrefix(t *testing.T) {
 		t.Errorf("expected p2 custom prefix %s, got %s", customP2, p2Custom)
 	}
 
-	// 4. Seat 2 with prefix base directory (e.g. ~/Games/umu-p2) -> should append prefix ID (70)
-	p2Base := filepath.Join(tmpDir, "Games", "umu-p2")
+	// 4. Seat 2 with prefix base directory -> should append prefix ID (70)
+	p2Base := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", "Games", "umu")
 	p2ResolvedFromBase, err := compat.EnsureSeatPrefix(context.Background(), cfg, game, "p2", p2Base)
 	if err != nil {
 		t.Fatalf("EnsureSeatPrefix(p2 base) failed: %v", err)
@@ -102,7 +103,7 @@ func TestEnsureSeatPrefix(t *testing.T) {
 	}
 
 	// 6. Pre-created AppData/Roaming in central user data directory
-	centralRoamingP2 := filepath.Join(tmpDir, "Games", "umu-p2", "umu-default", "drive_c", "users", "steamuser", "AppData", "Roaming")
+	centralRoamingP2 := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", "Games", "umu", "umu-default", "drive_c", "users", "steamuser", "AppData", "Roaming")
 	if _, err := os.Stat(centralRoamingP2); os.IsNotExist(err) {
 		t.Errorf("expected central AppData/Roaming to exist at %s", centralRoamingP2)
 	}

@@ -127,7 +127,7 @@
               <div class="min-w-0 flex flex-col">
                 <span class="text-xs truncate font-medium">{p.name}</span>
                 <span class="text-4xs text-neutral-400 font-mono truncate">
-                  {p.is_main ? '~/Games/umu' : `~/Games/umu-p${p.index}`}
+                  {p.is_main ? '~/Games/umu (Host)' : `~/Games/umu (Seat ${p.index || 2})`}
                 </span>
               </div>
             </div>

@@ -269,7 +269,7 @@
   ]);
   let profileOptions = $derived((profilesStore.profiles || []).map(p => ({
     value: p.id,
-    label: `${p.name} (${p.is_main ? 'Primary Host' : `~/Games/umu-p${p.index}`})`
+    label: `${p.name} (${p.is_main ? 'Primary Host' : `Seat ${p.index || 2}`})`
   })));
 </script>
 

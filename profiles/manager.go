@@ -603,17 +603,10 @@ func (m *Manager) GetEnv(id string) map[string]string {
 }
 
 // GetPrefixDir returns the Wine prefix directory for the given profile.
-// For Main profile: returns ~/Games/umu.
-// For isolated profiles: returns ~/Games/umu-p<Index>.
+// For all profiles, prefixes are stored in ~/Games/umu relative to the profile's home directory.
 func (m *Manager) GetPrefixDir(id string) string {
-	m.mu.RLock()
-	p := m.findProfileLocked(id)
-	m.mu.RUnlock()
-
-	if p == nil || p.IsMain || p.Index <= 1 {
-		return compat.DefaultPrefixesDirForSeat("p1")
-	}
-	return compat.DefaultPrefixesDirForSeat(fmt.Sprintf("p%d", p.Index))
+	home := m.GetHomeDir(id)
+	return filepath.Join(home, "Games", "umu")
 }
 
 // Materialize writes the Goldberg persona settings on disk for the specified profile.

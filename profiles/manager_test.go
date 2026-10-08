@@ -62,8 +62,9 @@ func TestProfileManager_CreateAndUpdate(t *testing.T) {
 	}
 
 	prefix := mgr.GetPrefixDir(p3.ID)
-	if !strings.HasSuffix(prefix, filepath.Join("Games", "umu-p3")) {
-		t.Errorf("expected prefix ending in Games/umu-p3, got %s", prefix)
+	expectedSuffix := filepath.Join("p3", "home", "Games", "umu")
+	if !strings.HasSuffix(prefix, expectedSuffix) {
+		t.Errorf("expected prefix ending in %s, got %s", expectedSuffix, prefix)
 	}
 
 	// Update p3

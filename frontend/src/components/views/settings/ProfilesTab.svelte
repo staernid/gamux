@@ -26,10 +26,9 @@
   function confirmDeleteProfile() {
     if (!active || active.is_main) return;
     const name = active.name || 'this profile';
-    const prefix = `~/Games/umu-p${active.index || 2}`;
     modalStore.open('confirm', {
       title: `Delete Profile "${name}"?`,
-      message: `This will remove the profile configuration and isolated sandbox. Your Wine prefix (${prefix}) and savegames will remain intact on disk.`,
+      message: `This will remove the profile configuration, isolated sandbox, and its Wine prefixes (~/Games/umu).`,
       confirmLabel: 'Delete Profile',
       cancelLabel: 'Keep Profile',
       danger: true,
@@ -60,7 +59,7 @@
             </span>
           </div>
           <p class="text-xs text-neutral-400 mt-0.5 font-mono">
-            {active?.is_main ? 'Uses host environment and default prefix (~/Games/umu)' : `Isolated sandbox and prefix (~/Games/umu-p${active?.index})`}
+            {active?.is_main ? 'Uses host environment and default prefix (~/Games/umu)' : 'Isolated sandbox with profile prefix (~/Games/umu)'}
           </p>
         </div>
       </div>

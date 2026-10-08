@@ -183,7 +183,7 @@
                   onchange={() => { multiseatStore.updateSeat('p2', { profile_id: cfgDraft.multiseat.player2_profile_id }); cfgDraft = { ...cfgDraft }; }}
                   class="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-neutral-400 cursor-pointer"
                 >
-                  {#each (profileOptions.length > 0 ? profileOptions : [{ value: 'p2', label: 'PlayerTwo (~/Games/umu-p2)' }]) as opt}
+                  {#each (profileOptions.length > 0 ? profileOptions : [{ value: 'p2', label: 'PlayerTwo (Seat 2)' }]) as opt}
                     <option value={opt.value} class="bg-surface-base text-neutral-200">{opt.label}</option>
                   {/each}
                 </select>

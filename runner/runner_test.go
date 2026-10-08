@@ -1933,7 +1933,7 @@ func TestBuildLaunchSpec_SecondaryProfileIsolation(t *testing.T) {
 		t.Fatalf("BuildLaunchSpec failed: %v", err)
 	}
 
-	expectedPrefix := filepath.Join(tmpDir, "Games", "umu-p2", "200710")
+	expectedPrefix := filepath.Join(p2Home, "Games", "umu", "200710")
 	if spec.Env["WINEPREFIX"] != expectedPrefix {
 		t.Errorf("expected WINEPREFIX %s, got %s", expectedPrefix, spec.Env["WINEPREFIX"])
 	}

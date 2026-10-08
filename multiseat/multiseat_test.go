@@ -478,6 +478,7 @@ func TestBuildSeatCommand_DefaultPrefixes(t *testing.T) {
 	sup := NewSupervisor(nil, nil)
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, ".local", "share"))
 	setupMockUMU(t, tmpDir)
 
 	sessionCfg := MultiseatSessionConfig{
@@ -515,13 +516,13 @@ func TestBuildSeatCommand_DefaultPrefixes(t *testing.T) {
 		t.Errorf("expected P1 args to setenv WINEPREFIX to %s, got: %s", expectedP1Pfx, argsP1)
 	}
 
-	// 2. Verify Player 2 seat command uses ~/Games/umu-p2/70
+	// 2. Verify Player 2 seat command uses isolated prefix in profile home
 	cmdP2, _, _, err := sup.buildSeatCommand(context.Background(), sessionCfg, sessionCfg.Seat2, filepath.Join(tmpDir, "p2"), nil, caps, 1, 2)
 	if err != nil {
 		t.Fatalf("buildSeatCommand(p2) failed: %v", err)
 	}
 	argsP2 := strings.Join(cmdP2.Args, " ")
-	expectedP2Pfx := filepath.Join(tmpDir, "Games", "umu-p2", "70")
+	expectedP2Pfx := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", "Games", "umu", "70")
 	if !strings.Contains(argsP2, "--bind "+expectedP2Pfx+" "+expectedP2Pfx) {
 		t.Errorf("expected P2 args to bind prefix %s, got: %s", expectedP2Pfx, argsP2)
 	}

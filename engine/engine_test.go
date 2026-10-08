@@ -1322,7 +1322,7 @@ func TestEngine_LaunchGame_SecondaryProfile(t *testing.T) {
 		t.Errorf("expected p2 configs.user.ini to exist at %s", p2Ini)
 	}
 
-	// Verify Windows/Wine game launch resolves to ~/Games/umu-p2/200710 and isolates HOME
+	// Verify Windows/Wine game launch resolves to isolated prefix in profile home and isolates HOME
 	winOpts := runner.LaunchOptions{
 		GameDir:       gameDir,
 		ExePath:       dummyScript,
@@ -1340,7 +1340,7 @@ func TestEngine_LaunchGame_SecondaryProfile(t *testing.T) {
 		_ = cmdWin.Process.Kill()
 	}
 
-	expectedPrefix := filepath.Join(tmpDir, "Games", "umu-p2", "200710")
+	expectedPrefix := filepath.Join(tmpDir, ".local", "share", "gamux", "profiles", "p2", "home", "Games", "umu", "200710")
 	if !util.FileExists(expectedPrefix) {
 		t.Errorf("expected game prefix %s to exist", expectedPrefix)
 	}

@@ -40,7 +40,7 @@ describe('ProfilesTab Component', () => {
 
     expect(screen.getByText('Bob')).toBeInTheDocument();
     expect(screen.getByText('Seat 2')).toBeInTheDocument();
-    expect(screen.getByText(/Isolated sandbox and prefix/)).toBeInTheDocument();
+    expect(screen.getByText(/Isolated sandbox with profile prefix/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Delete Profile/i })).toBeInTheDocument();
   });
 
@@ -55,7 +55,7 @@ describe('ProfilesTab Component', () => {
     expect(currentModal).toBeTruthy();
     expect(currentModal.type).toBe('confirm');
     expect(currentModal.props.title).toContain('Delete Profile "Bob"?');
-    expect(currentModal.props.message).toContain('Your Wine prefix (~/Games/umu-p2) and savegames will remain intact on disk.');
+    expect(currentModal.props.message).toContain('isolated sandbox, and its Wine prefixes (~/Games/umu)');
     expect(currentModal.props.confirmLabel).toBe('Delete Profile');
     expect(currentModal.props.danger).toBe(true);
 

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/gbe"
 	"github.com/staernid/gamux/util"
 )
@@ -277,14 +276,6 @@ func BuildBwrapArgs(opts BwrapOptions) ([]string, error) {
 					args = append(args, "--bind", target, target)
 				}
 			}
-		}
-	}
-
-	// For Player 2, ensure the entire seat prefix base directory (~/Games/umu-p2) is writable
-	if opts.SeatID == "p2" {
-		p2Base := compat.DefaultPrefixesDirForSeat("p2")
-		if err := os.MkdirAll(p2Base, 0755); err == nil {
-			args = append(args, "--bind", p2Base, p2Base)
 		}
 	}
 

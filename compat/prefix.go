@@ -22,31 +22,44 @@ func SeatIDFromProfileID(profileID string) string {
 	return profileID
 }
 
+// ResolveSeatHome returns the filesystem home directory for a seat ID ("p1", "p2", etc.) or profile ID.
+// For "main", "p1", or empty string, it returns the host user's actual home directory.
+// For secondary profiles ("p2", etc.), it returns $XDG_DATA_HOME/gamux/profiles/<seatID>/home.
+func ResolveSeatHome(seatID string) string {
+	canonSeat := SeatIDFromProfileID(seatID)
+	if canonSeat == "p1" {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		home, _ := os.UserHomeDir()
+		if home != "" {
+			dataHome = filepath.Join(home, ".local", "share")
+		} else {
+			dataHome = filepath.Join(os.TempDir(), ".local", "share")
+		}
+	}
+	return filepath.Join(dataHome, "gamux", "profiles", canonSeat, "home")
+}
+
 // DefaultPrefixesDir returns the base directory where isolated per-game Wine prefixes are stored for Player 1.
 func DefaultPrefixesDir() string {
 	return DefaultPrefixesDirForSeat("p1")
 }
 
 // DefaultPrefixesDirForSeat returns the base directory where isolated per-game Wine prefixes are stored
-// for a specific seat ("p1", "p2", etc.). Default ("p1" or empty) is ~/Games/umu; "p2" is ~/Games/umu-p2.
+// for a specific seat ("p1", "p2", etc.).
+// All profiles store prefixes relative to their home directory under ~/Games/umu.
 func DefaultPrefixesDirForSeat(seatID string) string {
-	home, err := os.UserHomeDir()
-	baseName := "umu"
-	canonSeat := SeatIDFromProfileID(seatID)
-	if canonSeat != "p1" {
-		baseName = fmt.Sprintf("umu-%s", canonSeat)
-	}
-	if err != nil {
-		return filepath.Join("Games", baseName)
-	}
-	return filepath.Join(home, "Games", baseName)
+	home := ResolveSeatHome(seatID)
+	return filepath.Join(home, "Games", "umu")
 }
 
-// DefaultPrefixDirs returns known default prefix base directories (e.g. ~/Games/umu, ~/Games/umu-p2).
+// DefaultPrefixDirs returns known default prefix base directories.
 func DefaultPrefixDirs() []string {
 	return []string{
 		DefaultPrefixesDirForSeat("p1"),
-		DefaultPrefixesDirForSeat("p2"),
 	}
 }
 
@@ -65,6 +78,9 @@ func IsKnownPrefixDir(path string) bool {
 				return true
 			}
 		}
+	}
+	if filepath.Base(cleanPath) == "umu" && filepath.Base(filepath.Dir(cleanPath)) == "Games" {
+		return true
 	}
 	for _, dir := range DefaultPrefixDirs() {
 		if cleanPath == util.CanonicalPath(dir) {
@@ -86,15 +102,8 @@ func DefaultCentralUserDataDirForSeat(cfg *config.Config, seatID string) string 
 		return util.ExpandPath(cfg.SteamUserdata)
 	}
 
-	home, err := os.UserHomeDir()
-	baseName := "umu"
-	if canonSeat != "p1" {
-		baseName = fmt.Sprintf("umu-%s", canonSeat)
-	}
-	if err != nil {
-		return filepath.Join("Games", baseName, "umu-default", "drive_c", "users", "steamuser")
-	}
-	return filepath.Join(home, "Games", baseName, "umu-default", "drive_c", "users", "steamuser")
+	home := ResolveSeatHome(canonSeat)
+	return filepath.Join(home, "Games", "umu", "umu-default", "drive_c", "users", "steamuser")
 }
 
 // ResolvePrefixIdentifier generates a deterministic, filesystem-safe identifier for a game's prefix.
@@ -191,18 +200,8 @@ func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game
 	}
 
 	// Ensure Goldberg GSE Saves symlinks to the profile's isolated GSE directory
-	var gseDir string
-	if canonSeat == "p1" {
-		home, _ := os.UserHomeDir()
-		gseDir = filepath.Join(home, ".local", "share", "GSE Saves")
-	} else {
-		dataHome := os.Getenv("XDG_DATA_HOME")
-		if dataHome == "" {
-			home, _ := os.UserHomeDir()
-			dataHome = filepath.Join(home, ".local", "share")
-		}
-		gseDir = filepath.Join(dataHome, "gamux", "profiles", canonSeat, "home", ".local", "share", "GSE Saves")
-	}
+	seatHome := ResolveSeatHome(canonSeat)
+	gseDir := filepath.Join(seatHome, ".local", "share", "GSE Saves")
 	_ = EnsurePrefixGSESymlink(prefixDir, gseDir)
 	_ = EnsurePrefixGSESymlink(filepath.Join(DefaultPrefixesDirForSeat(canonSeat), "umu-default"), gseDir)
 
