@@ -207,19 +207,57 @@
                     <div class="h-36 grid grid-rows-2 gap-1.5">
                       {#each [0, 1] as slotIdx}
                         {@const sObj = getSeatObjForSlot(slotIdx, dIdx) || dispSeats[slotIdx]}
-                        <div class="rounded-lg bg-surface-card border border-neutral-700/80 px-4 py-2 flex items-center justify-between">
-                          <div class="flex items-center space-x-2">
-                            <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-input text-neutral-300 border border-surface-border">
-                              {sObj ? sObj.seat_id.toUpperCase() : `SLOT ${slotIdx + 1}`}
-                            </span>
-                            <span class="text-xs font-bold text-neutral-200">
-                              {slotIdx === 0 ? 'Top Half' : 'Bottom Half'} • {sObj?.player?.account_name || sObj?.profile_id || 'Seat'}
-                            </span>
+                        {@const isP1 = sObj?.seat_id === 'p1'}
+                        {@const isStream = sObj?.mode === 'stream'}
+                        {#if dispSeats.length >= 2}
+                          <button
+                            type="button"
+                            onclick={() => swap2PSlots(dIdx)}
+                            class="w-full text-left rounded-lg bg-surface-card border px-4 py-2 flex items-center justify-between transition select-none group hover:border-neutral-500 hover:bg-surface-header/70 cursor-pointer active:scale-[0.99] {isStream ? 'border-indigo-500/40 bg-indigo-950/10' : 'border-neutral-700/80'}"
+                            title="Click to swap top/bottom positions"
+                          >
+                            <div class="flex items-center space-x-2">
+                              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : (isStream ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border')}">
+                                {sObj ? sObj.seat_id.toUpperCase() : `SLOT ${slotIdx + 1}`}
+                              </span>
+                              <span class="text-xs font-bold text-neutral-200">
+                                {slotIdx === 0 ? 'Top Half' : 'Bottom Half'} • {sObj?.player?.account_name || sObj?.profile_id || 'Seat'}
+                              </span>
+                              <span class="opacity-0 group-hover:opacity-100 transition-opacity text-4xs font-mono text-neutral-400">
+                                (Click to swap ⇄)
+                              </span>
+                            </div>
+                            {#if isStream}
+                              <span class="text-4xs font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
+                                📡 Sunshine Stream
+                              </span>
+                            {:else}
+                              <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                                {getSlotDimensions(d, 'top_bottom', slotIdx, dispSeats.length)}
+                              </span>
+                            {/if}
+                          </button>
+                        {:else}
+                          <div class="rounded-lg bg-surface-card border px-4 py-2 flex items-center justify-between {isStream ? 'border-indigo-500/40 bg-indigo-950/10' : 'border-neutral-700/80'}">
+                            <div class="flex items-center space-x-2">
+                              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : (isStream ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border')}">
+                                {sObj ? sObj.seat_id.toUpperCase() : `SLOT ${slotIdx + 1}`}
+                              </span>
+                              <span class="text-xs font-bold text-neutral-200">
+                                {slotIdx === 0 ? 'Top Half' : 'Bottom Half'} • {sObj?.player?.account_name || sObj?.profile_id || 'Seat'}
+                              </span>
+                            </div>
+                            {#if isStream}
+                              <span class="text-4xs font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
+                                📡 Sunshine Stream
+                              </span>
+                            {:else}
+                              <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                                {getSlotDimensions(d, 'top_bottom', slotIdx, dispSeats.length)}
+                              </span>
+                            {/if}
                           </div>
-                          <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
-                            {getSlotDimensions(d, 'top_bottom', slotIdx, dispSeats.length)}
-                          </span>
-                        </div>
+                        {/if}
                       {/each}
                     </div>
                   {:else if cfgDraft.multiseat.default_layout === 'quad_grid' && dispSeats.length >= 4}
@@ -280,22 +318,65 @@
                       {#each dispSeats as sSeat, sIdx}
                         {@const slotIdx = sSeat.screen_slot ?? sIdx}
                         {@const isP1 = sSeat.seat_id === 'p1'}
-                        <div class="flex-1 rounded-lg bg-surface-card border border-neutral-700/80 p-2.5 flex flex-col items-center justify-center space-y-1">
-                          <div class="flex items-center space-x-2">
-                            <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border'}">
-                              {sSeat.seat_id.toUpperCase()}
+                        {@const isStream = sSeat.mode === 'stream'}
+                        {#if dispSeats.length >= 2}
+                          <button
+                            type="button"
+                            onclick={() => swap2PSlots(dIdx)}
+                            class="flex-1 rounded-lg bg-surface-card border p-2.5 flex flex-col items-center justify-center space-y-1 transition select-none group relative hover:border-neutral-500 hover:bg-surface-header/70 cursor-pointer active:scale-[0.99] {isStream ? 'border-indigo-500/40 bg-indigo-950/10' : 'border-neutral-700/80'}"
+                            title="Click to swap viewport positions between players"
+                          >
+                            <div class="flex items-center space-x-2">
+                              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : (isStream ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border')}">
+                                {sSeat.seat_id.toUpperCase()}
+                              </span>
+                              <span class="text-xs font-bold text-white truncate max-w-[140px]">
+                                {sSeat.player?.account_name || sSeat.profile_id || `Player ${sIdx + 1}`}
+                              </span>
+                              <span class="text-4xs font-mono text-neutral-400">
+                                ({slotIdx === 0 ? 'Left' : (slotIdx === 1 ? 'Right' : `Col ${slotIdx + 1}`)})
+                              </span>
+                            </div>
+                            {#if isStream}
+                              <span class="text-4xs font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
+                                📡 Sunshine Stream
+                              </span>
+                            {:else}
+                              <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                                {getSlotDimensions(d, 'side_by_side', slotIdx, dispSeats.length)}
+                              </span>
+                            {/if}
+                            <span class="opacity-0 group-hover:opacity-100 transition-opacity text-4xs font-mono text-neutral-400 flex items-center space-x-1">
+                              <span>Click to swap</span>
+                              <span class="text-emerald-400 font-bold">⇄</span>
                             </span>
-                            <span class="text-xs font-bold text-white truncate max-w-[140px]">
-                              {sSeat.player?.account_name || sSeat.profile_id || `Player ${sIdx + 1}`}
-                            </span>
-                            <span class="text-4xs font-mono text-neutral-400">
-                              ({slotIdx === 0 ? 'Left' : (slotIdx === 1 ? 'Right' : `Col ${slotIdx + 1}`)})
-                            </span>
+                          </button>
+                        {:else}
+                          <div
+                            class="flex-1 rounded-lg bg-surface-card border p-2.5 flex flex-col items-center justify-center space-y-1 {isStream ? 'border-indigo-500/40 bg-indigo-950/10' : 'border-neutral-700/80'}"
+                          >
+                            <div class="flex items-center space-x-2">
+                              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {isP1 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : (isStream ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-surface-input text-neutral-300 border border-surface-border')}">
+                                {sSeat.seat_id.toUpperCase()}
+                              </span>
+                              <span class="text-xs font-bold text-white truncate max-w-[140px]">
+                                {sSeat.player?.account_name || sSeat.profile_id || `Player ${sIdx + 1}`}
+                              </span>
+                              <span class="text-4xs font-mono text-neutral-400">
+                                ({slotIdx === 0 ? 'Left' : (slotIdx === 1 ? 'Right' : `Col ${slotIdx + 1}`)})
+                              </span>
+                            </div>
+                            {#if isStream}
+                              <span class="text-4xs font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
+                                📡 Sunshine Stream
+                              </span>
+                            {:else}
+                              <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                                {getSlotDimensions(d, 'side_by_side', slotIdx, dispSeats.length)}
+                              </span>
+                            {/if}
                           </div>
-                          <span class="text-3xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
-                            {getSlotDimensions(d, 'side_by_side', slotIdx, dispSeats.length)}
-                          </span>
-                        </div>
+                        {/if}
                       {/each}
                     </div>
                   {/if}

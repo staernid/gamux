@@ -249,6 +249,8 @@
       label: m.name ? `${m.name} (${m.dev_node})` : m.dev_node
     }))
   ]);
+  let caps = $derived($multiseatStore.capabilities);
+  let hasBwrap = $derived(caps ? Boolean(caps?.has_bwrap ?? caps?.hasBwrap ?? caps?.HasBwrap) : true);
   let profileOptions = $derived((profilesStore.profiles || []).map(p => ({
     value: p.id,
     label: `${p.name} (${p.is_main ? 'Primary Host' : `Seat ${p.index || 2}`})`
@@ -256,10 +258,22 @@
 </script>
 
 <div class="space-y-6">
-  <!-- 1. System Diagnostics & Isolation Tools -->
-  <CoopDiagnosticsCard />
+  <!-- Missing Sandbox Tool Alert Banner (conditionally displayed if bwrap is missing) -->
+  {#if !hasBwrap}
+    <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start space-x-2.5">
+      <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <div class="space-y-1">
+        <div class="font-bold text-amber-200">Recommended Sandbox Tool Missing: Bubblewrap</div>
+        <div class="text-2xs text-amber-300/90 leading-relaxed">
+          Install <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded">bubblewrap</code> via your package manager for complete filesystem and input isolation between player seats.
+        </div>
+      </div>
+    </div>
+  {/if}
 
-  <!-- 2. Display Topology & Screen Layout -->
+  <!-- 1. Display Topology & Screen Layout -->
   <CoopLayoutCard
     bind:cfgDraft
     {visualLayouts}
@@ -268,7 +282,7 @@
     {seats}
   />
 
-  <!-- 3. Player Seats Configuration (N-Player Support) -->
+  <!-- 2. Player Seats Configuration (N-Player Support) -->
   <CoopSeatCard
     bind:cfgDraft
     {seats}
@@ -277,7 +291,7 @@
     {profileOptions}
   />
 
-  <!-- 4. Controller & Gamepad Diagnostics -->
+  <!-- 3. Controller & Gamepad Diagnostics -->
   <GamepadDiagnosticsCard
     bind:cfgDraft
     {gamepadOptions}
@@ -285,10 +299,13 @@
     {gamepads}
   />
 
-  <!-- 5. Dual Keyboards & Mice (Experimental) + Networking & Streaming + Audio -->
+  <!-- 4. Dual Keyboards & Mice (Experimental) + Networking & Streaming + Audio -->
   <CoopStreamingCard
     bind:cfgDraft
     {keyboardOptions}
     {mouseOptions}
   />
+
+  <!-- 5. System Diagnostics & Isolation Tools -->
+  <CoopDiagnosticsCard />
 </div>
