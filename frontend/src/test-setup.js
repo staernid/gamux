@@ -25,6 +25,8 @@ beforeEach(() => {
         GetToolsStatus: vi.fn().mockResolvedValue([]),
         GetGBEStatus: vi.fn().mockResolvedValue({ has_update: true, latest_tag: 'v0.2.7' }),
         GetSteamlessStatus: vi.fn().mockResolvedValue({ has_update: false }),
+        CheckGameUpdates: vi.fn().mockResolvedValue({ checked: true, is_up_to_date: true }),
+        CheckLibraryUpdates: vi.fn().mockResolvedValue({ total_checked: 0, updates_found: 0, updated_games: [] }),
         SelectDirectory: vi.fn().mockResolvedValue('/home/staernid/Games'),
         GetInitialTarget: vi.fn().mockResolvedValue(''),
         CreateGameStub: vi.fn().mockImplementation((lib, id, name, store, branch = 'public') => Promise.resolve({

@@ -263,13 +263,53 @@ func (a *App) GetGameCurrentPlayers(appID string) (int, error) {
 	return steam.FetchCurrentPlayers(a.getContext(), parsed)
 }
 
+// LibraryUpdateReport summarizes the results of a library-wide update inspection.
+type LibraryUpdateReport struct {
+	TotalChecked int                  `json:"total_checked"`
+	UpdatesFound int                  `json:"updates_found"`
+	UpdatedGames []*engine.GameStatus `json:"updated_games"`
+}
+
 // CheckGameUpdates inspects a game's update status using hybrid version checking.
 func (a *App) CheckGameUpdates(gamePath string) (*domain.VersionStatus, error) {
 	path, err := requireGamePath(gamePath)
 	if err != nil {
 		return nil, err
 	}
-	return a.Engine.CheckGameUpdates(a.getContext(), path)
+	vs, err := a.Engine.CheckGameUpdates(a.getContext(), path)
+	if err == nil && vs != nil {
+		if st, sErr := a.Engine.InspectStatus(a.getContext(), path); sErr == nil && st != nil {
+			a.UpdateCachedGame(st)
+			safeEmit(a.getContext(), "gamux:game-updated", map[string]any{"game": st})
+		}
+	}
+	return vs, err
+}
+
+// CheckLibraryUpdates inspects all installed games in the library for updates.
+func (a *App) CheckLibraryUpdates() (*LibraryUpdateReport, error) {
+	updated, err := a.Engine.CheckLibraryUpdates(a.getContext())
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range updated {
+		if g != nil {
+			a.UpdateCachedGame(g)
+			safeEmit(a.getContext(), "gamux:game-updated", map[string]any{"game": g})
+		}
+	}
+	total := len(updated)
+	a.gamesMu.RLock()
+	if len(a.cachedGames) > total {
+		total = len(a.cachedGames)
+	}
+	a.gamesMu.RUnlock()
+
+	return &LibraryUpdateReport{
+		TotalChecked: total,
+		UpdatesFound: len(updated),
+		UpdatedGames: updated,
+	}, nil
 }
 
 // GetGameDLCs retrieves configured DLCs or discovers available DLCs for a game.

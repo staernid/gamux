@@ -122,6 +122,7 @@ type VersionStatus struct {
 	Checked          bool   `json:"checked"`
 	CurrentBuildID   string `json:"current_build_id,omitempty"`
 	LatestBuildID    string `json:"latest_build_id,omitempty"`
+	RemoteManifestID string `json:"remote_manifest_id,omitempty"`
 	LatestPatchDate  int64  `json:"latest_patch_date,omitempty"`
 	LatestPatchTitle string `json:"latest_patch_title,omitempty"`
 	Message          string `json:"message,omitempty"`

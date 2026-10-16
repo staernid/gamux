@@ -140,6 +140,11 @@ const DEFAULT_MOCKS = {
     latest_patch_title: 'Latest Game Update',
     message: 'Game is up to date'
   }),
+  checkLibraryUpdates: () => Promise.resolve({
+    total_checked: mockData.MOCK_GAMES.length,
+    updates_found: 0,
+    updated_games: [],
+  }),
   getGameDLCs: (path) => Promise.resolve([
     { app_id: '2004110', name: 'Expansion Pass' },
     { app_id: '2147250', name: 'Soundtrack & Artwork' }

@@ -827,7 +827,33 @@ func (eng *Engine) CheckGameUpdates(ctx context.Context, gameDir string) (*domai
 		return &domain.VersionStatus{Checked: false, IsUpToDate: true, Message: "Not a Steam game"}, nil
 	}
 
-	return steam.CheckGameVersion(ctx, game.NumericAppID, game.BuildID, game.InstalledAt)
+	game = game.Clone()
+	vs, err := steam.CheckGameVersion(ctx, game.NumericAppID, game.BuildID, game.InstalledAt, game.Branch, game.ManifestID)
+	if err != nil {
+		return nil, err
+	}
+
+	if vs != nil {
+		game.VersionStatus = vs
+		game.HasUpdate = vs.Checked && !vs.IsUpToDate
+		if vs.RemoteManifestID != "" {
+			game.RemoteManifestID = vs.RemoteManifestID
+		}
+		game.RecomputeState()
+
+		var dirMtime, profileMtime int64
+		if dirFi, sErr := os.Stat(cleanDir); sErr == nil {
+			dirMtime = dirFi.ModTime().UnixNano()
+		}
+		if pFi, sErr := os.Stat(filepath.Join(cleanDir, ".gamux", "launch_profile.json")); sErr == nil {
+			profileMtime = pFi.ModTime().UnixNano()
+		} else if legFi, sErr := os.Stat(filepath.Join(cleanDir, "steam_settings", "launch_profile.json")); sErr == nil {
+			profileMtime = legFi.ModTime().UnixNano()
+		}
+		_ = cache.SaveCachedGame(cleanDir, dirMtime, profileMtime, game)
+	}
+
+	return vs, nil
 }
 
 // GetGameDLCs retrieves configured DLCs from configs.app.ini, falling back to Store API discovery.

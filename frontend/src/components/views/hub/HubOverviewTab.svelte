@@ -14,6 +14,7 @@
 
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
+  import { modalStore } from '../../../stores/modal.js';
   import { isSteamApp } from '../../../utils/game.js';
   import { openExternalUrl as openLink } from '../../../utils/navigation.js';
   import HubAboutCard from './cards/HubAboutCard.svelte';
@@ -148,6 +149,42 @@
 </script>
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
+  <!-- Update Available Spotlight Card -->
+  {#if (game?.versionStatus && !game.versionStatus.is_up_to_date) || game?.hasUpdate}
+    <div class="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+      <div class="flex items-start sm:items-center space-x-3.5 min-w-0">
+        <div class="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold text-amber-200">Update Available</span>
+            {#if game.versionStatus?.latest_build_id}
+              <span class="text-3xs font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Build #{game.versionStatus.latest_build_id}
+              </span>
+            {/if}
+          </div>
+          <p class="text-2xs text-neutral-400 mt-0.5 truncate">
+            {game.versionStatus?.latest_patch_title || game.versionStatus?.message || 'A newer build is available for this title.'}
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick={() => modalStore.open('update', { game, versionStatus: game.versionStatus })}
+        class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-black transition-colors flex items-center space-x-1.5 flex-shrink-0 shadow-md cursor-pointer"
+      >
+        <span>View Update Details</span>
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  {/if}
+
   <!-- Game Summary Synopsis & Key Facts -->
   <HubAboutCard {game} />
 

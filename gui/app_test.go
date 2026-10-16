@@ -744,8 +744,16 @@ func TestApp_ProcessTrackingAndRunningGames(t *testing.T) {
 		t.Fatalf("StopGame failed: %v", err)
 	}
 
-	// Verify stopped
-	if app.IsGameRunning(gameDir) {
+	// Verify stopped with a short poll for process termination
+	stopped := false
+	for i := 0; i < 20; i++ {
+		if !app.IsGameRunning(gameDir) {
+			stopped = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !stopped {
 		t.Errorf("expected game to be stopped")
 	}
 }
@@ -787,6 +795,15 @@ unlock_all=0
 	}
 	if status == nil {
 		t.Fatalf("expected non-nil VersionStatus")
+	}
+
+	// 3. CheckLibraryUpdates
+	report, err := app.CheckLibraryUpdates()
+	if err != nil {
+		t.Fatalf("CheckLibraryUpdates failed: %v", err)
+	}
+	if report == nil {
+		t.Fatalf("expected non-nil LibraryUpdateReport")
 	}
 }
 

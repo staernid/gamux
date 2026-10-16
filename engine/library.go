@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
@@ -161,6 +162,18 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 		}
 	}
 
+	// Check update status if Steam AppID is present
+	if status.NumericAppID > 0 {
+		if vs, err := steam.CheckGameVersion(ctx, status.NumericAppID, status.BuildID, status.InstalledAt, status.Branch, status.ManifestID); err == nil && vs != nil {
+			status.VersionStatus = vs
+			status.HasUpdate = vs.Checked && !vs.IsUpToDate
+			if vs.RemoteManifestID != "" {
+				status.RemoteManifestID = vs.RemoteManifestID
+			}
+			status.RecomputeState()
+		}
+	}
+
 	return status, nil
 }
 
@@ -299,61 +312,62 @@ func (eng *Engine) VerifyIntegrity(ctx context.Context, targetPath string) (*man
 	return pctx.Results.IntegrityReport, nil
 }
 
-// CheckLibraryUpdates scans a directory containing game folders and checks for available Steam updates.
-func (eng *Engine) CheckLibraryUpdates(ctx context.Context, parentDir string) ([]LibraryUpdateStatus, error) {
+// CheckLibraryUpdates concurrently checks version statuses for all installed Steam games in the configured library directories.
+// It returns a slice of GameStatus for all games that have updates available.
+func (eng *Engine) CheckLibraryUpdates(ctx context.Context, libDirs ...string) ([]*GameStatus, error) {
 	ctx = eng.WrapContext(ctx)
-	if parentDir == "" {
-		parentDir = "."
+
+	var targetDirs []string
+	if len(libDirs) > 0 {
+		targetDirs = libDirs
+	} else if eng.Config != nil {
+		targetDirs = eng.Config.ResolvedLibraryDirs()
 	}
 
-	absPath, err := filepath.Abs(parentDir)
+	if len(targetDirs) == 0 {
+		return nil, nil
+	}
+
+	games, err := eng.BatchInspectLibraries(ctx, targetDirs)
 	if err != nil {
-		return nil, fmt.Errorf("resolve abs path: %w", err)
+		return nil, fmt.Errorf("batch inspect libraries: %w", err)
 	}
 
-	entries, err := os.ReadDir(absPath)
-	if err != nil {
-		return nil, fmt.Errorf("read library directory %s: %w", absPath, err)
+	var steamGames []*GameStatus
+	for _, g := range games {
+		if g != nil && g.IsInstalled && g.NumericAppID > 0 {
+			steamGames = append(steamGames, g)
+		}
 	}
 
-	var results []LibraryUpdateStatus
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
+	if len(steamGames) == 0 {
+		return nil, nil
+	}
 
-		gameDir := filepath.Join(absPath, entry.Name())
-		if detector.IsIgnoredLibraryDir(gameDir) {
-			continue
-		}
-		manifestsDir := filepath.Join(gameDir, "[Manifests]")
-		if _, err := os.Stat(manifestsDir); err != nil {
-			continue
-		}
+	var g errgroup.Group
+	g.SetLimit(5)
 
-		info, err := detector.Detect(ctx, gameDir)
-		if err != nil || info.AppID == "" || info.AppID == "0" {
-			continue
-		}
+	var mu sync.Mutex
+	var updatedGames []*GameStatus
 
-		status := LibraryUpdateStatus{
-			GameTitle: info.Name,
-			AppID:     info.AppID,
-			GameDir:   gameDir,
-		}
-
-		manifestEntries, _ := os.ReadDir(manifestsDir)
-		for _, mFile := range manifestEntries {
-			if strings.HasSuffix(mFile.Name(), ".manifest") {
-				status.LocalManifestID = mFile.Name()
-				break
+	for _, sg := range steamGames {
+		gamePath := sg.GameDir
+		g.Go(func() error {
+			vs, cErr := eng.CheckGameUpdates(ctx, gamePath)
+			if cErr == nil && vs != nil && vs.Checked && !vs.IsUpToDate {
+				// Re-inspect updated game to reflect new HasUpdate status
+				if refreshed, rErr := eng.InspectStatus(ctx, gamePath); rErr == nil && refreshed != nil {
+					mu.Lock()
+					updatedGames = append(updatedGames, refreshed)
+					mu.Unlock()
+				}
 			}
-		}
-
-		results = append(results, status)
+			return nil
+		})
 	}
 
-	return results, nil
+	_ = g.Wait()
+	return updatedGames, nil
 }
 
 func (eng *Engine) resolveGameName(ctx context.Context, path string) string {
@@ -633,3 +647,5 @@ func (eng *Engine) FetchNews(ctx context.Context, appID string, count int) ([]st
 func (eng *Engine) GetDiskSpace(path string) (*util.DiskSpaceInfo, error) {
 	return util.GetDiskSpace(path)
 }
+
+

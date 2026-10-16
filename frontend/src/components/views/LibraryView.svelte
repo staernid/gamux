@@ -23,6 +23,7 @@
   } from '../../utils/game.js';
   import { playTick, playSelect } from '../../utils/audio.js';
   import { AppAPI } from '../../api/app.js';
+  import { notificationStore } from '../../stores/notifications.js';
 
   /**
    * @typedef {Object} Props
@@ -37,6 +38,25 @@
   // Local mode states
   let searchInputEl = $state();
   let focusedIndex = 0;
+  let isCheckingUpdates = $state(false);
+
+  async function handleCheckLibraryUpdates() {
+    if (isCheckingUpdates) return;
+    isCheckingUpdates = true;
+    try {
+      const rep = await AppAPI.checkLibraryUpdates();
+      const count = rep?.updates_found ?? 0;
+      if (count > 0) {
+        notificationStore.info('Updates Found', `${count} game update${count === 1 ? '' : 's'} available.`);
+      } else {
+        notificationStore.info('Up to Date', 'All games in library are up to date.');
+      }
+    } catch (err) {
+      notificationStore.error('Update Check Failed', err?.message || String(err));
+    } finally {
+      isCheckingUpdates = false;
+    }
+  }
 
   const sortOptions = [
     { id: 'name_asc', label: 'Name (A-Z)' },
@@ -205,6 +225,20 @@
 
         <!-- Right: Filter & Sort Dropdowns -->
         <div class="flex items-center space-x-3 justify-between md:justify-end">
+          <!-- Check Updates Button -->
+          <button
+            type="button"
+            onclick={handleCheckLibraryUpdates}
+            disabled={isCheckingUpdates}
+            class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+            title="Check library games for Steam updates"
+          >
+            <svg class="w-3.5 h-3.5 {isCheckingUpdates ? 'animate-spin text-sky-400' : 'text-neutral-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="hidden sm:inline">{isCheckingUpdates ? 'Checking...' : 'Check Updates'}</span>
+          </button>
+
           <!-- Status Filter Dropdown -->
           <div class="flex items-center space-x-2">
             <span class="text-2xs font-mono text-neutral-500 uppercase tracking-wider font-bold">Filter:</span>
@@ -336,6 +370,7 @@
                 isRunning={game.isRunning}
                 isReady={game.isReady || game.isPatched}
                 isStub={game.isStub}
+                hasUpdate={Boolean(game.hasUpdate || game.hasUpdatesOrIssues || (game.versionStatus && !game.versionStatus.is_up_to_date))}
                 playtimeSeconds={game.playtimeSeconds}
                 lastPlayed={game.lastPlayed}
                 diskSizeBytes={game.diskSizeBytes}

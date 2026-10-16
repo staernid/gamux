@@ -5,6 +5,7 @@
   import CatalogModal from '../stage/CatalogModal.svelte';
   import MetadataArtworkModal from '../stage/MetadataArtworkModal.svelte';
   import InstallModal from '../stage/InstallModal.svelte';
+  import UpdateModal from '../stage/UpdateModal.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
 
   async function handleUpdated(e) {
@@ -56,6 +57,11 @@
     />
   {:else if $modalStore.type === 'install'}
     <InstallModal
+      {...$modalStore.props}
+      onclose={handleClose}
+    />
+  {:else if $modalStore.type === 'update'}
+    <UpdateModal
       {...$modalStore.props}
       onclose={handleClose}
     />

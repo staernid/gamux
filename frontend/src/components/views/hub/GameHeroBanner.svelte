@@ -5,6 +5,7 @@
   const bubble = createBubbler();
   const dispatch = createEventDispatcher();
   import { modalStore } from '../../../stores/modal.js';
+  import { updateGameInStore } from '../../../stores/library.js';
   import { formatBytes, formatETA } from '../../../utils/format.js';
   import {
     getPlatformColors,
@@ -74,8 +75,15 @@
   async function checkGameUpdates(gameDir) {
     try {
       const res = await AppAPI.checkGameUpdates(gameDir);
-      if (res && res.checked) {
+      if (res) {
         versionStatus = res;
+        if (res.checked && game) {
+          updateGameInStore({
+            ...game,
+            versionStatus: res,
+            hasUpdate: !res.is_up_to_date
+          });
+        }
       }
     } catch {
       // Quiet fallback
@@ -299,15 +307,17 @@
               <span class="text-neutral-500">·</span>
               <LiveCommunityBadge playerCount={livePlayerCount} label="playing" />
             {/if}
-            {#if versionStatus && !versionStatus.is_up_to_date}
+            {#if (versionStatus && !versionStatus.is_up_to_date) || game?.hasUpdate}
               <span class="text-neutral-500">·</span>
-              <span
-                class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono flex items-center space-x-1.5"
-                title={versionStatus.message || versionStatus.latest_patch_title || 'Update available'}
+              <button
+                type="button"
+                onclick={() => modalStore.open('update', { game, versionStatus })}
+                class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-mono flex items-center space-x-1.5 cursor-pointer transition-colors"
+                title={versionStatus?.message || versionStatus?.latest_patch_title || 'Click to view update details'}
               >
                 <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                 <span>UPDATE AVAILABLE</span>
-              </span>
+              </button>
             {/if}
           </div>
         </div>
@@ -327,6 +337,20 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
             <span>Add to Library</span>
+          </button>
+        {/if}
+
+        {#if isInstalled && ((versionStatus && !versionStatus.is_up_to_date) || game?.hasUpdate) && !isTaskActive && !isGameRunning}
+          <button
+            type="button"
+            onclick={() => modalStore.open('update', { game, versionStatus })}
+            class="px-4 py-3 rounded-2xl font-bold text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
+            title="Update available - click to review and install"
+          >
+            <svg class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Update</span>
           </button>
         {/if}
 

@@ -13,6 +13,7 @@
    * @property {boolean} [isRunning]
    * @property {boolean} [isReady]
    * @property {boolean} [isStub]
+   * @property {boolean} [hasUpdate]
    * @property {number} [playtimeSeconds]
    * @property {number} [lastPlayed]
    * @property {number} [diskSizeBytes]
@@ -32,6 +33,7 @@
     isRunning = false,
     isReady = true,
     isStub = false,
+    hasUpdate = false,
     playtimeSeconds = 0,
     lastPlayed = 0,
     diskSizeBytes = 0,
@@ -89,6 +91,14 @@
       >
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
         <span>RUNNING</span>
+      </div>
+    {:else if hasUpdate}
+      <div
+        class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-4xs font-mono font-bold uppercase tracking-wider bg-sky-950/90 text-sky-300 border border-sky-500/50 shadow-md flex items-center space-x-1"
+        title="Update Available"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+        <span>UPDATE</span>
       </div>
     {:else if !isReady && !isStub}
       <div
