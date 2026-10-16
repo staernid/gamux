@@ -1355,3 +1355,58 @@ func TestGetAppDepots_RimworldLive(t *testing.T) {
 			d.DepotID, d.Name, d.Category, d.ContentCategory, d.IsDLC, d.DLCAppID)
 	}
 }
+
+func TestLinkAndUnlinkGameMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "PortalGame")
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	exeFile := filepath.Join(gameDir, "hl2.exe")
+	if err := os.WriteFile(exeFile, []byte("dummy exe"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	eng := New(config.DefaultConfig())
+	ctx := context.Background()
+
+	// Initial inspect
+	status, err := eng.InspectStatus(ctx, gameDir)
+	if err != nil {
+		t.Fatalf("InspectStatus failed: %v", err)
+	}
+	if status.AppID != "" && status.AppID != "0" {
+		t.Errorf("expected empty or 0 initial appID, got %s", status.AppID)
+	}
+
+	// Link to Steam 400 (Portal)
+	linked, err := eng.LinkGameMetadata(ctx, gameDir, "steam", "400")
+	if err != nil {
+		t.Fatalf("LinkGameMetadata failed: %v", err)
+	}
+	if linked.AppID != "400" {
+		t.Errorf("expected AppID '400', got %q", linked.AppID)
+	}
+	if linked.NumericAppID != 400 {
+		t.Errorf("expected NumericAppID 400, got %d", linked.NumericAppID)
+	}
+	if linked.ExternalIDs.SteamAppID != 400 {
+		t.Errorf("expected ExternalIDs.SteamAppID 400, got %d", linked.ExternalIDs.SteamAppID)
+	}
+	if linked.EffectiveMetadataProvider() != "steam" {
+		t.Errorf("expected EffectiveMetadataProvider 'steam', got %q", linked.EffectiveMetadataProvider())
+	}
+	if linked.EffectiveMetadataID() != "400" {
+		t.Errorf("expected EffectiveMetadataID '400', got %q", linked.EffectiveMetadataID())
+	}
+
+	// Unlink metadata
+	unlinked, err := eng.UnlinkGameMetadata(ctx, gameDir)
+	if err != nil {
+		t.Fatalf("UnlinkGameMetadata failed: %v", err)
+	}
+	if unlinked.LaunchProfile != nil && unlinked.LaunchProfile.MetadataProvider != "" {
+		t.Errorf("expected empty MetadataProvider after unlink, got %q", unlinked.LaunchProfile.MetadataProvider)
+	}
+}
+

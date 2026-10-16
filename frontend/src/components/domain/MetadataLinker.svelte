@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { AppAPI } from '../../api/app.js';
   import { notificationStore } from '../../stores/notifications.js';
-  import { selectedGame } from '../../stores/library.js';
+  import { selectedGame, updateGameInStore } from '../../stores/library.js';
   import { isSamePath } from '../../utils/game.js';
   import Icon from '../common/Icon.svelte';
 
@@ -113,7 +113,7 @@
       });
       if (updated) {
         game = { ...game, ...updated };
-        selectedGame.update(curr => (curr && isSamePath(curr.gameDir, gameDir) ? { ...curr, ...updated } : curr));
+        updateGameInStore(updated);
       }
       onupdated?.(updated);
       onlinked?.({ store: targetStore, id: idToLink, game: updated });
@@ -140,7 +140,7 @@
       });
       if (updated) {
         game = { ...game, ...updated };
-        selectedGame.update(curr => (curr && isSamePath(curr.gameDir, gameDir) ? { ...curr, ...updated } : curr));
+        updateGameInStore(updated);
       }
       customId = '';
       metaCandidates = [];

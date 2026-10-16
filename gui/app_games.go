@@ -408,19 +408,33 @@ func (a *App) QueryArtworkOptions(query domain.ArtworkQuery) ([]domain.ArtworkOp
 // ApplyCustomArtwork sets custom artwork on a game directory and updates metadata.
 func (a *App) ApplyCustomArtwork(gameDir string, assetType string, imageSource string) (*domain.GameArtwork, error) {
 	gameDir = util.CanonicalPath(gameDir)
-	return a.Engine.ApplyCustomArtwork(a.getContext(), gameDir, assetType, imageSource)
+	art, err := a.Engine.ApplyCustomArtwork(a.getContext(), gameDir, assetType, imageSource)
+	if err == nil {
+		if st, sErr := a.Engine.InspectStatus(a.getContext(), gameDir); sErr == nil && st != nil {
+			a.UpdateCachedGame(st)
+		}
+	}
+	return art, err
 }
 
 // LinkGameMetadata links a game directory to a specific store provider and ID.
 func (a *App) LinkGameMetadata(gameDir string, storeName string, storeID string) (*domain.Game, error) {
 	gameDir = util.CanonicalPath(gameDir)
-	return a.Engine.LinkGameMetadata(a.getContext(), gameDir, storeName, storeID)
+	res, err := a.Engine.LinkGameMetadata(a.getContext(), gameDir, storeName, storeID)
+	if err == nil && res != nil {
+		a.UpdateCachedGame(res)
+	}
+	return res, err
 }
 
 // UnlinkGameMetadata removes custom metadata overrides and restores auto-detected identity.
 func (a *App) UnlinkGameMetadata(gameDir string) (*domain.Game, error) {
 	gameDir = util.CanonicalPath(gameDir)
-	return a.Engine.UnlinkGameMetadata(a.getContext(), gameDir)
+	res, err := a.Engine.UnlinkGameMetadata(a.getContext(), gameDir)
+	if err == nil && res != nil {
+		a.UpdateCachedGame(res)
+	}
+	return res, err
 }
 
 // ListMetadataProviders returns registered metadata and artwork providers with their capabilities.

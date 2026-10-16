@@ -1,7 +1,9 @@
 <script>
-    import ModalShell from '../common/ModalShell.svelte';
+  import ModalShell from '../common/ModalShell.svelte';
   import MetadataLinker from '../domain/MetadataLinker.svelte';
   import ArtworkPicker from '../domain/ArtworkPicker.svelte';
+  import { drawerDraft } from '../../stores/drawerDraft.js';
+  import { updateGameInStore } from '../../stores/library.js';
 
   /**
    * @typedef {Object} Props
@@ -26,9 +28,11 @@
   let appId = $derived(game?.appId || '');
 
   function handleUpdated(e) {
-    const updated = e.detail;
+    const updated = e?.detail ?? e;
     if (updated) {
       game = { ...game, ...updated };
+      updateGameInStore(updated);
+      drawerDraft.syncIdentity(updated);
     }
     onupdated?.(updated);
   }
@@ -83,6 +87,8 @@
       <MetadataLinker
         {game}
         onupdated={handleUpdated}
+        onlinked={(detail) => { if (detail?.game) handleUpdated(detail.game); }}
+        onunlinked={(detail) => { if (detail?.game || detail) handleUpdated(detail?.game ?? detail); }}
       />
     {:else if activeTab === 'artwork'}
       <ArtworkPicker

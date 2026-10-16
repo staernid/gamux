@@ -318,54 +318,28 @@ describe('GameHubView Component', () => {
     expect(screen.getByRole('button', { name: /Cancel Task/i })).toBeInTheDocument();
   });
 
-  it('toggles inline Source and Metadata setup wizards in Configuration tab', async () => {
+  it('opens metadata and artwork modals from Configuration tab action cards', async () => {
+    const modalSpy = vi.spyOn(modalStore, 'open');
     render(GameHubView);
 
     // Navigate to Configuration tab
     const configBtn = screen.getByRole('button', { name: /^Configuration$/i });
     await fireEvent.click(configBtn);
 
-    // Toggle Source Setup Wizard
-    const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });
+    // Click Match Store
+    const matchStoreBtn = screen.getByRole('button', { name: /Match Store/i });
     await fireEvent.click(matchStoreBtn);
-    expect(screen.getByText('Configure Physical Installation Source & Store')).toBeInTheDocument();
-    expect(screen.getByText('Close Matcher')).toBeInTheDocument();
+    expect(modalSpy).toHaveBeenCalledWith('metadata-artwork', expect.objectContaining({ initialTab: 'metadata' }));
 
-    // Toggle Metadata Wizard (should close Source Wizard)
-    const matchMetaBtn = screen.getByRole('button', { name: /Match Metadata|Change Match/i });
+    // Click Match Metadata
+    const matchMetaBtn = screen.getByRole('button', { name: /Change Match|Match Metadata/i });
     await fireEvent.click(matchMetaBtn);
-    expect(screen.getByText('Match Online Store Metadata')).toBeInTheDocument();
-    expect(screen.queryByText('Configure Physical Installation Source & Store')).not.toBeInTheDocument();
-  });
+    expect(modalSpy).toHaveBeenCalledWith('metadata-link', expect.objectContaining({ game: expect.anything() }));
 
-  it('searches store candidates and sets AppID in Match Store wizard', async () => {
-    vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([
-      { id: '620', name: 'Portal 2', store: 'steam', release_date: '2011-04-19' },
-      { id: '400', name: 'Portal', store: 'steam', release_date: '2007-10-10' },
-    ]);
-
-    render(GameHubView);
-
-    // Navigate to Configuration tab
-    const configBtn = screen.getByRole('button', { name: /^Configuration$/i });
-    await fireEvent.click(configBtn);
-
-    // Open Match Store
-    const matchStoreBtn = screen.getByRole('button', { name: /Match Store|Change Store Match/i });
-    await fireEvent.click(matchStoreBtn);
-
-    const searchInput = screen.getByPlaceholderText(/Search STEAM catalogue for AppID/i);
-    await fireEvent.input(searchInput, { target: { value: 'Portal' } });
-
-    const searchBtn = screen.getByRole('button', { name: /^Search$/i });
-    await fireEvent.click(searchBtn);
-
-    expect(await screen.findByText('Portal 2')).toBeInTheDocument();
-
-    const matchBtns = screen.getAllByRole('button', { name: /Match Store/i });
-    await fireEvent.click(matchBtns[0]);
-
-    expect(get(drawerDraft).appId).toBe('620');
+    // Click Artwork Hub
+    const artworkBtn = screen.getByRole('button', { name: /Open Artwork Hub/i });
+    await fireEvent.click(artworkBtn);
+    expect(modalSpy).toHaveBeenCalledWith('artwork-picker', expect.objectContaining({ initialTab: 'cover' }));
   });
 
 

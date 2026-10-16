@@ -5,8 +5,6 @@
   import SettingSection from '../../common/SettingSection.svelte';
   import SettingRow from '../../common/SettingRow.svelte';
   import GhostInput from '../../common/GhostInput.svelte';
-  import GameSourceWizard from './GameSourceWizard.svelte';
-  import GameMetadataWizard from './GameMetadataWizard.svelte';
   import HubActionToolbar from './HubActionToolbar.svelte';
 
   /**
@@ -30,9 +28,6 @@
     onunlinkMeta
   } = $props();
 
-  let showSourceWizard = $state(false);
-  let showMetadataWizard = $state(false);
-
   let candidates = $derived(game?.launchCandidates || []);
   let metaInfo = $derived(game ? getMetadataInfo(game) : { provider: 'None', id: '' });
   let hasMatch = $derived(game ? hasMetadataMatch(game) : false);
@@ -43,26 +38,6 @@
 
   function handleReset() {
     onreset?.();
-  }
-
-  function handleLinkMeta(e) {
-    onlinkMeta?.(e.detail);
-    showMetadataWizard = false;
-  }
-
-  function handleUnlinkMeta() {
-    onunlinkMeta?.();
-    showMetadataWizard = false;
-  }
-
-  function toggleSourceWizard() {
-    showSourceWizard = !showSourceWizard;
-    if (showSourceWizard) showMetadataWizard = false;
-  }
-
-  function toggleMetadataWizard() {
-    showMetadataWizard = !showMetadataWizard;
-    if (showMetadataWizard) showSourceWizard = false;
   }
 </script>
 
@@ -96,7 +71,7 @@
         <!-- 3 Pillar Action Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <!-- 1. Physical Source Pillar -->
-          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3 {showSourceWizard ? 'border-surface-borderHighlight bg-surface-cardHover' : ''}">
+          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3">
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
@@ -118,19 +93,19 @@
             </div>
             <button
               type="button"
-              onclick={toggleSourceWizard}
+              onclick={() => modalStore.open('metadata-artwork', { game, initialTab: 'metadata' })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span>{showSourceWizard ? 'Close Matcher' : (($drawerDraft.appId || (game?.appId && game.appId !== '0')) ? 'Match Store...' : 'Match Store...')}</span>
+              <span>Match Store...</span>
             </button>
           </div>
 
           <!-- 2. Store Metadata Pillar -->
-          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3 {showMetadataWizard ? 'border-surface-borderHighlight bg-surface-cardHover' : ''}">
+          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3">
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
@@ -158,13 +133,13 @@
             </div>
             <button
               type="button"
-              onclick={toggleMetadataWizard}
+              onclick={() => modalStore.open('metadata-link', { game })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <span>{showMetadataWizard ? 'Close Matcher' : (hasMatch ? 'Change Match...' : 'Match Metadata...')}</span>
+              <span>{hasMatch ? 'Change Match...' : 'Match Metadata...'}</span>
             </button>
           </div>
 
@@ -188,7 +163,7 @@
             </div>
             <button
               type="button"
-              onclick={() => modalStore.open('artwork-picker', { game })}
+              onclick={() => modalStore.open('artwork-picker', { game, initialTab: 'cover' })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,19 +173,6 @@
             </button>
           </div>
         </div>
-
-        {#if showSourceWizard}
-          <GameSourceWizard {game} onclose={() => showSourceWizard = false} />
-        {/if}
-
-        {#if showMetadataWizard}
-          <GameMetadataWizard
-            {game}
-            onlinkMeta={handleLinkMeta}
-            onunlinkMeta={handleUnlinkMeta}
-            onclose={() => showMetadataWizard = false}
-          />
-        {/if}
       </SettingSection>
 
       <SettingSection title="Target Executable">

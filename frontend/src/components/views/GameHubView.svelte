@@ -431,7 +431,7 @@
           : `Linked ${game.name} to ${targetStore.toUpperCase()} (#${targetId})`
       });
       if (updated) {
-        selectedGame.update(curr => (curr && isSamePath(curr.gameDir, game.gameDir) ? { ...curr, ...updated } : curr));
+        updateGameInStore(updated);
         drawerDraft.init(updated, globalCfg);
       }
     } catch (err) {
@@ -453,7 +453,7 @@
         message: `Restored auto-detected identity for ${game.name}.`
       });
       if (updated) {
-        selectedGame.update(curr => (curr && isSamePath(curr.gameDir, game.gameDir) ? { ...curr, ...updated } : curr));
+        updateGameInStore(updated);
         drawerDraft.init(updated, globalCfg);
       }
     } catch (err) {

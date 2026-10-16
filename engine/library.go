@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/compat"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
@@ -463,6 +464,7 @@ func (eng *Engine) ApplyCustomArtwork(ctx context.Context, gameDir string, asset
 	}
 	profile.LockedArtwork = true
 	_ = compat.SaveProfile(profile)
+	cache.InvalidateGameCache(gameDir)
 
 	return art, nil
 }
@@ -486,6 +488,8 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 		profile.MetadataProvider = ""
 		profile.MetadataID = ""
 	case "steam":
+		profile.StoreAppID = profile.MetadataID
+		profile.AppID = profile.MetadataID
 		if eng.StoreRegistry != nil {
 			if p, ok := eng.StoreRegistry.Get("steam"); ok {
 				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
@@ -494,6 +498,7 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 			}
 		}
 	case "gog":
+		profile.GOGID = profile.MetadataID
 		if eng.StoreRegistry != nil {
 			if p, ok := eng.StoreRegistry.Get("gog"); ok {
 				if meta, err := p.GetMetadata(ctx, profile.MetadataID); err == nil && meta != nil && meta.Name != "" {
@@ -517,10 +522,19 @@ func (eng *Engine) LinkGameMetadata(ctx context.Context, gameDir, storeName, sto
 	}
 	_ = compat.SyncSettings(ctx, profile, eng.Config)
 
+	cache.InvalidateGameCache(gameDir)
 	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
 		return nil, err
 	}
+
+	if eng.ArtworkService != nil {
+		if !profile.LockedArtwork {
+			eng.ArtworkService.InvalidateCache(status)
+		}
+		_, _ = eng.ArtworkService.Resolve(ctx, status)
+	}
+
 	return status, nil
 }
 
@@ -539,10 +553,17 @@ func (eng *Engine) UnlinkGameMetadata(ctx context.Context, gameDir string) (*dom
 		return nil, fmt.Errorf("unlink metadata: %w", err)
 	}
 
+	cache.InvalidateGameCache(gameDir)
 	status, err := eng.InspectStatus(ctx, gameDir)
 	if err != nil {
 		return nil, err
 	}
+
+	if eng.ArtworkService != nil {
+		eng.ArtworkService.InvalidateCache(status)
+		_, _ = eng.ArtworkService.Resolve(ctx, status)
+	}
+
 	return status, nil
 }
 

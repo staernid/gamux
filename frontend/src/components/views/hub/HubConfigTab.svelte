@@ -11,8 +11,6 @@
   import InheritSelect from '../../common/InheritSelect.svelte';
   import PropertySheet from '../../schema/PropertySheet.svelte';
   import EnvDiffEditor from '../../common/EnvDiffEditor.svelte';
-  import GameSourceWizard from './GameSourceWizard.svelte';
-  import GameMetadataWizard from './GameMetadataWizard.svelte';
   import { PLATFORM_OPTIONS } from '../../../constants/options.js';
 
   /**
@@ -38,8 +36,6 @@
   } = $props();
   const platformOptions = PLATFORM_OPTIONS;
 
-  let showSourceWizard = $state(false);
-  let showMetadataWizard = $state(false);
   let filterOnlyOverrides = $state(false);
   let showPreview = $state(false);
   let launchPreview = $state(null);
@@ -97,26 +93,6 @@
   function handleResetAll() {
     onreset?.();
     schedulePreviewUpdate();
-  }
-
-  function handleLinkMeta(e) {
-    onlinkMeta?.(e.detail);
-    showMetadataWizard = false;
-  }
-
-  function handleUnlinkMeta() {
-    onunlinkMeta?.();
-    showMetadataWizard = false;
-  }
-
-  function toggleSourceWizard() {
-    showSourceWizard = !showSourceWizard;
-    if (showSourceWizard) showMetadataWizard = false;
-  }
-
-  function toggleMetadataWizard() {
-    showMetadataWizard = !showMetadataWizard;
-    if (showMetadataWizard) showSourceWizard = false;
   }
 
   async function copyLaunchCommand() {
@@ -398,13 +374,17 @@
 
     {#if !filterOnlyOverrides}
       <!-- 4. Identity, Source & Artwork Section -->
+      <!-- 4. Identity, Source & Artwork Section -->
       <SettingSection title="Store Identity & Artwork">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <!-- Physical Source Pillar -->
-          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3 {showSourceWizard ? 'border-surface-borderHighlight bg-surface-cardHover' : ''}">
+          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3">
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
+                  <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
                   Physical Source
                 </span>
                 <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap flex-shrink-0">
@@ -414,22 +394,29 @@
                   {/if}
                 </span>
               </div>
-              <p class="text-2xs text-neutral-400 leading-snug">File layout and DRM emulation pipeline.</p>
+              <p class="text-2xs text-neutral-400 leading-snug">File layout, DRM emulation, and runner execution.</p>
             </div>
             <button
               type="button"
-              onclick={toggleSourceWizard}
+              onclick={() => modalStore.open('metadata-artwork', { game, initialTab: 'metadata' })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <span>{showSourceWizard ? 'Close Matcher' : 'Match Store...'}</span>
+              <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span>Match Store...</span>
             </button>
           </div>
 
           <!-- Store Metadata Pillar -->
-          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3 {showMetadataWizard ? 'border-surface-borderHighlight bg-surface-cardHover' : ''}">
+          <div class="bg-surface-header border border-surface-border p-3.5 rounded-xl flex flex-col justify-between space-y-3">
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
+                  <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
                   Store Metadata
                 </span>
                 <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap flex-shrink-0">
@@ -443,10 +430,13 @@
             </div>
             <button
               type="button"
-              onclick={toggleMetadataWizard}
+              onclick={() => modalStore.open('metadata-link', { game })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <span>{showMetadataWizard ? 'Close Matcher' : (hasMatch ? 'Change Match...' : 'Match Metadata...')}</span>
+              <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>{hasMatch ? 'Change Match...' : 'Match Metadata...'}</span>
             </button>
           </div>
 
@@ -455,6 +445,9 @@
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
+                  <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   Artwork Hub
                 </span>
                 <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-300 border border-surface-border whitespace-nowrap flex-shrink-0">
@@ -465,26 +458,16 @@
             </div>
             <button
               type="button"
-              onclick={() => modalStore.open('artwork-picker', { game })}
+              onclick={() => modalStore.open('artwork-picker', { game, initialTab: 'cover' })}
               class="w-full py-1.5 px-3 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
+              <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
               <span>Open Artwork Hub...</span>
             </button>
           </div>
         </div>
-
-        {#if showSourceWizard}
-          <GameSourceWizard {game} onclose={() => showSourceWizard = false} />
-        {/if}
-
-        {#if showMetadataWizard}
-          <GameMetadataWizard
-            {game}
-            onlinkMeta={handleLinkMeta}
-            onunlinkMeta={handleUnlinkMeta}
-            onclose={() => showMetadataWizard = false}
-          />
-        {/if}
       </SettingSection>
     {/if}
   </div>

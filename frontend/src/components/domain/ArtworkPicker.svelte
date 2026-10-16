@@ -64,6 +64,19 @@
     { id: 'logo', label: 'Logo', hint: 'PNG' }
   ];
 
+  let lastKnownGameKey = '';
+  $effect(() => {
+    const currentKey = `${gameDir}:${appId}:${gameName}`;
+    if (currentKey !== lastKnownGameKey) {
+      const wasInitial = lastKnownGameKey === '';
+      lastKnownGameKey = currentKey;
+      if (!wasInitial) {
+        artQuery = gameName || (appId ? String(appId) : '');
+        fetchArtworkOptions();
+      }
+    }
+  });
+
   onMount(() => {
     artQuery = gameName || (appId ? String(appId) : '');
     fetchArtworkOptions();

@@ -658,11 +658,17 @@ func (g *Game) ApplyProfile(profile *LaunchProfile, launchProfileExists bool) {
 		if strings.EqualFold(profile.MetadataProvider, "steam") {
 			if num, ok := util.ParseAppID(profile.MetadataID); ok && num > 0 {
 				g.ExternalIDs.SteamAppID = num
+				if g.NumericAppID == 0 || g.AppID == "" || g.AppID == "0" || launchProfileExists {
+					g.AppID = profile.MetadataID
+					g.NumericAppID = num
+				}
 			}
 		} else if strings.EqualFold(profile.MetadataProvider, "gog") {
 			g.ExternalIDs.GOGID = profile.MetadataID
+			g.GOGID = profile.MetadataID
 		} else if strings.EqualFold(profile.MetadataProvider, "rawg") {
 			g.ExternalIDs.RAWGID = profile.MetadataID
+			g.RAWGID = profile.MetadataID
 		}
 	}
 	if launchProfileExists {
@@ -679,6 +685,7 @@ func (g *Game) ApplyProfile(profile *LaunchProfile, launchProfileExists bool) {
 		}
 	}
 	if profile.GOGID != "" {
+		g.GOGID = profile.GOGID
 		g.ExternalIDs.GOGID = profile.GOGID
 	}
 	if profile.SGDBID != "" {

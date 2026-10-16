@@ -199,6 +199,18 @@ function createDrawerDraftStore() {
       set(createInitialDraft(game, globalCfg));
     },
 
+    syncIdentity(game) {
+      if (!game) return;
+      const lp = game.launchProfile || game.launch_profile || {};
+      update(state => ({
+        ...state,
+        appId: lp.app_id || lp.appId || game.appId || game.app_id || state.appId,
+        metadataProvider: lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider || state.metadataProvider,
+        metadataId: lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id || state.metadataId,
+        name: lp.name || game.name || state.name,
+      }));
+    },
+
     setField(key, value) {
       update(state => ({ ...state, [key]: value }));
     },
@@ -298,6 +310,17 @@ function createDrawerDraftStore() {
       launchProfile.custom_logo_url = game.customLogoUrl ?? game.custom_logo_url ?? '';
       launchProfile.custom_icon_url = game.customIconUrl ?? game.custom_icon_url ?? '';
       launchProfile.locked_artwork = Boolean(game.lockedArtwork ?? game.locked_artwork);
+
+      const lp = game.launchProfile || game.launch_profile || {};
+      if (!launchProfile.metadata_provider && (lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider)) {
+        launchProfile.metadata_provider = lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider || '';
+      }
+      if (!launchProfile.metadata_id && (lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id)) {
+        launchProfile.metadata_id = lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id || '';
+      }
+      if (!launchProfile.store_app_id && (lp.store_app_id || lp.storeAppId)) {
+        launchProfile.store_app_id = lp.store_app_id || lp.storeAppId || '';
+      }
 
       try {
         const updated = await saveGameProfile(gameDir, launchProfile);

@@ -133,11 +133,24 @@
         buildId={game?.buildId}
       />
 
-      {#if genres.length > 0}
-        <div class="pt-2 border-t border-surface-border">
+      <div class="pt-2 border-t border-surface-border flex items-center justify-between gap-2 flex-wrap">
+        {#if genres.length > 0}
           <GenrePillGroup {genres} maxPills={6} />
-        </div>
-      {/if}
+        {:else}
+          <div></div>
+        {/if}
+        <button
+          type="button"
+          onclick={() => modalStore.open('metadata-link', { game })}
+          class="text-3xs font-mono font-medium text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border transition flex items-center gap-1.5 cursor-pointer ml-auto"
+          title="Edit or unlink store metadata match"
+        >
+          <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          <span>Edit Store Match</span>
+        </button>
+      </div>
     {:else}
       <!-- Standalone / Unlinked Title Information -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-1">

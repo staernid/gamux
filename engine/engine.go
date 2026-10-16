@@ -125,6 +125,7 @@ func (eng *Engine) UpdateConfig(newCfg *config.Config) {
 	reg.Register(store.NewGOGProvider())
 	reg.Register(store.NewRAWGProvider(newCfg.RAWGAPIKey))
 	reg.Register(store.NewSGDBProvider(newCfg.SteamGridDBAPIKey))
+	reg.Register(store.NewSteamGridProxyProvider())
 	eng.StoreRegistry = reg
 	eng.ArtworkService = store.NewArtworkService(newCfg.ArtworkDir, reg)
 

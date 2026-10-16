@@ -122,6 +122,19 @@ func NewArtworkService(cacheDir string, registry *Registry) *ArtworkService {
 	}
 }
 
+// InvalidateCache purges cached artwork files for a game when identity changes.
+func (s *ArtworkService) InvalidateCache(game *domain.Game) {
+	if s == nil || game == nil {
+		return
+	}
+	slug := util.Slugify(game.Name)
+	if slug == "" {
+		slug = "game-" + game.AppID
+	}
+	gameArtDir := filepath.Join(s.cacheDir, slug)
+	_ = os.RemoveAll(gameArtDir)
+}
+
 // DownloadFile downloads a URL to a local destination file path atomically.
 func (s *ArtworkService) DownloadFile(ctx context.Context, downloadURL, targetPath string) error {
 	if downloadURL == "" || targetPath == "" {
@@ -198,6 +211,9 @@ func (s *ArtworkService) Resolve(ctx context.Context, game *domain.Game) (*domai
 	steamID, hasSteamID := game.SteamAppID()
 	if !hasSteamID && game.AppID != "" && game.AppID != "0" {
 		steamID, hasSteamID = util.ParseAppID(game.AppID)
+	}
+	if !hasSteamID && provider == "steam" {
+		steamID, hasSteamID = util.ParseAppID(game.EffectiveMetadataID())
 	}
 
 	if provider == "rawg" && rawgID != "" && !game.LockedArtwork && s.registry != nil {
