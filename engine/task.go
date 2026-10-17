@@ -267,6 +267,9 @@ func (eng *Engine) newBatchLibraryOp(kind string) (*BatchLibraryOperation, error
 			Metadata:    map[string]string{"batch_kind": "artwork"},
 			Action: func(ctx context.Context, eng *Engine, game *GameStatus, ctrl *tasks.Controller, i, total int) (bool, error) {
 				art, _ := eng.ResolveArtwork(ctx, game)
+				if eng.ArtworkService != nil {
+					_, _ = eng.ArtworkService.PruneOrphans(game)
+				}
 				return art != nil, nil
 			},
 		}, nil

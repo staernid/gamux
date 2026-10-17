@@ -657,3 +657,73 @@ func TestArtworkService_PEIconExtraction(t *testing.T) {
 		t.Errorf("expected extracted icon file to exist at %s", art.LocalIcon)
 	}
 }
+
+func TestArtworkService_PruneOrphans(t *testing.T) {
+	cacheDir := t.TempDir()
+	gameDir := t.TempDir()
+
+	g := domain.NewGame("Hades", gameDir, "1145360", "win64")
+	slug := util.Slugify(g.Name)
+	artCacheDir := filepath.Join(cacheDir, slug)
+	gameArtDir := filepath.Join(gameDir, ".gamux", "art")
+	if err := os.MkdirAll(artCacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(gameArtDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create a referenced cover image in artCacheDir
+	validCover := filepath.Join(artCacheDir, "cover.jpg")
+	_ = os.WriteFile(validCover, []byte("valid cover"), 0644)
+	g.SetAsset(domain.AssetCover, domain.AssetLocation{
+		LocalPath: validCover,
+		LocalURL:  "/art/hades/cover.jpg",
+	})
+
+	// 2. Create orphaned images in both dirs
+	orphanCache1 := filepath.Join(artCacheDir, "old_hash_123.jpg")
+	orphanCache2 := filepath.Join(artCacheDir, "temp_banner.png")
+	_ = os.WriteFile(orphanCache1, []byte("old art 1"), 0644)
+	_ = os.WriteFile(orphanCache2, []byte("old art 2"), 0644)
+
+	orphanGame1 := filepath.Join(gameArtDir, "replaced_cover.png")
+	_ = os.WriteFile(orphanGame1, []byte("old art in game dir"), 0644)
+
+	// Non-image file that should not be touched
+	nonImage := filepath.Join(gameArtDir, "metadata.json")
+	_ = os.WriteFile(nonImage, []byte("{}"), 0644)
+
+	svc := NewArtworkService(cacheDir, NewRegistry())
+
+	// Run PruneOrphans
+	count, err := svc.PruneOrphans(g)
+	if err != nil {
+		t.Fatalf("PruneOrphans failed: %v", err)
+	}
+
+	if count != 3 {
+		t.Errorf("expected 3 pruned files, got %d", count)
+	}
+
+	// Verify valid cover still exists
+	if !util.FileExists(validCover) {
+		t.Errorf("referenced cover %s was incorrectly removed", validCover)
+	}
+
+	// Verify non-image file still exists
+	if !util.FileExists(nonImage) {
+		t.Errorf("non-image file %s was incorrectly removed", nonImage)
+	}
+
+	// Verify orphans removed
+	if util.FileExists(orphanCache1) {
+		t.Errorf("orphan %s still exists", orphanCache1)
+	}
+	if util.FileExists(orphanCache2) {
+		t.Errorf("orphan %s still exists", orphanCache2)
+	}
+	if util.FileExists(orphanGame1) {
+		t.Errorf("orphan %s still exists", orphanGame1)
+	}
+}

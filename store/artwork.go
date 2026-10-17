@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -133,6 +134,71 @@ func (s *ArtworkService) InvalidateCache(game *domain.Game) {
 	}
 	gameArtDir := filepath.Join(s.cacheDir, slug)
 	_ = os.RemoveAll(gameArtDir)
+}
+
+// PruneOrphans removes unreferenced image assets in the game's .gamux/art/ and system cache directories.
+func (s *ArtworkService) PruneOrphans(game *domain.Game) (int, error) {
+	if s == nil || game == nil {
+		return 0, nil
+	}
+
+	referencedPaths := make(map[string]bool)
+	for _, spec := range canonicalAssetSpecs {
+		loc := game.GetAsset(spec.AssetType)
+		if loc.LocalPath != "" {
+			referencedPaths[util.CanonicalPath(loc.LocalPath)] = true
+		}
+	}
+
+	slug := util.Slugify(game.Name)
+	if slug == "" {
+		slug = "game-" + game.AppID
+	}
+
+	dirsToInspect := []string{
+		filepath.Join(s.cacheDir, slug),
+	}
+	if game.GameDir != "" {
+		dirsToInspect = append(dirsToInspect, filepath.Join(game.GameDir, ".gamux", "art"))
+	}
+
+	removedCount := 0
+	validCacheNames := make(map[string]bool)
+	for _, spec := range canonicalAssetSpecs {
+		validCacheNames[strings.ToLower(spec.CacheFilename)] = true
+	}
+
+	for _, dir := range dirsToInspect {
+		if !util.DirExists(dir) {
+			continue
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			filePath := filepath.Join(dir, e.Name())
+			canonPath := util.CanonicalPath(filePath)
+
+			// If the file is not currently referenced
+			if !referencedPaths[canonPath] {
+				nameLower := strings.ToLower(e.Name())
+				ext := strings.ToLower(filepath.Ext(nameLower))
+				isImage := ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".ico" || ext == ".webp"
+				if isImage {
+					if err := os.Remove(filePath); err == nil {
+						removedCount++
+						slog.Debug("Pruned orphaned artwork file", "path", filePath)
+					}
+				}
+			}
+		}
+	}
+
+	return removedCount, nil
 }
 
 // DownloadFile downloads a URL to a local destination file path atomically.
@@ -798,6 +864,7 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 		RemoteURL: imageSource,
 	}
 	game.SetAsset(assetType, loc)
+	_, _ = s.PruneOrphans(game)
 
 	return &game.GameArtwork, nil
 }
