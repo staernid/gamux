@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { drawerDraft } from '../../../stores/drawerDraft.js';
   import { modalStore } from '../../../stores/modal.js';
@@ -80,7 +78,7 @@
     }, 300);
   }
 
-  run(() => {
+  $effect(() => {
     if ($drawerDraft && game?.gameDir) {
       schedulePreviewUpdate();
     }

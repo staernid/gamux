@@ -10,9 +10,6 @@
 </script>
 
 <script>
-  import { run } from 'svelte/legacy';
-
-  import { onMount } from 'svelte';
   import { AppAPI } from '../../../../api/app.js';
   import { modalStore } from '../../../../stores/modal.js';
   import { getMetadataInfo, isSteamApp, getGameSource } from '../../../../utils/game.js';
@@ -76,14 +73,8 @@
     }
   }
 
-  run(() => {
+  $effect(() => {
     if (lookupKey !== currentLookupKey && !isLoading) {
-      loadMetadata(providerKey, targetLookupId, lookupKey);
-    }
-  });
-
-  onMount(() => {
-    if (lookupKey) {
       loadMetadata(providerKey, targetLookupId, lookupKey);
     }
   });

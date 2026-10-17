@@ -386,9 +386,9 @@ func ShouldEmulate(game *domain.Game) bool {
 }
 
 // ScrubPrefixEmulation idempotently removes Goldberg emulation artifacts from a Wine prefix:
-// - Removes Goldberg DLLs, steam_settings symlinks, and steam_appid.txt from
-//   <prefix>/drive_c/Program Files (x86)/Steam
-// - Leaves genuine user files untouched.
+//   - Removes Goldberg DLLs, steam_settings symlinks, and steam_appid.txt from
+//     <prefix>/drive_c/Program Files (x86)/Steam
+//   - Leaves genuine user files untouched.
 func ScrubPrefixEmulation(prefixDir string) error {
 	if prefixDir == "" {
 		return nil
