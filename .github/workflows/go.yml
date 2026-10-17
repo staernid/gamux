@@ -50,7 +50,7 @@ jobs:
           args: --timeout=5m
 
       - name: Test Suite (with Race Detector)
-        run: go test -race -v ./...
+        run: go test -race -tags desktop,production,gtk3,webkit2_41 ./...
 
       - name: Build Dual Binaries
         run: make build-all

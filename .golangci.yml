@@ -1,0 +1,13 @@
+version: "2"
+run:
+  timeout: 5m
+  build-tags: [desktop, production, gtk3, webkit2_41]
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - bodyclose
+    - misspell
+formatters:
+  enable:
+    - gofmt

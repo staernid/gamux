@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LDFLAGS = -s -w -X main.Version=$(VERSION)
 GUI_TAGS = -tags desktop,production,gtk3,webkit2_41
 
-.PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test lint run run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
+.PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test test-go test-frontend lint fmt fmt-check check run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
 all: test build
 
@@ -17,7 +17,6 @@ build-all: build-cli build-gui
 build-cli:
 	@mkdir -p bin
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(CLI_BINARY) ./cmd/gamux
-	@cp -f $(CLI_BINARY) gamux
 
 build-frontend:
 	@echo "Building frontend dist assets..."
@@ -68,10 +67,17 @@ gui-snap:
 
 test: test-go test-frontend
 
-lint:
+fmt:
+	gofmt -w $(shell git ls-files '*.go')
+
+fmt-check:
+	@out=$$(gofmt -l $(shell git ls-files '*.go')); \
+	if [ -n "$$out" ]; then echo "gofmt needed (run 'make fmt'):"; echo "$$out"; exit 1; fi
+
+lint: fmt-check
 	go vet $(GUI_TAGS) ./...
 	@cd frontend && npm run check
-	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
+	@if which golangci-lint > /dev/null 2>&1; then golangci-lint run --build-tags desktop,production,gtk3,webkit2_41; else echo "golangci-lint not installed; skipping"; fi
 
 check: lint test-go test-frontend build
 	@echo "✨ All Go and Frontend tests, lints, and builds passed cleanly!"
