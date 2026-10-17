@@ -101,7 +101,6 @@ func TestBuildCageArgs(t *testing.T) {
 	}
 }
 
-
 func TestEnsureSeatProfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	prof := PlayerProfile{
@@ -305,7 +304,6 @@ func TestBuildBwrapArgs_Player1_RealHome(t *testing.T) {
 		t.Errorf("did not expect any reference to fake profile home for p1, got: %s", str)
 	}
 }
-
 
 func TestGenerateSunshineConfig(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -2237,5 +2235,3 @@ func TestResolveDeviceNode(t *testing.T) {
 		t.Errorf("expected fallback to active devNode %q, got %q", ev99Dev, got)
 	}
 }
-
-

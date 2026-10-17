@@ -33,7 +33,6 @@ func (a *App) GetGameConfigSchema() []config.PropertyDescriptor {
 	return config.GetGameConfigSchema()
 }
 
-
 // SaveConfig validates, merges, and saves new configuration settings.
 func (a *App) SaveConfig(newCfg *config.Config) error {
 	if newCfg == nil {
@@ -85,4 +84,3 @@ func (a *App) ResolveSteamProfile(identifier string) (*domain.SteamProfile, erro
 	}
 	return steam.ResolveSteamProfile(a.getContext(), apiKey, identifier)
 }
-

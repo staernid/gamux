@@ -25,16 +25,16 @@ type SaveLocation struct {
 
 // SaveLocationsResult consolidates all discovered data locations and aggregate stats for a game.
 type SaveLocationsResult struct {
-	GameDir          string         `json:"game_dir"`
-	GameName         string         `json:"game_name"`
-	AppID            string         `json:"app_id,omitempty"`
-	Platform         string         `json:"platform,omitempty"`
-	Locations        []SaveLocation `json:"locations"`
-	TotalSaveBytes   int64          `json:"total_save_bytes"`
-	TotalConfigFiles int            `json:"total_config_files"`
-	HasCloudSaves    bool           `json:"has_cloud_saves"`
-	PrimarySavePath  string         `json:"primary_save_path,omitempty"`
-	PrimaryConfigPath string        `json:"primary_config_path,omitempty"`
+	GameDir           string         `json:"game_dir"`
+	GameName          string         `json:"game_name"`
+	AppID             string         `json:"app_id,omitempty"`
+	Platform          string         `json:"platform,omitempty"`
+	Locations         []SaveLocation `json:"locations"`
+	TotalSaveBytes    int64          `json:"total_save_bytes"`
+	TotalConfigFiles  int            `json:"total_config_files"`
+	HasCloudSaves     bool           `json:"has_cloud_saves"`
+	PrimarySavePath   string         `json:"primary_save_path,omitempty"`
+	PrimaryConfigPath string         `json:"primary_config_path,omitempty"`
 }
 
 // ManifestConstraint defines condition filters for when a rule applies.

@@ -144,4 +144,3 @@ func (eng *Engine) UpdateConfig(newCfg *config.Config) {
 	}
 	eng.toolManager = tools.NewManager(newCfg)
 }
-

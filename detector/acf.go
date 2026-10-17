@@ -192,4 +192,3 @@ func GenerateACFContent(data *ACFData) string {
 	sb.WriteString("}\n")
 	return sb.String()
 }
-

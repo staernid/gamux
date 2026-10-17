@@ -151,7 +151,7 @@ func CheckGameVersion(ctx context.Context, appID uint32, localBuildID string, in
 
 	// Case B: Valid local build ID is present.
 	// Tier 1: Try official ISteamApps/UpToDateCheck/v1 (only applicable for default public branch)
-	if (targetBranchName == "public" || targetBranchName == "") {
+	if targetBranchName == "public" || targetBranchName == "" {
 		if versionNum, err := strconv.ParseUint(cleanBuildID, 10, 32); err == nil && versionNum > 0 {
 			apiURL := fmt.Sprintf("%s/ISteamApps/UpToDateCheck/v1/?appid=%d&version=%d", DefaultSteamWebAPI, appID, versionNum)
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)

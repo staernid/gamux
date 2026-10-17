@@ -55,7 +55,7 @@ func (s *SGDBProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
 		CanFetchMetadata:  false,
-		CanProvideArtwork:  true,
+		CanProvideArtwork: true,
 		IsGameStore:       false,
 	}
 }
@@ -67,9 +67,9 @@ func (s *SGDBProvider) IsGameStore() bool {
 type sgdbSearchResponse struct {
 	Success bool `json:"success"`
 	Data    []struct {
-		ID          int    `json:"id"`
-		Name        string `json:"name"`
-		ReleaseDate int64  `json:"release_date,omitempty"`
+		ID          int      `json:"id"`
+		Name        string   `json:"name"`
+		ReleaseDate int64    `json:"release_date,omitempty"`
 		Types       []string `json:"types,omitempty"`
 	} `json:"data"`
 }
@@ -431,4 +431,3 @@ func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 
 	return nil, nil
 }
-

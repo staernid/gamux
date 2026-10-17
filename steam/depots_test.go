@@ -346,4 +346,3 @@ func TestDiscoverDLCs_Rimworld(t *testing.T) {
 		t.Logf("DLC: AppID=%s, Name=%q", d.AppID, d.Name)
 	}
 }
-

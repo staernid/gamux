@@ -78,10 +78,10 @@ func TestGame_EffectiveAccessors(t *testing.T) {
 
 	// Override with LaunchProfile
 	g.LaunchProfile = &LaunchProfile{
-		ExePath:       "/games/test/custom.sh",
-		ExeArgs:       "--custom",
-		OperatingMode: ModePortable,
-		Runner:        RunnerLinux,
+		ExePath:         "/games/test/custom.sh",
+		ExeArgs:         "--custom",
+		OperatingMode:   ModePortable,
+		Runner:          RunnerLinux,
 		WinePrefix:      "/prefixes/custom",
 		PlaytimeSeconds: 3600,
 		LastPlayed:      1700000000,
@@ -241,7 +241,7 @@ func TestLaunchProfile_MergeFrom(t *testing.T) {
 		AppID:           "620",
 		Platform:        "win64",
 		ExePath:         "fallback.exe", // should NOT overwrite primary
-		OperatingMode:   ModePortable,  // should NOT overwrite primary
+		OperatingMode:   ModePortable,   // should NOT overwrite primary
 		Runner:          RunnerUMU,
 		PlaytimeSeconds: 7200,
 		LastPlayed:      1700000000,
@@ -309,6 +309,3 @@ func TestGame_ApplyProfile(t *testing.T) {
 		t.Errorf("expected playtime 12345 / 1710000000, got %d / %d", g.PlaytimeSeconds, g.LastPlayed)
 	}
 }
-
-
-

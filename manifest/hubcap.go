@@ -16,7 +16,6 @@ import (
 	"github.com/staernid/gamux/cache"
 )
 
-
 // DefaultHTTPClient is the default http.Client used for manifest key retrieval operations.
 var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
@@ -171,7 +170,6 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 			}
 		}
 
-
 		// 2. Try parsing as addappid(...) raw lua text
 		bodyStr := string(bodyBytes)
 		if strings.Contains(bodyStr, "addappid") {
@@ -236,7 +234,6 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 			lastErr = fmt.Errorf("could not parse valid depot keys from Hubcap response: %s", bodyStr)
 		}
 	}
-
 
 	if lastErr != nil {
 		return nil, fmt.Errorf("failed to resolve depot keys from Hubcap API for AppID %d: %w", appID, lastErr)

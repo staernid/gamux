@@ -169,4 +169,3 @@ func TestDownloadManifestFromSteamCDN(t *testing.T) {
 		t.Errorf("expected manifest content '%s', got '%s'", string(expectedManifestBytes), string(data))
 	}
 }
-

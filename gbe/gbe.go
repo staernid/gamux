@@ -53,13 +53,13 @@ var PlatformConfig = map[string]struct {
 
 // Options specifies configuration and target paths for applying Goldberg Steam Emulator.
 type Options struct {
-	Config     *config.Config
-	TargetDir  string
-	Platform   string
-	AppID      string
-	Language   string
-	DryRun     bool
-	Portable   bool
+	Config        *config.Config
+	TargetDir     string
+	Platform      string
+	AppID         string
+	Language      string
+	DryRun        bool
+	Portable      bool
 	WinePrefix    string
 	ExePath       string
 	CandidateExes []string
@@ -686,7 +686,6 @@ func SetupWinePrefixSteamDir(prefixDir, gbeBase, gameSettingsDir, appID string, 
 	return nil
 }
 
-
 // FindSteamSettingsDirs scans gameDir for all existing directories named steam_settings.
 func FindSteamSettingsDirs(gameDir string) []string {
 	var dirs []string
@@ -993,15 +992,15 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 	slog.Info("Starting Goldberg emulator revert", "dir", absTargetDir, "dryRun", dryRun)
 
 	loaderFileNames := map[string]bool{
-		"ColdClientLoader.ini":        true,
-		"steamclient_loader_x64.exe":  true,
-		"steamclient_loader_x86.exe":  true,
-		"steamclient64.dll":           true,
-		"steamclient.dll":             true,
-		"GameOverlayRenderer64.dll":   true,
-		"GameOverlayRenderer.dll":     true,
-		"steam_interfaces.txt":        true,
-		".steam_interfaces.hash":      true,
+		"ColdClientLoader.ini":       true,
+		"steamclient_loader_x64.exe": true,
+		"steamclient_loader_x86.exe": true,
+		"steamclient64.dll":          true,
+		"steamclient.dll":            true,
+		"GameOverlayRenderer64.dll":  true,
+		"GameOverlayRenderer.dll":    true,
+		"steam_interfaces.txt":       true,
+		".steam_interfaces.hash":     true,
 	}
 
 	var restoredCount int
@@ -1075,6 +1074,3 @@ func Revert(targetDir string, dryRun bool) (int, error) {
 	slog.Info("Goldberg emulator revert completed", "restoredFiles", restoredCount)
 	return restoredCount, nil
 }
-
-
-

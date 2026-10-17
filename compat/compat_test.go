@@ -158,16 +158,16 @@ func TestProfilePreservationOnSave(t *testing.T) {
 	_ = os.MkdirAll(gameDir, 0755)
 
 	initial := &domain.LaunchProfile{
-		GameDir:         gameDir,
-		Name:            "Preserve Game",
-		AppID:           "777",
-		InstalledAt:     1650000000,
-		PlaytimeSeconds: 7200,
-		LastPlayed:      1700000000,
-		CustomCoverURL:  "https://example.com/cover.png",
-		LockedArtwork:   true,
+		GameDir:          gameDir,
+		Name:             "Preserve Game",
+		AppID:            "777",
+		InstalledAt:      1650000000,
+		PlaytimeSeconds:  7200,
+		LastPlayed:       1700000000,
+		CustomCoverURL:   "https://example.com/cover.png",
+		LockedArtwork:    true,
 		MetadataProvider: "steam",
-		MetadataID:      "777",
+		MetadataID:       "777",
 	}
 
 	if err := compat.SaveProfileDirect(initial); err != nil {
@@ -528,4 +528,3 @@ func TestResolveStrategy(t *testing.T) {
 		t.Errorf("expected default fallback to ModeLoader, got %s", fallback.Mode())
 	}
 }
-

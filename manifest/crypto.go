@@ -146,4 +146,3 @@ func DecryptChunkPayload(encryptedData []byte, hexKey string) ([]byte, error) {
 
 	return decrypted, nil
 }
-

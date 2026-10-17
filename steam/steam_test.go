@@ -22,9 +22,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
-
-
 func TestFetchAppName(t *testing.T) {
 	cache.SetDisabled(true)
 	defer cache.SetDisabled(false)
@@ -627,4 +624,3 @@ func TestFetchAppNewsItems_CacheUpgrade(t *testing.T) {
 		t.Errorf("cache was downgraded! expected at least 3 items, got %d", len(protectedItems))
 	}
 }
-

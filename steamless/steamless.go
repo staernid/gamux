@@ -246,4 +246,3 @@ func UnpackExecutable(ctx context.Context, cfg *config.Config, exePath string, d
 	count, err := UnpackGameDirectory(ctx, cfg, exePath, dryRun)
 	return count > 0, err
 }
-

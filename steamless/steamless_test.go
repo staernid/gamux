@@ -17,7 +17,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 func TestEnsureBinary_EmbeddedExtraction(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.DefaultConfig()
@@ -92,4 +91,3 @@ func TestUnpackExecutable_DryRun(t *testing.T) {
 		t.Errorf("Expected unpacked to be false in dryRun mode")
 	}
 }
-

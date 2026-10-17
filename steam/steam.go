@@ -24,7 +24,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-
 // Default Steam API endpoints
 const (
 	DefaultSteamStoreAPI = "https://store.steampowered.com/api"
@@ -92,22 +91,22 @@ type AppGenre struct {
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
 	SteamAppID         uint32         `json:"steam_appid,omitempty"`
-	Name                string         `json:"name"`
-	Type                string         `json:"type"`
-	IsFree              bool           `json:"is_free"`
-	HeaderImage         string         `json:"header_image"`
-	RequiredAge         int            `json:"required_age"`
-	About               string         `json:"about_the_game"`
-	ShortDesc           string         `json:"short_description"`
-	DetailedDesc        string         `json:"detailed_description"`
-	Developers          []string       `json:"developers"`
-	Publishers          []string       `json:"publishers"`
-	Genres              []AppGenre     `json:"genres"`
-	SupportedLanguages  string         `json:"supported_languages"`
-	ReleaseDate         ReleaseDate    `json:"release_date"`
-	Platforms           AppPlatforms   `json:"platforms"`
-	PriceOverview       *PriceOverview `json:"price_overview,omitempty"`
-	DLC                 []uint32       `json:"dlc,omitempty"`
+	Name               string         `json:"name"`
+	Type               string         `json:"type"`
+	IsFree             bool           `json:"is_free"`
+	HeaderImage        string         `json:"header_image"`
+	RequiredAge        int            `json:"required_age"`
+	About              string         `json:"about_the_game"`
+	ShortDesc          string         `json:"short_description"`
+	DetailedDesc       string         `json:"detailed_description"`
+	Developers         []string       `json:"developers"`
+	Publishers         []string       `json:"publishers"`
+	Genres             []AppGenre     `json:"genres"`
+	SupportedLanguages string         `json:"supported_languages"`
+	ReleaseDate        ReleaseDate    `json:"release_date"`
+	Platforms          AppPlatforms   `json:"platforms"`
+	PriceOverview      *PriceOverview `json:"price_overview,omitempty"`
+	DLC                []uint32       `json:"dlc,omitempty"`
 }
 
 // AppPlatforms holds platform availability flags.
@@ -355,8 +354,6 @@ func FetchAppInfo(ctx context.Context, appID string) (name, appType, installDir 
 	cleanInstall := util.SanitizeInstallDir(details.Name)
 	return details.Name, t, cleanInstall, nil
 }
-
-
 
 // SearchResultItem represents an item in storesearch results.
 type SearchResultItem struct {
@@ -651,7 +648,6 @@ func FetchAppNews(ctx context.Context, appID string) (string, error) {
 	return res, nil
 }
 
-
 // FetchAppNewsItems fetches up to count news/patch note items for a given Steam AppID.
 func FetchAppNewsItems(ctx context.Context, appID string, count int) ([]NewsItem, error) {
 	if appID == "" || appID == "0" {
@@ -825,4 +821,3 @@ func FetchCurrentPlayers(ctx context.Context, appID uint32) (int, error) {
 
 	return count, nil
 }
-

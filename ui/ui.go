@@ -20,19 +20,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-
 var (
 	isTerminal = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 )
 
 // ANSI Color Codes
 const (
-	colorReset  = "\033[0m"
-	colorBold   = "\033[1m"
-	colorCyan   = "\033[36m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
+	colorReset   = "\033[0m"
+	colorBold    = "\033[1m"
+	colorCyan    = "\033[36m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorRed     = "\033[31m"
 	colorDim     = "\033[2m"
 	colorBlue    = "\033[34m"
 	colorMagenta = "\033[35m"
@@ -53,7 +52,6 @@ func blue(s string) string {
 }
 
 func bold(s string) string {
-
 
 	if !isTerminal {
 		return s
@@ -797,7 +795,6 @@ func RenderNewsItem(gameTitle string, index int, title, feedLabel, contents, url
 	fmt.Println()
 }
 
-
 // RenderStep prints a progress step indicator.
 func RenderStep(stepNum, totalSteps int, title string) {
 	fmt.Printf("\n[%d/%d] %s...\n", stepNum, totalSteps, bold(cyan(title)))
@@ -882,4 +879,3 @@ func PromptSelectCandidate(query string, candidates []steam.AppSearchResult) (st
 
 	return candidates[0], nil
 }
-

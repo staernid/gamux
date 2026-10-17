@@ -616,4 +616,3 @@ func (a *App) GetRecentGames(limit int) []TrayGame {
 
 	return FilterAndSortRecentGames(cached, limit)
 }
-

@@ -37,11 +37,11 @@ func TestConvertRawBmpPayloadToPNG(t *testing.T) {
 	// Construct 40-byte BITMAPINFOHEADER + 16x16 32-bit RGBA pixel data
 	var buf bytes.Buffer
 	var header [40]byte
-	binary.LittleEndian.PutUint32(header[0:4], 40)                       // biSize
-	binary.LittleEndian.PutUint32(header[4:8], uint32(width))             // biWidth
-	binary.LittleEndian.PutUint32(header[8:12], uint32(height*2))         // biHeight (doubled for icon mask)
-	binary.LittleEndian.PutUint16(header[12:14], 1)                       // biPlanes
-	binary.LittleEndian.PutUint16(header[14:16], 32)                      // biBitCount (32 bpp)
+	binary.LittleEndian.PutUint32(header[0:4], 40)                // biSize
+	binary.LittleEndian.PutUint32(header[4:8], uint32(width))     // biWidth
+	binary.LittleEndian.PutUint32(header[8:12], uint32(height*2)) // biHeight (doubled for icon mask)
+	binary.LittleEndian.PutUint16(header[12:14], 1)               // biPlanes
+	binary.LittleEndian.PutUint16(header[14:16], 32)              // biBitCount (32 bpp)
 	buf.Write(header[:])
 
 	// 16x16 pixels * 4 bytes/pixel (BGRA)

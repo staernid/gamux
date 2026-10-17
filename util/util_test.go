@@ -18,7 +18,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 func TestRunCmd(t *testing.T) {
 	// Test a successful command
 	output, err := RunCmd("echo", "hello", "world")
@@ -349,9 +348,9 @@ func TestWriteFileAtomic(t *testing.T) {
 
 func TestResolveOriginalBackupPath(t *testing.T) {
 	tests := []struct {
-		input       string
-		expected    string
-		isBackup    bool
+		input    string
+		expected string
+		isBackup bool
 	}{
 		{
 			input:    "/games/Cyberpunk.2077/bin/x64/Cyberpunk2077.exe.20260901-155237.ORIGINAL",
@@ -493,6 +492,3 @@ func TestPreallocateFile(t *testing.T) {
 		t.Errorf("expected no-op on zero size, got %v", err)
 	}
 }
-
-
-

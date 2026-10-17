@@ -10,18 +10,18 @@ import (
 
 // Controller coordinates execution lifecycle, telemetry reporting, pause synchronization, and rate limiting.
 type Controller struct {
-	ctx          context.Context
-	taskID       string
-	caps         Capability
-	limiter      Limiter
-	isPaused     atomic.Bool
-	pauseCond    *sync.Cond
-	mu           sync.Mutex
-	resultGame   *domain.Game
-	metadata     map[string]string
-	onProgress   func(currBytes, totalBytes int64, currItems, totalItems int, speed float64, eta int, pct float64)
-	onStage      func(stage, details string)
-	onStep       func(step, total int, stage, details string)
+	ctx        context.Context
+	taskID     string
+	caps       Capability
+	limiter    Limiter
+	isPaused   atomic.Bool
+	pauseCond  *sync.Cond
+	mu         sync.Mutex
+	resultGame *domain.Game
+	metadata   map[string]string
+	onProgress func(currBytes, totalBytes int64, currItems, totalItems int, speed float64, eta int, pct float64)
+	onStage    func(stage, details string)
+	onStep     func(step, total int, stage, details string)
 }
 
 // NewController initializes a Controller for a task execution.

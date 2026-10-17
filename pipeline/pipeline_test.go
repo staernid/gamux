@@ -481,4 +481,3 @@ func (m *mockCancelStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 	return ctx.Err()
 }
-

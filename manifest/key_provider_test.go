@@ -113,4 +113,3 @@ addappid(1091500)
 		t.Errorf("expected 3 depots parsed, got %d", len(res.Depots))
 	}
 }
-

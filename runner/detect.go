@@ -60,7 +60,6 @@ func FindUMUBinary() (string, error) {
 	return "", fmt.Errorf("umu-run binary not found in PATH or standard runtime directories (~/.local/share/umu/umu-run)")
 }
 
-
 // GetAvailableRunners inspects system PATH to detect available execution tools.
 func GetAvailableRunners() []string {
 	var runners []string

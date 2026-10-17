@@ -1865,9 +1865,3 @@ func TestDownloadChunk_ExhaustRetries(t *testing.T) {
 		t.Errorf("expected error message to mention 3 attempts, got %v", err)
 	}
 }
-
-
-
-
-
-

@@ -35,7 +35,6 @@ func (m mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m(req)
 }
 
-
 func mustTempDir(t *testing.T) string {
 	t.Helper()
 	d, err := os.MkdirTemp("", "github-test-*")
@@ -313,4 +312,3 @@ func TestExtractZipArchive_ZipSlipProtection(t *testing.T) {
 		t.Errorf("ZipSlip vulnerability detected: evil.txt was extracted outside destDir")
 	}
 }
-

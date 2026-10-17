@@ -17,7 +17,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 func TestCLIRegistrySanity(t *testing.T) {
 	// Verify main CLI commands are well-formed and categorized
 	app := buildApp()

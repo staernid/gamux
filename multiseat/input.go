@@ -610,4 +610,3 @@ func ResolveDeviceNode(raw string) string {
 	}
 	return raw
 }
-

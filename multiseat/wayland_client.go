@@ -25,16 +25,16 @@ const defaultXkbKeymap = `xkb_keymap {
 // WaylandClient provides a pure Go client to inject pointer and keyboard events
 // into a Wayland compositor (such as Cage) using zwlr_virtual_pointer_v1 and zwp_virtual_keyboard_v1.
 type WaylandClient struct {
-	mu        sync.Mutex
-	conn      *net.UnixConn
-	nextID    uint32
-	seatID    uint32
-	ptrMgrID  uint32
-	kbdMgrID  uint32
-	ptrID     uint32
-	kbdID     uint32
-	closed    bool
-	sockPath  string
+	mu       sync.Mutex
+	conn     *net.UnixConn
+	nextID   uint32
+	seatID   uint32
+	ptrMgrID uint32
+	kbdMgrID uint32
+	ptrID    uint32
+	kbdID    uint32
+	closed   bool
+	sockPath string
 }
 
 // NewWaylandClient initializes a new unpopulated WaylandClient instance.

@@ -43,22 +43,22 @@ type LibraryUpdateStatus struct {
 
 // DownloadGameOptions defines parameters for downloading or updating game depots.
 type DownloadGameOptions struct {
-	AppID                uint32                                                                             `json:"app_id"`
-	TargetDir            string                                                                             `json:"target_dir"`
-	Platform             string                                                                             `json:"platform"`
-	Language             string                                                                             `json:"language,omitempty"`
-	IncludedDepots       []uint32                                                                           `json:"included_depots,omitempty"`
-	ExcludedDepots       []uint32                                                                           `json:"excluded_depots,omitempty"`
-	IncludeOptional      bool                                                                               `json:"include_optional,omitempty"`
-	Branch               string                                                                             `json:"branch,omitempty"`
-	LuaPath              string                                                                             `json:"lua_path"`
-	DryRun               bool                                                                               `json:"dry_run"`
-	WorkerLimit          int                                                                                `json:"worker_limit,omitempty"`
-	AutoApply            bool                                                                               `json:"auto_apply"`
-	ApplyOptions         *ProcessOptions                                                                    `json:"apply_options,omitempty"`
-	ProgressCallback     func(current, total int, item string)                                              `json:"-"`
+	AppID                uint32                                                                              `json:"app_id"`
+	TargetDir            string                                                                              `json:"target_dir"`
+	Platform             string                                                                              `json:"platform"`
+	Language             string                                                                              `json:"language,omitempty"`
+	IncludedDepots       []uint32                                                                            `json:"included_depots,omitempty"`
+	ExcludedDepots       []uint32                                                                            `json:"excluded_depots,omitempty"`
+	IncludeOptional      bool                                                                                `json:"include_optional,omitempty"`
+	Branch               string                                                                              `json:"branch,omitempty"`
+	LuaPath              string                                                                              `json:"lua_path"`
+	DryRun               bool                                                                                `json:"dry_run"`
+	WorkerLimit          int                                                                                 `json:"worker_limit,omitempty"`
+	AutoApply            bool                                                                                `json:"auto_apply"`
+	ApplyOptions         *ProcessOptions                                                                     `json:"apply_options,omitempty"`
+	ProgressCallback     func(current, total int, item string)                                               `json:"-"`
 	ByteProgressCallback func(currBytes, totalBytes int64, speed float64, eta int, pct float64, item string) `json:"-"`
-	OnProgress           func(update downloader.ProgressUpdate)                                             `json:"-"`
-	CheckCancel          func() error                                                                       `json:"-"`
-	Throttle             func(bytes int) error                                                              `json:"-"`
+	OnProgress           func(update downloader.ProgressUpdate)                                              `json:"-"`
+	CheckCancel          func() error                                                                        `json:"-"`
+	Throttle             func(bytes int) error                                                               `json:"-"`
 }

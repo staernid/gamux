@@ -143,7 +143,6 @@ type SteamBranch struct {
 	PwdRequired bool   `json:"pwd_required,omitempty"`
 }
 
-
 // ArtworkOption represents a selectable artwork asset candidate discovered from a metadata provider.
 type ArtworkOption struct {
 	ID       string `json:"id"`
@@ -182,9 +181,9 @@ type ExternalIDs struct {
 type DepotSummary struct {
 	DepotID         uint32 `json:"depot_id"`
 	Name            string `json:"name"`
-	Category        string `json:"category"` // "common", "windows", "linux", "macos", "soundtrack"
+	Category        string `json:"category"`                   // "common", "windows", "linux", "macos", "soundtrack"
 	ContentCategory string `json:"content_category,omitempty"` // "core", "locale:<language>", "soundtrack", "optional_hd", "dlc"
-	Language        string `json:"language,omitempty"`          // e.g. "french", "german", "english"
+	Language        string `json:"language,omitempty"`         // e.g. "french", "german", "english"
 	Installed       bool   `json:"installed"`
 	Size            uint64 `json:"size"`
 	DownloadSize    uint64 `json:"download_size,omitempty"`
@@ -261,15 +260,15 @@ type GameArtwork struct {
 // All fields reflect physical on-disk baseline data discovered via detector, ACF manifests, and depot scanners.
 // To override execution or environment behaviors, use LaunchProfile instead.
 type GameRecord struct {
-	GameDir            string            `json:"game_dir"`
-	AppID              string            `json:"app_id"`
-	NumericAppID       uint32            `json:"numeric_app_id"`
-	Name               string            `json:"name"`
-	InstallDir         string            `json:"install_dir,omitempty"`
-	Store              string            `json:"store"`  // "Steam", "GOG", "Epic", "Itch", "Standalone", "Custom"
-	Source             GameSource        `json:"source"` // Canonical distribution source
-	Platform           string            `json:"platform"` // "linux", "win64", "win32"
-	Branch             string            `json:"branch,omitempty"`
+	GameDir            string     `json:"game_dir"`
+	AppID              string     `json:"app_id"`
+	NumericAppID       uint32     `json:"numeric_app_id"`
+	Name               string     `json:"name"`
+	InstallDir         string     `json:"install_dir,omitempty"`
+	Store              string     `json:"store"`    // "Steam", "GOG", "Epic", "Itch", "Standalone", "Custom"
+	Source             GameSource `json:"source"`   // Canonical distribution source
+	Platform           string     `json:"platform"` // "linux", "win64", "win32"
+	Branch             string     `json:"branch,omitempty"`
 	ExternalIDs        `json:",inline"`
 	DiskSizeBytes      int64             `json:"disk_size_bytes"`
 	FileCount          int               `json:"file_count"`
@@ -297,31 +296,31 @@ type GameRecord struct {
 // persisted atomically to <gameDir>/steam_settings/launch_profile.json.
 // Fields in LaunchProfile take precedence over detected defaults in GameRecord.
 type LaunchProfile struct {
-	GameDir           string            `json:"game_dir"`
-	AppID             string            `json:"app_id,omitempty"`
-	Name              string            `json:"name,omitempty"`
-	Platform          string            `json:"platform,omitempty"`       // "linux", "win64", "win32"
-	ExePath           string            `json:"exe_path"`
-	ExeArgs           string            `json:"exe_args,omitempty"`
-	OperatingMode     string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native" | "none"
-	Runner            string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
-	WinePrefix        string            `json:"wine_prefix,omitempty"`
-	ProtonPath        string            `json:"proton_path,omitempty"`
-	Language          string            `json:"language,omitempty"`
-	MangoHud          *bool             `json:"mangohud,omitempty"`
-	Gamescope         *bool             `json:"gamescope,omitempty"`
-	GamescopeWidth    int               `json:"gamescope_width,omitempty"`
-	GamescopeHeight   int               `json:"gamescope_height,omitempty"`
-	GamescopeFPS      int               `json:"gamescope_fps,omitempty"`
-	DisableOverlay    *bool             `json:"disable_overlay,omitempty"`
-	OfflineMode       *bool             `json:"offline_mode,omitempty"`
-	DllOverrides      string            `json:"dll_overrides,omitempty"`  // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
-	InhibitSleep      *bool             `json:"inhibit_sleep,omitempty"`
-	PreferSDL         *bool             `json:"prefer_sdl,omitempty"`
-	EnableWayland     *bool             `json:"enable_wayland,omitempty"`
-	CustomEnv         map[string]string `json:"custom_env,omitempty"`
-	WorkingDir        string            `json:"working_dir,omitempty"`
-	ProfileID         string            `json:"profile_id,omitempty"`
+	GameDir         string            `json:"game_dir"`
+	AppID           string            `json:"app_id,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	Platform        string            `json:"platform,omitempty"` // "linux", "win64", "win32"
+	ExePath         string            `json:"exe_path"`
+	ExeArgs         string            `json:"exe_args,omitempty"`
+	OperatingMode   string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native" | "none"
+	Runner          string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
+	WinePrefix      string            `json:"wine_prefix,omitempty"`
+	ProtonPath      string            `json:"proton_path,omitempty"`
+	Language        string            `json:"language,omitempty"`
+	MangoHud        *bool             `json:"mangohud,omitempty"`
+	Gamescope       *bool             `json:"gamescope,omitempty"`
+	GamescopeWidth  int               `json:"gamescope_width,omitempty"`
+	GamescopeHeight int               `json:"gamescope_height,omitempty"`
+	GamescopeFPS    int               `json:"gamescope_fps,omitempty"`
+	DisableOverlay  *bool             `json:"disable_overlay,omitempty"`
+	OfflineMode     *bool             `json:"offline_mode,omitempty"`
+	DllOverrides    string            `json:"dll_overrides,omitempty"` // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
+	InhibitSleep    *bool             `json:"inhibit_sleep,omitempty"`
+	PreferSDL       *bool             `json:"prefer_sdl,omitempty"`
+	EnableWayland   *bool             `json:"enable_wayland,omitempty"`
+	CustomEnv       map[string]string `json:"custom_env,omitempty"`
+	WorkingDir      string            `json:"working_dir,omitempty"`
+	ProfileID       string            `json:"profile_id,omitempty"`
 
 	// Store & Metadata bindings
 	Store            string `json:"store,omitempty"`
@@ -574,13 +573,13 @@ type ReadinessStatus struct {
 // It composes the static on-disk record, user launch configuration, computed readiness,
 // manifest integrity status, store metadata, and graphical assets.
 type Game struct {
-	GameRecord                 `json:",inline"`
-	LaunchProfile *LaunchProfile `json:"launch_profile,omitempty"`
-	ReadinessStatus            `json:",inline"`
-	GameArtwork                `json:",inline"`
-	ManifestStatus             `json:",inline"`
-	StoreMetadata              `json:",inline"`
-	VersionStatus *VersionStatus `json:"version_status,omitempty"`
+	GameRecord      `json:",inline"`
+	LaunchProfile   *LaunchProfile `json:"launch_profile,omitempty"`
+	ReadinessStatus `json:",inline"`
+	GameArtwork     `json:",inline"`
+	ManifestStatus  `json:",inline"`
+	StoreMetadata   `json:",inline"`
+	VersionStatus   *VersionStatus `json:"version_status,omitempty"`
 }
 
 // NewGame initializes a Game entity with parsed numeric AppID and standard defaults.
@@ -1078,5 +1077,3 @@ func (g *Game) HasCustomMetadata() bool {
 	}
 	return false
 }
-
-

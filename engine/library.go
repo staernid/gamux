@@ -79,7 +79,6 @@ func (eng *Engine) InspectLocal(ctx context.Context, targetPath string) (*GameSt
 	return status, nil
 }
 
-
 // InspectStatus inspects a game directory to determine its patch and configuration state, enriched with remote metadata.
 func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameStatus, error) {
 	ctx = eng.WrapContext(ctx)
@@ -385,7 +384,6 @@ func (eng *Engine) SearchStoreGames(ctx context.Context, query string) ([]store.
 	return eng.StoreRegistry.SearchGameProviders(eng.WrapContext(ctx), query)
 }
 
-
 // GetGameMetadata fetches store metadata for a specific provider (steam, gog, rawg, etc.) and ID.
 func (eng *Engine) GetGameMetadata(ctx context.Context, provider string, id string) (*store.Metadata, error) {
 	cleanID := strings.TrimSpace(id)
@@ -647,5 +645,3 @@ func (eng *Engine) FetchNews(ctx context.Context, appID string, count int) ([]st
 func (eng *Engine) GetDiskSpace(path string) (*util.DiskSpaceInfo, error) {
 	return util.GetDiskSpace(path)
 }
-
-

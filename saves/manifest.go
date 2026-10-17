@@ -22,13 +22,13 @@ const DefaultLudusaviManifestURL = "https://raw.githubusercontent.com/mtkennerly
 
 // ManifestManager coordinates loading, caching, and in-memory indexing of the Ludusavi save manifest.
 type ManifestManager struct {
-	mu                 sync.RWMutex
-	cacheDir           string
-	customURL          string
-	httpClient         *http.Client
-	bySteamAppID       map[uint32]*ManifestGame
-	byNormalizedTitle  map[string]*ManifestGame
-	byGOGID            map[uint64]*ManifestGame
+	mu                sync.RWMutex
+	cacheDir          string
+	customURL         string
+	httpClient        *http.Client
+	bySteamAppID      map[uint32]*ManifestGame
+	byNormalizedTitle map[string]*ManifestGame
+	byGOGID           map[uint64]*ManifestGame
 }
 
 // NewManifestManager creates an initialized ManifestManager.

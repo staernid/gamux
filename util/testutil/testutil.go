@@ -69,4 +69,3 @@ func SetupTestEnvironment() (cleanup func()) {
 		_ = os.RemoveAll(tmpDir)
 	}
 }
-

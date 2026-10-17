@@ -36,7 +36,6 @@ func (s *ScanStage) Execute(ctx context.Context, pctx *Context) error {
 		targetPath = "."
 	}
 
-
 	info, err := detector.Inspect(ctx, targetPath)
 	if err != nil {
 		return fmt.Errorf("auto-detect failed for %s: %w", targetPath, err)
@@ -582,5 +581,3 @@ func (s *RevertDRMStage) Execute(ctx context.Context, pctx *Context) error {
 	slog.Info("Revert DRM completed", "gameDir", targetDir, "restoredFiles", restoredCount)
 	return nil
 }
-
-

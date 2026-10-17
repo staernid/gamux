@@ -89,7 +89,6 @@ func ParseLua(content string) (*ParsedLua, error) {
 	}, nil
 }
 
-
 // ResolveKeys resolves manifest depot keys through a multi-provider fallback chain:
 // 1. Local .lua file (if luaPath is provided)
 // 2. RevoBD API (https://api.luagen.revobd.club/{appID}.zip)

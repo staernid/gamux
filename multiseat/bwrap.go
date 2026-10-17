@@ -11,20 +11,20 @@ import (
 
 // BwrapOptions holds settings for generating the Bubblewrap sandbox arguments.
 type BwrapOptions struct {
-	SeatID          string            // "p1" | "p2"
-	ProfileDir      string            // Base path for profile data (~/.local/share/gamux/profiles/<seat_id>)
-	GameDir         string            // Path to game installation (mounted read-only)
-	WinePrefix      string            // Isolated Wine prefix
-	GamepadNode     string            // Specific /dev/input/eventX node (all others masked)
-	KeyboardNode    string            // Specific /dev/input/eventX keyboard node (all other keyboards masked)
-	MouseNode       string            // Specific /dev/input/eventX mouse node (all other mice masked)
-	MaskInputNodes  []string          // Explicit additional /dev/input nodes to mask with /dev/null
-	AudioSink       string            // PULSE_SINK value
-	WaylandDisplay  string            // WAYLAND_DISPLAY value
-	DisplayEnv      string            // DISPLAY value
-	CustomEnv       map[string]string // Additional environment variables
-	Command         []string          // Inner command to execute
-	DieWithParent   bool
+	SeatID         string            // "p1" | "p2"
+	ProfileDir     string            // Base path for profile data (~/.local/share/gamux/profiles/<seat_id>)
+	GameDir        string            // Path to game installation (mounted read-only)
+	WinePrefix     string            // Isolated Wine prefix
+	GamepadNode    string            // Specific /dev/input/eventX node (all others masked)
+	KeyboardNode   string            // Specific /dev/input/eventX keyboard node (all other keyboards masked)
+	MouseNode      string            // Specific /dev/input/eventX mouse node (all other mice masked)
+	MaskInputNodes []string          // Explicit additional /dev/input nodes to mask with /dev/null
+	AudioSink      string            // PULSE_SINK value
+	WaylandDisplay string            // WAYLAND_DISPLAY value
+	DisplayEnv     string            // DISPLAY value
+	CustomEnv      map[string]string // Additional environment variables
+	Command        []string          // Inner command to execute
+	DieWithParent  bool
 }
 
 // EnsureSeatProfile prepares the isolated filesystem directory and Goldberg persona files for a seat.

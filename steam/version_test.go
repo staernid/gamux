@@ -561,4 +561,3 @@ func TestCheckGameVersion_DepotManifest_UpToDate(t *testing.T) {
 		t.Errorf("expected LatestBuildID '25753711', got %q", status.LatestBuildID)
 	}
 }
-

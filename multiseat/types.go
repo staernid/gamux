@@ -49,7 +49,7 @@ type SeatConfig struct {
 	Player          PlayerProfile `json:"player"`
 	ProfileID       string        `json:"profile_id,omitempty"` // Bound Gamux profile ID (e.g. "main", "p2", "p3")
 	Mode            SeatMode      `json:"mode"`
-	DisplayIndex    int           `json:"display_index"` // Physical monitor index for gamescope
+	DisplayIndex    int           `json:"display_index"`          // Physical monitor index for gamescope
 	DisplayName     string        `json:"display_name,omitempty"` // Physical output connector (e.g. "DP-1", "HDMI-A-1")
 	TargetWidth     int           `json:"target_width,omitempty"`
 	TargetHeight    int           `json:"target_height,omitempty"`
@@ -58,37 +58,37 @@ type SeatConfig struct {
 	WindowHeight    int           `json:"window_height,omitempty"`
 	WindowX         int           `json:"window_x,omitempty"`
 	WindowY         int           `json:"window_y,omitempty"`
-	ScreenSlot      *int          `json:"screen_slot,omitempty"` // Explicit slot index for screen partitioning (0, 1, 2, 3...)
-	GamepadNode     string        `json:"gamepad_node,omitempty"`     // Bound /dev/input/eventX node
-	KeyboardNode    string        `json:"keyboard_node,omitempty"`    // Bound /dev/input/eventX keyboard node
-	MouseNode       string        `json:"mouse_node,omitempty"`       // Bound /dev/input/eventX mouse node
-	ForceGrabCursor bool          `json:"force_grab_cursor,omitempty"`// Tell gamescope to force grab cursor / relative mouse
-	GrabKeyboard    bool          `json:"grab_keyboard,omitempty"`    // Tell gamescope to grab keyboard (-g)
-	ExclusiveGrab   bool          `json:"exclusive_grab,omitempty"`   // Acquire exclusive kernel EVIOCGRAB on input nodes
-	CursorPath      string        `json:"cursor_path,omitempty"`      // Custom cursor icon image path
-	Compositor      string        `json:"compositor,omitempty"`       // "auto" | "gamescope" | "cage" | "cage_gamescope"
-	NestCage        bool          `json:"nest_cage,omitempty"`        // Run gamescope nested inside cage compositor
-	ShowCursor      bool          `json:"show_cursor,omitempty"`      // Force visible cursor via software cursor env (WLR_NO_HARDWARE_CURSORS=1)
-	AudioSink       string        `json:"audio_sink,omitempty"`       // Assigned PipeWire sink name
-	PhysicalSink    string        `json:"physical_sink,omitempty"`    // Physical output sink to route to
+	ScreenSlot      *int          `json:"screen_slot,omitempty"`       // Explicit slot index for screen partitioning (0, 1, 2, 3...)
+	GamepadNode     string        `json:"gamepad_node,omitempty"`      // Bound /dev/input/eventX node
+	KeyboardNode    string        `json:"keyboard_node,omitempty"`     // Bound /dev/input/eventX keyboard node
+	MouseNode       string        `json:"mouse_node,omitempty"`        // Bound /dev/input/eventX mouse node
+	ForceGrabCursor bool          `json:"force_grab_cursor,omitempty"` // Tell gamescope to force grab cursor / relative mouse
+	GrabKeyboard    bool          `json:"grab_keyboard,omitempty"`     // Tell gamescope to grab keyboard (-g)
+	ExclusiveGrab   bool          `json:"exclusive_grab,omitempty"`    // Acquire exclusive kernel EVIOCGRAB on input nodes
+	CursorPath      string        `json:"cursor_path,omitempty"`       // Custom cursor icon image path
+	Compositor      string        `json:"compositor,omitempty"`        // "auto" | "gamescope" | "cage" | "cage_gamescope"
+	NestCage        bool          `json:"nest_cage,omitempty"`         // Run gamescope nested inside cage compositor
+	ShowCursor      bool          `json:"show_cursor,omitempty"`       // Force visible cursor via software cursor env (WLR_NO_HARDWARE_CURSORS=1)
+	AudioSink       string        `json:"audio_sink,omitempty"`        // Assigned PipeWire sink name
+	PhysicalSink    string        `json:"physical_sink,omitempty"`     // Physical output sink to route to
 	WinePrefix      string        `json:"wine_prefix,omitempty"`
 	HomeDir         string        `json:"home_dir,omitempty"`
-	Disabled        bool          `json:"disabled,omitempty"`         // If true, this seat is temporarily benched/inactive
-	SunshinePort    int           `json:"sunshine_port,omitempty"`    // Dedicated streaming port for this seat
+	Disabled        bool          `json:"disabled,omitempty"`      // If true, this seat is temporarily benched/inactive
+	SunshinePort    int           `json:"sunshine_port,omitempty"` // Dedicated streaming port for this seat
 }
 
 // MultiseatSessionConfig holds the full pairing configuration for launching an N-player session.
 type MultiseatSessionConfig struct {
-	GameDir              string        `json:"game_dir"`
-	Name                 string        `json:"name"`
-	AppID                string        `json:"app_id,omitempty"`
-	ExePath              string        `json:"exe_path"`
-	ExeArgs              string        `json:"exe_args,omitempty"`
-	Runner               string        `json:"runner,omitempty"` // "umu", "wine", "proton", "native"
-	Layout               DisplayLayout `json:"layout"`
-	Seats                []SeatConfig  `json:"seats,omitempty"`
-	Seat1          SeatConfig    `json:"seat1,omitempty"` // Backwards compatibility for 2-seat callers
-	Seat2          SeatConfig    `json:"seat2,omitempty"` // Backwards compatibility for 2-seat callers
+	GameDir        string        `json:"game_dir"`
+	Name           string        `json:"name"`
+	AppID          string        `json:"app_id,omitempty"`
+	ExePath        string        `json:"exe_path"`
+	ExeArgs        string        `json:"exe_args,omitempty"`
+	Runner         string        `json:"runner,omitempty"` // "umu", "wine", "proton", "native"
+	Layout         DisplayLayout `json:"layout"`
+	Seats          []SeatConfig  `json:"seats,omitempty"`
+	Seat1          SeatConfig    `json:"seat1,omitempty"`            // Backwards compatibility for 2-seat callers
+	Seat2          SeatConfig    `json:"seat2,omitempty"`            // Backwards compatibility for 2-seat callers
 	SunshinePortP1 int           `json:"sunshine_port_p1,omitempty"` // Base 47989
 	SunshinePortP2 int           `json:"sunshine_port_p2,omitempty"` // Base 48010
 }
@@ -165,4 +165,3 @@ func isExplicitDeviceNode(node string) bool {
 	node = ResolveDeviceNode(node)
 	return node != "" && node != "none" && node != "auto"
 }
-

@@ -254,16 +254,16 @@ func TestLaunchProfile_RoundTrip(t *testing.T) {
 
 	trueVal := true
 	opts := LaunchOptions{
-		GameDir:           tmpDir,
-		ExePath:           "Binaries/Win64/Game.exe",
-		ExeArgs:           "-nostartupmovies",
-		AppID:         "730",
-		Name:          "Counter-Strike 2",
-		Platform:      "win64",
-		OperatingMode: ModeStandalone,
-		Runner:        RunnerUMU,
-		WinePrefix:    "~/.wine-cs2",
-		MangoHud:      &trueVal,
+		GameDir:        tmpDir,
+		ExePath:        "Binaries/Win64/Game.exe",
+		ExeArgs:        "-nostartupmovies",
+		AppID:          "730",
+		Name:           "Counter-Strike 2",
+		Platform:       "win64",
+		OperatingMode:  ModeStandalone,
+		Runner:         RunnerUMU,
+		WinePrefix:     "~/.wine-cs2",
+		MangoHud:       &trueVal,
 		DisableOverlay: &trueVal,
 		OfflineMode:    &trueVal,
 		CustomEnv: map[string]string{
@@ -401,7 +401,6 @@ func TestGetLog_AndPersistence(t *testing.T) {
 			"LD_PRELOAD": "",
 		},
 	}
-
 
 	_, err := mgr.Start(context.Background(), cfg, opts)
 	if err != nil {
@@ -653,15 +652,15 @@ func TestResolveEffectiveOptions_CascadingProfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	trueVal := true
 	profile := LaunchOptions{
-		GameDir:           tmpDir,
-		ExePath:           filepath.Join(tmpDir, "SavedGame.exe"),
-		AppID:             "88888",
-		Name:              "Cascaded Game",
-		Platform:          "win64",
-		OperatingMode:     ModeStandalone,
-		Runner:            RunnerWine,
-		WinePrefix:        "~/.wine-cascaded",
-		MangoHud:   &trueVal,
+		GameDir:        tmpDir,
+		ExePath:        filepath.Join(tmpDir, "SavedGame.exe"),
+		AppID:          "88888",
+		Name:           "Cascaded Game",
+		Platform:       "win64",
+		OperatingMode:  ModeStandalone,
+		Runner:         RunnerWine,
+		WinePrefix:     "~/.wine-cascaded",
+		MangoHud:       &trueVal,
 		DisableOverlay: &trueVal,
 		OfflineMode:    &trueVal,
 		CustomEnv: map[string]string{
@@ -1953,11 +1952,11 @@ func TestFormatCommandLine(t *testing.T) {
 	spec := &LaunchSpec{
 		Args: []string{"umu-run", "game.exe", "-dx11", "spaced arg"},
 		Env: map[string]string{
-			"GAMEID":      "220240",
-			"STORE":       "steam",
-			"SteamAppId":  "220240",
-			"WINEPREFIX":  "/home/user/Games/umu",
-			"MANGOHUD":    "1",
+			"GAMEID":     "220240",
+			"STORE":      "steam",
+			"SteamAppId": "220240",
+			"WINEPREFIX": "/home/user/Games/umu",
+			"MANGOHUD":   "1",
 		},
 	}
 	formatted := FormatCommandLine(spec)
@@ -2007,4 +2006,3 @@ func TestDetectOverrides(t *testing.T) {
 		t.Errorf("expected 3 overrides, got %v", overridesCustom)
 	}
 }
-

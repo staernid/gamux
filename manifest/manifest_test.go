@@ -153,7 +153,6 @@ func buildTestProtobufPayload(files []ManifestFileEntry) []byte {
 	return result
 }
 
-
 func TestParseLua_ValidContent(t *testing.T) {
 	luaContent := `
 -- Sample manifest lua
@@ -877,8 +876,8 @@ func TestMatchesOSList(t *testing.T) {
 		targetPlat string
 		expected   bool
 	}{
-		{"", "win64", true},             // common matches everything
-		{"all", "win64", true},          // all matches everything
+		{"", "win64", true},    // common matches everything
+		{"all", "win64", true}, // all matches everything
 		{"windows", "win64", true},
 		{"windows", "win32", true},
 		{"windows", "windows", true},
@@ -1220,5 +1219,3 @@ func TestErrorMessages_UserFriendly(t *testing.T) {
 		})
 	}
 }
-
-

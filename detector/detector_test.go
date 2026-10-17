@@ -636,5 +636,3 @@ func TestDetect_PlaceholderTitleHealing(t *testing.T) {
 		t.Errorf("expected healed InstallDir 'Pacific Drive', got %q", info.InstallDir)
 	}
 }
-
-

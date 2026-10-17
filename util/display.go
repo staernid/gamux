@@ -72,12 +72,12 @@ func DetectPrimaryDisplay() DisplayInfo {
 }
 
 type kscreenOutput struct {
-	Name          string `json:"name"`
-	Connected     bool   `json:"connected"`
-	Enabled       bool   `json:"enabled"`
-	Priority      int    `json:"priority"`
+	Name          string  `json:"name"`
+	Connected     bool    `json:"connected"`
+	Enabled       bool    `json:"enabled"`
+	Priority      int     `json:"priority"`
 	Scale         float64 `json:"scale"`
-	CurrentModeID string `json:"currentModeId"`
+	CurrentModeID string  `json:"currentModeId"`
 	Pos           struct {
 		X int `json:"x"`
 		Y int `json:"y"`

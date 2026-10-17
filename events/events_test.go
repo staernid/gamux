@@ -161,4 +161,3 @@ func TestBus_TypedLifecycleConstructors(t *testing.T) {
 		t.Errorf("expected percent 40.0, got %f", evStep.Progress.Percent)
 	}
 }
-

@@ -84,7 +84,6 @@ func resolveAppIDAndTargetDir(ctx context.Context, c *cli.Context) (uint32, stri
 	return appID, "."
 }
 
-
 func isAutoYes(c *cli.Context) bool {
 	if c.Bool("yes") || c.IsSet("yes") || c.IsSet("y") {
 		return true

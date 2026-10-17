@@ -84,29 +84,29 @@ type SeatPreference struct {
 
 // MultiseatConfig holds preferences and layout/device options for 2-player local and streaming sessions.
 type MultiseatConfig struct {
-	Player2ProfileID      string           `json:"player2_profile_id,omitempty"`
-	DefaultSeat1Mode      string           `json:"default_seat1_mode,omitempty"` // "local" | "stream"
-	DefaultSeat2Mode      string           `json:"default_seat2_mode,omitempty"` // "local" | "stream"
-	DefaultLayout         string           `json:"default_layout,omitempty"`    // "dual_monitor" | "side_by_side" | "top_bottom" | "quad_grid" | "three_player" | "windowed"
-	Seat1Gamepad          string           `json:"seat1_gamepad,omitempty"`
-	Seat2Gamepad          string           `json:"seat2_gamepad,omitempty"`
-	Seat1Keyboard         string           `json:"seat1_keyboard,omitempty"`
-	Seat2Keyboard         string           `json:"seat2_keyboard,omitempty"`
-	Seat1Mouse            string           `json:"seat1_mouse,omitempty"`
-	Seat2Mouse            string           `json:"seat2_mouse,omitempty"`
-	Seat1ForceGrabCursor  bool             `json:"seat1_force_grab_cursor"`
-	Seat1GrabKeyboard     bool             `json:"seat1_grab_keyboard"`
-	Seat1ShowCursor       bool             `json:"seat1_show_cursor"`
-	Seat2ForceGrabCursor  bool             `json:"seat2_force_grab_cursor,omitempty"`
-	Seat2GrabKeyboard     bool             `json:"seat2_grab_keyboard,omitempty"`
-	Seat2Compositor       string           `json:"seat2_compositor,omitempty"`
-	Seat2NestCage         bool             `json:"seat2_nest_cage,omitempty"`
-	Seat2ShowCursor       bool             `json:"seat2_show_cursor"`
-	Seat1DisplayIndex     int              `json:"seat1_display_index"`
-	Seat2DisplayIndex     int              `json:"seat2_display_index"`
-	SunshinePortP1        int              `json:"sunshine_port_p1,omitempty"`
-	SunshinePortP2        int              `json:"sunshine_port_p2,omitempty"`
-	Seats                 []SeatPreference `json:"seats,omitempty"`
+	Player2ProfileID     string           `json:"player2_profile_id,omitempty"`
+	DefaultSeat1Mode     string           `json:"default_seat1_mode,omitempty"` // "local" | "stream"
+	DefaultSeat2Mode     string           `json:"default_seat2_mode,omitempty"` // "local" | "stream"
+	DefaultLayout        string           `json:"default_layout,omitempty"`     // "dual_monitor" | "side_by_side" | "top_bottom" | "quad_grid" | "three_player" | "windowed"
+	Seat1Gamepad         string           `json:"seat1_gamepad,omitempty"`
+	Seat2Gamepad         string           `json:"seat2_gamepad,omitempty"`
+	Seat1Keyboard        string           `json:"seat1_keyboard,omitempty"`
+	Seat2Keyboard        string           `json:"seat2_keyboard,omitempty"`
+	Seat1Mouse           string           `json:"seat1_mouse,omitempty"`
+	Seat2Mouse           string           `json:"seat2_mouse,omitempty"`
+	Seat1ForceGrabCursor bool             `json:"seat1_force_grab_cursor"`
+	Seat1GrabKeyboard    bool             `json:"seat1_grab_keyboard"`
+	Seat1ShowCursor      bool             `json:"seat1_show_cursor"`
+	Seat2ForceGrabCursor bool             `json:"seat2_force_grab_cursor,omitempty"`
+	Seat2GrabKeyboard    bool             `json:"seat2_grab_keyboard,omitempty"`
+	Seat2Compositor      string           `json:"seat2_compositor,omitempty"`
+	Seat2NestCage        bool             `json:"seat2_nest_cage,omitempty"`
+	Seat2ShowCursor      bool             `json:"seat2_show_cursor"`
+	Seat1DisplayIndex    int              `json:"seat1_display_index"`
+	Seat2DisplayIndex    int              `json:"seat2_display_index"`
+	SunshinePortP1       int              `json:"sunshine_port_p1,omitempty"`
+	SunshinePortP2       int              `json:"sunshine_port_p2,omitempty"`
+	Seats                []SeatPreference `json:"seats,omitempty"`
 }
 
 // DefaultConfig resolves default paths respecting XDG environment variables.
@@ -174,28 +174,28 @@ func DefaultConfig() *Config {
 		PreferSDL:            false,
 		EnableWayland:        false,
 		Multiseat: MultiseatConfig{
-			Player2ProfileID:      "p2",
-			DefaultSeat1Mode:      "local",
-			DefaultSeat2Mode:      "local",
-			DefaultLayout:         "dual_monitor",
-			Seat1Gamepad:          "auto",
-			Seat2Gamepad:          "auto",
-			Seat1Keyboard:         "auto",
-			Seat2Keyboard:         "auto",
-			Seat1Mouse:            "auto",
-			Seat2Mouse:            "auto",
-			Seat1ForceGrabCursor:  false,
-			Seat1GrabKeyboard:     false,
-			Seat1ShowCursor:       true,
-			Seat2ForceGrabCursor:  false,
-			Seat2GrabKeyboard:     false,
-			Seat2Compositor:       "auto",
-			Seat2NestCage:         false,
-			Seat2ShowCursor:       true,
-			Seat1DisplayIndex:     0,
-			Seat2DisplayIndex:     1,
-			SunshinePortP1:        47989,
-			SunshinePortP2:        48010,
+			Player2ProfileID:     "p2",
+			DefaultSeat1Mode:     "local",
+			DefaultSeat2Mode:     "local",
+			DefaultLayout:        "dual_monitor",
+			Seat1Gamepad:         "auto",
+			Seat2Gamepad:         "auto",
+			Seat1Keyboard:        "auto",
+			Seat2Keyboard:        "auto",
+			Seat1Mouse:           "auto",
+			Seat2Mouse:           "auto",
+			Seat1ForceGrabCursor: false,
+			Seat1GrabKeyboard:    false,
+			Seat1ShowCursor:      true,
+			Seat2ForceGrabCursor: false,
+			Seat2GrabKeyboard:    false,
+			Seat2Compositor:      "auto",
+			Seat2NestCage:        false,
+			Seat2ShowCursor:      true,
+			Seat1DisplayIndex:    0,
+			Seat2DisplayIndex:    1,
+			SunshinePortP1:       47989,
+			SunshinePortP2:       48010,
 		},
 	}
 	syncMultiseatSeats(&cfg.Multiseat)
@@ -504,4 +504,3 @@ func (cfg *Config) ResolvedLibraryDirs() []string {
 	}
 	return dirs
 }
-

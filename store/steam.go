@@ -34,7 +34,7 @@ func (s *SteamProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
 		CanFetchMetadata:  true,
-		CanProvideArtwork:  true,
+		CanProvideArtwork: true,
 		IsGameStore:       true,
 	}
 }
@@ -283,4 +283,3 @@ func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []Art
 	}
 	return opts
 }
-

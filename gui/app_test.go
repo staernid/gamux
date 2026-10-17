@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	restoreEnv := testutil.SetupTestEnvironment()
 	defer restoreEnv()
 	restore := testutil.SilenceLogging()
-	
+
 	// Stub HTTP requests to avoid live network latency and external rate limits
 	mockClient := testutil.NewMockHTTPClient(map[string]testutil.MockResponse{
 		"GetNewsForApp": {
@@ -146,7 +146,6 @@ func TestApp_GetGameConfigSchema(t *testing.T) {
 		t.Errorf("expected runner to be present in game schema")
 	}
 }
-
 
 func TestApp_SaveConfig_UpdatesStateAndDisk(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -413,11 +412,11 @@ func TestApp_LaunchProfileAndRunners(t *testing.T) {
 	// Test Save & Get profile
 	trueVal := true
 	opts := LaunchOptions{
-		GameDir:       tmpDir,
-		ExePath:       "game.bin",
-		OperatingMode: "standalone",
-		Runner:        "linux",
-		MangoHud:      &trueVal,
+		GameDir:        tmpDir,
+		ExePath:        "game.bin",
+		OperatingMode:  "standalone",
+		Runner:         "linux",
+		MangoHud:       &trueVal,
 		DisableOverlay: &trueVal,
 		OfflineMode:    &trueVal,
 	}
@@ -861,5 +860,3 @@ func TestApp_Profiles(t *testing.T) {
 		t.Errorf("expected active to fall back to main, got %s", active.ID)
 	}
 }
-
-

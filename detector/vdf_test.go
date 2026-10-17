@@ -180,5 +180,3 @@ Line 3"
 		t.Errorf("expected NextKey 'ValueAfterMultiline', got %q", next)
 	}
 }
-
-

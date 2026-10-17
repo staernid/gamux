@@ -388,5 +388,3 @@ func TestConfig_ResolvedLibraryDirs(t *testing.T) {
 	}
 	_ = emptyResolved
 }
-
-

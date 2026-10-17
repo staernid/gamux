@@ -23,7 +23,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 func TestApplyGBE_InvalidPlatform(t *testing.T) {
 	err := Apply(context.Background(), Options{
 		Config:    config.DefaultConfig(),
@@ -700,6 +699,3 @@ func TestSetupWinePrefixSteamDir(t *testing.T) {
 		t.Errorf("expected steam_settings symlink/dir in prefix steam directory")
 	}
 }
-
-
-

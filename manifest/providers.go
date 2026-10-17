@@ -381,4 +381,3 @@ func DownloadManifestFromSteamCDN(ctx context.Context, depotID uint32, manifestG
 
 	return payload, nil
 }
-

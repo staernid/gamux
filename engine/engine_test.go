@@ -34,8 +34,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
-
 func TestInspectStatus_Original(t *testing.T) {
 	tmpDir := t.TempDir()
 	gameDir := filepath.Join(tmpDir, "TestGame")
@@ -361,10 +359,6 @@ func TestEngine_SyncAndRollbackInvariant(t *testing.T) {
 	}
 }
 
-
-
-
-
 func TestPipeline_ConsolidateManifests(t *testing.T) {
 	gameDir := t.TempDir()
 	sourceDir := filepath.Join(gameDir, "source_manifests")
@@ -603,7 +597,6 @@ func TestEngine_SaveLaunchProfile_SyncsDRMFiles(t *testing.T) {
 		t.Fatalf("expected steamclient64.dll to be removed in None mode")
 	}
 }
-
 
 func TestEngine_GetGameAchievements_GSE(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1409,4 +1402,3 @@ func TestLinkAndUnlinkGameMetadata(t *testing.T) {
 		t.Errorf("expected empty MetadataProvider after unlink, got %q", unlinked.LaunchProfile.MetadataProvider)
 	}
 }
-

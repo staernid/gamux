@@ -583,4 +583,3 @@ func (a *App) TrashGame(gamePath string) error {
 	a.RemoveCachedGame(path)
 	return nil
 }
-

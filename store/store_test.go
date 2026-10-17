@@ -31,7 +31,7 @@ func (m *mockProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
 		CanFetchMetadata:  true,
-		CanProvideArtwork:  true,
+		CanProvideArtwork: true,
 		IsGameStore:       m.id == "steam" || m.id == "gog",
 	}
 }
@@ -657,12 +657,3 @@ func TestArtworkService_PEIconExtraction(t *testing.T) {
 		t.Errorf("expected extracted icon file to exist at %s", art.LocalIcon)
 	}
 }
-
-
-
-
-
-
-
-
-

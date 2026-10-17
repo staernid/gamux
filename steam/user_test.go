@@ -14,8 +14,8 @@ import (
 
 func TestCleanSteamProfileInput(t *testing.T) {
 	cases := []struct {
-		input       string
-		expectedID  string
+		input        string
+		expectedID   string
 		expectedIs64 bool
 	}{
 		{"https://steamcommunity.com/id/gaben", "gaben", false},

@@ -58,7 +58,7 @@ func (p *SteamGridProxyProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
 		CanFetchMetadata:  false,
-		CanProvideArtwork:  true,
+		CanProvideArtwork: true,
 		IsGameStore:       false,
 	}
 }

@@ -401,4 +401,3 @@ func TestCaseInsensitiveResolve_PreservesMatchedParents(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, resolved)
 	}
 }
-

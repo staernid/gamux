@@ -732,4 +732,3 @@ func LoadPreviousManifestFromDir(targetDir string, depotID uint32, depotKeys map
 		Files:         files,
 	}, nil
 }
-

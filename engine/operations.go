@@ -12,8 +12,6 @@ import (
 	"github.com/staernid/gamux/tools"
 )
 
-
-
 // DownloadOperation downloads game depots with progress streaming, throttling, pause/resume, and auto-setup.
 type DownloadOperation struct {
 	Engine   *Engine

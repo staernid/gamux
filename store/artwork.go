@@ -801,5 +801,3 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 
 	return &game.GameArtwork, nil
 }
-
-

@@ -51,10 +51,10 @@ type ArtworkQuery = domain.ArtworkQuery
 
 // ProviderCapabilities defines the functional features supported by a metadata/asset provider.
 type ProviderCapabilities struct {
-	CanSearch        bool `json:"can_search"`
-	CanFetchMetadata bool `json:"can_fetch_metadata"`
+	CanSearch         bool `json:"can_search"`
+	CanFetchMetadata  bool `json:"can_fetch_metadata"`
 	CanProvideArtwork bool `json:"can_provide_artwork"`
-	IsGameStore      bool `json:"is_game_store"`
+	IsGameStore       bool `json:"is_game_store"`
 }
 
 // ProviderDescriptor provides human-friendly and programmatic metadata about a registered provider.
@@ -185,7 +185,6 @@ func (r *Registry) SearchGameProviders(ctx context.Context, query string) ([]Sea
 	return r.searchProviders(ctx, query, providers)
 }
 
-
 // SearchAll queries all registered providers concurrently for game matches.
 func (r *Registry) SearchAll(ctx context.Context, query string) ([]SearchResult, error) {
 	r.mu.RLock()
@@ -281,4 +280,3 @@ func (r *Registry) QueryArtworkOptions(ctx context.Context, query ArtworkQuery) 
 	wg.Wait()
 	return allOptions, nil
 }
-

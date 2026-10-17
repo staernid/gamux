@@ -457,7 +457,7 @@ func TestTasksManager_ProgressThrottling(t *testing.T) {
 	completedReceived := false
 
 	time.Sleep(50 * time.Millisecond)
-	drainLoop:
+drainLoop:
 	for {
 		select {
 		case ev := <-sink.Events():
@@ -480,4 +480,3 @@ func TestTasksManager_ProgressThrottling(t *testing.T) {
 		t.Errorf("expected throttled progress events to be < 20, got %d", progressCount)
 	}
 }
-

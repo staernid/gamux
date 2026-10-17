@@ -376,5 +376,3 @@ func NewStepProgress(step, total int, title, details string) Event {
 		},
 	}
 }
-
-

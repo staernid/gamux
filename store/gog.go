@@ -43,7 +43,7 @@ func (g *GOGProvider) Capabilities() ProviderCapabilities {
 	return ProviderCapabilities{
 		CanSearch:         true,
 		CanFetchMetadata:  true,
-		CanProvideArtwork:  true,
+		CanProvideArtwork: true,
 		IsGameStore:       true,
 	}
 }

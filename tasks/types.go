@@ -9,11 +9,11 @@ import (
 
 // Standard typed error modes across the seam.
 var (
-	ErrTaskNotFound       = errors.New("tasks: task not found")
-	ErrTaskNotPausable    = errors.New("tasks: task does not support pause/resume")
+	ErrTaskNotFound      = errors.New("tasks: task not found")
+	ErrTaskNotPausable   = errors.New("tasks: task does not support pause/resume")
 	ErrInvalidTransition = errors.New("tasks: invalid state transition")
-	ErrManagerClosed      = errors.New("tasks: manager is shut down")
-	ErrDuplicateTaskID    = errors.New("tasks: task id already exists")
+	ErrManagerClosed     = errors.New("tasks: manager is shut down")
+	ErrDuplicateTaskID   = errors.New("tasks: task id already exists")
 )
 
 // TaskType identifies the operational domain of a task.
@@ -47,8 +47,8 @@ const (
 type Capability uint32
 
 const (
-	CapNone           Capability = 0
-	CapCancellable    Capability = 1 << iota
+	CapNone        Capability = 0
+	CapCancellable Capability = 1 << iota
 	CapPausable
 	CapPersist
 	CapBandwidthLimit
@@ -182,4 +182,3 @@ type ProgressReporter interface {
 
 // TaskRunner executes a task instance within a Controller.
 type TaskRunner func(ctx context.Context, t *Task, ctrl *Controller) error
-

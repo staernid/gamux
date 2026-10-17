@@ -270,4 +270,3 @@ func FetchGlobalAchievementPercentages(ctx context.Context, appID uint32) (map[s
 
 	return result, nil
 }
-

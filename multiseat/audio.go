@@ -9,10 +9,10 @@ import (
 
 // VirtualSink represents a created PipeWire/PulseAudio null sink module.
 type VirtualSink struct {
-	SinkName    string `json:"sink_name"`    // e.g. "gamux-p1"
-	Description string `json:"description"`  // e.g. "Gamux Player 1 Sink"
-	ModuleID    string `json:"module_id"`    // pactl module ID for unloading
-	LoopbackID  string `json:"loopback_id"`  // optional loopback module ID
+	SinkName    string `json:"sink_name"`   // e.g. "gamux-p1"
+	Description string `json:"description"` // e.g. "Gamux Player 1 Sink"
+	ModuleID    string `json:"module_id"`   // pactl module ID for unloading
+	LoopbackID  string `json:"loopback_id"` // optional loopback module ID
 }
 
 // UnloadSinkByName finds and unloads any loaded PulseAudio/PipeWire module matching the sinkName.
