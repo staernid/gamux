@@ -492,6 +492,10 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		}
 	}
 
+	// Everything gathered so far was declared by the ACF manifest or Steam AppInfo and is
+	// authoritative; candidates appended below come from filesystem heuristics.
+	manifestDeclared := len(info.LaunchCandidates)
+
 	// For Steam games with no candidates yet, or for standard games: scan candidate exes
 	sort.SliceStable(state.candidateExes, func(i, j int) bool {
 		scoreI := ScoreExecutable(state.candidateExes[i], info.GameDir, info.Name)
@@ -543,17 +547,15 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		}
 	}
 
-	// Use ColdClientLoader.ini Exe if present
-	if state.coldClientLoaderExe != "" && util.FileExists(state.coldClientLoaderExe) {
-		realLower := strings.ToLower(filepath.Base(state.coldClientLoaderExe))
-		if !strings.Contains(realLower, "steamclient_loader") && !strings.Contains(realLower, "coldclientloader") {
-			relLoader := util.NormalizeRelativePath(state.coldClientLoaderExe)
-			if filepath.IsAbs(state.coldClientLoaderExe) {
-				if rel, err := filepath.Rel(info.GameDir, state.coldClientLoaderExe); err == nil && !strings.HasPrefix(rel, "..") {
-					relLoader = util.NormalizeRelativePath(rel)
-				}
+	// ColdClientLoader.ini names the real game executable behind the loader. It is a ranked
+	// fallback (below manifest-declared executables), not an unconditional override.
+	var iniDeclaredExe string
+	if state.coldClientLoaderExe != "" && util.FileExists(state.coldClientLoaderExe) && !isLoaderWrapper(state.coldClientLoaderExe) {
+		iniDeclaredExe = util.NormalizeRelativePath(state.coldClientLoaderExe)
+		if filepath.IsAbs(state.coldClientLoaderExe) {
+			if rel, err := filepath.Rel(info.GameDir, state.coldClientLoaderExe); err == nil && !strings.HasPrefix(rel, "..") {
+				iniDeclaredExe = util.NormalizeRelativePath(rel)
 			}
-			info.ExePath = relLoader
 		}
 	}
 
@@ -567,21 +569,12 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		info.ApplyProfile(profile, launchProfileExists)
 	}
 
-	if info.ExePath == "" && len(info.LaunchCandidates) > 0 {
-		info.ExePath = info.LaunchCandidates[0].Executable
-		info.ExeArgs = info.LaunchCandidates[0].Arguments
-	}
-
-	// Final safeguard: never expose loader wrapper as main game ExePath
-	if strings.Contains(strings.ToLower(info.ExePath), "steamclient_loader") || strings.Contains(strings.ToLower(info.ExePath), "coldclientloader") {
-		info.ExePath = ""
-		for _, cand := range info.LaunchCandidates {
-			candBase := strings.ToLower(filepath.Base(cand.Executable))
-			if !strings.Contains(candBase, "steamclient_loader") && !strings.Contains(candBase, "coldclientloader") {
-				info.ExePath = cand.Executable
-				break
-			}
-		}
+	if info.ExePath == "" {
+		info.ExePath, info.ExeArgs = chooseDefaultExe(
+			info.LaunchCandidates[:manifestDeclared],
+			iniDeclaredExe,
+			info.LaunchCandidates[manifestDeclared:],
+		)
 	}
 
 	// Update platform if executable is a Windows .exe and platform was defaulted to linux
@@ -609,6 +602,11 @@ func ScoreExecutable(exePath string, gameDir string, gameName string) int {
 	cleanExeName := strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(baseNoExt, ""))
 
 	score := 0
+
+	// Loader/wrapper binaries are never the game itself.
+	if isLoaderWrapper(base) {
+		score -= 3000
+	}
 
 	// Exclude / demote crash report tools and secondary helpers
 	if strings.Contains(lowerBase, "bssndrpt") ||
