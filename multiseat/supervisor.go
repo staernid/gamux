@@ -73,6 +73,7 @@ type Supervisor struct {
 	cfg        *config.Config
 	bus        *events.Bus
 	scaleGuard *ScaleGuard
+	seatDeps   seatDeps // nil means host implementation; tests inject fakes
 }
 
 var defaultSupervisor = NewSupervisor(nil, nil)
