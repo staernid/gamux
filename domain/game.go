@@ -321,6 +321,7 @@ type LaunchProfile struct {
 	CustomEnv       map[string]string `json:"custom_env,omitempty"`
 	WorkingDir      string            `json:"working_dir,omitempty"`
 	ProfileID       string            `json:"profile_id,omitempty"`
+	ForceEmulation  *bool             `json:"force_emulation,omitempty"`
 
 	// Store & Metadata bindings
 	Store            string `json:"store,omitempty"`
@@ -420,6 +421,9 @@ func (p *LaunchProfile) MergeFrom(other *LaunchProfile) {
 	}
 	if p.ProfileID == "" {
 		p.ProfileID = other.ProfileID
+	}
+	if p.ForceEmulation == nil && other.ForceEmulation != nil {
+		p.ForceEmulation = other.ForceEmulation
 	}
 	if p.SourceOverride == "" {
 		p.SourceOverride = other.SourceOverride

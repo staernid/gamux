@@ -433,12 +433,15 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 
 	// If game is set to ModeNone or does not require emulation, revert any old emulator artifacts and skip
-	if (!pctx.Game.IsSteam() && pctx.Game.AppID == "") || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
+	if !compat.ShouldEmulate(pctx.Game) || opMode == domain.ModeNone || opMode == domain.ModeStandalone {
 		if pctx.Game.HasBackups() || pctx.Game.SettingsDirExists {
 			_, _ = compat.Revert(ctx, pctx.Game.GameDir, pctx.Options.DryRun)
 		}
 		if !pctx.Options.DryRun {
 			_ = compat.SaveProfileDirect(profile)
+			if profile.WinePrefix != "" {
+				_ = compat.ScrubPrefixEmulation(profile.WinePrefix)
+			}
 		}
 		return nil
 	}

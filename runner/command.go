@@ -338,21 +338,24 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 	}
 	seatID := compat.SeatIDFromProfileID(resolved.ProfileID)
 
+	// Construct gameStub for prefix and emulation resolution
+	numAppID, _ := util.ParseAppID(resolved.AppID)
+	gameStub := &domain.Game{
+		GameRecord: domain.GameRecord{
+			Name:         resolved.Name,
+			AppID:        resolved.AppID,
+			NumericAppID: numAppID,
+			Platform:     resolved.Platform,
+			GameDir:      resolved.GameDir,
+		},
+		LaunchProfile: &domain.LaunchProfile{
+			OperatingMode:  resolved.OperatingMode,
+			ForceEmulation: resolved.ForceEmulation,
+		},
+	}
+
 	// Wine / Proton prefix isolation with central Syncthing user data symlinking
 	if resolved.Platform != "linux" || resolved.Runner == RunnerWine || resolved.Runner == RunnerProton || resolved.Runner == RunnerUMU {
-		numAppID, _ := util.ParseAppID(resolved.AppID)
-		gameStub := &domain.Game{
-			GameRecord: domain.GameRecord{
-				Name:         resolved.Name,
-				AppID:        resolved.AppID,
-				NumericAppID: numAppID,
-				Platform:     resolved.Platform,
-				GameDir:      resolved.GameDir,
-			},
-			LaunchProfile: &domain.LaunchProfile{
-				OperatingMode: resolved.OperatingMode,
-			},
-		}
 		prefixDir, pErr := compat.EnsureSeatPrefix(ctx, cfg, gameStub, seatID, resolved.WinePrefix)
 		if pErr == nil && prefixDir != "" {
 			gameEnv["WINEPREFIX"] = prefixDir
@@ -388,9 +391,10 @@ func BuildLaunchSpec(ctx context.Context, cfg *config.Config, opts LaunchOptions
 			overridesParts = append(overridesParts, strings.TrimSpace(resolved.DllOverrides))
 		}
 
-		// If in loader or emulator mode, automatically redirect Steam client libraries through Wine DLL overrides
+		// If in loader or emulator mode, automatically redirect Steam client libraries through Wine DLL overrides,
+		// but only if emulation is active for this game (valid Steam AppID or ForceEmulation).
 		resolvedMode := domain.NormalizeOperatingMode(resolved.OperatingMode)
-		if resolvedMode == ModeLoader {
+		if resolvedMode == ModeLoader && compat.ShouldEmulate(gameStub) {
 			overridesParts = append(overridesParts, "steamclient,steamclient64,GameOverlayRenderer,GameOverlayRenderer64=n,b")
 		}
 

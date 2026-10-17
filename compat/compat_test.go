@@ -528,3 +528,76 @@ func TestResolveStrategy(t *testing.T) {
 		t.Errorf("expected default fallback to ModeLoader, got %s", fallback.Mode())
 	}
 }
+
+func TestShouldEmulate(t *testing.T) {
+	if compat.ShouldEmulate(nil) {
+		t.Error("nil game should not emulate")
+	}
+
+	gameNoID := domain.NewGame("Unlinked Game", "/tmp/unlinked", "", "win64")
+	gameNoID.Store = domain.StoreStandalone
+	if compat.ShouldEmulate(gameNoID) {
+		t.Error("game with no AppID should not emulate by default")
+	}
+
+	gameZeroID := domain.NewGame("Zero ID Game", "/tmp/zero", "0", "win64")
+	if compat.ShouldEmulate(gameZeroID) {
+		t.Error("game with AppID '0' should not emulate")
+	}
+
+	gameSteam := domain.NewGame("Portal 2", "/tmp/portal2", "620", "win64")
+	if !compat.ShouldEmulate(gameSteam) {
+		t.Error("Steam game with valid AppID should emulate")
+	}
+
+	// ForceEmulation = true overrides absence of AppID
+	forceTrue := true
+	gameNoID.LaunchProfile = &domain.LaunchProfile{ForceEmulation: &forceTrue}
+	if !compat.ShouldEmulate(gameNoID) {
+		t.Error("ForceEmulation=true should enable emulation for unlinked game")
+	}
+
+	// ForceEmulation = false overrides valid Steam AppID
+	forceFalse := false
+	gameSteam.LaunchProfile = &domain.LaunchProfile{ForceEmulation: &forceFalse}
+	if compat.ShouldEmulate(gameSteam) {
+		t.Error("ForceEmulation=false should disable emulation even with valid AppID")
+	}
+}
+
+func TestScrubPrefixEmulation(t *testing.T) {
+	tmpDir := t.TempDir()
+	steamDir := filepath.Join(tmpDir, "drive_c", "Program Files (x86)", "Steam")
+	if err := os.MkdirAll(steamDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Populate emulation files and symlinks
+	_ = os.WriteFile(filepath.Join(steamDir, "steamclient64.dll"), []byte("fake dll"), 0644)
+	_ = os.WriteFile(filepath.Join(steamDir, "steamclient.dll"), []byte("fake dll"), 0644)
+	_ = os.WriteFile(filepath.Join(steamDir, "GameOverlayRenderer64.dll"), []byte("fake dll"), 0644)
+	_ = os.WriteFile(filepath.Join(steamDir, "GameOverlayRenderer.dll"), []byte("fake dll"), 0644)
+	_ = os.WriteFile(filepath.Join(steamDir, "steam_appid.txt"), []byte("12345"), 0644)
+	_ = os.Symlink(tmpDir, filepath.Join(steamDir, "steam_settings"))
+
+	// Genuine user file that should NOT be removed
+	userFile := filepath.Join(steamDir, "user_custom_data.txt")
+	_ = os.WriteFile(userFile, []byte("user data"), 0644)
+
+	if err := compat.ScrubPrefixEmulation(tmpDir); err != nil {
+		t.Fatalf("ScrubPrefixEmulation failed: %v", err)
+	}
+
+	// Verify emulation artifacts removed
+	for _, f := range []string{"steamclient64.dll", "steamclient.dll", "GameOverlayRenderer64.dll", "GameOverlayRenderer.dll", "steam_appid.txt", "steam_settings"} {
+		p := filepath.Join(steamDir, f)
+		if util.FileExists(p) {
+			t.Errorf("expected %s to be scrubbed, but it still exists", f)
+		}
+	}
+
+	// Verify genuine user file preserved
+	if !util.FileExists(userFile) {
+		t.Errorf("expected user file %s to be preserved, but it was removed", userFile)
+	}
+}

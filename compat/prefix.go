@@ -214,12 +214,18 @@ func EnsureSeatPrefix(ctx context.Context, cfg *config.Config, game *domain.Game
 	}
 
 	if opMode == domain.ModeLoader && game != nil {
-		gbeBase := cfg.GbeDir
-		if gbeBase == "" {
-			gbeBase = config.DefaultConfig().GbeDir
+		if ShouldEmulate(game) {
+			gbeBase := cfg.GbeDir
+			if gbeBase == "" {
+				gbeBase = config.DefaultConfig().GbeDir
+			}
+			settingsDir := filepath.Join(game.GameDir, "steam_settings")
+			_ = gbe.SetupWinePrefixSteamDir(canonicalPrefix, gbeBase, settingsDir, game.AppID, false)
+		} else {
+			_ = ScrubPrefixEmulation(canonicalPrefix)
 		}
-		settingsDir := filepath.Join(game.GameDir, "steam_settings")
-		_ = gbe.SetupWinePrefixSteamDir(canonicalPrefix, gbeBase, settingsDir, game.AppID, false)
+	} else if game != nil && (opMode == domain.ModeNative || opMode == domain.ModeNone || opMode == domain.ModeStandalone) {
+		_ = ScrubPrefixEmulation(canonicalPrefix)
 	}
 
 	return canonicalPrefix, nil
@@ -357,4 +363,63 @@ func EnsurePrefixGSESymlink(prefixDir, targetGSEDir string) error {
 
 	slog.Info("Symlinking prefix GSE Saves to profile directory", "prefix", prefixDir, "target", targetGSEDir)
 	return os.Symlink(targetGSEDir, linkPath)
+}
+
+// ShouldEmulate evaluates whether Goldberg Steam Emulator should be injected or active for a game.
+// It returns true if ForceEmulation is explicitly enabled, or if the game has a valid Steam AppID
+// and is not marked as unlinked/standalone without a Steam AppID.
+func ShouldEmulate(game *domain.Game) bool {
+	if game == nil {
+		return false
+	}
+	if game.LaunchProfile != nil && game.LaunchProfile.ForceEmulation != nil {
+		return *game.LaunchProfile.ForceEmulation
+	}
+	// Title lacks a valid Steam AppID or is unlinked standalone
+	if game.AppID == "" || game.AppID == "0" {
+		return false
+	}
+	if game.NumericAppID == 0 {
+		return false
+	}
+	return game.IsSteam()
+}
+
+// ScrubPrefixEmulation idempotently removes Goldberg emulation artifacts from a Wine prefix:
+// - Removes Goldberg DLLs, steam_settings symlinks, and steam_appid.txt from
+//   <prefix>/drive_c/Program Files (x86)/Steam
+// - Leaves genuine user files untouched.
+func ScrubPrefixEmulation(prefixDir string) error {
+	if prefixDir == "" {
+		return nil
+	}
+	steamDir := filepath.Join(prefixDir, "drive_c", "Program Files (x86)", "Steam")
+	if !util.DirExists(steamDir) {
+		return nil
+	}
+
+	targets := []string{
+		"steamclient64.dll",
+		"steamclient.dll",
+		"GameOverlayRenderer64.dll",
+		"GameOverlayRenderer.dll",
+		"steam_settings",
+		"steam_appid.txt",
+	}
+
+	for _, name := range targets {
+		p := filepath.Join(steamDir, name)
+		fi, err := os.Lstat(p)
+		if err != nil {
+			continue
+		}
+		// If it's a symlink or regular file, remove it
+		if fi.Mode()&os.ModeSymlink != 0 || fi.Mode().IsRegular() {
+			_ = os.Remove(p)
+		} else if fi.IsDir() && name == "steam_settings" {
+			_ = os.RemoveAll(p)
+		}
+	}
+
+	return nil
 }

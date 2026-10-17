@@ -352,6 +352,10 @@ func UnlinkMetadata(gameDir string) error {
 	p.CustomIconURL = ""
 	p.LockedArtwork = false
 
+	if p.WinePrefix != "" {
+		_ = ScrubPrefixEmulation(p.WinePrefix)
+	}
+
 	cache.InvalidateGameCache(gameDir)
 	return SaveProfileDirect(p)
 }

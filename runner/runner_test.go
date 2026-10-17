@@ -804,6 +804,8 @@ func TestBuildCommand_DllOverrides(t *testing.T) {
 
 	opts := LaunchOptions{
 		GameDir:       tmpDir,
+		Name:          "Test Game",
+		AppID:         "480",
 		ExePath:       "game.exe",
 		Platform:      "win64",
 		Runner:        RunnerWine,
@@ -864,6 +866,55 @@ func TestBuildCommand_ModeNone_WineNoLoaderOverride(t *testing.T) {
 				t.Errorf("expected ModeNone to NOT contain steamclient override in WINEDLLOVERRIDES, got: %s", env)
 			}
 		}
+	}
+}
+
+func TestBuildCommand_Unlinked_WineNoLoaderOverride(t *testing.T) {
+	cfg := config.DefaultConfig()
+	tmpDir := t.TempDir()
+	exePath := filepath.Join(tmpDir, "game.exe")
+	_ = os.WriteFile(exePath, []byte("MZ"), 0755)
+
+	opts := LaunchOptions{
+		GameDir:       tmpDir,
+		Name:          "Unlinked Game",
+		AppID:         "", // No Steam AppID
+		ExePath:       "game.exe",
+		Platform:      "win64",
+		Runner:        RunnerWine,
+		OperatingMode: ModeLoader,
+	}
+
+	cmd, err := BuildCommand(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	for _, env := range cmd.Env {
+		if strings.HasPrefix(env, "WINEDLLOVERRIDES=") {
+			if strings.Contains(env, "steamclient") {
+				t.Errorf("expected unlinked game to NOT contain steamclient override in WINEDLLOVERRIDES, got: %s", env)
+			}
+		}
+	}
+
+	// But with ForceEmulation = true, it should contain it
+	forceTrue := true
+	opts.ForceEmulation = &forceTrue
+	cmd2, err := BuildCommand(context.Background(), cfg, opts)
+	if err != nil {
+		t.Fatalf("BuildCommand with ForceEmulation failed: %v", err)
+	}
+
+	found := false
+	for _, env := range cmd2.Env {
+		if strings.HasPrefix(env, "WINEDLLOVERRIDES=") && strings.Contains(env, "steamclient") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ForceEmulation=true to contain steamclient override in WINEDLLOVERRIDES")
 	}
 }
 
