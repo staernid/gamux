@@ -46,18 +46,17 @@ func resolveCageDecision(seatCfg SeatConfig, seatID string, caps SystemCapabilit
 }
 
 type runningSeat struct {
-	seatID       string
-	profileID    string
-	cmd          *exec.Cmd
-	pgid         int
-	sink         *VirtualSink
-	sunshineCmd  *exec.Cmd
-	sunshinePgid int
-	grabber      *InputGrabber
-	status       SeatStatus
-	logFile      *os.File
-	logPath      string
-	waylandLink  string
+	seatID      string
+	profileID   string
+	cmd         *exec.Cmd
+	pgid        int
+	sink        *VirtualSink
+	sunshineCmd *exec.Cmd
+	grabber     *InputGrabber
+	status      SeatStatus
+	logFile     *os.File
+	logPath     string
+	waylandLink string
 }
 
 type runningSession struct {

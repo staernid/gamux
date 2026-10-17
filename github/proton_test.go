@@ -161,9 +161,7 @@ func TestFetchAndInstallProton(t *testing.T) {
 	spec.APIURL = server.URL + "/release"
 
 	// Fetch before install
-	info, err := FetchProtonRelease(ctx, "proton-ge")
-	if err != nil {
-		// Because DefaultProtonGEAPI is hardcoded in GetProtonFlavor, let's verify UpdateProton with custom URL
-	}
-	_ = info
+	// DefaultProtonGEAPI is hardcoded in GetProtonFlavor, so a failure here is
+	// expected; the result is intentionally ignored.
+	_, _ = FetchProtonRelease(ctx, "proton-ge")
 }

@@ -48,6 +48,7 @@ func (a *App) multiseatSupervisor() *multiseat.Supervisor {
 	if a.Engine != nil && a.Engine.Multiseat != nil {
 		return a.Engine.Multiseat
 	}
+	//nolint:staticcheck // fallback singleton for callers constructed without an Engine
 	return multiseat.DefaultSupervisor()
 }
 

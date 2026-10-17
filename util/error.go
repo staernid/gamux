@@ -1,5 +1,7 @@
 package util
 
+import "errors"
+
 // FixableError is an error interface that carries suggested diagnostic fix actions.
 type FixableError interface {
 	error
@@ -39,14 +41,9 @@ func ExtractSuggestedFixes(err error) []string {
 	if err == nil {
 		return nil
 	}
-	if fe, ok := err.(FixableError); ok {
+	var fe FixableError
+	if errors.As(err, &fe) {
 		return fe.SuggestedFixes()
-	}
-	type causer interface {
-		Unwrap() error
-	}
-	if c, ok := err.(causer); ok && c.Unwrap() != nil {
-		return ExtractSuggestedFixes(c.Unwrap())
 	}
 	return nil
 }

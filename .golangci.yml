@@ -8,6 +8,27 @@ linters:
     - errorlint
     - bodyclose
     - misspell
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # Stylistic: prefer if/else over tagged switch for two-way comparisons.
+        - -QF1003
+        - -QF1008
+        - -QF1012
+  exclusions:
+    rules:
+      # Best-effort cleanup where a failure is unactionable.
+      - linters: [errcheck]
+        text: 'Error return value of .*(Close|Remove|RemoveAll|Setenv|Unsetenv).* is not checked'
+      - linters: [errcheck]
+        path: _test\.go
 formatters:
   enable:
     - gofmt

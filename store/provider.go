@@ -234,7 +234,7 @@ func (r *Registry) searchProviders(ctx context.Context, query string, providers 
 	}
 
 	if len(allResults) == 0 && len(errs) > 0 {
-		return nil, fmt.Errorf("search failed across providers: %v", errs[0])
+		return nil, fmt.Errorf("search failed across providers: %w", errs[0])
 	}
 
 	return allResults, nil

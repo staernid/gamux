@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -459,10 +460,7 @@ func UpdateGBE(ctx context.Context, cfg *config.Config) error {
 }
 
 // UpdateSteamlessAssets fetches the latest release assets from steamless-rs and saves them to destDir.
-func UpdateSteamlessAssets(ctx context.Context, cfg *config.Config, destDir string) error {
-	if cfg == nil {
-		cfg = config.DefaultConfig()
-	}
+func UpdateSteamlessAssets(ctx context.Context, _ *config.Config, destDir string) error {
 	slog.Info("Fetching latest Steamless release assets from GitHub")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, DefaultSteamlessGithubAPI, nil)
@@ -683,7 +681,7 @@ func extractTarArchive(r io.Reader, destDir string) error {
 	tarReader := tar.NewReader(r)
 	for {
 		header, err := tarReader.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

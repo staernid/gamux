@@ -1,6 +1,16 @@
 package util
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
+
+// TitleCase upper-cases the first letter of each word, leaving the rest untouched.
+func TitleCase(s string) string {
+	return cases.Title(language.Und, cases.NoLower).String(s)
+}
 
 // SanitizeFilename replaces illegal filesystem characters with dashes to return a clean folder name.
 func SanitizeFilename(name string) string {

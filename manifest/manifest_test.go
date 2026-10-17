@@ -131,7 +131,7 @@ func buildTestProtobufPayload(files []ManifestFileEntry) []byte {
 		entryData = append(entryData, []byte(f.Path)...)
 
 		// field 2 (wire 0): Size
-		entryData = append(entryData, encodeVarint((2<<3)|0)...)
+		entryData = append(entryData, encodeVarint(2<<3)...)
 		entryData = append(entryData, encodeVarint(f.Size)...)
 
 		// Mapping entry in payload: field 1 (wire 2)
@@ -464,7 +464,7 @@ func encodeBytesFieldHelper(fieldNum uint64, data []byte) []byte {
 }
 
 func encodeVarintFieldHelper(fieldNum uint64, val uint64) []byte {
-	tag := encodeVarintHelper((fieldNum << 3) | 0)
+	tag := encodeVarintHelper(fieldNum << 3)
 	return append(tag, encodeVarintHelper(val)...)
 }
 
@@ -597,7 +597,7 @@ func TestClassifyDepotContent(t *testing.T) {
 		{Path: "Textures/4K/albedo_4k.dat", Size: 2000000000},
 		{Path: "Textures/highres/normals_4k.dat", Size: 2000000000},
 	}
-	cat, lang = ClassifyDepotContent(104, "High Resolution Texture Pack", hdFiles, nil)
+	cat, _ = ClassifyDepotContent(104, "High Resolution Texture Pack", hdFiles, nil)
 	if cat != ContentCategoryOptionalHD {
 		t.Errorf("expected optional_hd, got cat=%s", cat)
 	}

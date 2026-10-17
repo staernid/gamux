@@ -35,16 +35,6 @@ func (m mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m(req)
 }
 
-func mustTempDir(t *testing.T) string {
-	t.Helper()
-	d, err := os.MkdirTemp("", "github-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(d) })
-	return d
-}
-
 func TestUpdateGBE_HTTPError(t *testing.T) {
 	mockClient := &http.Client{
 		Transport: mockRoundTripper(func(req *http.Request) (*http.Response, error) {

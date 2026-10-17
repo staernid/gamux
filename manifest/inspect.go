@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/util"
 )
 
 // InspectGameDepots inspects local manifests to produce a structured inventory of all game depots.
@@ -151,7 +152,7 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 			if meta != nil && meta.Name != "" {
 				depotName = meta.Name
 			} else if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
-				depotName = fmt.Sprintf("%s Language Pack (%d)", strings.Title(lang), dID)
+				depotName = fmt.Sprintf("%s Language Pack (%d)", util.TitleCase(lang), dID)
 			} else if contentCat == ContentCategoryOptionalHD {
 				depotName = fmt.Sprintf("High-Resolution Assets (%d)", dID)
 			} else if contentCat == ContentCategorySoundtrack {
@@ -223,7 +224,7 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 			depotName := m.Name
 			if depotName == "" {
 				if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
-					depotName = fmt.Sprintf("%s Language Pack (%d)", strings.Title(lang), dID)
+					depotName = fmt.Sprintf("%s Language Pack (%d)", util.TitleCase(lang), dID)
 				} else if contentCat == ContentCategoryOptionalHD {
 					depotName = fmt.Sprintf("High-Resolution Assets (%d)", dID)
 				} else if contentCat == ContentCategorySoundtrack {

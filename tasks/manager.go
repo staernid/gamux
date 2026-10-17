@@ -525,7 +525,7 @@ func (m *Manager) RunSync(ctx context.Context, spec TaskSpec) error {
 	}
 
 	task.FinishedAt = time.Now().UnixMilli()
-	if ctx.Err() == context.Canceled || (runErr != nil && runErr == context.Canceled) {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(runErr, context.Canceled) {
 		task.Status = StatusCancelled
 		task.Details = "Task cancelled"
 		tc := *task

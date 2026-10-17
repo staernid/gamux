@@ -190,10 +190,7 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 
 			depots := make([]DepotKeyPair, 0, len(jsonPayload.Depots))
 			for _, entry := range jsonPayload.Depots {
-				depots = append(depots, DepotKeyPair{
-					DepotID:       entry.DepotID,
-					DecryptionKey: entry.DecryptionKey,
-				})
+				depots = append(depots, DepotKeyPair(entry))
 			}
 
 			slog.Info("Successfully resolved depot keys from Hubcap API (JSON format)", "appID", targetAppID, "depots", len(depots))
@@ -226,7 +223,7 @@ func FetchHubcapKeys(ctx context.Context, appID uint32, apiKey string) (*ParsedL
 		}
 
 		if strings.HasPrefix(strings.TrimSpace(strings.ToLower(bodyStr)), "<!") || strings.HasPrefix(strings.TrimSpace(strings.ToLower(bodyStr)), "<html") {
-			lastErr = fmt.Errorf("Hubcap API returned non-JSON HTML response (no keys for AppID %d)", appID)
+			lastErr = fmt.Errorf("hubcap API returned non-JSON HTML response (no keys for AppID %d)", appID)
 		} else {
 			if len(bodyStr) > 120 {
 				bodyStr = bodyStr[:117] + "..."

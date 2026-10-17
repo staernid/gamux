@@ -118,11 +118,6 @@ func DefaultConfig() *Config {
 		dataHome = filepath.Join(homeDir, ".local", "share")
 	}
 
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" && homeDir != "" {
-		configHome = filepath.Join(homeDir, ".config")
-	}
-
 	gbePath := ".local/share/gbe_fork"
 	if dataHome != "" {
 		gbePath = filepath.Join(dataHome, "gbe_fork")

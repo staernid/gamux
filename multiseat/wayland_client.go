@@ -149,9 +149,8 @@ func (c *WaylandClient) Connect(sockPath string) error {
 	// 3. Read registry globals
 	header := make([]byte, 8)
 	var seatName, ptrMgrName, kbdMgrName uint32
-	var syncDone bool
 
-	for !syncDone {
+	for {
 		if _, err := io.ReadFull(conn, header); err != nil {
 			_ = conn.Close()
 			return fmt.Errorf("read wayland event header: %w", err)
@@ -190,7 +189,6 @@ func (c *WaylandClient) Connect(sockPath string) error {
 
 		// Check for wl_callback.done (sync complete)
 		if objID == syncID && opcode == 0 {
-			syncDone = true
 			break
 		}
 
@@ -291,7 +289,7 @@ func (c *WaylandClient) Connect(sockPath string) error {
 		_ = conn.Close()
 		return fmt.Errorf("create keymap memfd: %w", err)
 	}
-	defer syscall.Close(memfd)
+	defer func() { _ = syscall.Close(memfd) }()
 
 	if _, err := syscall.Write(memfd, kmBytes); err != nil {
 		_ = conn.Close()

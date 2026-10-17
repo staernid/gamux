@@ -2,6 +2,7 @@ package tasks_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync/atomic"
@@ -149,7 +150,7 @@ func TestTasksManager_PauseNonPausableRejection(t *testing.T) {
 
 	// Attempt pause should fail with ErrTaskNotPausable
 	err = mgr.Pause(id)
-	if err != tasks.ErrTaskNotPausable {
+	if !errors.Is(err, tasks.ErrTaskNotPausable) {
 		t.Fatalf("expected ErrTaskNotPausable, got %v", err)
 	}
 }

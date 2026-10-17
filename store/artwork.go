@@ -785,7 +785,7 @@ func (s *ArtworkService) ApplyCustomArtwork(ctx context.Context, game *domain.Ga
 		return nil, fmt.Errorf("invalid image source (must be a valid local file path or http/https URL)")
 	}
 
-	var mtime int64 = time.Now().Unix()
+	mtime := time.Now().Unix()
 	if fi, err := os.Stat(targetPath); err == nil {
 		mtime = fi.ModTime().Unix()
 	}

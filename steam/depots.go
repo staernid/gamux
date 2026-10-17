@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/staernid/gamux/cache"
+	"github.com/staernid/gamux/util"
 )
 
 // SteamDepotInfo captures structured metadata about a Steam content depot.
@@ -130,7 +131,7 @@ func SynthesizeDepotNameWithDLC(depotID uint32, osList, osArch, lang string, isD
 	}
 
 	if lang != "" {
-		normLang := strings.Title(strings.ToLower(lang))
+		normLang := util.TitleCase(strings.ToLower(lang))
 		return fmt.Sprintf("%s Language Pack (%d)", normLang, depotID)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -110,7 +111,7 @@ func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 		} else {
 			uncomp, err = io.ReadAll(dec)
 		}
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, fmt.Errorf("zstd decode for VSZa chunk: %w", err)
 		}
 		return uncomp, nil
@@ -144,7 +145,7 @@ func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 		} else {
 			uncomp, err = io.ReadAll(lzr)
 		}
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, fmt.Errorf("lzma decode: %w", err)
 		}
 		return uncomp, nil
@@ -181,7 +182,7 @@ func DecompressChunkSlice(chunk []byte, expectedSize uint32) ([]byte, error) {
 			return nil, fmt.Errorf("raw zstd reset: %w", err)
 		}
 		uncomp, err := io.ReadAll(dec)
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, fmt.Errorf("raw zstd decode: %w", err)
 		}
 		return uncomp, nil

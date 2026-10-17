@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -127,7 +128,8 @@ func UnpackFile(ctx context.Context, cfg *config.Config, exePath string, dryRun 
 	execErr := cmd.Run()
 	var exitCode int
 	if execErr != nil {
-		if exitErr, ok := execErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(execErr, &exitErr) {
 			exitCode = exitErr.ExitCode()
 		} else {
 			return false, fmt.Errorf("execute steamless: %w", execErr)
@@ -199,7 +201,8 @@ func UnpackGameDirectory(ctx context.Context, cfg *config.Config, gameDir string
 	execErr := cmd.Run()
 	var exitCode int
 	if execErr != nil {
-		if exitErr, ok := execErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(execErr, &exitErr) {
 			exitCode = exitErr.ExitCode()
 		} else {
 			return 0, fmt.Errorf("execute steamless: %w", execErr)

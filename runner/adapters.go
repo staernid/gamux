@@ -54,7 +54,7 @@ func (r *UMURunner) BuildArgs(ctx context.Context, cfg *config.Config, targetExe
 		if booted, bErr := tools.NewUMUTool(cfg).EnsureAvailable(ctx); bErr == nil && util.FileExists(booted) {
 			umuBin = booted
 		} else {
-			return "", nil, fmt.Errorf("runner 'umu' selected: %w (auto-bootstrap failed: %v)", err, bErr)
+			return "", nil, fmt.Errorf("runner 'umu' selected: %w (auto-bootstrap failed: %w)", err, bErr)
 		}
 	}
 	return umuBin, append([]string{targetExe}, exeArgs...), nil

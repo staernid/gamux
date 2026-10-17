@@ -225,17 +225,11 @@ func CheckGameVersion(ctx context.Context, appID uint32, localBuildID string, in
 				if localNum < remoteNum {
 					isUpToDate = false
 					msg = fmt.Sprintf("New build available: %s", targetBranch.BuildID)
-				} else {
-					isUpToDate = true
-					msg = "Game is up to date"
 				}
 			} else {
 				if cleanBuildID != targetBranch.BuildID {
 					isUpToDate = false
 					msg = fmt.Sprintf("New build available: %s", targetBranch.BuildID)
-				} else {
-					isUpToDate = true
-					msg = "Game is up to date"
 				}
 			}
 

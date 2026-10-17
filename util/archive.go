@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/bzip2"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -46,7 +47,7 @@ func DownloadAndExtract(ctx context.Context, url, destDir, format string) error 
 		tarReader := tar.NewReader(bzip2Reader)
 		for {
 			header, err := tarReader.Next()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {

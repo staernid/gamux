@@ -30,8 +30,6 @@ var (
 	addAppIDKeyRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)\s*,\s*\d+\s*,\s*(?:"|')([^"']+)(?:"|')\s*\)`)
 	// Matches addappid(12345)
 	addAppIDNoKeyRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)\s*\)`)
-	// General addappid match to detect AppID
-	generalAddAppIDRegex = regexp.MustCompile(`(?m)^\s*addappid\s*\(\s*(\d+)`)
 )
 
 // ParseLua parses the raw text contents of a .lua file and returns structured depot keys.

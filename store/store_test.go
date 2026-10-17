@@ -595,7 +595,7 @@ func TestArtworkService_SteamGridProxyFallback(t *testing.T) {
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/search/IndieGame" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf("%q", server.URL+"/indie_cover.jpg")))
+			_, _ = fmt.Fprintf(w, "%q", server.URL+"/indie_cover.jpg")
 			return
 		}
 		if r.URL.Path == "/indie_cover.jpg" {

@@ -696,7 +696,7 @@ func RenderDetectionSummary(info *domain.Game) {
 	fmt.Println(dim("------------------------------------------------------------------------"))
 	fmt.Println(bold("  Integrations & Patch Badges:"))
 
-	stateStr := info.State
+	var stateStr string
 	if strings.Contains(strings.ToLower(info.State), "original") {
 		stateStr = green("[DRM: Clean]")
 	} else {

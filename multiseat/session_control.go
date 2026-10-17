@@ -335,11 +335,3 @@ func (s *Supervisor) GetRunningInstances() []domain.RunningInstance {
 	}
 	return result
 }
-
-func (s *Supervisor) cleanupSinks(ctx context.Context, sinks ...*VirtualSink) {
-	for _, sink := range sinks {
-		if sink != nil {
-			sink.Destroy(ctx)
-		}
-	}
-}

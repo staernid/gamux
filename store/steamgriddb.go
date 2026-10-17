@@ -363,8 +363,7 @@ func (s *SGDBProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 		return nil, fmt.Errorf("missing steamgriddb api key")
 	}
 
-	endpoint := "grids"
-	dimQuery := "?dimensions=600x900"
+	var endpoint, dimQuery string
 	switch query.AssetType {
 	case "cover":
 		endpoint = "grids"

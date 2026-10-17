@@ -6,6 +6,7 @@ go 1.25.0
 require (
 	github.com/bodgit/sevenzip v1.6.1
 	github.com/charmbracelet/glamour v0.10.0
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/klauspost/compress v1.18.3
 	github.com/mattn/go-isatty v0.0.24
 	github.com/ulikunitz/xz v0.5.16
@@ -13,6 +14,7 @@ require (
 	github.com/wailsapp/wails/v3 v3.0.0-beta.27
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.39.0
 	golang.org/x/time v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -40,7 +42,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -62,6 +63,5 @@ require (
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )

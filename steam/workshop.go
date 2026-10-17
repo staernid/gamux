@@ -162,7 +162,7 @@ func downloadAndExtractZip(ctx context.Context, downloadURL string, outDir strin
 		}
 
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(path, 0755)
+			_ = os.MkdirAll(path, 0755)
 			continue
 		}
 

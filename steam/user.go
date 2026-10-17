@@ -70,7 +70,7 @@ func ResolveSteamProfile(ctx context.Context, apiKey string, input string) (*dom
 
 	if !is64 {
 		if apiKey == "" {
-			return nil, fmt.Errorf("Steam Web API key is required to resolve vanity profile %q", input)
+			return nil, fmt.Errorf("a Steam Web API key is required to resolve vanity profile %q", input)
 		}
 
 		vanityURL := fmt.Sprintf("%s/ISteamUser/ResolveVanityURL/v1/?key=%s&vanityurl=%s", DefaultSteamWebAPI, url.QueryEscape(apiKey), url.QueryEscape(idCandidate))
