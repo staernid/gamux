@@ -3,18 +3,19 @@
   import StorageAutomationCard from './cards/StorageAutomationCard.svelte';
   import CredentialsCard from './cards/CredentialsCard.svelte';
 
-  let { cfgDraft = $bindable() } = $props();
+  let { storageDraft = $bindable(), cfgDraft = $bindable() } = $props();
+  let draft = $derived(storageDraft || cfgDraft || {});
 </script>
 
 <div class="space-y-4">
   <!-- Bespoke Library Folders Manager -->
-  <LibraryPathsCard bind:libraryPaths={cfgDraft.library_paths} />
+  <LibraryPathsCard bind:libraryPaths={draft.library_paths} />
 
   <!-- Bespoke Automation & Backups Card -->
-  <StorageAutomationCard bind:cfgDraft />
+  <StorageAutomationCard bind:storageDraft bind:cfgDraft />
 
   <!-- API Keys & Service Credentials Card -->
   <div id="credentials-card">
-    <CredentialsCard bind:cfgDraft />
+    <CredentialsCard bind:storageDraft bind:cfgDraft />
   </div>
 </div>

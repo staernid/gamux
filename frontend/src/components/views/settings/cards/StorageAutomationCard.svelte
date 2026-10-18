@@ -5,8 +5,9 @@
   import GhostInput from '../../../common/GhostInput.svelte';
   import { selectDirectoryDialog } from '../../../../utils/filesystem.js';
 
-  let { cfgDraft = $bindable() } = $props();
+  let { storageDraft = $bindable(), cfgDraft = $bindable() } = $props();
 
+  let targetDraft = $derived(storageDraft || cfgDraft || {});
   let showAdvancedStorage = $state(false);
 
   const retentionOptions = [
@@ -18,18 +19,18 @@
   ];
 
   async function handleBrowseArtworkDir() {
-    const selected = await selectDirectoryDialog('Select Artwork Cache Directory', cfgDraft.artwork_dir || '');
+    const selected = await selectDirectoryDialog('Select Artwork Cache Directory', targetDraft.artwork_dir || '');
     if (selected) {
-      cfgDraft.artwork_dir = selected;
-      cfgDraft = { ...cfgDraft };
+      if (storageDraft) storageDraft.artwork_dir = selected;
+      if (cfgDraft) cfgDraft.artwork_dir = selected;
     }
   }
 
   async function handleBrowseBackupDir() {
-    const selected = await selectDirectoryDialog('Select Save Backup Directory', cfgDraft.backup_dir || '');
+    const selected = await selectDirectoryDialog('Select Save Backup Directory', targetDraft.backup_dir || '');
     if (selected) {
-      cfgDraft.backup_dir = selected;
-      cfgDraft = { ...cfgDraft };
+      if (storageDraft) storageDraft.backup_dir = selected;
+      if (cfgDraft) cfgDraft.backup_dir = selected;
     }
   }
 </script>
@@ -40,23 +41,23 @@
       <SeamlessSwitch
         label="Normalize Folders"
         description="Standardize folder names to official Steam game titles"
-        bind:value={cfgDraft.normalize}
+        bind:value={targetDraft.normalize}
       />
 
       <SeamlessSwitch
         label="Auto-Backup Saves"
         description="Create a rolling save backup before launching any game"
-        bind:value={cfgDraft.auto_backup_saves}
+        bind:value={targetDraft.auto_backup_saves}
       />
     </div>
 
-    {#if cfgDraft.auto_backup_saves}
+    {#if targetDraft.auto_backup_saves}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         <StepperRow
           label="Backup Retention Count"
           description="Number of rotating save snapshots to retain per game"
           options={retentionOptions}
-          bind:value={cfgDraft.backup_retention_count}
+          bind:value={targetDraft.backup_retention_count}
         />
       </div>
     {/if}
@@ -80,7 +81,7 @@
         <GhostInput
           label="Artwork Directory"
           description="Local cache directory for covers, heroes, and logos"
-          bind:value={cfgDraft.artwork_dir}
+          bind:value={targetDraft.artwork_dir}
           placeholder="~/.local/share/gamux/art"
           mono={true}
         >
@@ -99,7 +100,7 @@
         <GhostInput
           label="Backup Directory"
           description="Local directory for automated game save snapshots"
-          bind:value={cfgDraft.backup_dir}
+          bind:value={targetDraft.backup_dir}
           placeholder="~/.local/share/gamux/backups"
           mono={true}
         >

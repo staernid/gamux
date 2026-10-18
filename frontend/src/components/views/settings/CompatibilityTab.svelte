@@ -2,8 +2,10 @@
   import GamescopeCard from './cards/GamescopeCard.svelte';
   import PropertySheet from '../../schema/PropertySheet.svelte';
 
-  let { cfgDraft = $bindable({}) } = $props();
+  let { compatDraft = $bindable(), gamescopeDraft = $bindable(), cfgDraft = $bindable({}) } = $props();
   export const runnersList = [];
+
+  let targetCompat = $derived(compatDraft || cfgDraft || {});
 </script>
 
 <div class="space-y-6">
@@ -37,7 +39,7 @@
     <PropertySheet
       includeKeys={['default_runner', 'wine_prefix']}
       groupByCategory={false}
-      bind:values={cfgDraft}
+      bind:values={targetCompat}
     />
   </div>
 
@@ -51,9 +53,9 @@
     <PropertySheet
       includeKeys={['mangohud']}
       groupByCategory={false}
-      bind:values={cfgDraft}
+      bind:values={targetCompat}
     />
-    <GamescopeCard bind:cfgDraft />
+    <GamescopeCard bind:gamescopeDraft bind:cfgDraft />
   </div>
 
   <!-- 3. Steam & Goldberg Emulation (GBE Fork) -->
@@ -69,7 +71,7 @@
     <PropertySheet
       includeKeys={['operating_mode', 'steamless', 'achievements', 'language', 'disable_overlay', 'offline_mode']}
       groupByCategory={false}
-      bind:values={cfgDraft}
+      bind:values={targetCompat}
     />
   </div>
 
@@ -83,7 +85,7 @@
     <PropertySheet
       includeKeys={['global_env']}
       groupByCategory={false}
-      bind:values={cfgDraft}
+      bind:values={targetCompat}
     />
   </div>
 </div>

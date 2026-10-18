@@ -4,12 +4,15 @@
   import { profilesStore } from '../../../../stores/profiles.js';
 
   let {
+    multiseatDraft = $bindable(),
     cfgDraft = $bindable(),
     seats = [],
     activeSeats = [],
     displays = [],
     profileOptions = []
   } = $props();
+
+  let ms = $derived(multiseatDraft || cfgDraft?.multiseat || {});
 
   function toggleSeat(seatId) {
     const target = seats.find(s => s.seat_id === seatId);
@@ -22,10 +25,12 @@
 
   function setSeatOutputMode(seatIdx, mode) {
     if (seatIdx === 0) {
-      cfgDraft.multiseat.default_seat1_mode = mode;
+      if (multiseatDraft) multiseatDraft.default_seat1_mode = mode;
+      if (cfgDraft?.multiseat) cfgDraft.multiseat.default_seat1_mode = mode;
       multiseatStore.setSeatMode('p1', mode);
     } else if (seatIdx === 1) {
-      cfgDraft.multiseat.default_seat2_mode = mode;
+      if (multiseatDraft) multiseatDraft.default_seat2_mode = mode;
+      if (cfgDraft?.multiseat) cfgDraft.multiseat.default_seat2_mode = mode;
       multiseatStore.setSeatMode('p2', mode);
     } else {
       multiseatStore.updateSeat(seatIdx, { mode });

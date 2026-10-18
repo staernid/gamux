@@ -1,12 +1,11 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import SettingSection from '../../../common/SettingSection.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
 
-  let { cfgDraft = $bindable() } = $props();
+  let { networkDraft = $bindable(), generalDraft = $bindable(), cfgDraft = $bindable() } = $props();
 
+  let targetDraft = $derived(networkDraft || generalDraft || cfgDraft || {});
   let customSpeedMB = $state('');
 
   const standardSpeedPresets = [0, 5242880, 10485760, 26214400, 52428800, 104857600];
@@ -21,34 +20,46 @@
     { value: -1, label: 'Custom Limit (MB/s)...' }
   ];
 
-  let selectedSpeedMode = $derived(standardSpeedPresets.includes(cfgDraft.transfer_speed_limit)
-    ? cfgDraft.transfer_speed_limit
+  let speedLimit = $derived(targetDraft.transfer_speed_limit ?? 0);
+
+  let selectedSpeedMode = $derived(standardSpeedPresets.includes(speedLimit)
+    ? speedLimit
     : -1);
 
-  run(() => {
-    if (selectedSpeedMode === -1 && !customSpeedMB && cfgDraft.transfer_speed_limit > 0) {
-      customSpeedMB = String(Math.round(cfgDraft.transfer_speed_limit / 1048576));
+  $effect(() => {
+    if (selectedSpeedMode === -1 && !customSpeedMB && speedLimit > 0) {
+      customSpeedMB = String(Math.round(speedLimit / 1048576));
     }
   });
+
+  function setSpeedLimit(bytes) {
+    if (networkDraft) networkDraft.transfer_speed_limit = bytes;
+    if (generalDraft) generalDraft.transfer_speed_limit = bytes;
+    if (cfgDraft) cfgDraft.transfer_speed_limit = bytes;
+  }
 
   function handleSpeedSelect(val) {
     const num = Number(val);
     if (num === -1) {
       if (!customSpeedMB) customSpeedMB = '15';
-      cfgDraft.transfer_speed_limit = (parseInt(customSpeedMB, 10) || 15) * 1048576;
+      setSpeedLimit((parseInt(customSpeedMB, 10) || 15) * 1048576);
     } else {
-      cfgDraft.transfer_speed_limit = num;
+      setSpeedLimit(num);
     }
-    cfgDraft = { ...cfgDraft };
   }
 
   function handleCustomSpeedInput(e) {
     const mb = parseInt(e.target.value, 10);
     customSpeedMB = e.target.value;
     if (!isNaN(mb) && mb >= 0) {
-      cfgDraft.transfer_speed_limit = mb * 1048576;
-      cfgDraft = { ...cfgDraft };
+      setSpeedLimit(mb * 1048576);
     }
+  }
+
+  function handleNotifyChange(val) {
+    if (networkDraft) networkDraft.enable_launch_notify = val;
+    if (generalDraft) generalDraft.enable_launch_notify = val;
+    if (cfgDraft) cfgDraft.enable_launch_notify = val;
   }
 </script>
 
@@ -85,7 +96,8 @@
     <SeamlessSwitch
       label="Launch Notifications"
       description="Display system toast alert when a game runner process initializes"
-      bind:value={cfgDraft.enable_launch_notify}
+      value={targetDraft.enable_launch_notify}
+      onchange={handleNotifyChange}
     />
   </div>
 </SettingSection>

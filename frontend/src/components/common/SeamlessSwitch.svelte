@@ -1,7 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
-  
   /**
    * @typedef {Object} Props
    * @property {string} [label]
@@ -29,7 +26,7 @@
   } = $props();
 
   // If checked is passed, sync value from checked
-  run(() => {
+  $effect(() => {
     if (checked !== undefined && value !== checked) {
       value = checked;
     }

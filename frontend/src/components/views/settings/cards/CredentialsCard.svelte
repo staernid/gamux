@@ -3,7 +3,8 @@
   import GhostInput from '../../../common/GhostInput.svelte';
   import { openExternalUrl } from '../../../../utils/navigation.js';
 
-  let { cfgDraft = $bindable() } = $props();
+  let { storageDraft = $bindable(), cfgDraft = $bindable() } = $props();
+  let targetDraft = $derived(storageDraft || cfgDraft || {});
 </script>
 
 <SettingSection
@@ -15,10 +16,10 @@
       label="Steam Web API Key"
       description="Used to fetch official Steam depot manifests, DLC catalogs, community news, and store metadata"
       type="password"
-      bind:value={cfgDraft.steam_web_api_key}
+      bind:value={targetDraft.steam_web_api_key}
       placeholder="32-char hex key (e.g. 7F8A1B2C...)"
       mono={true}
-      status={cfgDraft.steam_web_api_key ? 'SET' : ''}
+      status={targetDraft.steam_web_api_key ? 'SET' : ''}
     >
       {#snippet action()}
             <button
@@ -40,10 +41,10 @@
       label="Hubcap Manifest API Key"
       description="Used to query Hubcap for game depot manifests and decryption keys during downloads"
       type="password"
-      bind:value={cfgDraft.hubcap_api_key}
+      bind:value={targetDraft.hubcap_api_key}
       placeholder="Hubcap API token"
       mono={true}
-      status={cfgDraft.hubcap_api_key ? 'SET' : ''}
+      status={targetDraft.hubcap_api_key ? 'SET' : ''}
     >
       {#snippet action()}
             <button
@@ -65,10 +66,10 @@
       label="SteamGridDB API Key"
       description="Automated downloads for high-resolution vertical covers, banners, hero artwork, and clear logos"
       type="password"
-      bind:value={cfgDraft.steamgriddb_api_key}
+      bind:value={targetDraft.steamgriddb_api_key}
       placeholder="SteamGridDB API token"
       mono={true}
-      status={cfgDraft.steamgriddb_api_key ? 'SET' : ''}
+      status={targetDraft.steamgriddb_api_key ? 'SET' : ''}
     >
       {#snippet action()}
             <button
@@ -90,10 +91,10 @@
       label="RAWG API Key"
       description="Provides fallback descriptions, release dates, genres, and metadata discovery for standalone titles"
       type="password"
-      bind:value={cfgDraft.rawg_api_key}
+      bind:value={targetDraft.rawg_api_key}
       placeholder="RAWG API key"
       mono={true}
-      status={cfgDraft.rawg_api_key ? 'SET' : ''}
+      status={targetDraft.rawg_api_key ? 'SET' : ''}
     >
       {#snippet action()}
             <button

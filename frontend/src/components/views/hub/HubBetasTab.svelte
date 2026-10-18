@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
@@ -222,7 +220,7 @@
     const q = searchQuery.toLowerCase();
     return b.name.toLowerCase().includes(q) || (b.description && b.description.toLowerCase().includes(q)) || (b.build_id && b.build_id.includes(q));
   }));
-  run(() => {
+  $effect(() => {
     if (effectiveAppId && effectiveAppId !== loadedAppId) {
       loadedAppId = effectiveAppId;
       loadBranches();

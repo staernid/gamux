@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import TopBar from './components/header/TopBar.svelte';
@@ -207,7 +205,7 @@
     });
   }
 
-  run(() => {
+  $effect(() => {
     if (pendingTargetAppId && $games?.length > 0) {
       const found = $games.find(g => g && String(g.appId) === String(pendingTargetAppId));
       if (found) {

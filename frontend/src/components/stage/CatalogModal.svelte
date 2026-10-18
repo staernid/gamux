@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount, onDestroy, tick } from 'svelte';
   import ModalShell from '../common/ModalShell.svelte';
   import Icon from '../common/Icon.svelte';
@@ -37,7 +35,7 @@
   let allGames = $derived($games || []);
 
   // Debounced Store Catalog Search
-  run(() => {
+  $effect(() => {
     const q = (query || '').trim();
     if (q !== lastStoreQuery) {
       lastStoreQuery = q;
@@ -87,14 +85,14 @@
     });
   }
 
-  run(() => {
+  $effect(() => {
     if (focusedIndex >= filteredResults.length) {
       focusedIndex = Math.max(0, filteredResults.length - 1);
     }
   });
 
   // Scroll focused card into view smoothly
-  run(() => {
+  $effect(() => {
     if (gridContainerEl && filteredResults.length > 0) {
       tick().then(() => {
         const activeCard = gridContainerEl?.querySelector(`[data-index="${focusedIndex}"]`);

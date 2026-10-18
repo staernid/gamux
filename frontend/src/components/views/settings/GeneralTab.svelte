@@ -3,7 +3,8 @@
   import NetworkDownloadsCard from './cards/NetworkDownloadsCard.svelte';
   import PropertySheet from '../../schema/PropertySheet.svelte';
 
-  let { cfgDraft = $bindable() } = $props();
+  let { generalDraft = $bindable(), cfgDraft = $bindable() } = $props();
+  let draft = $derived(generalDraft || cfgDraft);
 </script>
 
 <div class="space-y-4">
@@ -11,7 +12,7 @@
   <AudioSettingsCard />
 
   <!-- Network & Downloads Card -->
-  <NetworkDownloadsCard bind:cfgDraft />
+  <NetworkDownloadsCard bind:generalDraft bind:cfgDraft />
 
   <!-- Declarative Lifecycle Settings -->
   <div class="space-y-3">
@@ -24,7 +25,7 @@
       category="Lifecycle"
       excludeKeys={['enable_launch_notify']}
       groupByCategory={false}
-      bind:values={cfgDraft}
+      bind:values={draft}
     />
   </div>
 </div>

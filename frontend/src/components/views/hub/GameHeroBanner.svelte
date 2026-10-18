@@ -1,9 +1,4 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { run, stopPropagation, createBubbler } from 'svelte/legacy';
-
-  const bubble = createBubbler();
-  const dispatch = createEventDispatcher();
   import { modalStore } from '../../../stores/modal.js';
   import { updateGameInStore } from '../../../stores/library.js';
   import { formatBytes, formatETA } from '../../../utils/format.js';
@@ -96,30 +91,28 @@
 
   function handleReturnToShelf() {
     onreturnToShelf?.();
-    dispatch('returnToShelf');
   }
 
   function handlePrimaryAction() {
     onprimaryAction?.();
-    dispatch('primaryAction');
   }
 
   function handleOpenDirectory() {
     onopenDirectory?.();
-    dispatch('openDirectory');
   }
 
   function handleTrash() {
     ontrash?.();
-    dispatch('trash');
   }
-  run(() => {
+
+  $effect(() => {
     if (game) {
       logoFailed = false;
       heroFailed = false;
     }
   });
-  run(() => {
+
+  $effect(() => {
     if (game?.appId && isSteamApp(game.appId)) {
       const aid = String(game.appId).trim();
       if (aid !== loadedPlayerAppId) {
@@ -132,8 +125,10 @@
       loadedPlayerAppId = '';
     }
   });
+
   let isSteam = $derived(game ? isSteamApp(game.appId) : false);
-  run(() => {
+
+  $effect(() => {
     if (game?.gameDir && isSteam) {
       const gdir = game.gameDir;
       if (gdir !== loadedVersionGameDir) {
@@ -478,8 +473,8 @@
           {#if showLaunchMenu}
             <div
               class="absolute right-0 bottom-full mb-2 w-52 bg-[#121215] border border-[#27272a] rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in space-y-1 text-left"
-              onclick={stopPropagation(bubble('click'))}
-              onkeydown={stopPropagation(bubble('keydown'))}
+              onclick={(e) => e.stopPropagation()}
+              onkeydown={(e) => e.stopPropagation()}
               role="menu"
               tabindex="-1"
             >

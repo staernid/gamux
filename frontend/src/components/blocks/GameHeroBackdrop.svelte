@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   /**
    * @typedef {Object} Props
    * @property {string} [heroUrl]
@@ -26,7 +24,7 @@
   let imgFailed = $state(false);
 
   let activeUrl = $derived((!imgFailed && (localHeroUrl || heroUrl)) || '');
-  run(() => {
+  $effect(() => {
     if (heroUrl || localHeroUrl) {
       imgFailed = false;
     }

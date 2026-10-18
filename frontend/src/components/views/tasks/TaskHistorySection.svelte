@@ -1,7 +1,5 @@
 <script>
-  import { stopPropagation } from 'svelte/legacy';
-
-    import { formatBytes } from '../../../utils/format.js';
+  import { formatBytes } from '../../../utils/format.js';
   import PosterArt from '../../common/PosterArt.svelte';
 
   let { tasks = [] ,
@@ -90,7 +88,7 @@
           {#if tr.gameDir}
             <button
               type="button"
-              onclick={stopPropagation(() => handleOpenDirectory(tr.gameDir))}
+              onclick={(e) => { e.stopPropagation(); handleOpenDirectory(tr.gameDir); }}
               class="text-neutral-300 hover:text-white text-xs px-2.5 py-1.5 rounded-xl bg-surface-header hover:bg-surface-input border border-surface-border font-medium transition cursor-pointer"
               title="Open Installation Folder"
             >
@@ -100,7 +98,7 @@
 
           <button
             type="button"
-            onclick={stopPropagation(() => handleDismiss(tr.id))}
+            onclick={(e) => { e.stopPropagation(); handleDismiss(tr.id); }}
             class="text-neutral-400 hover:text-white text-xs px-2.5 py-1.5 rounded-xl hover:bg-surface-input cursor-pointer transition"
             title="Dismiss from history"
           >

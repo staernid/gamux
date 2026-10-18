@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   /**
    * @typedef {Object} Props
    * @property {string} [logoUrl]
@@ -24,7 +22,7 @@
   let imgFailed = $state(false);
 
   let activeUrl = $derived((!imgFailed && (localLogoUrl || logoUrl)) || '');
-  run(() => {
+  $effect(() => {
     if (logoUrl || localLogoUrl) {
       imgFailed = false;
     }

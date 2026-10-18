@@ -1,7 +1,5 @@
 <script>
-  import { run } from 'svelte/legacy';
-
-    import { isSteamApp } from '../../../utils/game.js';
+  import { isSteamApp } from '../../../utils/game.js';
   import HubDLCCard from './cards/HubDLCCard.svelte';
   import HubIntegrityCard from './cards/HubIntegrityCard.svelte';
   import HubLogsCard from './cards/HubLogsCard.svelte';
@@ -49,7 +47,7 @@
   // svelte-ignore state_referenced_locally
   let prevActiveSubTab = $state(activeSubTab);
 
-  run(() => {
+  $effect(() => {
     if (activeSubTab !== prevActiveSubTab) {
       prevActiveSubTab = activeSubTab;
       activeFilesSubTab = activeSubTab || 'depots';

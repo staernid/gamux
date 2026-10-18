@@ -10,8 +10,6 @@
 </script>
 
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../api/app.js';
   import { modalStore } from '../../../stores/modal.js';
@@ -118,7 +116,7 @@
   let steamDbUrl = $derived(isSteam ? `https://steamdb.info/app/${encodeURIComponent(effectiveAppId)}/` : (name ? `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}` : ''));
   let hltbUrl = $derived(name ? `https://howlongtobeat.com/?q=${encodeURIComponent(name)}` : '');
   // Restore cached items immediately to prevent UI flicker on tab return
-  run(() => {
+  $effect(() => {
     if (effectiveAppId && overviewNewsCache.has(effectiveAppId)) {
       const cached = overviewNewsCache.get(effectiveAppId);
       if (cached && cached.length > 0 && newsItems.length === 0) {
@@ -128,7 +126,8 @@
       newsItems = game.newsItems.slice(0, 3);
     }
   });
-  run(() => {
+
+  $effect(() => {
     if (game?.gameDir && overviewAchievementsCache.has(game.gameDir)) {
       const cachedAch = overviewAchievementsCache.get(game.gameDir);
       if (cachedAch && cachedAch.length > 0 && achievements.length === 0) {
@@ -136,12 +135,14 @@
       }
     }
   });
-  run(() => {
+
+  $effect(() => {
     if (game?.gameDir && game.gameDir !== loadedAchievementsDir) {
       loadAchievements();
     }
   });
-  run(() => {
+
+  $effect(() => {
     if (effectiveAppId && effectiveAppId !== loadedNewsAppId) {
       loadNews();
     }

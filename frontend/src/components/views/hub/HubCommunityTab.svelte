@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { AppAPI } from '../../../api/app.js';
   import { isSteamApp } from '../../../utils/game.js';
   import HubAchievementsCard from './cards/HubAchievementsCard.svelte';
@@ -57,23 +55,26 @@
   function toggleNewsExpand(idx) {
     expandedNewsIndex = expandedNewsIndex === idx ? -1 : idx;
   }
-  run(() => {
+  $effect(() => {
     if (initialSubTab !== prevInitialSubTab) {
       prevInitialSubTab = initialSubTab;
       activeCommunitySubTab = initialSubTab || 'achievements';
     }
   });
-  run(() => {
+
+  $effect(() => {
     if (initialNewsIndex !== prevInitialNewsIndex) {
       prevInitialNewsIndex = initialNewsIndex;
       expandedNewsIndex = initialNewsIndex ?? 0;
     }
   });
+
   let effectiveAppId = $derived((game?.appId && isSteamApp(game.appId))
     ? String(game.appId).trim()
     : ((game?.metadataProvider || '').toLowerCase() === 'steam' && isSteamApp(game?.metadataId) ? String(game.metadataId).trim() : ''));
   let isSteam = $derived(Boolean(effectiveAppId));
-  run(() => {
+
+  $effect(() => {
     if (activeCommunitySubTab === 'news' && loadedNewsAppID !== effectiveAppId && !isLoadingNews && effectiveAppId) {
       loadNews();
     }

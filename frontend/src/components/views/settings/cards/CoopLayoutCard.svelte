@@ -3,12 +3,15 @@
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
   let {
+    multiseatDraft = $bindable(),
     cfgDraft = $bindable(),
     visualLayouts = [],
     effectiveDisplays = [],
     activeSeats = [],
     seats = []
   } = $props();
+
+  let ms = $derived(multiseatDraft || cfgDraft?.multiseat || {});
 
   function selectLayout(layoutId) {
     if (layoutId === 'quad_grid') {
@@ -28,7 +31,8 @@
         if (s.disabled) multiseatStore.toggleSeatActive(s.seat_id);
       });
     }
-    cfgDraft.multiseat.default_layout = layoutId;
+    if (multiseatDraft) multiseatDraft.default_layout = layoutId;
+    if (cfgDraft?.multiseat) cfgDraft.multiseat.default_layout = layoutId;
     multiseatStore.setLayout(layoutId);
 
     // Synchronize display assignments based on selected layout
@@ -112,11 +116,11 @@
           <button
             type="button"
             onclick={() => selectLayout(opt.id)}
-            class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between space-y-1.5 cursor-pointer {cfgDraft.multiseat.default_layout === opt.id ? 'bg-surface-header border-neutral-500 shadow-sm' : 'bg-surface-card border-surface-border hover:border-neutral-600'}"
+            class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between space-y-1.5 cursor-pointer {ms.default_layout === opt.id ? 'bg-surface-header border-neutral-500 shadow-sm' : 'bg-surface-card border-surface-border hover:border-neutral-600'}"
           >
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold {cfgDraft.multiseat.default_layout === opt.id ? 'text-white' : 'text-neutral-300'}">{opt.name}</span>
-              <span class="text-4xs font-mono px-1.5 py-0.5 rounded {cfgDraft.multiseat.default_layout === opt.id ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-surface-input text-neutral-400 border border-surface-border'}">{opt.badge}</span>
+              <span class="text-xs font-bold {ms.default_layout === opt.id ? 'text-white' : 'text-neutral-300'}">{opt.name}</span>
+              <span class="text-4xs font-mono px-1.5 py-0.5 rounded {ms.default_layout === opt.id ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-surface-input text-neutral-400 border border-surface-border'}">{opt.badge}</span>
             </div>
             <p class="text-3xs text-neutral-400 leading-tight">{opt.desc}</p>
           </button>
@@ -128,7 +132,7 @@
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <span class="text-2xs font-bold text-neutral-400 uppercase tracking-wider">Connected Physical Displays & Viewports</span>
-        {#if activeSeats.length >= 2 && (cfgDraft.multiseat.default_layout === 'side_by_side' || cfgDraft.multiseat.default_layout === 'top_bottom')}
+        {#if activeSeats.length >= 2 && (ms.default_layout === 'side_by_side' || ms.default_layout === 'top_bottom')}
           <button
             type="button"
             onclick={() => swap2PSlots(0)}
@@ -202,7 +206,7 @@
                         {d.width} × {d.height} (Fullscreen 1:1)
                       </div>
                     </div>
-                  {:else if cfgDraft.multiseat.default_layout === 'top_bottom'}
+                  {:else if ms.default_layout === 'top_bottom'}
                     <!-- Horizontal Split Rows -->
                     <div class="h-36 grid grid-rows-2 gap-1.5">
                       {#each [0, 1] as slotIdx}
@@ -260,7 +264,7 @@
                         {/if}
                       {/each}
                     </div>
-                  {:else if cfgDraft.multiseat.default_layout === 'quad_grid' && dispSeats.length >= 4}
+                  {:else if ms.default_layout === 'quad_grid' && dispSeats.length >= 4}
                     <!-- 2x2 Quadrant Grid -->
                     <div class="h-36 grid grid-cols-2 grid-rows-2 gap-1.5">
                       {#each [0, 1, 2, 3] as slotIdx}
@@ -280,7 +284,7 @@
                         </div>
                       {/each}
                     </div>
-                  {:else if cfgDraft.multiseat.default_layout === 'three_player' && dispSeats.length >= 3}
+                  {:else if ms.default_layout === 'three_player' && dispSeats.length >= 3}
                     {@const s0 = getSeatObjForSlot(0, dIdx) || dispSeats[0]}
                     <!-- 3-Player Split -->
                     <div class="h-36 flex flex-col gap-1.5">

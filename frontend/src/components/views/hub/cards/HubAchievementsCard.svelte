@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../../api/app.js';
   import { formatLastPlayed } from '../../../../utils/game.js';
@@ -70,7 +68,7 @@
     if (filterMode === 'locked') return !a.unlocked;
     return true;
   }));
-  run(() => {
+  $effect(() => {
     if (gameDir && gameDir !== loadedGameDir) {
       loadAchievements();
     }

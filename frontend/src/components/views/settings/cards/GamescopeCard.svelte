@@ -1,18 +1,18 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import SettingSection from '../../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
 
-  let { cfgDraft = $bindable({}) } = $props();
+  let { gamescopeDraft = $bindable(), cfgDraft = $bindable() } = $props();
+
+  let targetDraft = $derived(gamescopeDraft || cfgDraft || {});
 
   let selectedResPreset = $state('auto');
   let isCustomRes = $state(false);
 
-  run(() => {
-    const w = cfgDraft?.gamescope_width || 0;
-    const h = cfgDraft?.gamescope_height || 0;
+  $effect(() => {
+    const w = targetDraft.gamescope_width || 0;
+    const h = targetDraft.gamescope_height || 0;
     if (!w && !h) {
       selectedResPreset = 'auto';
       isCustomRes = false;
@@ -37,21 +37,29 @@
     }
   });
 
+  function setDimensions(w, h) {
+    if (gamescopeDraft) {
+      gamescopeDraft.gamescope_width = w;
+      gamescopeDraft.gamescope_height = h;
+    }
+    if (cfgDraft) {
+      cfgDraft.gamescope_width = w;
+      cfgDraft.gamescope_height = h;
+    }
+  }
+
   function handleResChange(val) {
     selectedResPreset = val;
     if (val === 'auto') {
-      cfgDraft.gamescope_width = 0;
-      cfgDraft.gamescope_height = 0;
+      setDimensions(0, 0);
       isCustomRes = false;
     } else if (val === 'custom') {
       isCustomRes = true;
     } else {
       isCustomRes = false;
       const parts = val.split('x').map(Number);
-      cfgDraft.gamescope_width = parts[0];
-      cfgDraft.gamescope_height = parts[1];
+      setDimensions(parts[0], parts[1]);
     }
-    cfgDraft = { ...cfgDraft };
   }
 
   const resPresets = [
@@ -67,8 +75,8 @@
   let selectedFpsPreset = $state('0');
   let isCustomFps = $state(false);
 
-  run(() => {
-    const fps = cfgDraft?.gamescope_fps || 0;
+  $effect(() => {
+    const fps = targetDraft.gamescope_fps || 0;
     if ([0, 60, 100, 120, 144, 165, 240].includes(fps)) {
       selectedFpsPreset = String(fps);
       isCustomFps = false;
@@ -78,15 +86,24 @@
     }
   });
 
+  function setFps(fps) {
+    if (gamescopeDraft) gamescopeDraft.gamescope_fps = fps;
+    if (cfgDraft) cfgDraft.gamescope_fps = fps;
+  }
+
   function handleFpsChange(val) {
     selectedFpsPreset = val;
     if (val === 'custom') {
       isCustomFps = true;
     } else {
       isCustomFps = false;
-      cfgDraft.gamescope_fps = Number(val);
-      cfgDraft = { ...cfgDraft };
+      setFps(Number(val));
     }
+  }
+
+  function handleGamescopeToggle(val) {
+    if (gamescopeDraft) gamescopeDraft.gamescope = val;
+    if (cfgDraft) cfgDraft.gamescope = val;
   }
 
   const fpsPresets = [
@@ -111,7 +128,8 @@
       <SeamlessSwitch
         label="Enable Single-Player Gamescope"
         description="Wrap single-player game launches in Gamescope compositor (off by default)"
-        bind:value={cfgDraft.gamescope}
+        value={targetDraft.gamescope}
+        onchange={handleGamescopeToggle}
       />
 
       <div class="space-y-1.5">
@@ -128,7 +146,7 @@
               <input
                 id="custom-gamescope-w"
                 type="number"
-                bind:value={cfgDraft.gamescope_width}
+                bind:value={targetDraft.gamescope_width}
                 class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
                 placeholder="3440"
               />
@@ -138,7 +156,7 @@
               <input
                 id="custom-gamescope-h"
                 type="number"
-                bind:value={cfgDraft.gamescope_height}
+                bind:value={targetDraft.gamescope_height}
                 class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
                 placeholder="1440"
               />
@@ -162,7 +180,7 @@
             <input
               id="custom-gamescope-fps"
               type="number"
-              bind:value={cfgDraft.gamescope_fps}
+              bind:value={targetDraft.gamescope_fps}
               class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
               placeholder="100"
             />
