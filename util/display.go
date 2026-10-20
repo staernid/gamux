@@ -1,11 +1,13 @@
 package util
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 // DisplayInfo holds detected screen metrics.
@@ -30,9 +32,6 @@ func DetectDisplays() []DisplayInfo {
 	}
 	if list := detectXrandrDisplays(); len(list) > 0 {
 		return list
-	}
-	if info := DetectPrimaryDisplay(); info.Width > 0 && info.Height > 0 {
-		return []DisplayInfo{info}
 	}
 	return []DisplayInfo{
 		{
@@ -101,7 +100,9 @@ type kscreenRoot struct {
 }
 
 func detectKScreenDoctorDisplays() []DisplayInfo {
-	cmd := exec.Command("kscreen-doctor", "-j")
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "kscreen-doctor", "-j")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -166,7 +167,9 @@ func detectKScreenDoctorDisplays() []DisplayInfo {
 }
 
 func detectXrandrDisplays() []DisplayInfo {
-	cmd := exec.Command("xrandr", "--current")
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "xrandr", "--current")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil

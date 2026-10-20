@@ -16,7 +16,15 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/util"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restoreLogs := testutil.SilenceLogging()
+	code := m.Run()
+	restoreLogs()
+	os.Exit(code)
+}
 
 func TestCalculateSplitGeometry(t *testing.T) {
 	totalW, totalH := 1920, 1080
@@ -1396,6 +1404,9 @@ func TestBuildGamescopeArgs_SplitGeometry_CorrectDimensions(t *testing.T) {
 }
 
 func TestEIClient_LiveGamescope(t *testing.T) {
+	if os.Getenv("TEST_LIVE_GAMESCOPE") != "1" {
+		t.Skip("skipping live gamescope test (set TEST_LIVE_GAMESCOPE=1 to run)")
+	}
 	gsBin, err := exec.LookPath("gamescope")
 	if err != nil {
 		t.Skip("gamescope binary not available on host, skipping live test")

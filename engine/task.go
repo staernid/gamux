@@ -42,9 +42,8 @@ func (eng *Engine) SubmitUpdate(gamePath string) (string, error) {
 	gameName := eng.resolveGameName(context.Background(), gamePath)
 	pctx := &pipeline.Context{
 		Options: pipeline.Options{
-			Path:          gamePath,
-			OperatingMode: domain.ModePortable,
-			NormalizeDir:  true,
+			Path:         gamePath,
+			NormalizeDir: true,
 		},
 		Game:     domain.NewGame(gameName, gamePath, "", ""),
 		Config:   eng.Config,

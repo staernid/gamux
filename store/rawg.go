@@ -142,7 +142,7 @@ func (p *RAWGProvider) Search(ctx context.Context, query string) ([]SearchResult
 		return nil, fmt.Errorf("create RAWG search request: %w", err)
 	}
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, p.httpClient).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute RAWG search: %w", err)
 	}
@@ -240,7 +240,7 @@ func (p *RAWGProvider) FetchRawGame(ctx context.Context, gameID string) (*rawgGa
 		return nil, fmt.Errorf("create RAWG game request: %w", err)
 	}
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, p.httpClient).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute RAWG game request: %w", err)
 	}
@@ -467,7 +467,7 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 	reqURL := p.buildURL("/games/"+url.PathEscape(targetID)+"/screenshots", nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err == nil {
-		resp, err := p.httpClient.Do(req)
+		resp, err := httpClientFromContext(ctx, p.httpClient).Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			defer resp.Body.Close()
 			if body, err := io.ReadAll(resp.Body); err == nil {

@@ -15,7 +15,7 @@ function getInitialLibraryPaths() {
     if (single) return [single];
   }
   if (typeof window !== 'undefined' && !window.go) {
-    return ['/home/staernid/Games'];
+    return ['~/Games'];
   }
   return [];
 }

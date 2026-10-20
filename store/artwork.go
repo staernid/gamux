@@ -213,7 +213,7 @@ func (s *ArtworkService) DownloadFile(ctx context.Context, downloadURL, targetPa
 	}
 	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Game Manager)")
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, s.httpClient).Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", downloadURL, err)
 	}

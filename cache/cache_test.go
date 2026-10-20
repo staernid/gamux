@@ -204,9 +204,7 @@ func TestCache_NewsItems_InMemory(t *testing.T) {
 	}
 
 	// Clear in-memory cache, should fall back to disk
-	newsItemsMu.Lock()
-	newsItemsMemoryCache = make(map[string][]byte)
-	newsItemsMu.Unlock()
+	newsItemsCache.reset()
 
 	data, ok = GetNewsItems("99999")
 	if !ok {

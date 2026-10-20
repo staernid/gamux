@@ -3,11 +3,32 @@ package store
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/staernid/gamux/domain"
 )
+
+type httpClientContextKey struct{}
+
+// WithHTTPClient injects an HTTP client into the context for store & artwork requests.
+func WithHTTPClient(ctx context.Context, client *http.Client) context.Context {
+	return context.WithValue(ctx, httpClientContextKey{}, client)
+}
+
+// httpClientFromContext returns the context-injected HTTP client if present, or fallback.
+func httpClientFromContext(ctx context.Context, fallback *http.Client) *http.Client {
+	if ctx != nil {
+		if client, ok := ctx.Value(httpClientContextKey{}).(*http.Client); ok && client != nil {
+			return client
+		}
+	}
+	if fallback != nil {
+		return fallback
+	}
+	return http.DefaultClient
+}
 
 // SearchResult represents a game candidate discovered via a store search query.
 type SearchResult struct {

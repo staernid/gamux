@@ -16,24 +16,6 @@ const (
 	StoreCustom     = "Custom"
 )
 
-// Operating Mode Constants
-const (
-	ModePortable   = "portable"
-	ModeLoader     = "loader"
-	ModeNone       = "none"
-	ModeNative     = "native"
-	ModeStandalone = "standalone"
-)
-
-// Runner constants
-const (
-	RunnerAuto   = "auto"
-	RunnerUMU    = "umu"
-	RunnerWine   = "wine"
-	RunnerProton = "proton"
-	RunnerLinux  = "linux"
-)
-
 // GameSource represents how and where the game is installed and run.
 type GameSource = string
 
@@ -46,15 +28,6 @@ const (
 	SourceCustom     GameSource = StoreCustom
 )
 
-// Canonical asset types
-const (
-	AssetCover  = "cover"
-	AssetBanner = "banner"
-	AssetHero   = "hero"
-	AssetLogo   = "logo"
-	AssetIcon   = "icon"
-)
-
 // LaunchCandidate represents an executable or configured launch target in a game directory.
 type LaunchCandidate struct {
 	Name        string `json:"name"`
@@ -62,232 +35,6 @@ type LaunchCandidate struct {
 	Arguments   string `json:"arguments,omitempty"`
 	Description string `json:"description,omitempty"`
 }
-
-// NewsItem represents a store patch note or announcement.
-type NewsItem struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	URL       string `json:"url"`
-	Author    string `json:"author,omitempty"`
-	Contents  string `json:"contents"`
-	FeedLabel string `json:"feedlabel,omitempty"`
-	Date      int64  `json:"date"`
-	FeedName  string `json:"feedname,omitempty"`
-	AppID     uint32 `json:"appid,omitempty"`
-}
-
-// AchievementItem represents a game achievement with metadata, unlock status, and rarity.
-type AchievementItem struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Description   string  `json:"description"`
-	IconURL       string  `json:"icon_url"`
-	IconGrayURL   string  `json:"icon_gray_url"`
-	Hidden        bool    `json:"hidden"`
-	Unlocked      bool    `json:"unlocked"`
-	UnlockTime    int64   `json:"unlock_time,omitempty"`
-	GlobalPercent float64 `json:"global_percent,omitempty"`
-	Rarity        string  `json:"rarity,omitempty"` // "ultra_rare", "rare", "uncommon", "common"
-}
-
-// ComputeRarityTier classifies an achievement unlock percentage into standard rarity tiers.
-func ComputeRarityTier(percent float64) string {
-	if percent <= 0 {
-		return ""
-	}
-	if percent < 5.0 {
-		return "ultra_rare"
-	}
-	if percent < 15.0 {
-		return "rare"
-	}
-	if percent < 40.0 {
-		return "uncommon"
-	}
-	return "common"
-}
-
-// SteamProfile represents resolved public Steam profile data for persona configuration.
-type SteamProfile struct {
-	SteamID     string `json:"steam_id"`
-	PersonaName string `json:"persona_name"`
-	AvatarURL   string `json:"avatar_url"`
-	CountryCode string `json:"country_code,omitempty"`
-	ProfileURL  string `json:"profile_url,omitempty"`
-}
-
-// VersionStatus encapsulates update verification metrics and patch freshness.
-type VersionStatus struct {
-	IsUpToDate       bool   `json:"is_up_to_date"`
-	Checked          bool   `json:"checked"`
-	CurrentBuildID   string `json:"current_build_id,omitempty"`
-	LatestBuildID    string `json:"latest_build_id,omitempty"`
-	RemoteManifestID string `json:"remote_manifest_id,omitempty"`
-	LatestPatchDate  int64  `json:"latest_patch_date,omitempty"`
-	LatestPatchTitle string `json:"latest_patch_title,omitempty"`
-	Message          string `json:"message,omitempty"`
-}
-
-// DLCItem represents a structured DLC entry associated with a game.
-type DLCItem struct {
-	AppID string `json:"app_id"`
-	Name  string `json:"name"`
-}
-
-// SteamBranch represents an official release or beta content branch for a Steam game.
-type SteamBranch struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	BuildID     string `json:"build_id,omitempty"`
-	TimeUpdated int64  `json:"time_updated,omitempty"`
-	PwdRequired bool   `json:"pwd_required,omitempty"`
-}
-
-// ArtworkOption represents a selectable artwork asset candidate discovered from a metadata provider.
-type ArtworkOption struct {
-	ID       string `json:"id"`
-	Provider string `json:"provider"` // "steam", "steamgriddb", "gog", "custom"
-	Type     string `json:"type"`     // "cover", "banner", "hero", "logo", "icon"
-	URL      string `json:"url"`
-	ThumbURL string `json:"thumb_url"`
-	Width    int    `json:"width,omitempty"`
-	Height   int    `json:"height,omitempty"`
-	Style    string `json:"style,omitempty"` // "official", "alternate", "blurred", "material", "no_logo"
-	Score    int    `json:"score,omitempty"`
-	Author   string `json:"author,omitempty"`
-}
-
-// ArtworkQuery encapsulates structured criteria for resolving artwork candidates.
-type ArtworkQuery struct {
-	GameDir    string `json:"game_dir,omitempty"`
-	Title      string `json:"title,omitempty"`
-	SteamAppID uint32 `json:"steam_app_id,omitempty"`
-	GOGID      string `json:"gog_id,omitempty"`
-	SGDBID     string `json:"sgdb_id,omitempty"`
-	AssetType  string `json:"asset_type"` // "cover", "banner", "hero", "logo", "icon"
-}
-
-// ExternalIDs tracks cross-platform and database identifiers for a game.
-type ExternalIDs struct {
-	SteamAppID uint32 `json:"steam_appid,omitempty"`
-	GOGID      string `json:"gog_id,omitempty"`
-	EpicApp    string `json:"epic_app,omitempty"`
-	SGDBID     string `json:"sgdb_id,omitempty"`
-	RAWGID     string `json:"rawg_id,omitempty"`
-	IGDBID     string `json:"igdb_id,omitempty"`
-}
-
-// DepotSummary encapsulates metadata and disk installation state for a single Steam content depot.
-type DepotSummary struct {
-	DepotID         uint32 `json:"depot_id"`
-	Name            string `json:"name"`
-	Category        string `json:"category"`                   // "common", "windows", "linux", "macos", "soundtrack"
-	ContentCategory string `json:"content_category,omitempty"` // "core", "locale:<language>", "soundtrack", "optional_hd", "dlc"
-	Language        string `json:"language,omitempty"`         // e.g. "french", "german", "english"
-	Installed       bool   `json:"installed"`
-	Size            uint64 `json:"size"`
-	DownloadSize    uint64 `json:"download_size,omitempty"`
-	FileCount       int    `json:"file_count"`
-	ManifestID      uint64 `json:"manifest_id"`
-	OSArch          string `json:"osarch,omitempty"`
-	DLCAppID        uint32 `json:"dlc_app_id,omitempty"`
-	IsDLC           bool   `json:"is_dlc,omitempty"`
-	DLCName         string `json:"dlc_name,omitempty"`
-}
-
-// ManifestStatus holds depot manifest and file integrity state.
-type ManifestStatus struct {
-	ManifestID        string   `json:"manifest_id,omitempty"`
-	BuildID           string   `json:"build_id,omitempty"`
-	RemoteManifestID  string   `json:"remote_manifest_id,omitempty"`
-	OfficialFileCount int      `json:"official_file_count"`
-	ModifiedFiles     []string `json:"modified_files,omitempty"`
-	MissingFiles      []string `json:"missing_files,omitempty"`
-	UntrackedFiles    []string `json:"untracked_files,omitempty"`
-	RedistModified    []string `json:"redist_modified,omitempty"`
-	RedistMissing     []string `json:"redist_missing,omitempty"`
-	HasUpdate         bool     `json:"has_update"`
-}
-
-// StoreMetadata holds store-sourced remote metadata (news, patch notes, synopsis, credits).
-type StoreMetadata struct {
-	RecentPatchNote string     `json:"recent_patch_note,omitempty"`
-	NewsItems       []NewsItem `json:"news_items,omitempty"`
-	Summary         string     `json:"summary,omitempty"`
-	ReleaseDate     string     `json:"release_date,omitempty"`
-	Developers      []string   `json:"developers,omitempty"`
-	Publishers      []string   `json:"publishers,omitempty"`
-	Genres          []string   `json:"genres,omitempty"`
-}
-
-// AssetLocation encapsulates paths and URLs for a specific graphical asset.
-type AssetLocation struct {
-	RemoteURL string `json:"remote_url,omitempty"`
-	LocalPath string `json:"local_path,omitempty"`
-	LocalURL  string `json:"local_url,omitempty"`
-	CustomURL string `json:"custom_url,omitempty"`
-}
-
-// GameArtwork stores remote URLs and local file paths for graphical assets.
-type GameArtwork struct {
-	CoverURL        string `json:"cover_url,omitempty"`
-	BannerURL       string `json:"banner_url,omitempty"`
-	HeroURL         string `json:"hero_url,omitempty"`
-	LogoURL         string `json:"logo_url,omitempty"`
-	IconURL         string `json:"icon_url,omitempty"`
-	LocalCover      string `json:"local_cover,omitempty"`
-	LocalBanner     string `json:"local_banner,omitempty"`
-	LocalHero       string `json:"local_hero,omitempty"`
-	LocalLogo       string `json:"local_logo,omitempty"`
-	LocalIcon       string `json:"local_icon,omitempty"`
-	LocalCoverURL   string `json:"local_cover_url,omitempty"`
-	LocalBannerURL  string `json:"local_banner_url,omitempty"`
-	LocalHeroURL    string `json:"local_hero_url,omitempty"`
-	LocalLogoURL    string `json:"local_logo_url,omitempty"`
-	CustomCoverURL  string `json:"custom_cover_url,omitempty"`
-	CustomBannerURL string `json:"custom_banner_url,omitempty"`
-	CustomHeroURL   string `json:"custom_hero_url,omitempty"`
-	CustomLogoURL   string `json:"custom_logo_url,omitempty"`
-	CustomIconURL   string `json:"custom_icon_url,omitempty"`
-	LockedArtwork   bool   `json:"locked_artwork,omitempty"`
-}
-
-// ModTopology defines the detected game engine mod layout and active mod directory.
-type ModTopology struct {
-	Engine           string   `json:"engine"`                     // "unity", "unreal", "generic"
-	ModDir           string   `json:"mod_dir"`                    // Relative path from GameDir (e.g. "BepInEx/plugins", "Content/Paks/~mods", "mods")
-	AbsoluteModDir   string   `json:"absolute_mod_dir,omitempty"` // Absolute path on disk
-	Detected         bool     `json:"detected"`
-	SupportedFormats []string `json:"supported_formats,omitempty"` // e.g. [".dll"], [".pak"]
-}
-
-// InstalledMod represents an installed game mod or workshop item on disk.
-type InstalledMod struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	WorkshopID        uint64   `json:"workshop_id,omitempty"`
-	Enabled           bool     `json:"enabled"`
-	Path              string   `json:"path"`
-	RelativePath      string   `json:"relative_path"`
-	TimeUpdated       int64    `json:"time_updated,omitempty"`
-	LatestTimeUpdated int64    `json:"latest_time_updated,omitempty"`
-	HasUpdate         bool     `json:"has_update"`
-	Description       string   `json:"description,omitempty"`
-	PreviewURL        string   `json:"preview_url,omitempty"`
-	Size              int64    `json:"size"`
-	Files             []string `json:"files,omitempty"`
-}
-
-// GameModStatus encapsulates the mod topology, installed mods list, and update status for a game.
-type GameModStatus struct {
-	Topology      ModTopology    `json:"topology"`
-	Mods          []InstalledMod `json:"mods"`
-	OutdatedCount int            `json:"outdated_count"`
-}
-
-// ---------------------------------------------------------------------------
-// 1. Dedicated Model: GameRecord (Static Identity & On-Disk Inventory)
-// ---------------------------------------------------------------------------
 
 // GameRecord captures the immutable on-disk identity, directory layout, and inventory metrics of an installed game.
 // All fields reflect physical on-disk baseline data discovered via detector, ACF manifests, and depot scanners.
@@ -324,283 +71,6 @@ type GameRecord struct {
 	OutdatedModsCount  int               `json:"outdated_mods_count,omitempty"`
 }
 
-// ---------------------------------------------------------------------------
-// 2. Dedicated Model: LaunchProfile (Persistent User Configuration)
-// ---------------------------------------------------------------------------
-
-// LaunchProfile defines execution overrides and runtime environment settings for a game,
-// persisted atomically to <gameDir>/steam_settings/launch_profile.json.
-// Fields in LaunchProfile take precedence over detected defaults in GameRecord.
-type LaunchProfile struct {
-	GameDir         string            `json:"game_dir"`
-	AppID           string            `json:"app_id,omitempty"`
-	Name            string            `json:"name,omitempty"`
-	Platform        string            `json:"platform,omitempty"` // "linux", "win64", "win32"
-	ExePath         string            `json:"exe_path"`
-	ExeArgs         string            `json:"exe_args,omitempty"`
-	OperatingMode   string            `json:"operating_mode,omitempty"` // "standalone" | "portable" | "loader" | "native" | "none"
-	Runner          string            `json:"runner,omitempty"`         // "umu", "wine", "proton", "linux", "auto"
-	WinePrefix      string            `json:"wine_prefix,omitempty"`
-	ProtonPath      string            `json:"proton_path,omitempty"`
-	Language        string            `json:"language,omitempty"`
-	MangoHud        *bool             `json:"mangohud,omitempty"`
-	Gamescope       *bool             `json:"gamescope,omitempty"`
-	GamescopeWidth  int               `json:"gamescope_width,omitempty"`
-	GamescopeHeight int               `json:"gamescope_height,omitempty"`
-	GamescopeFPS    int               `json:"gamescope_fps,omitempty"`
-	DisableOverlay  *bool             `json:"disable_overlay,omitempty"`
-	OfflineMode     *bool             `json:"offline_mode,omitempty"`
-	DllOverrides    string            `json:"dll_overrides,omitempty"` // Custom Wine DLL overrides string, e.g. "d3d11=n,b;dxgi=n,b"
-	InhibitSleep    *bool             `json:"inhibit_sleep,omitempty"`
-	PreferSDL       *bool             `json:"prefer_sdl,omitempty"`
-	EnableWayland   *bool             `json:"enable_wayland,omitempty"`
-	CustomEnv       map[string]string `json:"custom_env,omitempty"`
-	WorkingDir      string            `json:"working_dir,omitempty"`
-	ProfileID       string            `json:"profile_id,omitempty"`
-	ForceEmulation  *bool             `json:"force_emulation,omitempty"`
-
-	// Store & Metadata bindings
-	Store            string `json:"store,omitempty"`
-	StoreAppID       string `json:"store_app_id,omitempty"`
-	Branch           string `json:"branch,omitempty"`
-	BranchPassword   string `json:"branch_password,omitempty"`
-	SourceOverride   string `json:"source_override,omitempty"`
-	MetadataProvider string `json:"metadata_provider,omitempty"`
-	MetadataID       string `json:"metadata_id,omitempty"`
-	GOGID            string `json:"gog_id,omitempty"`
-	SGDBID           string `json:"sgdb_id,omitempty"`
-	CustomCoverURL   string `json:"custom_cover_url,omitempty"`
-	CustomBannerURL  string `json:"custom_banner_url,omitempty"`
-	CustomHeroURL    string `json:"custom_hero_url,omitempty"`
-	CustomLogoURL    string `json:"custom_logo_url,omitempty"`
-	CustomIconURL    string `json:"custom_icon_url,omitempty"`
-	LockedArtwork    bool   `json:"locked_artwork,omitempty"`
-	InstalledAt      int64  `json:"installed_at,omitempty"`
-	PlaytimeSeconds  int64  `json:"playtime_seconds,omitempty"`
-	LastPlayed       int64  `json:"last_played,omitempty"`
-}
-
-// MergeFrom copies non-zero fields from other into p if they are not already set in p.
-// Environment variables in CustomEnv are merged without overwriting existing keys.
-func (p *LaunchProfile) MergeFrom(other *LaunchProfile) {
-	if p == nil || other == nil {
-		return
-	}
-	if p.GameDir == "" {
-		p.GameDir = other.GameDir
-	}
-	if p.Name == "" {
-		p.Name = other.Name
-	}
-	if p.AppID == "" {
-		p.AppID = other.AppID
-	}
-	if p.Platform == "" {
-		p.Platform = other.Platform
-	}
-	if p.ExePath == "" {
-		p.ExePath = other.ExePath
-	}
-	if p.ExeArgs == "" {
-		p.ExeArgs = other.ExeArgs
-	}
-	if p.OperatingMode == "" {
-		p.OperatingMode = other.OperatingMode
-	}
-	if p.Runner == "" {
-		p.Runner = other.Runner
-	}
-	if p.WinePrefix == "" {
-		p.WinePrefix = other.WinePrefix
-	}
-	if p.ProtonPath == "" {
-		p.ProtonPath = other.ProtonPath
-	}
-	if p.Language == "" {
-		p.Language = other.Language
-	}
-	if p.MangoHud == nil && other.MangoHud != nil {
-		p.MangoHud = other.MangoHud
-	}
-	if p.Gamescope == nil && other.Gamescope != nil {
-		p.Gamescope = other.Gamescope
-	}
-	if p.GamescopeWidth <= 0 && other.GamescopeWidth > 0 {
-		p.GamescopeWidth = other.GamescopeWidth
-	}
-	if p.GamescopeHeight <= 0 && other.GamescopeHeight > 0 {
-		p.GamescopeHeight = other.GamescopeHeight
-	}
-	if p.GamescopeFPS <= 0 && other.GamescopeFPS > 0 {
-		p.GamescopeFPS = other.GamescopeFPS
-	}
-	if p.DisableOverlay == nil && other.DisableOverlay != nil {
-		p.DisableOverlay = other.DisableOverlay
-	}
-	if p.OfflineMode == nil && other.OfflineMode != nil {
-		p.OfflineMode = other.OfflineMode
-	}
-	if p.DllOverrides == "" {
-		p.DllOverrides = other.DllOverrides
-	}
-	if p.InhibitSleep == nil && other.InhibitSleep != nil {
-		p.InhibitSleep = other.InhibitSleep
-	}
-	if p.PreferSDL == nil && other.PreferSDL != nil {
-		p.PreferSDL = other.PreferSDL
-	}
-	if p.EnableWayland == nil && other.EnableWayland != nil {
-		p.EnableWayland = other.EnableWayland
-	}
-	if p.WorkingDir == "" {
-		p.WorkingDir = other.WorkingDir
-	}
-	if p.ProfileID == "" {
-		p.ProfileID = other.ProfileID
-	}
-	if p.ForceEmulation == nil && other.ForceEmulation != nil {
-		p.ForceEmulation = other.ForceEmulation
-	}
-	if p.SourceOverride == "" {
-		p.SourceOverride = other.SourceOverride
-	}
-	if len(other.CustomEnv) > 0 {
-		if p.CustomEnv == nil {
-			p.CustomEnv = make(map[string]string)
-		}
-		for k, v := range other.CustomEnv {
-			if _, exists := p.CustomEnv[k]; !exists {
-				p.CustomEnv[k] = v
-			}
-		}
-	}
-	p.MergeMetadataAndStatsFrom(other)
-}
-
-// MergeMetadataAndStatsFrom preserves on-disk statistics and metadata/artwork bindings from other
-// into p if they are not already set in p. It does not overwrite execution or runner configuration.
-func (p *LaunchProfile) MergeMetadataAndStatsFrom(other *LaunchProfile) {
-	if p == nil || other == nil {
-		return
-	}
-	if p.InstalledAt <= 0 && other.InstalledAt > 0 {
-		p.InstalledAt = other.InstalledAt
-	}
-	if p.PlaytimeSeconds <= 0 && other.PlaytimeSeconds > 0 {
-		p.PlaytimeSeconds = other.PlaytimeSeconds
-	}
-	if p.LastPlayed <= 0 && other.LastPlayed > 0 {
-		p.LastPlayed = other.LastPlayed
-	}
-	if p.Store == "" {
-		p.Store = other.Store
-	}
-	if p.StoreAppID == "" {
-		p.StoreAppID = other.StoreAppID
-	}
-	if p.MetadataProvider == "" {
-		p.MetadataProvider = other.MetadataProvider
-	}
-	if p.MetadataID == "" {
-		p.MetadataID = other.MetadataID
-	}
-	if p.GOGID == "" {
-		p.GOGID = other.GOGID
-	}
-	if p.SGDBID == "" {
-		p.SGDBID = other.SGDBID
-	}
-	if p.CustomCoverURL == "" {
-		p.CustomCoverURL = other.CustomCoverURL
-	}
-	if p.CustomBannerURL == "" {
-		p.CustomBannerURL = other.CustomBannerURL
-	}
-	if p.CustomHeroURL == "" {
-		p.CustomHeroURL = other.CustomHeroURL
-	}
-	if p.CustomLogoURL == "" {
-		p.CustomLogoURL = other.CustomLogoURL
-	}
-	if p.CustomIconURL == "" {
-		p.CustomIconURL = other.CustomIconURL
-	}
-	if !p.LockedArtwork && other.LockedArtwork {
-		p.LockedArtwork = true
-	}
-	if p.Branch == "" {
-		p.Branch = other.Branch
-	}
-	if p.BranchPassword == "" {
-		p.BranchPassword = other.BranchPassword
-	}
-}
-
-// Clone returns a deep copy of the LaunchProfile.
-func (p *LaunchProfile) Clone() *LaunchProfile {
-	if p == nil {
-		return nil
-	}
-	cp := *p
-	if p.CustomEnv != nil {
-		cp.CustomEnv = make(map[string]string, len(p.CustomEnv))
-		for k, v := range p.CustomEnv {
-			cp.CustomEnv[k] = v
-		}
-	}
-	return &cp
-}
-
-// Clone returns a deep copy of the Game aggregate.
-func (g *Game) Clone() *Game {
-	if g == nil {
-		return nil
-	}
-	cp := *g
-	if g.LaunchProfile != nil {
-		cp.LaunchProfile = g.LaunchProfile.Clone()
-	}
-	if g.VersionStatus != nil {
-		vs := *g.VersionStatus
-		cp.VersionStatus = &vs
-	}
-	if g.LaunchCandidates != nil {
-		cp.LaunchCandidates = append([]LaunchCandidate(nil), g.LaunchCandidates...)
-	}
-	if g.Depots != nil {
-		cp.Depots = append([]DepotSummary(nil), g.Depots...)
-	}
-	if g.AvailablePlatforms != nil {
-		cp.AvailablePlatforms = append([]string(nil), g.AvailablePlatforms...)
-	}
-	if g.SupportedLanguages != nil {
-		cp.SupportedLanguages = append([]string(nil), g.SupportedLanguages...)
-	}
-	if g.OriginalBackups != nil {
-		cp.OriginalBackups = append([]string(nil), g.OriginalBackups...)
-	}
-	if g.SettingsDirs != nil {
-		cp.SettingsDirs = append([]string(nil), g.SettingsDirs...)
-	}
-	if g.ModTopology.SupportedFormats != nil {
-		cp.ModTopology.SupportedFormats = append([]string(nil), g.ModTopology.SupportedFormats...)
-	}
-	if g.Mods != nil {
-		cp.Mods = make([]InstalledMod, len(g.Mods))
-		for i, m := range g.Mods {
-			cp.Mods[i] = m
-			if m.Files != nil {
-				cp.Mods[i].Files = append([]string(nil), m.Files...)
-			}
-		}
-	}
-	return &cp
-}
-
-// ---------------------------------------------------------------------------
-// 3. Dedicated Model: ReadinessStatus (Computed Health & Integration State)
-// ---------------------------------------------------------------------------
-
 // ReadinessStatus holds computed operational flags derived from inspection data and configurations.
 type ReadinessStatus struct {
 	State              string   `json:"state"` // "Original", "Loader-Configured", "Portable-Patched"
@@ -616,10 +86,6 @@ type ReadinessStatus struct {
 	SteamAppIDTxtFound bool     `json:"steam_appid_txt_found"`
 	CurrentLanguage    string   `json:"current_language,omitempty"`
 }
-
-// ---------------------------------------------------------------------------
-// Unified Domain Aggregate: Game
-// ---------------------------------------------------------------------------
 
 // Game is the canonical entity representing a managed game installation.
 // It composes the static on-disk record, user launch configuration, computed readiness,
@@ -674,6 +140,52 @@ func NewGame(name, gameDir, appID, platform string) *Game {
 			Genres:     make([]string, 0),
 		},
 	}
+}
+
+// Clone returns a deep copy of the Game aggregate.
+func (g *Game) Clone() *Game {
+	if g == nil {
+		return nil
+	}
+	cp := *g
+	if g.LaunchProfile != nil {
+		cp.LaunchProfile = g.LaunchProfile.Clone()
+	}
+	if g.VersionStatus != nil {
+		vs := *g.VersionStatus
+		cp.VersionStatus = &vs
+	}
+	if g.LaunchCandidates != nil {
+		cp.LaunchCandidates = append([]LaunchCandidate(nil), g.LaunchCandidates...)
+	}
+	if g.Depots != nil {
+		cp.Depots = append([]DepotSummary(nil), g.Depots...)
+	}
+	if g.AvailablePlatforms != nil {
+		cp.AvailablePlatforms = append([]string(nil), g.AvailablePlatforms...)
+	}
+	if g.SupportedLanguages != nil {
+		cp.SupportedLanguages = append([]string(nil), g.SupportedLanguages...)
+	}
+	if g.OriginalBackups != nil {
+		cp.OriginalBackups = append([]string(nil), g.OriginalBackups...)
+	}
+	if g.SettingsDirs != nil {
+		cp.SettingsDirs = append([]string(nil), g.SettingsDirs...)
+	}
+	if g.ModTopology.SupportedFormats != nil {
+		cp.ModTopology.SupportedFormats = append([]string(nil), g.ModTopology.SupportedFormats...)
+	}
+	if g.Mods != nil {
+		cp.Mods = make([]InstalledMod, len(g.Mods))
+		for i, m := range g.Mods {
+			cp.Mods[i] = m
+			if m.Files != nil {
+				cp.Mods[i].Files = append([]string(nil), m.Files...)
+			}
+		}
+	}
+	return &cp
 }
 
 // ApplyProfile synchronizes custom user profile overrides, metadata bindings, external IDs,
@@ -822,23 +334,6 @@ func (g *Game) CandidateExes() []string {
 	return exes
 }
 
-// NormalizeOperatingMode normalizes alias strings (e.g. "injected", "standalone", "drm-free") to canonical operating modes.
-func NormalizeOperatingMode(mode string) string {
-	m := strings.ToLower(strings.TrimSpace(mode))
-	switch m {
-	case "portable", "injected", "patch", "patched", "portable-patched":
-		return ModePortable
-	case "loader", "loader-configured":
-		return ModeLoader
-	case "none", "standalone", "clean", "drm-free":
-		return ModeNone
-	case "native":
-		return ModeNative
-	default:
-		return m
-	}
-}
-
 // EffectiveOperatingMode returns the active operating mode override from the profile or empty string if unset.
 func (g *Game) EffectiveOperatingMode() string {
 	if g.LaunchProfile != nil && g.LaunchProfile.OperatingMode != "" {
@@ -976,116 +471,6 @@ func (g *Game) RecomputeState() {
 	g.IsInstalled = g.EffectiveExePath() != "" || g.FileCount > 0
 	g.IsStub = g.GameDir != "" && !g.IsInstalled
 	g.IsReady = g.IsInstalled && (g.IsPatched || g.EffectiveExePath() != "")
-}
-
-// GetAsset returns the location information for a specific asset type.
-func (g *Game) GetAsset(assetType string) AssetLocation {
-	switch strings.ToLower(assetType) {
-	case AssetCover:
-		return AssetLocation{
-			RemoteURL: g.CoverURL,
-			LocalPath: g.LocalCover,
-			LocalURL:  g.LocalCoverURL,
-			CustomURL: g.CustomCoverURL,
-		}
-	case AssetBanner:
-		return AssetLocation{
-			RemoteURL: g.BannerURL,
-			LocalPath: g.LocalBanner,
-			LocalURL:  g.LocalBannerURL,
-			CustomURL: g.CustomBannerURL,
-		}
-	case AssetHero:
-		return AssetLocation{
-			RemoteURL: g.HeroURL,
-			LocalPath: g.LocalHero,
-			LocalURL:  g.LocalHeroURL,
-			CustomURL: g.CustomHeroURL,
-		}
-	case AssetLogo:
-		return AssetLocation{
-			RemoteURL: g.LogoURL,
-			LocalPath: g.LocalLogo,
-			LocalURL:  g.LocalLogoURL,
-			CustomURL: g.CustomLogoURL,
-		}
-	case AssetIcon:
-		return AssetLocation{
-			RemoteURL: g.IconURL,
-			LocalPath: g.LocalIcon,
-			CustomURL: g.CustomIconURL,
-		}
-	default:
-		return AssetLocation{}
-	}
-}
-
-// SetAsset updates the fields corresponding to the specified asset type.
-func (g *Game) SetAsset(assetType string, loc AssetLocation) {
-	switch strings.ToLower(assetType) {
-	case AssetCover:
-		if loc.RemoteURL != "" {
-			g.CoverURL = loc.RemoteURL
-		}
-		if loc.LocalPath != "" {
-			g.LocalCover = loc.LocalPath
-		}
-		if loc.LocalURL != "" {
-			g.LocalCoverURL = loc.LocalURL
-		}
-		if loc.CustomURL != "" {
-			g.CustomCoverURL = loc.CustomURL
-		}
-	case AssetBanner:
-		if loc.RemoteURL != "" {
-			g.BannerURL = loc.RemoteURL
-		}
-		if loc.LocalPath != "" {
-			g.LocalBanner = loc.LocalPath
-		}
-		if loc.LocalURL != "" {
-			g.LocalBannerURL = loc.LocalURL
-		}
-		if loc.CustomURL != "" {
-			g.CustomBannerURL = loc.CustomURL
-		}
-	case AssetHero:
-		if loc.RemoteURL != "" {
-			g.HeroURL = loc.RemoteURL
-		}
-		if loc.LocalPath != "" {
-			g.LocalHero = loc.LocalPath
-		}
-		if loc.LocalURL != "" {
-			g.LocalHeroURL = loc.LocalURL
-		}
-		if loc.CustomURL != "" {
-			g.CustomHeroURL = loc.CustomURL
-		}
-	case AssetLogo:
-		if loc.RemoteURL != "" {
-			g.LogoURL = loc.RemoteURL
-		}
-		if loc.LocalPath != "" {
-			g.LocalLogo = loc.LocalPath
-		}
-		if loc.LocalURL != "" {
-			g.LocalLogoURL = loc.LocalURL
-		}
-		if loc.CustomURL != "" {
-			g.CustomLogoURL = loc.CustomURL
-		}
-	case AssetIcon:
-		if loc.RemoteURL != "" {
-			g.IconURL = loc.RemoteURL
-		}
-		if loc.LocalPath != "" {
-			g.LocalIcon = loc.LocalPath
-		}
-		if loc.CustomURL != "" {
-			g.CustomIconURL = loc.CustomURL
-		}
-	}
 }
 
 // EffectiveMetadataProvider returns the active metadata provider in lowercase (e.g. "steam", "gog", "custom", "standalone").

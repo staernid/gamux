@@ -39,10 +39,67 @@ export function filterLaunchCandidates(candidates = []) {
     }));
 }
 
+const LAUNCH_PROFILE_SNAKE_TO_CAMEL = {
+  game_dir: 'gameDir',
+  exe_path: 'exePath',
+  exe_args: 'exeArgs',
+  app_id: 'appId',
+  operating_mode: 'operatingMode',
+  wine_prefix: 'winePrefix',
+  proton_path: 'protonPath',
+  dll_overrides: 'dllOverrides',
+  mangohud: 'mangoHud',
+  mango_hud: 'mangoHud',
+  disable_overlay: 'disableOverlay',
+  offline_mode: 'offlineMode',
+  custom_env: 'customEnv',
+  source_override: 'sourceOverride',
+  metadata_provider: 'metadataProvider',
+  metadata_id: 'metadataId',
+  store_app_id: 'storeAppId',
+  gog_id: 'gogId',
+  gamescope_width: 'gamescopeWidth',
+  gamescope_height: 'gamescopeHeight',
+  gamescope_fps: 'gamescopeFps',
+  working_dir: 'workingDir',
+  profile_id: 'profileId',
+  force_emulation: 'forceEmulation',
+  playtime_seconds: 'playtimeSeconds',
+  last_played: 'lastPlayed',
+  installed_at: 'installedAt',
+  custom_cover_url: 'customCoverUrl',
+  custom_banner_url: 'customBannerUrl',
+  custom_hero_url: 'customHeroUrl',
+  custom_logo_url: 'customLogoUrl',
+  custom_icon_url: 'customIconUrl',
+  locked_artwork: 'lockedArtwork',
+  branch_password: 'branchPassword',
+  inhibit_sleep: 'inhibitSleep',
+  prefer_sdl: 'preferSdl',
+  enable_wayland: 'enableWayland',
+};
+
+export function normalizeLaunchProfile(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v === undefined) continue;
+    const camel = LAUNCH_PROFILE_SNAKE_TO_CAMEL[k] || k.replace(/_([a-z0-9])/g, (_, ch) => ch.toUpperCase());
+    if ((camel === 'gameDir' || camel === 'exePath' || camel === 'winePrefix' || camel === 'protonPath' || camel === 'workingDir') && typeof v === 'string') {
+      out[camel] = normalizePath(v);
+    } else if (camel === 'customEnv' && v && typeof v === 'object') {
+      out[camel] = { ...v };
+    } else {
+      out[camel] = v;
+    }
+  }
+  return out;
+}
+
 export function getExecutablePath(game, candidates = []) {
   if (!game) return '';
-  const lp = game.launch_profile || game.launchProfile || game.LaunchProfile || null;
-  let rawExe = lp?.exe_path || lp?.exePath || lp?.ExePath || game.exe_path || game.exePath || game.ExePath || '';
+  const lp = normalizeLaunchProfile(game.launch_profile || game.launchProfile || game.LaunchProfile || null);
+  let rawExe = lp?.exePath || game.exe_path || game.exePath || game.ExePath || '';
   if (rawExe && (rawExe.toLowerCase().includes('steamclient_loader') || rawExe.toLowerCase().includes('coldclientloader'))) {
     rawExe = candidates[0]?.executable || '';
   }
@@ -96,7 +153,7 @@ export function normalizeGame(g) {
   const rawCandidates = g.launch_candidates || g.launchCandidates || g.LaunchCandidates || [];
   const launchCandidates = filterLaunchCandidates(rawCandidates);
 
-  const lp = g.launch_profile || g.launchProfile || g.LaunchProfile || null;
+  const lp = normalizeLaunchProfile(g.launch_profile || g.launchProfile || g.LaunchProfile || null);
   const rawExe = getExecutablePath(g, launchCandidates);
 
   const isPatched = Boolean(
@@ -121,16 +178,16 @@ export function normalizeGame(g) {
     gameDir: normalizePath(g.game_dir ?? g.gameDir ?? g.GameDir ?? ''),
     store: g.store || g.Store || 'Steam',
     source: g.source || g.Source || g.store || g.Store || 'Steam',
-    gogId: String(g.gog_id ?? g.gogId ?? g.GOGID ?? lp?.gog_id ?? lp?.gogId ?? ''),
-    metadataProvider: lp?.metadata_provider || lp?.metadataProvider || g.metadata_provider || g.metadataProvider || '',
-    metadataId: String(lp?.metadata_id ?? lp?.metadataId ?? g.metadata_id ?? g.metadataId ?? ''),
+    gogId: String(g.gog_id ?? g.gogId ?? g.GOGID ?? lp?.gogId ?? ''),
+    metadataProvider: lp?.metadataProvider || g.metadata_provider || g.metadataProvider || '',
+    metadataId: String(lp?.metadataId ?? g.metadata_id ?? g.metadataId ?? ''),
     platform: g.platform || g.Platform || 'win64',
     exePath: normalizePath(rawExe),
-    exeArgs: lp?.exe_args || lp?.exeArgs || lp?.ExeArgs || g.exe_args || g.exeArgs || g.ExeArgs || '',
+    exeArgs: lp?.exeArgs || g.exe_args || g.exeArgs || g.ExeArgs || '',
     launchCandidates,
     launchProfile: lp,
-    branch: g.branch || g.Branch || lp?.branch || lp?.Branch || 'public',
-    branchPassword: lp?.branch_password || lp?.branchPassword || '',
+    branch: g.branch || g.Branch || lp?.branch || 'public',
+    branchPassword: lp?.branchPassword || '',
     isInstalled,
     isStub,
     isVirtual,
@@ -146,10 +203,10 @@ export function normalizeGame(g) {
     officialFileCount: Number(g.official_file_count ?? g.officialFileCount ?? g.OfficialFileCount ?? 0),
     dlcCount: Number(g.dlc_count ?? g.dlcCount ?? g.DLCCount ?? 0),
     achievementCount: Number(g.achievement_count ?? g.achievementCount ?? g.AchievementCount ?? 0),
-    operatingMode: lp?.operating_mode || lp?.operatingMode || g.operating_mode || g.operatingMode || '',
-    runner: lp?.runner || lp?.Runner || g.runner || g.Runner || '',
-    protonPath: normalizePath(lp?.proton_path || lp?.protonPath || lp?.ProtonPath || g.proton_path || g.protonPath || g.ProtonPath || ''),
-    winePrefix: normalizePath(lp?.wine_prefix || lp?.winePrefix || lp?.WinePrefix || g.wine_prefix || g.winePrefix || g.WinePrefix || ''),
+    operatingMode: lp?.operatingMode || g.operating_mode || g.operatingMode || '',
+    runner: lp?.runner || g.runner || g.Runner || '',
+    protonPath: normalizePath(lp?.protonPath || g.proton_path || g.protonPath || g.ProtonPath || ''),
+    winePrefix: normalizePath(lp?.winePrefix || g.wine_prefix || g.winePrefix || g.WinePrefix || ''),
     currentLanguage: g.current_language || g.currentLanguage || '',
     supportedLanguages: g.supported_languages || g.supportedLanguages || [],
     modifiedFiles: g.modified_files || g.modifiedFiles || [],
@@ -162,17 +219,23 @@ export function normalizeGame(g) {
     remoteManifestId: g.remote_manifest_id || g.remoteManifestId || '',
     recentPatchNote: g.recent_patch_note || g.recentPatchNote || '',
     newsItems: g.news_items || g.newsItems || [],
-    coverUrl: g.cover_url || g.coverUrl || g.custom_cover_url || g.customCoverUrl || '',
+    coverUrl: g.cover_url || g.coverUrl || g.custom_cover_url || g.customCoverUrl || lp?.customCoverUrl || '',
     localCoverUrl: g.local_cover_url || g.localCoverUrl || g.local_cover || g.localCover || '',
-    heroUrl: g.hero_url || g.heroUrl || g.custom_hero_url || g.customHeroUrl || '',
+    heroUrl: g.hero_url || g.heroUrl || g.custom_hero_url || g.customHeroUrl || lp?.customHeroUrl || '',
     localHeroUrl: g.local_hero_url || g.localHeroUrl || g.local_hero || g.localHero || '',
-    bannerUrl: g.banner_url || g.bannerUrl || g.custom_banner_url || g.customBannerUrl || '',
+    bannerUrl: g.banner_url || g.bannerUrl || g.custom_banner_url || g.customBannerUrl || lp?.customBannerUrl || '',
     localBannerUrl: g.local_banner_url || g.localBannerUrl || g.local_banner || g.localBanner || '',
-    logoUrl: g.logo_url || g.logoUrl || g.custom_logo_url || g.customLogoUrl || '',
+    logoUrl: g.logo_url || g.logoUrl || g.custom_logo_url || g.customLogoUrl || lp?.customLogoUrl || '',
     localLogoUrl: g.local_logo_url || g.localLogoUrl || g.local_logo || g.localLogo || '',
-    installedAt: Number(g.installed_at ?? g.installedAt ?? lp?.installed_at ?? lp?.installedAt ?? 0),
-    playtimeSeconds: Number(g.playtime_seconds ?? g.playtimeSeconds ?? lp?.playtime_seconds ?? lp?.playtimeSeconds ?? 0),
-    lastPlayed: Number(g.last_played ?? g.lastPlayed ?? lp?.last_played ?? lp?.lastPlayed ?? 0),
+    customCoverUrl: g.custom_cover_url || g.customCoverUrl || lp?.customCoverUrl || '',
+    customBannerUrl: g.custom_banner_url || g.customBannerUrl || lp?.customBannerUrl || '',
+    customHeroUrl: g.custom_hero_url || g.customHeroUrl || lp?.customHeroUrl || '',
+    customLogoUrl: g.custom_logo_url || g.customLogoUrl || lp?.customLogoUrl || '',
+    customIconUrl: g.custom_icon_url || g.customIconUrl || lp?.customIconUrl || '',
+    lockedArtwork: Boolean(g.locked_artwork ?? g.lockedArtwork ?? lp?.lockedArtwork ?? false),
+    installedAt: Number(g.installed_at ?? g.installedAt ?? lp?.installedAt ?? 0),
+    playtimeSeconds: Number(g.playtime_seconds ?? g.playtimeSeconds ?? lp?.playtimeSeconds ?? 0),
+    lastPlayed: Number(g.last_played ?? g.lastPlayed ?? lp?.lastPlayed ?? 0),
     summary: g.summary || g.Summary || lp?.summary || '',
     releaseDate: g.release_date || g.releaseDate || '',
     developers: g.developers || g.Developers || [],
@@ -270,14 +333,14 @@ export function getGameSource(game) {
 
 export function getMetadataInfo(game) {
   if (!game) return { provider: 'None', id: '' };
-  const lp = game.launchProfile || null;
-  const provider = (game.metadataProvider || game.metadata_provider || lp?.metadataProvider || lp?.metadata_provider || '').toLowerCase();
+  const lp = normalizeLaunchProfile(game.launchProfile || game.launch_profile || null);
+  const provider = (game.metadataProvider || game.metadata_provider || lp?.metadataProvider || '').toLowerCase();
   if (provider === 'none' || provider === 'standalone' || provider === 'custom') {
     return { provider: 'None', id: '' };
   }
-  const metaId = String(game.metadataId || game.metadata_id || lp?.metadataId || lp?.metadata_id || '');
+  const metaId = String(game.metadataId || game.metadata_id || lp?.metadataId || '');
   const appId = String(game.appId || game.app_id || '');
-  const gogId = String(game.gogId || game.gog_id || lp?.gogId || lp?.gog_id || '');
+  const gogId = String(game.gogId || game.gog_id || lp?.gogId || '');
 
   if (provider === 'steam' || (!provider && isSteamApp(appId))) {
     return { provider: 'Steam', id: metaId || appId };

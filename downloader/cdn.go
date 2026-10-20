@@ -20,6 +20,9 @@ import (
 	"github.com/staernid/gamux/util"
 )
 
+// retryBackoffBase is the base delay between chunk retry rounds (overridable in unit tests).
+var retryBackoffBase = 150 * time.Millisecond
+
 // NewDownloaderHTTPClient returns an http.Client configured with dedicated transport pooling
 // optimized for high-concurrency depot chunk downloads.
 func NewDownloaderHTTPClient() *http.Client {
@@ -223,8 +226,11 @@ func downloadChunk(ctx context.Context, client *http.Client, cdnHosts []string, 
 		}
 
 		if attempt > 0 {
-			jitter := time.Duration(10+int(chunkID[0])%50) * time.Millisecond
-			backoff := time.Duration(150*(1<<attempt))*time.Millisecond + jitter
+			backoff := retryBackoffBase * (1 << attempt)
+			if retryBackoffBase >= 10*time.Millisecond {
+				jitter := time.Duration(10+int(chunkID[0])%50) * time.Millisecond
+				backoff += jitter
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

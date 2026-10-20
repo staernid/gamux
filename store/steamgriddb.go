@@ -108,7 +108,7 @@ func (s *SGDBProvider) doRequest(ctx context.Context, reqURL string, target any)
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Game Manager)")
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, s.httpClient).Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

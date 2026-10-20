@@ -216,7 +216,7 @@
 
   async function handleAddToLibrary() {
     if (!game) return;
-    const lib = $libraryPath || '/home/staernid/Games';
+    const lib = $libraryPath || '~/Games';
     try {
       const stub = await AppAPI.createGameStub(lib, game.appId, game.name, game.store || 'Steam', game.branch || 'public');
       if (stub) {
@@ -291,7 +291,7 @@
       }
 
       let dest = game.gameDir;
-      const configuredLib = ($libraryPaths && $libraryPaths.length > 0) ? $libraryPaths[0] : ($libraryPath || '/home/staernid/Games');
+      const configuredLib = ($libraryPaths && $libraryPaths.length > 0) ? $libraryPaths[0] : ($libraryPath || '~/Games');
       const lib = configuredLib;
 
       // If it's a virtual store title or lacks a directory, register the stub in the library first

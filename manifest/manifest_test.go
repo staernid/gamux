@@ -20,6 +20,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
 	restore := testutil.SilenceLogging()
 	oldClient := DefaultHTTPClient
 	DefaultHTTPClient = &http.Client{
@@ -36,10 +37,14 @@ func TestMain(m *testing.M) {
 	DefaultHTTPClient = oldClient
 	HTTPClient = oldClient
 	restore()
+	restoreEnv()
 	os.Exit(code)
 }
 
 func TestInspectRealFactorio(t *testing.T) {
+	if os.Getenv("TEST_HOST_GAMES") != "1" {
+		t.Skip("skipping host Factorio test (set TEST_HOST_GAMES=1 to run)")
+	}
 	gameDir := "/home/staernid/Games/Factorio"
 	if _, err := os.Stat(gameDir); err != nil {
 		t.Skip("skipping real Factorio test: game directory not found")

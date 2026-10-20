@@ -669,6 +669,9 @@ func TestEngine_GetGameAchievements_GSE(t *testing.T) {
 }
 
 func TestEngine_GetGameAchievements_RealDysmantle(t *testing.T) {
+	if os.Getenv("TEST_HOST_GAMES") != "1" {
+		t.Skip("skipping host Dysmantle test (set TEST_HOST_GAMES=1 to run)")
+	}
 	dysmantleDir := "/home/staernid/Games/DYSMANTLE"
 	if !util.FileExists(dysmantleDir) {
 		t.Skip("Dysmantle directory not present on host")
@@ -1340,12 +1343,61 @@ func TestEngine_LaunchGame_SecondaryProfile(t *testing.T) {
 }
 
 func TestGetAppDepots_RimworldLive(t *testing.T) {
+	if os.Getenv("TEST_LIVE_NETWORK") != "1" {
+		t.Skip("skipping live Rimworld network test (set TEST_LIVE_NETWORK=1 to run)")
+	}
 	eng := New(config.DefaultConfig())
 	depots, err := eng.GetAppDepots(context.Background(), 294100)
 	t.Logf("Rimworld GetAppDepots err: %v, count: %d", err, len(depots))
 	for _, d := range depots {
 		t.Logf("Depot: ID=%d, Name=%q, Cat=%q, ContentCat=%q, IsDLC=%v, DLCAppID=%d",
 			d.DepotID, d.Name, d.Category, d.ContentCategory, d.IsDLC, d.DLCAppID)
+	}
+}
+
+func TestGBEStage_PreservesConfiguredOperatingModeOnUpdate(t *testing.T) {
+	tmpDir := t.TempDir()
+	gameDir := filepath.Join(tmpDir, "LoaderGame")
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gameDir, "game.exe"), []byte("MZ"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gameDir, "steam_api64.dll"), []byte("pristine_steam_dll"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	game := domain.NewGame("LoaderGame", gameDir, "400", "win64")
+	game.LaunchProfile = &domain.LaunchProfile{
+		GameDir:       gameDir,
+		AppID:         "400",
+		Platform:      "win64",
+		OperatingMode: domain.ModeLoader,
+		ExePath:       "game.exe",
+	}
+
+	// Simulate post-update GBEStage where Options.OperatingMode is "" (preserve existing mode)
+	pctx := &pipeline.Context{
+		Options: pipeline.Options{
+			Path:   gameDir,
+			DryRun: false,
+		},
+		Game:   game,
+		Config: config.DefaultConfig(),
+	}
+	stage := &pipeline.GBEStage{}
+	if err := stage.Execute(context.Background(), pctx); err != nil {
+		t.Fatalf("GBEStage.Execute failed: %v", err)
+	}
+
+	if pctx.Game.LaunchProfile.OperatingMode != domain.ModeLoader {
+		t.Errorf("expected OperatingMode to remain %q after update, got %q", domain.ModeLoader, pctx.Game.LaunchProfile.OperatingMode)
+	}
+	// Verify steam_api64.dll was NOT replaced in-place with portable backup
+	backups, _ := filepath.Glob(filepath.Join(gameDir, "*.ORIGINAL"))
+	if len(backups) > 0 {
+		t.Errorf("expected 0 .ORIGINAL backups in loader mode, found %v", backups)
 	}
 }
 

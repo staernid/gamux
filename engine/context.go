@@ -7,11 +7,12 @@ import (
 	"github.com/staernid/gamux/github"
 	"github.com/staernid/gamux/manifest"
 	"github.com/staernid/gamux/steam"
+	"github.com/staernid/gamux/store"
 	"github.com/staernid/gamux/tools"
 )
 
 // WrapContext decorates a context with the shared HTTP client for downstream
-// Steam, GitHub, and Manifest API calls.
+// Steam, GitHub, Manifest, and Store/Artwork API calls.
 func (eng *Engine) WrapContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
@@ -20,6 +21,7 @@ func (eng *Engine) WrapContext(ctx context.Context) context.Context {
 		ctx = steam.WithHTTPClient(ctx, eng.HTTPClient)
 		ctx = github.WithHTTPClient(ctx, eng.HTTPClient)
 		ctx = manifest.WithHTTPClient(ctx, eng.HTTPClient)
+		ctx = store.WithHTTPClient(ctx, eng.HTTPClient)
 	}
 	return ctx
 }

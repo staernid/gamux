@@ -150,11 +150,11 @@ func (s *ManifestStage) Execute(ctx context.Context, pctx *Context) error {
 	}
 
 	// Auto-fetch manifests if missing
-	if pctx.Game.NumericAppID > 0 {
+	if pctx.Game.NumericAppID > 0 && !pctx.Options.DryRun {
 		if entries, readErr := os.ReadDir(manifestsDir); readErr != nil || len(entries) == 0 {
 			slog.Info("No local [Manifests] found, resolving keys and manifests", "appID", pctx.Game.AppID)
 			parsedLua, keyErr := manifest.ResolveKeys(ctx, pctx.Game.NumericAppID, "", "")
-			if keyErr == nil && len(parsedLua.ManifestFiles) > 0 && !pctx.Options.DryRun {
+			if keyErr == nil && len(parsedLua.ManifestFiles) > 0 {
 				_ = os.MkdirAll(manifestsDir, 0755)
 				for fname, fcontent := range parsedLua.ManifestFiles {
 					outPath := filepath.Join(manifestsDir, fname)
@@ -402,7 +402,9 @@ func (s *GBEStage) Execute(ctx context.Context, pctx *Context) error {
 		opMode = pctx.Game.EffectiveOperatingMode()
 	}
 	if opMode == "" {
-		if pctx.Config != nil && pctx.Config.OperatingMode != "" {
+		if pctx.Game.IsPortablePatched() {
+			opMode = domain.ModePortable
+		} else if pctx.Config != nil && pctx.Config.OperatingMode != "" {
 			opMode = pctx.Config.OperatingMode
 		} else {
 			opMode = domain.ModeLoader

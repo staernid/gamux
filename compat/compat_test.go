@@ -11,7 +11,17 @@ import (
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/util"
+	"github.com/staernid/gamux/util/testutil"
 )
+
+func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
+	restoreLogs := testutil.SilenceLogging()
+	code := m.Run()
+	restoreLogs()
+	restoreEnv()
+	os.Exit(code)
+}
 
 func TestEnsurePrefix(t *testing.T) {
 	tmpDir := t.TempDir()

@@ -25,7 +25,7 @@
   let showDlcList = $state(false);
 
   // Available libraries
-  let configuredLibraries = $derived($libraryPaths && $libraryPaths.length > 0 ? $libraryPaths : [$libraryPath || '/home/staernid/Games'].filter(Boolean));
+  let configuredLibraries = $derived($libraryPaths && $libraryPaths.length > 0 ? $libraryPaths : [$libraryPath || '~/Games'].filter(Boolean));
   let selectedLibrary = $state('');
 
   // Sanitized game folder name
@@ -38,7 +38,7 @@
   let targetDir = $derived(
     game?.gameDir && !game.isVirtual
       ? game.gameDir
-      : `${selectedLibrary || configuredLibraries[0] || '/home/staernid/Games'}/${cleanGameName}`
+      : `${selectedLibrary || configuredLibraries[0] || '~/Games'}/${cleanGameName}`
   );
 
   // Preferred language
@@ -94,7 +94,7 @@
   });
 
   onMount(async () => {
-    selectedLibrary = configuredLibraries[0] || '/home/staernid/Games';
+    selectedLibrary = configuredLibraries[0] || '~/Games';
     await fetchDepots();
   });
 
@@ -259,7 +259,7 @@
     }
 
     let finalDir = targetDir;
-    const libRoot = selectedLibrary || configuredLibraries[0] || '/home/staernid/Games';
+    const libRoot = selectedLibrary || configuredLibraries[0] || '~/Games';
 
     // Ensure game stub is registered if virtual or lacking directory
     if (!game?.gameDir || game.isVirtual) {
@@ -332,7 +332,7 @@
         </select>
       {:else}
         <div class="p-2.5 bg-surface-input border border-surface-border rounded-xl font-mono text-2xs text-neutral-300 truncate">
-          {selectedLibrary || configuredLibraries[0] || '/home/staernid/Games'}
+          {selectedLibrary || configuredLibraries[0] || '~/Games'}
         </div>
       {/if}
       <div class="text-3xs text-neutral-400 font-mono truncate px-1">

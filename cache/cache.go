@@ -25,37 +25,114 @@ var (
 	nameMemoryCache map[string]string
 	namesLoaded     bool
 
-	// In-memory thread-safe cache for Steam store AppDetails
-	detailsMu          sync.RWMutex
-	detailsMemoryCache = make(map[string][]byte)
-
 	// In-memory thread-safe cache for inspected game records (Warm Library Cache)
 	gamesMu          sync.RWMutex
 	gamesMemoryCache = make(map[string]CachedGameRecord)
 
-	// In-memory thread-safe cache for Steam news items
-	newsItemsMu          sync.RWMutex
-	newsItemsMemoryCache = make(map[string][]byte)
+	resettableCaches []interface{ reset() }
+)
 
-	// In-memory thread-safe cache for Steam global achievement percentages
-	achPercentagesMu          sync.RWMutex
-	achPercentagesMemoryCache = make(map[string][]byte)
+type ttlCache[K comparable] struct {
+	mu       sync.RWMutex
+	mem      map[K][]byte
+	inMemory bool
+	subdir   string
+	ttl      time.Duration
+	isZero   func(K) bool
+	fileFn   func(K) string
+}
 
-	// In-memory thread-safe cache for Steam version and update statuses
-	versionsMu          sync.RWMutex
-	versionsMemoryCache = make(map[string][]byte)
+func newTTLCache[K comparable](subdir string, ttl time.Duration, inMemory bool, isZero func(K) bool, fileFn func(K) string) *ttlCache[K] {
+	c := &ttlCache[K]{
+		subdir:   subdir,
+		ttl:      ttl,
+		inMemory: inMemory,
+		isZero:   isZero,
+		fileFn:   fileFn,
+	}
+	if inMemory {
+		c.mem = make(map[K][]byte)
+	}
+	resettableCaches = append(resettableCaches, c)
+	return c
+}
 
-	// In-memory thread-safe cache for Steam branches
-	branchesMu          sync.RWMutex
-	branchesMemoryCache = make(map[uint32][]byte)
+func (c *ttlCache[K]) reset() {
+	if !c.inMemory {
+		return
+	}
+	c.mu.Lock()
+	c.mem = make(map[K][]byte)
+	c.mu.Unlock()
+}
 
-	// In-memory thread-safe cache for Steam depots
-	depotsMu          sync.RWMutex
-	depotsMemoryCache = make(map[uint32][]byte)
+func (c *ttlCache[K]) get(key K) ([]byte, bool) {
+	if disableCache.Load() || (c.isZero != nil && c.isZero(key)) {
+		return nil, false
+	}
 
-	// In-memory thread-safe cache for Steam launch options
-	launchMu          sync.RWMutex
-	launchMemoryCache = make(map[uint32][]byte)
+	if c.inMemory {
+		c.mu.RLock()
+		if cached, ok := c.mem[key]; ok && len(cached) > 0 {
+			c.mu.RUnlock()
+			return cached, true
+		}
+		c.mu.RUnlock()
+	}
+
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	path := filepath.Join(dir, c.subdir, c.fileFn(key))
+	if data, ok := readTTLFile(path, c.ttl); ok {
+		if c.inMemory {
+			c.mu.Lock()
+			c.mem[key] = data
+			c.mu.Unlock()
+		}
+		return data, true
+	}
+	return nil, false
+}
+
+func (c *ttlCache[K]) save(key K, data []byte) error {
+	if disableCache.Load() || (c.isZero != nil && c.isZero(key)) || len(data) == 0 {
+		return nil
+	}
+
+	if c.inMemory {
+		c.mu.Lock()
+		c.mem[key] = data
+		c.mu.Unlock()
+	}
+
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	path := filepath.Join(dir, c.subdir, c.fileFn(key))
+	return writeTTLFile(path, data)
+}
+
+var (
+	nonEmptyStr   = func(k string) bool { return k == "" }
+	zeroUint32    = func(k uint32) bool { return k == 0 }
+	jsonKeyFile   = func(k string) string { return fmt.Sprintf("%s.json", k) }
+	uint32KeyFile = func(k uint32) string { return fmt.Sprintf("%d.json", k) }
+
+	detailsCache        = newTTLCache("appdetails", 7*24*time.Hour, true, nonEmptyStr, jsonKeyFile)
+	newsCache           = newTTLCache("news", 24*time.Hour, false, nonEmptyStr, jsonKeyFile)
+	newsItemsCache      = newTTLCache("news", 12*time.Hour, true, nonEmptyStr, func(k string) string { return fmt.Sprintf("%s_items.json", k) })
+	achPercentagesCache = newTTLCache("achievements", 7*24*time.Hour, true, nonEmptyStr, func(k string) string { return fmt.Sprintf("%s_percentages.json", k) })
+	versionsCache       = newTTLCache("versions", 30*time.Minute, true, nonEmptyStr, func(k string) string { return fmt.Sprintf("%s.json", strings.ReplaceAll(k, ":", "_")) })
+	branchesCache       = newTTLCache("branches", 6*time.Hour, true, zeroUint32, uint32KeyFile)
+	depotsCache         = newTTLCache("depots", 6*time.Hour, true, zeroUint32, uint32KeyFile)
+	launchCache         = newTTLCache("launch", 6*time.Hour, true, zeroUint32, uint32KeyFile)
+	steamDepotDBCache   = newTTLCache("steamdepotdb", 24*time.Hour, false, nil, func(_ string) string { return "fallback_depotkeys.json" })
+	manifesthubCache    = newTTLCache("manifesthub", 24*time.Hour, false, nil, func(_ string) string { return "depotkeys.json" })
+	githubReleaseCache  = newTTLCache("github", 1*time.Hour, false, nonEmptyStr, jsonKeyFile)
+	sgdbArtworkCache    = newTTLCache("sgdb", 7*24*time.Hour, false, nonEmptyStr, jsonKeyFile)
 )
 
 // IsDisabled reports whether caching is globally disabled (useful for testing or forced refresh).
@@ -121,33 +198,13 @@ func SetCacheDir(dir string) {
 	namesLoaded = false
 	nameMu.Unlock()
 
-	detailsMu.Lock()
-	detailsMemoryCache = make(map[string][]byte)
-	detailsMu.Unlock()
-
 	gamesMu.Lock()
 	gamesMemoryCache = make(map[string]CachedGameRecord)
 	gamesMu.Unlock()
 
-	newsItemsMu.Lock()
-	newsItemsMemoryCache = make(map[string][]byte)
-	newsItemsMu.Unlock()
-
-	achPercentagesMu.Lock()
-	achPercentagesMemoryCache = make(map[string][]byte)
-	achPercentagesMu.Unlock()
-
-	versionsMu.Lock()
-	versionsMemoryCache = make(map[string][]byte)
-	versionsMu.Unlock()
-
-	branchesMu.Lock()
-	branchesMemoryCache = make(map[uint32][]byte)
-	branchesMu.Unlock()
-
-	launchMu.Lock()
-	launchMemoryCache = make(map[uint32][]byte)
-	launchMu.Unlock()
+	for _, c := range resettableCaches {
+		c.reset()
+	}
 }
 
 func getCacheDir() string {
@@ -299,116 +356,26 @@ func SaveAppName(appID, name string) {
 }
 
 // ==========================================
-// 2. Steam AppDetails Cache (7 Days TTL)
+// 2. Steam & Provider TTL Caches
 // ==========================================
 
 // GetAppDetails retrieves cached Steam store AppDetails JSON if less than 7 days old.
-func GetAppDetails(appID string) ([]byte, bool) {
-	if disableCache.Load() || appID == "" {
-		return nil, false
-	}
-
-	// 1. Fast in-memory cache check
-	detailsMu.RLock()
-	if cached, ok := detailsMemoryCache[appID]; ok && len(cached) > 0 {
-		detailsMu.RUnlock()
-		return cached, true
-	}
-	detailsMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "appdetails", fmt.Sprintf("%s.json", appID))
-	if data, ok := readTTLFile(path, 7*24*time.Hour); ok {
-		detailsMu.Lock()
-		detailsMemoryCache[appID] = data
-		detailsMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetAppDetails(appID string) ([]byte, bool) { return detailsCache.get(appID) }
 
 // SaveAppDetails writes Steam store AppDetails JSON to in-memory and disk cache for 7 days.
-func SaveAppDetails(appID string, data []byte) error {
-	if disableCache.Load() || appID == "" || len(data) == 0 {
-		return nil
-	}
-	detailsMu.Lock()
-	detailsMemoryCache[appID] = data
-	detailsMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	path := filepath.Join(dir, "appdetails", fmt.Sprintf("%s.json", appID))
-	return writeTTLFile(path, data)
-}
-
-// ==========================================
-// 3. Steam News / Patch Notes Cache (12h/24h)
-// ==========================================
+func SaveAppDetails(appID string, data []byte) error { return detailsCache.save(appID, data) }
 
 // GetNews retrieves cached Steam patch notes if less than 24 hours old.
 func GetNews(appID string) (string, bool) {
-	if disableCache.Load() || appID == "" {
-		return "", false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return "", false
-	}
-	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
-	if data, ok := readTTLFile(path, 24*time.Hour); ok {
-		return string(data), true
-	}
-	return "", false
+	data, ok := newsCache.get(appID)
+	return string(data), ok
 }
 
 // SaveNews caches Steam patch notes to disk for 24 hours.
-func SaveNews(appID, news string) {
-	if disableCache.Load() || appID == "" || news == "" {
-		return
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "news", fmt.Sprintf("%s.json", appID))
-	_ = writeTTLFile(path, []byte(news))
-}
+func SaveNews(appID, news string) { _ = newsCache.save(appID, []byte(news)) }
 
 // GetNewsItems retrieves cached Steam patch notes list if less than 12 hours old.
-func GetNewsItems(appID string) ([]byte, bool) {
-	if disableCache.Load() || appID == "" {
-		return nil, false
-	}
-
-	// 1. Fast in-memory cache check
-	newsItemsMu.RLock()
-	if cached, ok := newsItemsMemoryCache[appID]; ok && len(cached) > 0 {
-		newsItemsMu.RUnlock()
-		return cached, true
-	}
-	newsItemsMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
-	if data, ok := readTTLFile(path, 12*time.Hour); ok {
-		newsItemsMu.Lock()
-		newsItemsMemoryCache[appID] = data
-		newsItemsMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetNewsItems(appID string) ([]byte, bool) { return newsItemsCache.get(appID) }
 
 // SaveNewsItems caches Steam patch notes list to in-memory and disk cache for 12 hours.
 func SaveNewsItems(appID string, itemsJSON []byte) {
@@ -418,472 +385,71 @@ func SaveNewsItems(appID string, itemsJSON []byte) {
 
 	// Never downgrade cache: if existing cache has more items and is valid, keep it
 	if existingBytes, ok := GetNewsItems(appID); ok {
-		var existingItems []json.RawMessage
-		var newItems []json.RawMessage
+		var existingItems, newItems []json.RawMessage
 		if json.Unmarshal(existingBytes, &existingItems) == nil && json.Unmarshal(itemsJSON, &newItems) == nil {
 			if len(existingItems) > len(newItems) {
 				return
 			}
 		}
 	}
-
-	// Update in-memory cache
-	newsItemsMu.Lock()
-	newsItemsMemoryCache[appID] = itemsJSON
-	newsItemsMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "news", fmt.Sprintf("%s_items.json", appID))
-	_ = writeTTLFile(path, itemsJSON)
+	_ = newsItemsCache.save(appID, itemsJSON)
 }
 
 // GetAchievementPercentages retrieves cached Steam global achievement percentages if less than 7 days old.
-func GetAchievementPercentages(appID string) ([]byte, bool) {
-	if disableCache.Load() || appID == "" {
-		return nil, false
-	}
-
-	// 1. Fast in-memory cache check
-	achPercentagesMu.RLock()
-	if cached, ok := achPercentagesMemoryCache[appID]; ok && len(cached) > 0 {
-		achPercentagesMu.RUnlock()
-		return cached, true
-	}
-	achPercentagesMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "achievements", fmt.Sprintf("%s_percentages.json", appID))
-	if data, ok := readTTLFile(path, 7*24*time.Hour); ok {
-		achPercentagesMu.Lock()
-		achPercentagesMemoryCache[appID] = data
-		achPercentagesMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetAchievementPercentages(appID string) ([]byte, bool) { return achPercentagesCache.get(appID) }
 
 // SaveAchievementPercentages caches Steam global achievement percentages to in-memory and disk cache for 7 days.
-func SaveAchievementPercentages(appID string, data []byte) {
-	if disableCache.Load() || appID == "" || len(data) == 0 {
-		return
-	}
-
-	achPercentagesMu.Lock()
-	achPercentagesMemoryCache[appID] = data
-	achPercentagesMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "achievements", fmt.Sprintf("%s_percentages.json", appID))
-	_ = writeTTLFile(path, data)
-}
+func SaveAchievementPercentages(appID string, data []byte) { _ = achPercentagesCache.save(appID, data) }
 
 // GetVersionStatus retrieves cached Steam version status if less than 30 minutes old.
-func GetVersionStatus(key string) ([]byte, bool) {
-	if disableCache.Load() || key == "" {
-		return nil, false
-	}
-
-	// 1. Fast in-memory cache check
-	versionsMu.RLock()
-	if cached, ok := versionsMemoryCache[key]; ok && len(cached) > 0 {
-		versionsMu.RUnlock()
-		return cached, true
-	}
-	versionsMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	cleanKey := strings.ReplaceAll(key, ":", "_")
-	path := filepath.Join(dir, "versions", fmt.Sprintf("%s.json", cleanKey))
-	if data, ok := readTTLFile(path, 30*time.Minute); ok {
-		versionsMu.Lock()
-		versionsMemoryCache[key] = data
-		versionsMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetVersionStatus(key string) ([]byte, bool) { return versionsCache.get(key) }
 
 // SaveVersionStatus caches Steam version status to in-memory and disk cache for 30 minutes.
-func SaveVersionStatus(key string, data []byte) {
-	if disableCache.Load() || key == "" || len(data) == 0 {
-		return
-	}
-
-	versionsMu.Lock()
-	versionsMemoryCache[key] = data
-	versionsMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	cleanKey := strings.ReplaceAll(key, ":", "_")
-	path := filepath.Join(dir, "versions", fmt.Sprintf("%s.json", cleanKey))
-	_ = writeTTLFile(path, data)
-}
+func SaveVersionStatus(key string, data []byte) { _ = versionsCache.save(key, data) }
 
 // GetSteamBranches retrieves cached Steam branches JSON if less than 6 hours old.
-func GetSteamBranches(appID uint32) ([]byte, bool) {
-	if disableCache.Load() || appID == 0 {
-		return nil, false
-	}
-
-	// 1. In-memory cache check
-	branchesMu.RLock()
-	if cached, ok := branchesMemoryCache[appID]; ok && len(cached) > 0 {
-		branchesMu.RUnlock()
-		return cached, true
-	}
-	branchesMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "branches", fmt.Sprintf("%d.json", appID))
-	if data, ok := readTTLFile(path, 6*time.Hour); ok {
-		branchesMu.Lock()
-		branchesMemoryCache[appID] = data
-		branchesMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetSteamBranches(appID uint32) ([]byte, bool) { return branchesCache.get(appID) }
 
 // SaveSteamBranches caches Steam branches to in-memory and disk cache for 6 hours.
-func SaveSteamBranches(appID uint32, data []byte) {
-	if disableCache.Load() || appID == 0 || len(data) == 0 {
-		return
-	}
-
-	branchesMu.Lock()
-	branchesMemoryCache[appID] = data
-	branchesMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "branches", fmt.Sprintf("%d.json", appID))
-	_ = writeTTLFile(path, data)
-}
+func SaveSteamBranches(appID uint32, data []byte) { _ = branchesCache.save(appID, data) }
 
 // GetSteamDepots retrieves cached Steam depots metadata JSON if less than 6 hours old.
-func GetSteamDepots(appID uint32) ([]byte, bool) {
-	if disableCache.Load() || appID == 0 {
-		return nil, false
-	}
-
-	// 1. In-memory cache check
-	depotsMu.RLock()
-	if cached, ok := depotsMemoryCache[appID]; ok && len(cached) > 0 {
-		depotsMu.RUnlock()
-		return cached, true
-	}
-	depotsMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "depots", fmt.Sprintf("%d.json", appID))
-	if data, ok := readTTLFile(path, 6*time.Hour); ok {
-		depotsMu.Lock()
-		depotsMemoryCache[appID] = data
-		depotsMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetSteamDepots(appID uint32) ([]byte, bool) { return depotsCache.get(appID) }
 
 // SaveSteamDepots caches Steam depots metadata to in-memory and disk cache for 6 hours.
-func SaveSteamDepots(appID uint32, data []byte) {
-	if disableCache.Load() || appID == 0 || len(data) == 0 {
-		return
-	}
-
-	depotsMu.Lock()
-	depotsMemoryCache[appID] = data
-	depotsMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "depots", fmt.Sprintf("%d.json", appID))
-	_ = writeTTLFile(path, data)
-}
+func SaveSteamDepots(appID uint32, data []byte) { _ = depotsCache.save(appID, data) }
 
 // GetSteamLaunch retrieves cached Steam launch options JSON if less than 6 hours old.
-func GetSteamLaunch(appID uint32) ([]byte, bool) {
-	if disableCache.Load() || appID == 0 {
-		return nil, false
-	}
-
-	// 1. In-memory cache check
-	launchMu.RLock()
-	if cached, ok := launchMemoryCache[appID]; ok && len(cached) > 0 {
-		launchMu.RUnlock()
-		return cached, true
-	}
-	launchMu.RUnlock()
-
-	// 2. Disk cache check
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "launch", fmt.Sprintf("%d.json", appID))
-	if data, ok := readTTLFile(path, 6*time.Hour); ok {
-		launchMu.Lock()
-		launchMemoryCache[appID] = data
-		launchMu.Unlock()
-		return data, true
-	}
-	return nil, false
-}
+func GetSteamLaunch(appID uint32) ([]byte, bool) { return launchCache.get(appID) }
 
 // SaveSteamLaunch caches Steam launch options to in-memory and disk cache for 6 hours.
-func SaveSteamLaunch(appID uint32, data []byte) {
-	if disableCache.Load() || appID == 0 || len(data) == 0 {
-		return
-	}
-
-	launchMu.Lock()
-	launchMemoryCache[appID] = data
-	launchMu.Unlock()
-
-	dir := getCacheDir()
-	if dir == "" {
-		return
-	}
-	path := filepath.Join(dir, "launch", fmt.Sprintf("%d.json", appID))
-	_ = writeTTLFile(path, data)
-}
-
-// ==========================================
-// 4. Hubcap & RevoBD Manifest ZIP Cache (30 Days)
-// ==========================================
-
-// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available and less than 30 days old.
-func GetHubcapZIP(appID uint32) ([]byte, bool) {
-	if disableCache.Load() {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
-	info, err := os.Stat(zipPath)
-	if err != nil || info.Size() == 0 {
-		return nil, false
-	}
-	if time.Since(info.ModTime()) >= 30*24*time.Hour {
-		slog.Debug("Hubcap ZIP cache expired (>30 days), will re-fetch", "appID", appID)
-		return nil, false
-	}
-	data, err := os.ReadFile(zipPath)
-	if err == nil && len(data) > 0 {
-		slog.Info("Using cached Hubcap ZIP archive from disk (0 API requests consumed)", "appID", appID)
-		return data, true
-	}
-	return nil, false
-}
-
-// SaveHubcapZIP writes Hubcap ZIP archive bytes to local disk cache.
-func SaveHubcapZIP(appID uint32, data []byte) error {
-	if disableCache.Load() || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	zipPath := filepath.Join(dir, "hubcap", fmt.Sprintf("%d.zip", appID))
-	slog.Debug("Caching Hubcap ZIP archive to disk", "appID", appID, "path", zipPath)
-	return os.WriteFile(zipPath, data, 0644)
-}
-
-// GetRevoBDZIP retrieves cached RevoBD ZIP archive bytes if available and less than 30 days old.
-func GetRevoBDZIP(appID uint32) ([]byte, bool) {
-	if disableCache.Load() {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	zipPath := filepath.Join(dir, "revobd", fmt.Sprintf("%d.zip", appID))
-	info, err := os.Stat(zipPath)
-	if err != nil || info.Size() == 0 {
-		return nil, false
-	}
-	if time.Since(info.ModTime()) >= 30*24*time.Hour {
-		slog.Debug("RevoBD ZIP cache expired (>30 days), will re-fetch", "appID", appID)
-		return nil, false
-	}
-	data, err := os.ReadFile(zipPath)
-	if err == nil && len(data) > 0 {
-		slog.Info("Using cached RevoBD ZIP archive from disk (0 API requests consumed)", "appID", appID)
-		return data, true
-	}
-	return nil, false
-}
-
-// SaveRevoBDZIP writes RevoBD ZIP archive bytes to local disk cache.
-func SaveRevoBDZIP(appID uint32, data []byte) error {
-	if disableCache.Load() || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	zipPath := filepath.Join(dir, "revobd", fmt.Sprintf("%d.zip", appID))
-	slog.Debug("Caching RevoBD ZIP archive to disk", "appID", appID, "path", zipPath)
-	return os.WriteFile(zipPath, data, 0644)
-}
-
-// ==========================================
-// 5. SteamDepotDB Cache (24h TTL)
-// ==========================================
+func SaveSteamLaunch(appID uint32, data []byte) { _ = launchCache.save(appID, data) }
 
 // GetSteamDepotDB retrieves cached SteamDepotDB fallback keys if less than 24 hours old.
-func GetSteamDepotDB() ([]byte, bool) {
-	if disableCache.Load() {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "steamdepotdb", "fallback_depotkeys.json")
-	return readTTLFile(path, 24*time.Hour)
-}
+func GetSteamDepotDB() ([]byte, bool) { return steamDepotDBCache.get("") }
 
 // SaveSteamDepotDB saves SteamDepotDB fallback keys to disk for 24 hours.
-func SaveSteamDepotDB(data []byte) error {
-	if disableCache.Load() || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	path := filepath.Join(dir, "steamdepotdb", "fallback_depotkeys.json")
-	return writeTTLFile(path, data)
-}
-
-// ==========================================
-// 6. Manifesthub Cache (24h TTL)
-// ==========================================
+func SaveSteamDepotDB(data []byte) error { return steamDepotDBCache.save("", data) }
 
 // GetManifesthubDB retrieves cached GitLab Manifesthub depot keys if less than 24 hours old.
-func GetManifesthubDB() ([]byte, bool) {
-	if disableCache.Load() {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "manifesthub", "depotkeys.json")
-	return readTTLFile(path, 24*time.Hour)
-}
+func GetManifesthubDB() ([]byte, bool) { return manifesthubCache.get("") }
 
 // SaveManifesthubDB saves GitLab Manifesthub depot keys to disk for 24 hours.
-func SaveManifesthubDB(data []byte) error {
-	if disableCache.Load() || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	path := filepath.Join(dir, "manifesthub", "depotkeys.json")
-	return writeTTLFile(path, data)
-}
-
-// ==========================================
-// 7. GitHub Release Cache (1 Hour TTL)
-// ==========================================
+func SaveManifesthubDB(data []byte) error { return manifesthubCache.save("", data) }
 
 // GetGitHubRelease retrieves cached GitHub release metadata if less than 1 hour old.
-func GetGitHubRelease(key string) ([]byte, bool) {
-	if disableCache.Load() || key == "" {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "github", fmt.Sprintf("%s.json", key))
-	return readTTLFile(path, 1*time.Hour)
-}
+func GetGitHubRelease(key string) ([]byte, bool) { return githubReleaseCache.get(key) }
 
 // SaveGitHubRelease caches GitHub release metadata to disk for 1 hour.
-func SaveGitHubRelease(key string, data []byte) error {
-	if disableCache.Load() || key == "" || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	path := filepath.Join(dir, "github", fmt.Sprintf("%s.json", key))
-	return writeTTLFile(path, data)
-}
-
-// ==========================================
-// 8. SteamGridDB Artwork Metadata Cache (7 Days TTL)
-// ==========================================
+func SaveGitHubRelease(key string, data []byte) error { return githubReleaseCache.save(key, data) }
 
 // GetSGDBArtwork retrieves cached SteamGridDB artwork metadata if less than 7 days old.
-func GetSGDBArtwork(lookupKey string) ([]byte, bool) {
-	if disableCache.Load() || lookupKey == "" {
-		return nil, false
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil, false
-	}
-	path := filepath.Join(dir, "sgdb", fmt.Sprintf("%s.json", lookupKey))
-	return readTTLFile(path, 7*24*time.Hour)
-}
+func GetSGDBArtwork(lookupKey string) ([]byte, bool) { return sgdbArtworkCache.get(lookupKey) }
 
 // SaveSGDBArtwork caches SteamGridDB artwork metadata to disk for 7 days.
 func SaveSGDBArtwork(lookupKey string, data []byte) error {
-	if disableCache.Load() || lookupKey == "" || len(data) == 0 {
-		return nil
-	}
-	dir := getCacheDir()
-	if dir == "" {
-		return nil
-	}
-	path := filepath.Join(dir, "sgdb", fmt.Sprintf("%s.json", lookupKey))
-	return writeTTLFile(path, data)
+	return sgdbArtworkCache.save(lookupKey, data)
 }
-
-// ==========================================
-// 9. Multi-Store Metadata Cache (24 Hours TTL)
-// ==========================================
 
 // GetStoreMetadata retrieves cached catalog metadata (e.g. GOG, RAWG) if less than 24 hours old.
 func GetStoreMetadata(storeName, gameID string) ([]byte, bool) {
@@ -914,7 +480,65 @@ func SaveStoreMetadata(storeName, gameID string, data []byte) error {
 }
 
 // ==========================================
-// 10. Warm Library Cache
+// 3. Hubcap & RevoBD Manifest ZIP Cache (30 Days)
+// ==========================================
+
+func getZIPCache(subdir, label string, appID uint32) ([]byte, bool) {
+	if disableCache.Load() {
+		return nil, false
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil, false
+	}
+	zipPath := filepath.Join(dir, subdir, fmt.Sprintf("%d.zip", appID))
+	info, err := os.Stat(zipPath)
+	if err != nil || info.Size() == 0 {
+		return nil, false
+	}
+	if time.Since(info.ModTime()) >= 30*24*time.Hour {
+		slog.Debug(label+" ZIP cache expired (>30 days), will re-fetch", "appID", appID)
+		return nil, false
+	}
+	data, err := os.ReadFile(zipPath)
+	if err == nil && len(data) > 0 {
+		slog.Info("Using cached "+label+" ZIP archive from disk (0 API requests consumed)", "appID", appID)
+		return data, true
+	}
+	return nil, false
+}
+
+func saveZIPCache(subdir, label string, appID uint32, data []byte) error {
+	if disableCache.Load() || len(data) == 0 {
+		return nil
+	}
+	dir := getCacheDir()
+	if dir == "" {
+		return nil
+	}
+	zipPath := filepath.Join(dir, subdir, fmt.Sprintf("%d.zip", appID))
+	slog.Debug("Caching "+label+" ZIP archive to disk", "appID", appID, "path", zipPath)
+	return os.WriteFile(zipPath, data, 0644)
+}
+
+// GetHubcapZIP retrieves cached Hubcap ZIP archive bytes if available and less than 30 days old.
+func GetHubcapZIP(appID uint32) ([]byte, bool) { return getZIPCache("hubcap", "Hubcap", appID) }
+
+// SaveHubcapZIP writes Hubcap ZIP archive bytes to local disk cache.
+func SaveHubcapZIP(appID uint32, data []byte) error {
+	return saveZIPCache("hubcap", "Hubcap", appID, data)
+}
+
+// GetRevoBDZIP retrieves cached RevoBD ZIP archive bytes if available and less than 30 days old.
+func GetRevoBDZIP(appID uint32) ([]byte, bool) { return getZIPCache("revobd", "RevoBD", appID) }
+
+// SaveRevoBDZIP writes RevoBD ZIP archive bytes to local disk cache.
+func SaveRevoBDZIP(appID uint32, data []byte) error {
+	return saveZIPCache("revobd", "RevoBD", appID, data)
+}
+
+// ==========================================
+// 4. Warm Library Cache
 // ==========================================
 
 // CachedGameRecord stores an inspected domain.Game entity validated against sentinel signature and executable stats.
@@ -1043,13 +667,13 @@ func InvalidateGameCache(gameDir string) {
 }
 
 // ==========================================
-// 11. Disk Cache Pruning
+// 5. Disk Cache Pruning
 // ==========================================
 
 // Prune removes expired cache files from all TTL-based subdirectories.
 // For JSON caches using TTLWrapper, entries older than 2× their TTL are removed.
 // For ZIP caches (hubcap, revobd), files older than 2× 30 days are removed.
-// The "games" subdirectory is skipped since it uses mtime-based invalidation.
+// The "games" subdirectory is skipped since it uses sentinel-based invalidation.
 func Prune() (removed int) {
 	dir := getCacheDir()
 	if dir == "" {
@@ -1086,11 +710,7 @@ func Prune() (removed int) {
 	return removed
 }
 
-// isExpiredCacheFile checks whether a cache file has exceeded maxAge.
-// For ZIP files (hubcap, revobd), uses file mtime.
-// For JSON TTLWrapper files, reads the embedded timestamp.
 func isExpiredCacheFile(path, subdir string, maxAge time.Duration) bool {
-	// ZIP archives use file mtime
 	if subdir == "hubcap" || subdir == "revobd" {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -1099,7 +719,6 @@ func isExpiredCacheFile(path, subdir string, maxAge time.Duration) bool {
 		return time.Since(info.ModTime()) >= maxAge
 	}
 
-	// TTLWrapper JSON files: read the embedded timestamp
 	if !strings.HasSuffix(path, ".json") {
 		return false
 	}
@@ -1109,7 +728,6 @@ func isExpiredCacheFile(path, subdir string, maxAge time.Duration) bool {
 	}
 	var wrapper TTLWrapper
 	if err := json.Unmarshal(data, &wrapper); err != nil {
-		// Can't parse → treat as stale
 		return true
 	}
 	if wrapper.Timestamp.IsZero() {

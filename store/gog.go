@@ -86,7 +86,7 @@ func (g *GOGProvider) Search(ctx context.Context, query string) ([]SearchResult,
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gamux/1.0")
 
-	resp, err := g.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, g.httpClient).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query GOG catalog: %w", err)
 	}
@@ -168,7 +168,7 @@ func (g *GOGProvider) fetchCatalogProduct(ctx context.Context, gameID, title, sl
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gamux/1.0")
 
-		resp, err := g.httpClient.Do(req)
+		resp, err := httpClientFromContext(ctx, g.httpClient).Do(req)
 		if err != nil {
 			continue
 		}
@@ -222,7 +222,7 @@ func (g *GOGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadata
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gamux/1.0")
 
-		resp, err := g.httpClient.Do(req)
+		resp, err := httpClientFromContext(ctx, g.httpClient).Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query GOG product: %w", err)
 		}

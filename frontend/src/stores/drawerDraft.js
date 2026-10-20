@@ -2,7 +2,7 @@ import { writable, get } from 'svelte/store';
 import { saveGameProfile, resetGameProfile, rollbackGame, refreshGame, showInspector } from './library.js';
 import { notificationStore } from './notifications.js';
 import { AppAPI } from '../api/app.js';
-import { filterLaunchCandidates, getExecutablePath } from '../utils/game.js';
+import { filterLaunchCandidates, getExecutablePath, normalizeLaunchProfile } from '../utils/game.js';
 import * as envDraft from './drawer/envDraft.js';
 
 // Re-export environment draft helpers for backward compatibility
@@ -132,24 +132,23 @@ export function createInitialDraft(game = null, globalCfg = {}) {
 
   const candidates = filterLaunchCandidates(game.launchCandidates || []);
   const baseExe = getExecutablePath(game, candidates);
-  const lp = game.launchProfile || game.launch_profile || {};
+  const lp = normalizeLaunchProfile(game.launchProfile || game.launch_profile) || {};
 
   const draft = {
     ...baseDraft,
     gameDir: game.gameDir || '',
     name: lp.name || '',
     platform: lp.platform || game.platform || 'win64',
-    appId: lp.app_id || lp.appId || '',
+    appId: lp.appId || '',
     exePath: baseExe,
-    exeArgs: lp.exe_args || lp.exeArgs || '',
+    exeArgs: lp.exeArgs || '',
     branch: game.branch || lp.branch || 'public',
-    branchPassword: game.branchPassword || lp.branch_password || lp.branchPassword || '',
+    branchPassword: game.branchPassword || lp.branchPassword || '',
   };
 
-  // Dynamically map all profile fields from lp to camelCase in draft
-  for (const [rawKey, val] of Object.entries(lp)) {
+  // Dynamically map all profile fields from normalized lp to camelCase in draft
+  for (const [camelKey, val] of Object.entries(lp)) {
     if (val === undefined || val === null) continue;
-    const camelKey = snakeToCamelKey(rawKey);
     if (camelKey === 'customEnv' && val && typeof val === 'object') {
       draft.customEnv = { ...val };
     } else {
@@ -157,25 +156,13 @@ export function createInitialDraft(game = null, globalCfg = {}) {
     }
   }
 
-  // Handle explicit nulls for boolean overrides (mangohud, disable_overlay, offline_mode)
-  if (lp.mangohud !== undefined || lp.mangoHud !== undefined) {
-    draft.mangoHud = lp.mangohud ?? lp.mangoHud;
-  }
-  if (lp.disable_overlay !== undefined || lp.disableOverlay !== undefined) {
-    draft.disableOverlay = lp.disable_overlay ?? lp.disableOverlay;
-  }
-  if (lp.offline_mode !== undefined || lp.offlineMode !== undefined) {
-    draft.offlineMode = lp.offline_mode ?? lp.offlineMode;
-  }
-  if (lp.inhibit_sleep !== undefined || lp.inhibitSleep !== undefined) {
-    draft.inhibitSleep = lp.inhibit_sleep ?? lp.inhibitSleep;
-  }
-  if (lp.prefer_sdl !== undefined || lp.preferSdl !== undefined) {
-    draft.preferSdl = lp.prefer_sdl ?? lp.preferSdl;
-  }
-  if (lp.enable_wayland !== undefined || lp.enableWayland !== undefined) {
-    draft.enableWayland = lp.enable_wayland ?? lp.enableWayland;
-  }
+  // Handle explicit nulls for boolean overrides
+  if (lp.mangoHud !== undefined) draft.mangoHud = lp.mangoHud;
+  if (lp.disableOverlay !== undefined) draft.disableOverlay = lp.disableOverlay;
+  if (lp.offlineMode !== undefined) draft.offlineMode = lp.offlineMode;
+  if (lp.inhibitSleep !== undefined) draft.inhibitSleep = lp.inhibitSleep;
+  if (lp.preferSdl !== undefined) draft.preferSdl = lp.preferSdl;
+  if (lp.enableWayland !== undefined) draft.enableWayland = lp.enableWayland;
 
   if (!draft.exePath && baseExe) {
     draft.exePath = baseExe;
@@ -201,12 +188,12 @@ function createDrawerDraftStore() {
 
     syncIdentity(game) {
       if (!game) return;
-      const lp = game.launchProfile || game.launch_profile || {};
+      const lp = normalizeLaunchProfile(game.launchProfile || game.launch_profile) || {};
       update(state => ({
         ...state,
-        appId: lp.app_id || lp.appId || game.appId || game.app_id || state.appId,
-        metadataProvider: lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider || state.metadataProvider,
-        metadataId: lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id || state.metadataId,
+        appId: lp.appId || game.appId || state.appId,
+        metadataProvider: lp.metadataProvider || game.metadataProvider || state.metadataProvider,
+        metadataId: lp.metadataId || game.metadataId || state.metadataId,
         name: lp.name || game.name || state.name,
       }));
     },
@@ -302,24 +289,24 @@ function createDrawerDraftStore() {
       }
 
       // Preserve game-level metadata and timestamps
-      launchProfile.playtime_seconds = game.playtimeSeconds ?? game.playtime_seconds ?? 0;
-      launchProfile.last_played = game.lastPlayed ?? game.last_played ?? 0;
-      launchProfile.custom_cover_url = game.customCoverUrl ?? game.custom_cover_url ?? '';
-      launchProfile.custom_banner_url = game.customBannerUrl ?? game.custom_banner_url ?? '';
-      launchProfile.custom_hero_url = game.customHeroUrl ?? game.custom_hero_url ?? '';
-      launchProfile.custom_logo_url = game.customLogoUrl ?? game.custom_logo_url ?? '';
-      launchProfile.custom_icon_url = game.customIconUrl ?? game.custom_icon_url ?? '';
-      launchProfile.locked_artwork = Boolean(game.lockedArtwork ?? game.locked_artwork);
+      launchProfile.playtime_seconds = game.playtimeSeconds ?? 0;
+      launchProfile.last_played = game.lastPlayed ?? 0;
+      launchProfile.custom_cover_url = game.customCoverUrl ?? '';
+      launchProfile.custom_banner_url = game.customBannerUrl ?? '';
+      launchProfile.custom_hero_url = game.customHeroUrl ?? '';
+      launchProfile.custom_logo_url = game.customLogoUrl ?? '';
+      launchProfile.custom_icon_url = game.customIconUrl ?? '';
+      launchProfile.locked_artwork = Boolean(game.lockedArtwork);
 
-      const lp = game.launchProfile || game.launch_profile || {};
-      if (!launchProfile.metadata_provider && (lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider)) {
-        launchProfile.metadata_provider = lp.metadata_provider || lp.metadataProvider || game.metadataProvider || game.metadata_provider || '';
+      const lp = normalizeLaunchProfile(game.launchProfile || game.launch_profile) || {};
+      if (!launchProfile.metadata_provider && (lp.metadataProvider || game.metadataProvider)) {
+        launchProfile.metadata_provider = lp.metadataProvider || game.metadataProvider || '';
       }
-      if (!launchProfile.metadata_id && (lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id)) {
-        launchProfile.metadata_id = lp.metadata_id || lp.metadataId || game.metadataId || game.metadata_id || '';
+      if (!launchProfile.metadata_id && (lp.metadataId || game.metadataId)) {
+        launchProfile.metadata_id = lp.metadataId || game.metadataId || '';
       }
-      if (!launchProfile.store_app_id && (lp.store_app_id || lp.storeAppId)) {
-        launchProfile.store_app_id = lp.store_app_id || lp.storeAppId || '';
+      if (!launchProfile.store_app_id && lp.storeAppId) {
+        launchProfile.store_app_id = lp.storeAppId || '';
       }
 
       try {

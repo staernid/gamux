@@ -82,7 +82,7 @@ func (p *SteamGridProxyProvider) FetchCoverURL(ctx context.Context, title string
 	}
 	req.Header.Set("User-Agent", "Gamux/1.0 (Linux; Game Manager)")
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := httpClientFromContext(ctx, p.httpClient).Do(req)
 	if err != nil {
 		return "", fmt.Errorf("query proxy: %w", err)
 	}

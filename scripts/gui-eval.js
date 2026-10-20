@@ -150,10 +150,17 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
 
     const pendingRequests = new Map();
 
+    const requestRaw = (method, params = {}) => {
+      return new Promise((res, rej) => {
+        const id = sendCmd(method, params);
+        pendingRequests.set(id, { resolve: res, reject: rej, raw: true });
+      });
+    };
+
     const request = (method, params = {}) => {
       return new Promise((res, rej) => {
         const id = sendCmd(method, params);
-        pendingRequests.set(id, { resolve: res, reject: rej });
+        pendingRequests.set(id, { resolve: res, reject: rej, raw: false });
       });
     };
 
@@ -165,13 +172,13 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
           console.error('[Browser Exception]', exc?.text, exc?.exception?.description);
         }
         if (msg.id && pendingRequests.has(msg.id)) {
-          const { resolve, reject } = pendingRequests.get(msg.id);
+          const { resolve, reject, raw } = pendingRequests.get(msg.id);
           pendingRequests.delete(msg.id);
           if (msg.result?.exceptionDetails) {
             const desc = msg.result.exceptionDetails.exception?.description || msg.result.exceptionDetails.text;
             reject(new Error(desc));
           } else {
-            resolve(msg.result?.result?.value);
+            resolve(raw ? msg.result : msg.result?.result?.value);
           }
         }
       } catch (e) {
@@ -206,14 +213,17 @@ function evaluateWebSocket(wsUrl, targetUrl, expr) {
           throw new Error('GAMUX_DEV bridge not ready after waiting');
         }
 
-
-        const evalResult = await request('Runtime.evaluate', {
-          expression: `(async () => { return await (${expr}); })()`,
-          awaitPromise: true,
-          returnByValue: true
-        });
-
-        resolve(evalResult);
+        if (typeof expr === 'function') {
+          const fnResult = await expr({ request, requestRaw });
+          resolve(fnResult);
+        } else {
+          const evalResult = await request('Runtime.evaluate', {
+            expression: `(async () => { return await (${expr}); })()`,
+            awaitPromise: true,
+            returnByValue: true
+          });
+          resolve(evalResult);
+        }
       } catch (err) {
         reject(err);
       } finally {
@@ -337,12 +347,35 @@ async function handleSnapshots(chromeBin) {
     { name: '06_search_grid.png', path: '?view=library&search=1' },
   ];
 
-  for (const v of views) {
-    const targetFile = path.join(SNAPSHOT_DIR, v.name);
-    const cmd = `"${chromeBin}" --headless=new --hide-scrollbars --window-size=1280,800 --virtual-time-budget=2000 --run-all-compositor-stages-before-draw --screenshot="${targetFile}" "${BASE_URL}/${v.path}"`;
-    execSync(cmd, { stdio: 'ignore' });
-    console.log(`  ✓ Captured ${v.name}`);
-  }
+  await executeViaCDP(chromeBin, `${BASE_URL}/?view=library`, async ({ request, requestRaw }) => {
+    await requestRaw('Emulation.setDeviceMetricsOverride', {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+
+    for (const v of views) {
+      const targetFile = path.join(SNAPSHOT_DIR, v.name);
+      await request('Page.navigate', { url: `${BASE_URL}/${v.path}` });
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 50));
+        try {
+          const isReady = await request('Runtime.evaluate', {
+            expression: 'document.readyState === "complete" && Boolean(window.__GAMUX_DEV__)',
+            returnByValue: true
+          });
+          if (isReady === true) break;
+        } catch {}
+      }
+      await new Promise(r => setTimeout(r, 120));
+      const shot = await requestRaw('Page.captureScreenshot', { format: 'png' });
+      if (shot?.data) {
+        fs.writeFileSync(targetFile, Buffer.from(shot.data, 'base64'));
+      }
+      console.log(`  ✓ Captured ${v.name}`);
+    }
+  });
 
   console.log(`✨ All snapshots captured successfully in: ${SNAPSHOT_DIR}`);
 }

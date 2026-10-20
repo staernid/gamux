@@ -23,7 +23,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
 	restore := testutil.SilenceLogging()
+	oldBackoff := retryBackoffBase
+	retryBackoffBase = time.Millisecond
 	oldClient := DefaultHTTPClient
 	DefaultHTTPClient = &http.Client{
 		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -36,7 +39,9 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	DefaultHTTPClient = oldClient
+	retryBackoffBase = oldBackoff
 	restore()
+	restoreEnv()
 	os.Exit(code)
 }
 
@@ -170,6 +175,9 @@ func TestLevel0ChunkDecompression(t *testing.T) {
 		t.Skip("Network error fetching test chunk:", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Skip("Skipping live CDN chunk test in offline/unit test mode")
+	}
 	rawChunkData, _ := io.ReadAll(resp.Body)
 
 	payloadData, err := manifest.DecryptChunkPayload(rawChunkData, "1d68c2af57678e17e48935daee51d4fa41f10d47b531e6129d1d890d0436f2a5")

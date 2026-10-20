@@ -18,6 +18,15 @@ import (
 	"github.com/staernid/gamux/util/testutil"
 )
 
+func TestMain(m *testing.M) {
+	restoreEnv := testutil.SetupTestEnvironment()
+	restoreLogs := testutil.SilenceLogging()
+	code := m.Run()
+	restoreLogs()
+	restoreEnv()
+	os.Exit(code)
+}
+
 type mockProvider struct {
 	id          string
 	displayName string
@@ -380,8 +389,64 @@ func TestSGDBProvider_AssetTypeEndpoints(t *testing.T) {
 	}
 }
 
+func newMockGOGClient() *http.Client {
+	catalogJSON := `{
+		"products": [{
+			"id": "1207664643",
+			"title": "The Witcher 3: Wild Hunt",
+			"slug": "the-witcher-3-wild-hunt",
+			"coverVertical": "https://images.gog.com/cover_vert.jpg",
+			"coverHorizontal": "https://images.gog.com/cover_horiz.jpg",
+			"logo": "https://images.gog.com/logo.png",
+			"galaxyBackgroundImage": "https://images.gog.com/hero_bg.jpg",
+			"developers": ["CD PROJEKT RED"],
+			"publishers": ["CD PROJEKT RED"],
+			"releaseDate": "2015.05.19",
+			"genres": [{"name": "Role-playing", "slug": "rpg"}]
+		}]
+	}`
+	productJSON := `{
+		"id": 1207664643,
+		"title": "The Witcher 3: Wild Hunt",
+		"slug": "the-witcher-3-wild-hunt",
+		"images": {
+			"background": "//images.gog.com/bg.jpg",
+			"logo2x": "//images.gog.com/logo2x.jpg"
+		},
+		"description": {
+			"short": "Story-driven open world RPG."
+		}
+	}`
+	return &http.Client{
+		Transport: testutil.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			u := req.URL.String()
+			if strings.Contains(u, "api.gog.com/products/1207664643") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(productJSON)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			if strings.Contains(u, "catalog.gog.com/v1/catalog") {
+				// GOG catalog returns default recommendations even for unmatched queries
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(catalogJSON)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+}
+
 func TestGOGProvider_Endpoints(t *testing.T) {
 	p := NewGOGProvider()
+	p.httpClient = newMockGOGClient()
 	if p.ID() != "gog" || p.DisplayName() != "GOG.com" || !p.IsGameStore() {
 		t.Fatalf("unexpected GOG provider properties")
 	}
@@ -427,6 +492,7 @@ func TestGOGProvider_Endpoints(t *testing.T) {
 
 func TestGOGProvider_NoFalsePositives(t *testing.T) {
 	p := NewGOGProvider()
+	p.httpClient = newMockGOGClient()
 
 	// 1. Non-existent search query must return 0 results, not Witcher 3 recommendations
 	results, err := p.Search(context.Background(), "NonExistentGameXYZ12345")
@@ -459,8 +525,11 @@ func TestGOGProvider_NoFalsePositives(t *testing.T) {
 func TestArtworkService_NoGOGDefaultFallback(t *testing.T) {
 	tmpDir := t.TempDir()
 	reg := NewRegistry()
-	reg.Register(NewGOGProvider())
+	gogProv := NewGOGProvider()
+	gogProv.httpClient = newMockGOGClient()
+	reg.Register(gogProv)
 	svc := NewArtworkService(tmpDir, reg)
+	svc.httpClient = newMockGOGClient()
 
 	gameDir := t.TempDir()
 	// Game without GOG ID and without matching title

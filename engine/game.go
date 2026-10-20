@@ -333,6 +333,33 @@ func (eng *Engine) SaveLaunchProfile(ctx context.Context, gameDir string, opts r
 	return nil
 }
 
+func fetchDepotMetaMap(ctx context.Context, appID uint32) map[uint32]manifest.DepotMeta {
+	if appID == 0 {
+		return nil
+	}
+	remoteDepots, err := steam.FetchAppDepotMetadata(ctx, appID)
+	if err != nil || len(remoteDepots) == 0 {
+		return nil
+	}
+	metaMap := make(map[uint32]manifest.DepotMeta, len(remoteDepots))
+	for dID, dInfo := range remoteDepots {
+		metaMap[dID] = manifest.DepotMeta{
+			DepotID:      dInfo.DepotID,
+			Name:         dInfo.Name,
+			Language:     dInfo.Language,
+			OSList:       dInfo.OSList,
+			OSArch:       dInfo.OSArch,
+			Optional:     dInfo.Optional,
+			IsDLC:        dInfo.IsDLC,
+			DLCAppID:     dInfo.DLCAppID,
+			DLCName:      dInfo.DLCName,
+			Size:         dInfo.Size,
+			DownloadSize: dInfo.DownloadSize,
+		}
+	}
+	return metaMap
+}
+
 // GetGameDepots retrieves the structured inventory of all content depots for a game directory.
 func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.DepotSummary, error) {
 	ctx = eng.WrapContext(ctx)
@@ -349,27 +376,7 @@ func (eng *Engine) GetGameDepots(ctx context.Context, gameDir string) ([]domain.
 		}
 	}
 
-	var metaMap map[uint32]manifest.DepotMeta
-	if numAppID > 0 {
-		if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, numAppID); sErr == nil && len(remoteDepots) > 0 {
-			metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
-			for dID, dInfo := range remoteDepots {
-				metaMap[dID] = manifest.DepotMeta{
-					DepotID:      dInfo.DepotID,
-					Name:         dInfo.Name,
-					Language:     dInfo.Language,
-					OSList:       dInfo.OSList,
-					OSArch:       dInfo.OSArch,
-					Optional:     dInfo.Optional,
-					IsDLC:        dInfo.IsDLC,
-					DLCAppID:     dInfo.DLCAppID,
-					DLCName:      dInfo.DLCName,
-					Size:         dInfo.Size,
-					DownloadSize: dInfo.DownloadSize,
-				}
-			}
-		}
-	}
+	metaMap := fetchDepotMetaMap(ctx, numAppID)
 
 	targetDir := gameDir
 	if status != nil && status.GameDir != "" {
@@ -385,25 +392,7 @@ func (eng *Engine) GetAppDepots(ctx context.Context, appID uint32) ([]domain.Dep
 		return nil, fmt.Errorf("invalid Steam AppID")
 	}
 
-	var metaMap map[uint32]manifest.DepotMeta
-	if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, appID); sErr == nil && len(remoteDepots) > 0 {
-		metaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
-		for dID, dInfo := range remoteDepots {
-			metaMap[dID] = manifest.DepotMeta{
-				DepotID:      dInfo.DepotID,
-				Name:         dInfo.Name,
-				Language:     dInfo.Language,
-				OSList:       dInfo.OSList,
-				OSArch:       dInfo.OSArch,
-				Optional:     dInfo.Optional,
-				IsDLC:        dInfo.IsDLC,
-				DLCAppID:     dInfo.DLCAppID,
-				DLCName:      dInfo.DLCName,
-				Size:         dInfo.Size,
-				DownloadSize: dInfo.DownloadSize,
-			}
-		}
-	}
+	metaMap := fetchDepotMetaMap(ctx, appID)
 	return manifest.InspectGameDepotsWithMetadata("", appID, metaMap)
 }
 
@@ -640,25 +629,7 @@ func (eng *Engine) DownloadGame(ctx context.Context, opts DownloadGameOptions) (
 		prefLang = manifest.ResolveSystemLanguage()
 	}
 
-	var depotMetaMap map[uint32]manifest.DepotMeta
-	if remoteDepots, sErr := steam.FetchAppDepotMetadata(ctx, opts.AppID); sErr == nil && len(remoteDepots) > 0 {
-		depotMetaMap = make(map[uint32]manifest.DepotMeta, len(remoteDepots))
-		for dID, dInfo := range remoteDepots {
-			depotMetaMap[dID] = manifest.DepotMeta{
-				DepotID:      dInfo.DepotID,
-				Name:         dInfo.Name,
-				Language:     dInfo.Language,
-				OSList:       dInfo.OSList,
-				OSArch:       dInfo.OSArch,
-				Optional:     dInfo.Optional,
-				IsDLC:        dInfo.IsDLC,
-				DLCAppID:     dInfo.DLCAppID,
-				DLCName:      dInfo.DLCName,
-				Size:         dInfo.Size,
-				DownloadSize: dInfo.DownloadSize,
-			}
-		}
-	}
+	depotMetaMap := fetchDepotMetaMap(ctx, opts.AppID)
 
 	targetBranch := opts.Branch
 	if targetBranch == "" && opts.TargetDir != "" {
@@ -757,9 +728,8 @@ func (eng *Engine) UpdateGame(ctx context.Context, gamePath string) (*GameStatus
 
 	pctx := &pipeline.Context{
 		Options: pipeline.Options{
-			Path:          targetPath,
-			OperatingMode: domain.ModePortable,
-			NormalizeDir:  true,
+			Path:         targetPath,
+			NormalizeDir: true,
 		},
 		Game:     domain.NewGame("", targetPath, "", ""),
 		Config:   eng.Config,

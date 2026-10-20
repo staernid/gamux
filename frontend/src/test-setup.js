@@ -1,6 +1,18 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, vi } from 'vitest';
 
+// Mock @wailsio/runtime so importing app.js in unit tests doesn't trigger Wails v3's
+// "Browser Environment Detected" stderr banner 62 times across test workers.
+vi.mock('@wailsio/runtime', () => ({
+  Call: {
+    ByName: vi.fn(),
+  },
+  Events: {
+    On: vi.fn(),
+    Emit: vi.fn(),
+  },
+}));
+
 // Global mock for Wails window.runtime & window.go if needed
 beforeEach(() => {
   window.runtime = {
@@ -27,7 +39,7 @@ beforeEach(() => {
         GetSteamlessStatus: vi.fn().mockResolvedValue({ has_update: false }),
         CheckGameUpdates: vi.fn().mockResolvedValue({ checked: true, is_up_to_date: true }),
         CheckLibraryUpdates: vi.fn().mockResolvedValue({ total_checked: 0, updates_found: 0, updated_games: [] }),
-        SelectDirectory: vi.fn().mockResolvedValue('/home/staernid/Games'),
+        SelectDirectory: vi.fn().mockResolvedValue('~/Games'),
         GetInitialTarget: vi.fn().mockResolvedValue(''),
         CreateGameStub: vi.fn().mockImplementation((lib, id, name, store, branch = 'public') => Promise.resolve({
           name: name || `Game ${id}`,
