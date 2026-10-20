@@ -470,8 +470,7 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 		})
 	}
 
-	allFiles := make([]ManifestFileEntry, 0)
-	var resolvedDepotID uint32
+	candidateDepots := make(map[uint32][]ManifestFileEntry)
 
 	// Track reasons depots were filtered out for structured error reporting
 	var seenPlatforms []string
@@ -545,19 +544,16 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 				}
 				continue
 			}
-			if resolvedDepotID == 0 {
-				resolvedDepotID = dID
-			}
 			for idx := range validFiles {
 				validFiles[idx].DepotID = dID
 			}
-			allFiles = append(allFiles, validFiles...)
+			candidateDepots[dID] = validFiles
 		}
 	}
 
 	// Fallback: If strict language filter excluded all depots, retry with relaxed language filtering
 	// so the user is never locked out of downloading available depots (Core Tenet 2)
-	if len(allFiles) == 0 && filter.Language != "" && filter.Language != "all" {
+	if len(candidateDepots) == 0 && filter.Language != "" && filter.Language != "all" {
 		relaxedFilter := filter
 		relaxedFilter.Language = "all"
 		for dID, candidates := range depotManifests {
@@ -592,17 +588,27 @@ func LoadManifestFromDirWithFilter(targetDir string, appID uint32, depotKeys map
 				if !ShouldIncludeDepot(dID, validFiles, relaxedFilter) {
 					continue
 				}
-				if resolvedDepotID == 0 {
-					resolvedDepotID = dID
-				}
 				for idx := range validFiles {
 					validFiles[idx].DepotID = dID
 				}
-				allFiles = append(allFiles, validFiles...)
+				candidateDepots[dID] = validFiles
 			}
 		}
-		if len(allFiles) > 0 {
+		if len(candidateDepots) > 0 {
 			slog.Info("Fallback to all language depots after language filter matched 0 depots", "depotsCount", len(depotManifests))
+		}
+	}
+
+	var allFiles []ManifestFileEntry
+	var resolvedDepotID uint32
+	if len(candidateDepots) > 0 {
+		reconciledFiles, includedDepots, recErr := ReconcileDepots(candidateDepots, filter)
+		if recErr != nil {
+			return nil, recErr
+		}
+		allFiles = reconciledFiles
+		if len(includedDepots) > 0 {
+			resolvedDepotID = includedDepots[0]
 		}
 	}
 

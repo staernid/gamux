@@ -324,7 +324,7 @@
         {#if isVirtual}
           <button
             type="button"
-            onclick={() => { onaddToLibrary?.(); dispatch('addToLibrary'); }}
+            onclick={() => { onaddToLibrary?.(); }}
             class="px-4 py-3 rounded-2xl font-bold text-xs bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white transition flex items-center space-x-2 shadow-xl cursor-pointer"
             title="Add skeleton metadata stub to your library without downloading files"
           >
@@ -435,7 +435,7 @@
               <!-- Cancel Transfer Button -->
               <button
                 type="button"
-                onclick={stopPropagation(() => tasksStore.cancel(activeGameTask.id))}
+                onclick={(e) => { e.stopPropagation(); tasksStore.cancel(activeGameTask.id); }}
                 class="relative z-10 px-3 py-3.5 bg-neutral-900/80 hover:bg-rose-950 text-neutral-400 hover:text-rose-200 border-l border-neutral-700/80 transition-colors cursor-pointer flex items-center justify-center self-stretch"
                 title="Cancel Task"
                 aria-label="Cancel Task"
@@ -450,7 +450,7 @@
               <!-- Split Menu Trigger Button -->
               <button
                 type="button"
-                onclick={stopPropagation(() => { showLaunchMenu = !showLaunchMenu; })}
+                onclick={(e) => { e.stopPropagation(); showLaunchMenu = !showLaunchMenu; }}
                 class="px-2.5 py-3.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-l border-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
                 title="Launch Options (Single Player / Co-Op)"
                 aria-label="Launch Options"

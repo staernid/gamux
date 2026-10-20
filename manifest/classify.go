@@ -168,12 +168,13 @@ var shortLanguageMarkers = []struct {
 	lang    string
 	markers []string
 }{
-	{"french", []string{"/fr-fr/", "_fr.pck", "_fr.pak"}},
-	{"german", []string{"/de-de/", "_de.pck", "_de.pak"}},
-	{"japanese", []string{"/ja-jp/", "_ja.pck", "_ja.pak"}},
-	{"polish", []string{"/pl-pl/", "_pl.pck", "_pl.pak"}},
-	{"russian", []string{"/ru-ru/", "_ru.pck", "_ru.pak"}},
-	{"schinese", []string{"/zh-cn/", "_zh.pck", "_zh.pak"}},
+	{"english", []string{"/en-us/", "/en-gb/", "_en.pck", "_en.pak", "ww.vdf", "row.vdf"}},
+	{"french", []string{"/fr-fr/", "_fr.pck", "_fr.pak", "fra.vdf", "fr.vdf"}},
+	{"german", []string{"/de-de/", "_de.pck", "_de.pak", "ger.vdf", "de.vdf"}},
+	{"japanese", []string{"/ja-jp/", "_ja.pck", "_ja.pak", "jap.vdf", "jp.vdf"}},
+	{"polish", []string{"/pl-pl/", "_pl.pck", "_pl.pak", "pol.vdf", "pl.vdf"}},
+	{"russian", []string{"/ru-ru/", "_ru.pck", "_ru.pak", "rus.vdf", "ru.vdf"}},
+	{"schinese", []string{"/zh-cn/", "_zh.pck", "_zh.pak", "cn.vdf", "zh.vdf"}},
 }
 
 // fileSignals summarizes manifest entries for content classification.

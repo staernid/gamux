@@ -257,8 +257,7 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 
 	// Fallback to in-memory parsed manifests if disk manifests are absent or could not be loaded
 	if (loadedManifest == nil || len(loadedManifest.Files) == 0) && len(parsedLua.ManifestFiles) > 0 {
-		var allFiles []manifest.ManifestFileEntry
-		var firstDepotID uint32
+		candidateDepots := make(map[uint32][]manifest.ManifestFileEntry)
 		for filename, data := range parsedLua.ManifestFiles {
 			parts := strings.Split(filename, "_")
 			var fileDepotID uint32
@@ -274,18 +273,15 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 					slog.Debug("Skipping remote depot manifest filtered out by options", "depotID", fileDepotID, "platform", req.Platform, "language", prefLang)
 					continue
 				}
-				if firstDepotID == 0 {
-					firstDepotID = fileDepotID
-				}
 				for idx := range files {
 					files[idx].DepotID = fileDepotID
 				}
-				allFiles = append(allFiles, files...)
+				candidateDepots[fileDepotID] = files
 			}
 		}
 
 		// If strict language filter produced 0 files, retry with relaxed language filtering (Core Tenet 2)
-		if len(allFiles) == 0 && depotFilter.Language != "" && depotFilter.Language != "all" {
+		if len(candidateDepots) == 0 && depotFilter.Language != "" && depotFilter.Language != "all" {
 			relaxedFilter := depotFilter
 			relaxedFilter.Language = "all"
 			for filename, data := range parsedLua.ManifestFiles {
@@ -302,23 +298,27 @@ func Download(ctx context.Context, req DownloadRequest) (*Result, error) {
 					if !manifest.ShouldIncludeDepot(fileDepotID, files, relaxedFilter) {
 						continue
 					}
-					if firstDepotID == 0 {
-						firstDepotID = fileDepotID
-					}
 					for idx := range files {
 						files[idx].DepotID = fileDepotID
 					}
-					allFiles = append(allFiles, files...)
+					candidateDepots[fileDepotID] = files
 				}
 			}
 		}
 
-		if len(allFiles) > 0 {
-			loadedManifest = &manifest.Manifest{
-				AppID:     req.AppID,
-				DepotID:   firstDepotID,
-				DepotKeys: depotKeys,
-				Files:     allFiles,
+		if len(candidateDepots) > 0 {
+			reconciledFiles, includedDepots, recErr := manifest.ReconcileDepots(candidateDepots, depotFilter)
+			if recErr == nil && len(reconciledFiles) > 0 {
+				firstDepotID := uint32(0)
+				if len(includedDepots) > 0 {
+					firstDepotID = includedDepots[0]
+				}
+				loadedManifest = &manifest.Manifest{
+					AppID:     req.AppID,
+					DepotID:   firstDepotID,
+					DepotKeys: depotKeys,
+					Files:     reconciledFiles,
+				}
 			}
 		}
 	}
@@ -487,14 +487,17 @@ func DownloadOrUpdateGame(ctx context.Context, m *manifest.Manifest, opts Downlo
 		for _, f := range m.Files {
 			depotFiles[f.DepotID] = append(depotFiles[f.DepotID], f)
 		}
-		var filtered []manifest.ManifestFileEntry
+		candidateDepots := make(map[uint32][]manifest.ManifestFileEntry)
 		for dID, files := range depotFiles {
 			if manifest.ShouldIncludeDepot(dID, files, depotFilter) {
-				filtered = append(filtered, files...)
+				candidateDepots[dID] = files
 			}
 		}
-		if len(filtered) > 0 {
-			m.Files = filtered
+		if len(candidateDepots) > 0 {
+			reconciled, _, err := manifest.ReconcileDepots(candidateDepots, depotFilter)
+			if err == nil && len(reconciled) > 0 {
+				m.Files = reconciled
+			}
 		}
 	}
 

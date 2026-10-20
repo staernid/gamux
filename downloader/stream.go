@@ -109,17 +109,38 @@ func streamDepotFiles(ctx context.Context, m *manifest.Manifest, absTargetDir st
 		d.purgeDeleted(deletedFiles)
 	}
 
-	var totalDepotBytes int64
+	// Defense-in-depth: Deduplicate file entries by normalized relative path.
+	// If two entries have the same relative path:
+	// - If identical SHA-1/Size: keep one, ignore duplicate.
+	// - If conflicting SHA-1/Size: abort early with a clear error to prevent corruption.
+	filesToDownload := make([]manifest.ManifestFileEntry, 0, len(m.Files))
+	seenPaths := make(map[string]manifest.ManifestFileEntry, len(m.Files))
 	for _, f := range m.Files {
+		relPath := manifest.NormalizePath(f.Path)
+		if relPath == "" && isDirectoryEntry(f) {
+			continue
+		}
+		if existing, ok := seenPaths[relPath]; ok {
+			if existing.SHA1 == f.SHA1 && existing.Size == f.Size {
+				continue
+			}
+			return nil, fmt.Errorf("conflicting file versions detected for path %q (depot %d vs depot %d)", relPath, existing.DepotID, f.DepotID)
+		}
+		seenPaths[relPath] = f
+		filesToDownload = append(filesToDownload, f)
+	}
+
+	var totalDepotBytes int64
+	for _, f := range filesToDownload {
 		if f.Size > 0 && !isDirectoryEntry(f) {
 			totalDepotBytes += int64(f.Size)
 		}
 	}
-	d.progress = newProgressTracker(req.OnProgress, totalDepotBytes, len(m.Files))
+	d.progress = newProgressTracker(req.OnProgress, totalDepotBytes, len(filesToDownload))
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(workerLimit)
-	for _, fileEntry := range m.Files {
+	for _, fileEntry := range filesToDownload {
 		entry := fileEntry
 		relPath := manifest.NormalizePath(entry.Path)
 		if relPath == "" && isDirectoryEntry(entry) {

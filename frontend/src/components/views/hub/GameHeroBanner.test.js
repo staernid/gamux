@@ -106,9 +106,7 @@ describe('GameHeroBanner Component', () => {
         game: mockSteamGame,
         isGameRunning: false,
         isTaskActive: false,
-      },
-      events: {
-        trash: trashHandler,
+        ontrash: trashHandler,
       },
     });
 
