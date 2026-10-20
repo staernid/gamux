@@ -87,6 +87,17 @@ const DEFAULT_MOCKS = {
     { id: 'ACH_2', name: 'Master Collector', description: 'Collect all hidden items', icon_url: '', icon_gray_url: '', hidden: false, unlocked: false, unlock_time: 0, global_percent: 3.8, rarity: 'ultra_rare' }
   ]),
   getGameCurrentPlayers: (appId) => Promise.resolve(14250),
+  getGameMods: (path) => Promise.resolve(mockData.MOCK_MOD_STATUS),
+  toggleGameMod: (path, modId, enable) => Promise.resolve({
+    id: modId,
+    name: modId,
+    enabled: enable,
+    path: enable ? `${path}/${modId}` : `${path}/${modId}.disabled`,
+    relative_path: modId,
+  }),
+  deleteGameMod: () => Promise.resolve(),
+  checkGameModUpdates: (path) => Promise.resolve(mockData.MOCK_MOD_STATUS),
+  installWorkshopMod: () => Promise.resolve('mock_workshop_task_id'),
   resolveSteamProfile: (identifier) => Promise.resolve({
     steam_id: '76561197960287930',
     persona_name: 'GamuxPlayer',

@@ -130,6 +130,44 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.protonPath).toBe('');
   });
 
+  it('normalizes modTopology, mods, and outdatedModsCount properly', () => {
+    const rawGame = {
+      name: 'Unity Modded Game',
+      app_id: '1234',
+      game_dir: '/games/unity_game',
+      mod_topology: {
+        engine: 'unity',
+        mod_dir: 'BepInEx/plugins',
+        detected: true,
+        supported_formats: ['.dll']
+      },
+      mods: [
+        {
+          id: 'ModA.dll',
+          name: 'Mod A',
+          workshop_id: 111,
+          enabled: true,
+          path: '/games/unity_game/BepInEx/plugins/ModA.dll',
+          has_update: true
+        }
+      ],
+      outdated_mods_count: 1
+    };
+
+    const normalized = normalizeGame(rawGame);
+    expect(normalized.modTopology).toEqual({
+      engine: 'unity',
+      modDir: 'BepInEx/plugins',
+      absoluteModDir: '',
+      detected: true,
+      supportedFormats: ['.dll']
+    });
+    expect(normalized.mods.length).toBe(1);
+    expect(normalized.mods[0].id).toBe('ModA.dll');
+    expect(normalized.mods[0].hasUpdate).toBe(true);
+    expect(normalized.outdatedModsCount).toBe(1);
+  });
+
   it('normalizes running instances from raw backend payloads', () => {
     const raw = {
       instance_id: '/games/hl2:p2:p2',

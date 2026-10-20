@@ -860,3 +860,43 @@ func TestApp_Profiles(t *testing.T) {
 		t.Errorf("expected active to fall back to main, got %s", active.ID)
 	}
 }
+
+func TestApp_ModManagement(t *testing.T) {
+	tmpDir := t.TempDir()
+	modsDir := filepath.Join(tmpDir, "mods")
+	_ = os.MkdirAll(modsDir, 0755)
+	modFile := filepath.Join(modsDir, "Plugin.pak")
+	_ = os.WriteFile(modFile, []byte("data"), 0644)
+
+	app := NewApp(config.DefaultConfig())
+
+	// 1. GetGameMods
+	status, err := app.GetGameMods(tmpDir)
+	if err != nil {
+		t.Fatalf("GetGameMods failed: %v", err)
+	}
+	if len(status.Mods) != 1 {
+		t.Fatalf("expected 1 mod, got %d", len(status.Mods))
+	}
+	if !status.Mods[0].Enabled {
+		t.Errorf("expected mod to be enabled")
+	}
+
+	// 2. ToggleGameMod
+	disabled, err := app.ToggleGameMod(tmpDir, "Plugin.pak", false)
+	if err != nil {
+		t.Fatalf("ToggleGameMod failed: %v", err)
+	}
+	if disabled.Enabled {
+		t.Errorf("expected mod to be disabled")
+	}
+
+	// 3. DeleteGameMod
+	if err := app.DeleteGameMod(tmpDir, "Plugin.pak"); err != nil {
+		t.Fatalf("DeleteGameMod failed: %v", err)
+	}
+	after, _ := app.GetGameMods(tmpDir)
+	if len(after.Mods) != 0 {
+		t.Errorf("expected 0 mods, got %d", len(after.Mods))
+	}
+}

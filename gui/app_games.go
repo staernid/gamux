@@ -583,3 +583,67 @@ func (a *App) TrashGame(gamePath string) error {
 	a.RemoveCachedGame(path)
 	return nil
 }
+
+// -----------------------------------------------------------------------------
+// Mod Management
+// -----------------------------------------------------------------------------
+
+// GetGameMods returns the mod topology and installed mods for a game directory.
+func (a *App) GetGameMods(gamePath string) (*domain.GameModStatus, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.GetGameMods(a.getContext(), path)
+}
+
+// ToggleGameMod enables or disables an installed mod by renaming.
+func (a *App) ToggleGameMod(gamePath, modID string, enable bool) (*domain.InstalledMod, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.ToggleGameMod(path, modID, enable)
+}
+
+// DeleteGameMod deletes an installed mod and cleans up its registry entry.
+func (a *App) DeleteGameMod(gamePath, modID string) error {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return err
+	}
+	if a.Engine == nil {
+		return fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.DeleteGameMod(path, modID)
+}
+
+// CheckGameModUpdates checks for newer versions of installed workshop mods via Steam Web API.
+func (a *App) CheckGameModUpdates(gamePath string) (*domain.GameModStatus, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return nil, err
+	}
+	if a.Engine == nil {
+		return nil, fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.CheckGameModUpdates(a.getContext(), path)
+}
+
+// InstallWorkshopMod initiates an asynchronous workshop mod installation task and returns the task ID.
+func (a *App) InstallWorkshopMod(gamePath, itemURLOrID string) (string, error) {
+	path, err := requireGamePath(gamePath)
+	if err != nil {
+		return "", err
+	}
+	if a.Engine == nil {
+		return "", fmt.Errorf("engine not initialized")
+	}
+	return a.Engine.SubmitWorkshop(itemURLOrID, path, false)
+}

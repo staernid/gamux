@@ -197,6 +197,7 @@ func (eng *Engine) SubmitWorkshop(itemURLOrID, targetDir string, dryRun bool) (s
 		targetDir = "."
 	}
 	return eng.Tasks.SubmitOp(&WorkshopOperation{
+		Engine:      eng,
 		ItemURLOrID: itemURLOrID,
 		TargetDir:   targetDir,
 		DryRun:      dryRun,
@@ -405,6 +406,22 @@ func (eng *Engine) registerDefaultTaskRunners() {
 			DisplayName: t.GameName,
 			TargetDir:   t.GameDir,
 			Tool:        tool,
+		}
+		return op.Execute(ctx, ctrl)
+	})
+
+	eng.Tasks.RegisterRunner(tasks.TypeWorkshop, func(ctx context.Context, t *tasks.Task, ctrl *tasks.Controller) error {
+		item := ""
+		if t.Metadata != nil {
+			item = t.Metadata["item_url_or_id"]
+		}
+		if item == "" {
+			item = t.AppID
+		}
+		op := &WorkshopOperation{
+			Engine:      eng,
+			ItemURLOrID: item,
+			TargetDir:   t.GameDir,
 		}
 		return op.Execute(ctx, ctrl)
 	})

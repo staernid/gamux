@@ -156,6 +156,38 @@ func CopyFile(src, dest string) error {
 	return out.Close()
 }
 
+// CopyDir recursively copies a directory tree from src to dst.
+func CopyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := CopyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := CopyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // DiskSpaceInfo represents disk usage metrics for a filesystem volume.
 type DiskSpaceInfo struct {
 	Path       string `json:"path"`

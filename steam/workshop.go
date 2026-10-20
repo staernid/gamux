@@ -28,6 +28,11 @@ type WorkshopItemDetails struct {
 	FileURL         string `json:"file_url"`
 	ConsumerAppID   uint32 `json:"consumer_app_id"`
 	FileName        string `json:"filename"`
+	TimeCreated     int64  `json:"time_created"`
+	TimeUpdated     int64  `json:"time_updated"`
+	FileSize        uint64 `json:"file_size"`
+	Description     string `json:"description"`
+	PreviewURL      string `json:"preview_url"`
 }
 
 // ExtractWorkshopID extracts the numeric published file ID from a URL or raw ID string.
@@ -46,10 +51,28 @@ func ExtractWorkshopID(input string) (uint64, error) {
 
 // FetchWorkshopItemDetails queries Steam's public Web API for workshop item metadata.
 func FetchWorkshopItemDetails(ctx context.Context, publishedFileID uint64) (*WorkshopItemDetails, error) {
+	items, err := FetchWorkshopItemsDetails(ctx, []uint64{publishedFileID})
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("workshop item details not found for ID %d", publishedFileID)
+	}
+	return &items[0], nil
+}
+
+// FetchWorkshopItemsDetails queries Steam's public Web API for multiple workshop items in a single batch request.
+func FetchWorkshopItemsDetails(ctx context.Context, publishedFileIDs []uint64) ([]WorkshopItemDetails, error) {
+	if len(publishedFileIDs) == 0 {
+		return nil, nil
+	}
+
 	apiURL := "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
 	formData := url.Values{}
-	formData.Set("itemcount", "1")
-	formData.Set("publishedfileids[0]", fmt.Sprintf("%d", publishedFileID))
+	formData.Set("itemcount", fmt.Sprintf("%d", len(publishedFileIDs)))
+	for i, id := range publishedFileIDs {
+		formData.Set(fmt.Sprintf("publishedfileids[%d]", i), fmt.Sprintf("%d", id))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(formData.Encode()))
 	if err != nil {
@@ -78,16 +101,7 @@ func FetchWorkshopItemDetails(ctx context.Context, publishedFileID uint64) (*Wor
 		return nil, fmt.Errorf("decode workshop JSON: %w", err)
 	}
 
-	if len(result.Response.PublishedFileDetails) == 0 {
-		return nil, fmt.Errorf("workshop item details not found for ID %d", publishedFileID)
-	}
-
-	details := result.Response.PublishedFileDetails[0]
-	if details.Result != 1 {
-		return nil, fmt.Errorf("workshop item %d returned error result code %d", publishedFileID, details.Result)
-	}
-
-	return &details, nil
+	return result.Response.PublishedFileDetails, nil
 }
 
 // DownloadWorkshopItem downloads a workshop item or mod directly into the specified target directory.

@@ -5,6 +5,36 @@
  * backwards-compatible snake_case aliases across the IPC boundary.
  */
 
+export interface ModTopology {
+  engine: string;
+  modDir: string;
+  absoluteModDir?: string;
+  detected: boolean;
+  supportedFormats?: string[];
+}
+
+export interface InstalledMod {
+  id: string;
+  name: string;
+  workshopId?: number;
+  enabled: boolean;
+  path: string;
+  relativePath: string;
+  timeUpdated?: number;
+  latestTimeUpdated?: number;
+  hasUpdate?: boolean;
+  description?: string;
+  previewUrl?: string;
+  size?: number;
+  files?: string[];
+}
+
+export interface GameModStatus {
+  topology: ModTopology;
+  mods: InstalledMod[];
+  outdatedCount: number;
+}
+
 export interface LaunchCandidate {
   name: string;
   executable: string;
@@ -98,6 +128,9 @@ export interface Game {
   developers?: string[];
   publishers?: string[];
   genres?: string[];
+  modTopology?: ModTopology;
+  mods?: InstalledMod[];
+  outdatedModsCount?: number;
 }
 
 export interface RunningInstance {

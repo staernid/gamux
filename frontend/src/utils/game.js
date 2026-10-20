@@ -178,6 +178,32 @@ export function normalizeGame(g) {
     developers: g.developers || g.Developers || [],
     publishers: g.publishers || g.Publishers || [],
     genres: g.genres || g.Genres || [],
+    modTopology: (g.mod_topology || g.modTopology || g.ModTopology) ? {
+      engine: (g.mod_topology || g.modTopology || g.ModTopology).engine || (g.mod_topology || g.modTopology || g.ModTopology).Engine || 'generic',
+      modDir: (g.mod_topology || g.modTopology || g.ModTopology).mod_dir || (g.mod_topology || g.modTopology || g.ModTopology).modDir || (g.mod_topology || g.modTopology || g.ModTopology).ModDir || 'mods',
+      absoluteModDir: (g.mod_topology || g.modTopology || g.ModTopology).absolute_mod_dir || (g.mod_topology || g.modTopology || g.ModTopology).absoluteModDir || (g.mod_topology || g.modTopology || g.ModTopology).AbsoluteModDir || '',
+      detected: Boolean((g.mod_topology || g.modTopology || g.ModTopology).detected ?? (g.mod_topology || g.modTopology || g.ModTopology).Detected ?? false),
+      supportedFormats: (g.mod_topology || g.modTopology || g.ModTopology).supported_formats || (g.mod_topology || g.modTopology || g.ModTopology).supportedFormats || (g.mod_topology || g.modTopology || g.ModTopology).SupportedFormats || [],
+    } : null,
+    mods: Array.isArray(g.mods || g.Mods) ? (g.mods || g.Mods).map(m => ({
+      id: String(m.id || m.ID || ''),
+      name: m.name || m.Name || '',
+      workshopId: Number(m.workshop_id ?? m.workshopId ?? m.WorkshopID ?? 0),
+      enabled: Boolean(m.enabled ?? m.Enabled ?? true),
+      path: normalizePath(m.path || m.Path || ''),
+      relativePath: normalizePath(m.relative_path || m.relativePath || m.RelativePath || ''),
+      timeUpdated: Number(m.time_updated ?? m.timeUpdated ?? m.TimeUpdated ?? 0),
+      latestTimeUpdated: Number(m.latest_time_updated ?? m.latestTimeUpdated ?? m.LatestTimeUpdated ?? 0),
+      hasUpdate: Boolean(m.has_update ?? m.hasUpdate ?? m.HasUpdate ?? false),
+      description: m.description || m.Description || '',
+      previewUrl: m.preview_url || m.previewUrl || m.PreviewURL || '',
+      size: Number(m.size ?? m.Size ?? 0),
+      files: m.files || m.Files || [],
+    })) : [],
+    outdatedModsCount: Number(
+      g.outdated_mods_count ?? g.outdatedModsCount ?? g.OutdatedModsCount ??
+      (Array.isArray(g.mods || g.Mods) ? (g.mods || g.Mods).filter(m => Boolean(m.has_update ?? m.hasUpdate ?? m.HasUpdate)).length : 0)
+    ),
   };
 }
 

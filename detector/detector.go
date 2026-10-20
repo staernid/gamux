@@ -618,7 +618,11 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		info.Platform = "win64"
 	}
 
-	// 10. Recompute state
+	// 10. Mod Topology & Installed Mods Detection
+	info.ModTopology = DetectModTopology(info.GameDir)
+	info.Mods, info.OutdatedModsCount = ScanInstalledMods(info.GameDir, info.ModTopology)
+
+	// 11. Recompute state
 	info.RecomputeState()
 
 	// Persist to Warm Library Cache

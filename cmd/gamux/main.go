@@ -75,6 +75,7 @@ func buildApp() *cli.App {
 		Commands: []*cli.Command{
 			downloadCommand,
 			workshopCommand,
+			modsCommand,
 			applyCommand,
 			batchCommand,
 			statusCommand,

@@ -252,6 +252,39 @@ type GameArtwork struct {
 	LockedArtwork   bool   `json:"locked_artwork,omitempty"`
 }
 
+// ModTopology defines the detected game engine mod layout and active mod directory.
+type ModTopology struct {
+	Engine           string   `json:"engine"`                     // "unity", "unreal", "generic"
+	ModDir           string   `json:"mod_dir"`                    // Relative path from GameDir (e.g. "BepInEx/plugins", "Content/Paks/~mods", "mods")
+	AbsoluteModDir   string   `json:"absolute_mod_dir,omitempty"` // Absolute path on disk
+	Detected         bool     `json:"detected"`
+	SupportedFormats []string `json:"supported_formats,omitempty"` // e.g. [".dll"], [".pak"]
+}
+
+// InstalledMod represents an installed game mod or workshop item on disk.
+type InstalledMod struct {
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	WorkshopID        uint64   `json:"workshop_id,omitempty"`
+	Enabled           bool     `json:"enabled"`
+	Path              string   `json:"path"`
+	RelativePath      string   `json:"relative_path"`
+	TimeUpdated       int64    `json:"time_updated,omitempty"`
+	LatestTimeUpdated int64    `json:"latest_time_updated,omitempty"`
+	HasUpdate         bool     `json:"has_update"`
+	Description       string   `json:"description,omitempty"`
+	PreviewURL        string   `json:"preview_url,omitempty"`
+	Size              int64    `json:"size"`
+	Files             []string `json:"files,omitempty"`
+}
+
+// GameModStatus encapsulates the mod topology, installed mods list, and update status for a game.
+type GameModStatus struct {
+	Topology      ModTopology    `json:"topology"`
+	Mods          []InstalledMod `json:"mods"`
+	OutdatedCount int            `json:"outdated_count"`
+}
+
 // ---------------------------------------------------------------------------
 // 1. Dedicated Model: GameRecord (Static Identity & On-Disk Inventory)
 // ---------------------------------------------------------------------------
@@ -286,6 +319,9 @@ type GameRecord struct {
 	RawDepotLayout     bool              `json:"raw_depot_layout,omitempty"`
 	ExePath            string            `json:"exe_path,omitempty"` // Detected default primary executable
 	ExeArgs            string            `json:"exe_args,omitempty"`
+	ModTopology        ModTopology       `json:"mod_topology"`
+	Mods               []InstalledMod    `json:"mods,omitempty"`
+	OutdatedModsCount  int               `json:"outdated_mods_count,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -545,6 +581,18 @@ func (g *Game) Clone() *Game {
 	}
 	if g.SettingsDirs != nil {
 		cp.SettingsDirs = append([]string(nil), g.SettingsDirs...)
+	}
+	if g.ModTopology.SupportedFormats != nil {
+		cp.ModTopology.SupportedFormats = append([]string(nil), g.ModTopology.SupportedFormats...)
+	}
+	if g.Mods != nil {
+		cp.Mods = make([]InstalledMod, len(g.Mods))
+		for i, m := range g.Mods {
+			cp.Mods[i] = m
+			if m.Files != nil {
+				cp.Mods[i].Files = append([]string(nil), m.Files...)
+			}
+		}
 	}
 	return &cp
 }

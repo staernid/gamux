@@ -107,6 +107,7 @@ func (op *ToolUpdateOperation) Execute(ctx context.Context, ctrl *tasks.Controll
 
 // WorkshopOperation downloads a Steam Workshop item or mod.
 type WorkshopOperation struct {
+	Engine      *Engine
 	ItemURLOrID string
 	TargetDir   string
 	DryRun      bool
@@ -118,11 +119,18 @@ func (op *WorkshopOperation) TaskSpec() tasks.TaskSpec {
 		Title:        fmt.Sprintf("Download Workshop Item (%s)", op.ItemURLOrID),
 		GameDir:      op.TargetDir,
 		Capabilities: tasks.CapCancellable,
+		Metadata: map[string]string{
+			"item_url_or_id": op.ItemURLOrID,
+		},
 	}
 }
 
 func (op *WorkshopOperation) Execute(ctx context.Context, ctrl *tasks.Controller) error {
 	ctrl.ReportStage("Fetching Workshop Details", op.ItemURLOrID)
+	if op.Engine != nil && !op.DryRun {
+		_, err := op.Engine.InstallWorkshopMod(ctx, op.TargetDir, op.ItemURLOrID)
+		return err
+	}
 	return steam.DownloadWorkshopItem(ctx, op.ItemURLOrID, op.TargetDir, op.DryRun)
 }
 

@@ -184,13 +184,25 @@ var workshopCommand = &cli.Command{
 		}
 
 		ui.RenderStep(1, 1, "Fetching Workshop item details: "+input)
-		if err := steam.DownloadWorkshopItem(c.Context, input, targetDir, c.Bool("dry-run")); err != nil {
+		if c.Bool("dry-run") {
+			if err := steam.DownloadWorkshopItem(c.Context, input, targetDir, true); err != nil {
+				renderCLIError(err, "Verify Workshop URL or ID", "Check internet connection")
+				return err
+			}
+			ui.RenderSuccess("Workshop item dry run complete", "", nil)
+			return nil
+		}
+
+		eng := engine.New(activeConfig)
+		mod, err := eng.InstallWorkshopMod(c.Context, targetDir, input)
+		if err != nil {
 			renderCLIError(err, "Verify Workshop URL or ID", "Check internet connection")
 			return err
 		}
 
-		ui.RenderSuccess("Workshop item setup complete", "", []string{
-			fmt.Sprintf("Run 'gamux apply %s' to refresh game configuration", targetDir),
+		ui.RenderSuccess(fmt.Sprintf("Installed Workshop Mod: %s", mod.Name), "", []string{
+			fmt.Sprintf("Installed to: %s", mod.RelativePath),
+			fmt.Sprintf("Run 'gamux mods list --dir %s' to view active mods", targetDir),
 		})
 		return nil
 	},

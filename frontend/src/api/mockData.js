@@ -450,3 +450,47 @@ export const MOCK_CONFIG_SCHEMA = [
   { key: 'auto_backup_saves', label: 'Auto-Backup Saves', description: 'Automatically create a zip snapshot backup before launching.', type: 'boolean', category: 'Saves & Backups', scope: 'both', default: false },
   { key: 'backup_retention_count', label: 'Backup Retention Limit', description: 'Maximum number of rolling backup snapshots to retain.', type: 'number', category: 'Saves & Backups', scope: 'both', default: 5, min: 1, max: 50, step: 1 }
 ];
+
+export const MOCK_MOD_STATUS = {
+  topology: {
+    engine: 'unity',
+    mod_dir: 'BepInEx/plugins',
+    absolute_mod_dir: '/home/staernid/Games/Risk of Rain 2/BepInEx/plugins',
+    detected: true,
+    supported_formats: ['.dll', '.zip']
+  },
+  mods: [
+    {
+      id: 'ItemStatsMod.dll',
+      name: 'ItemStatsMod',
+      workshop_id: 315783921,
+      enabled: true,
+      path: '/home/staernid/Games/Risk of Rain 2/BepInEx/plugins/ItemStatsMod.dll',
+      relative_path: 'BepInEx/plugins/ItemStatsMod.dll',
+      time_updated: 1720000000,
+      latest_time_updated: 1729000000,
+      has_update: true,
+      description: 'Displays detailed item stats and descriptions in the HUD.',
+      preview_url: '',
+      size: 1048576,
+      files: ['ItemStatsMod.dll']
+    },
+    {
+      id: 'ProperSave.dll',
+      name: 'ProperSave',
+      workshop_id: 315783922,
+      enabled: false,
+      path: '/home/staernid/Games/Risk of Rain 2/BepInEx/plugins/ProperSave.dll.disabled',
+      relative_path: 'BepInEx/plugins/ProperSave.dll.disabled',
+      time_updated: 1715000000,
+      latest_time_updated: 1715000000,
+      has_update: false,
+      description: 'Saves your run progress at the beginning of each stage.',
+      preview_url: '',
+      size: 524288,
+      files: ['ProperSave.dll']
+    }
+  ],
+  outdated_count: 1
+};
+
