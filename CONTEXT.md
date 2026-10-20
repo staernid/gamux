@@ -80,3 +80,11 @@ _Avoid_: Depot merging, manifest deduplication
 An active, monitored game execution process—representing either a single-player session or a dedicated seat within a multi-seat session—uniquely identified by canonical instance ID (`<gameDir>` or `<gameDir>:<profileID>` or `<gameDir>:<profileID>:<seatID>`).
 _Avoid_: Game process, active pid, running game item
 
+**Sentinel Signature**:
+A deterministic cryptographic digest of critical configuration files (`launch_profile.json`, `configs.*.ini`, `steam_appid.txt`, `appmanifest_*.acf`) used for rapid, non-coarse warm library cache invalidation without full directory tree traversals.
+_Avoid_: Cache hash, dir fingerprint
+
+**Input Grabber**:
+A kernel-level evdev device controller asserting exclusive ownership (`EVIOCGRAB`) over physical input nodes to isolate keyboards and mice to dedicated player seats.
+_Avoid_: Input blocker, controller hook, event interceptor
+

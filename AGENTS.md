@@ -49,3 +49,11 @@ Essential guidelines, architecture patterns, and conventions for development on 
 - `make gui-dump` — Dump GUI store state, event timeline, and invariant report as JSON.
 - `make gui-trace` — Run lifecycle trace scenario in headless browser and print event table.
 - `make gui-audit` — Run automated GUI store and event invariant audit.
+
+---
+
+## Subsystem Invariants & Reference Docs
+
+- [`docs/notes/performance-and-isolation-invariants.md`](docs/notes/performance-and-isolation-invariants.md) — Operational invariants for downloader chunk I/O, warm cache sentinel signatures, and multiseat evdev permissions.
+- [`docs/notes/workshop-mod-management.md`](docs/notes/workshop-mod-management.md) — Workshop and mod structure design notes.
+
