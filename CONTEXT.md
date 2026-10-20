@@ -72,3 +72,11 @@ _Avoid_: Folder renaming, sanitization, path cleanup
 A point-in-time, self-contained compressed archive (`.zip`) containing semantic mappings, file checksums, and on-disk save/configuration data for a game across Linux native, Wine prefix, and GSE Cloud locations.
 _Avoid_: Save zip, backup file, save export
 
+**Depot Reconciliation**:
+A mathematical conflict detection and graph resolution pipeline stage that resolves overlapping or mutually exclusive regional Steam depots into a consolidated, conflict-free file manifest using language cues and compatibility scoring.
+_Avoid_: Depot merging, manifest deduplication
+
+**Running Instance**:
+An active, monitored game execution process—representing either a single-player session or a dedicated seat within a multi-seat session—uniquely identified by canonical instance ID (`<gameDir>` or `<gameDir>:<profileID>` or `<gameDir>:<profileID>:<seatID>`).
+_Avoid_: Game process, active pid, running game item
+
