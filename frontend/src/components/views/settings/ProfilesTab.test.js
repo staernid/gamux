@@ -16,8 +16,8 @@ describe('ProfilesTab Component', () => {
     { value: 'FR', label: 'France' }
   ];
 
-  const mainProfile = { id: 'main', index: 1, name: 'Alice', is_main: true, steam_id: '76561197960287930' };
-  const p2Profile = { id: 'p2', index: 2, name: 'Bob', is_main: false, steam_id: '76561198998877665' };
+  const mainProfile = { id: 'main', index: 1, name: 'Alice', isMain: true, steamId: '76561197960287930' };
+  const p2Profile = { id: 'p2', index: 2, name: 'Bob', isMain: false, steamId: '76561198998877665' };
 
   beforeEach(() => {
     modalStore.close();

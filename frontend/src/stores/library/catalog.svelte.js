@@ -1,4 +1,4 @@
-import { normalizeGame, isSamePath } from '../../utils/game.js';
+import { normalizeGame, normalizeRunningInstance, isSamePath } from '../../utils/game.js';
 import { selectedGame } from './selection.js';
 
 export function isGamePathRunning(runningSetOrArray, path) {
@@ -31,9 +31,9 @@ export class CatalogState {
   }
 
   setRunningInstances(instances) {
-    const list = Array.isArray(instances) ? instances : [];
+    const list = Array.isArray(instances) ? instances.map(normalizeRunningInstance).filter(Boolean) : [];
     this.runningInstances = list;
-    this.runningGames = new Set(list.map(i => i.gameDir || i.game_dir).filter(Boolean));
+    this.runningGames = new Set(list.map(i => i.gameDir).filter(Boolean));
     this.#notifyInstances();
     this.#notifyRunning();
   }
@@ -48,13 +48,13 @@ export class CatalogState {
 
     const current = this.runningInstances;
     const filtered = current.filter(i => {
-      const samePath = isSamePath(i.gameDir || i.game_dir, gameDir);
+      const samePath = isSamePath(i.gameDir, gameDir);
       if (!samePath) return true;
 
-      const iId = i.instanceId || i.instance_id;
+      const iId = i.instanceId;
       if (iId && instanceId && iId === instanceId) return false;
 
-      const iSeat = i.seatId || i.seat_id || '';
+      const iSeat = i.seatId || '';
 
       // If updating a seat instance, remove prior entry for the same seat
       if (seatId && iSeat === seatId) return false;
@@ -72,24 +72,17 @@ export class CatalogState {
     });
 
     if (isRunning) {
-      filtered.push({
-        instance_id: instanceId,
-        instanceId: instanceId,
-        game_dir: gameDir,
-        gameDir: gameDir,
-        game_name: gameName,
-        gameName: gameName,
-        app_id: appId,
-        appId: appId,
-        profile_id: profileId,
-        profileId: profileId,
-        seat_id: seatId,
-        seatId: seatId,
+      filtered.push(normalizeRunningInstance({
+        instanceId,
+        gameDir,
+        gameName,
+        appId,
+        profileId,
+        seatId,
         pid: extra.pid || 0,
-        is_multiseat: Boolean(seatId),
         isMultiseat: Boolean(seatId),
-        start_time: Math.floor(Date.now() / 1000)
-      });
+        startTime: Math.floor(Date.now() / 1000)
+      }));
     }
     this.runningInstances = filtered;
     this.#notifyInstances();

@@ -1,18 +1,46 @@
 import { AppAPI } from '../api/app.js';
 import { notificationStore } from './notifications.js';
 
+export function normalizeProfile(p) {
+  if (!p) return null;
+  return {
+    id: p.id || 'main',
+    index: p.index ?? 1,
+    name: p.name || 'Player',
+    steamId: String(p.steamId ?? p.steam_id ?? ''),
+    language: p.language || 'english',
+    ipCountry: p.ipCountry ?? p.ip_country ?? 'US',
+    avatarUrl: p.avatarUrl ?? p.avatar_url ?? '',
+    isMain: Boolean(p.isMain ?? p.is_main ?? false),
+  };
+}
+
+export function serializeProfile(p) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    index: p.index,
+    name: p.name,
+    steam_id: p.steamId ?? p.steam_id ?? '',
+    language: p.language || 'english',
+    ip_country: p.ipCountry ?? p.ip_country ?? 'US',
+    avatar_url: p.avatarUrl ?? p.avatar_url ?? '',
+    is_main: Boolean(p.isMain ?? p.is_main ?? false),
+  };
+}
+
 export class ProfilesState {
   profiles = $state([]);
-  activeProfile = $state({
+  activeProfile = $state(normalizeProfile({
     id: 'main',
     index: 1,
     name: 'GamuxPlayer',
-    steam_id: '76561197960287930',
+    steamId: '76561197960287930',
     language: 'english',
-    ip_country: 'US',
-    avatar_url: '',
-    is_main: true,
-  });
+    ipCountry: 'US',
+    avatarUrl: '',
+    isMain: true,
+  }));
   isLoading = $state(false);
 
   #subscribers = new Set();
@@ -21,13 +49,13 @@ export class ProfilesState {
     if (typeof window !== 'undefined' && window.runtime?.EventsOn) {
       window.runtime.EventsOn('gamux:active-profile-changed', (p) => {
         if (p && p.id) {
-          this.activeProfile = p;
+          this.activeProfile = normalizeProfile(p);
           this.#notify();
         }
       });
       window.runtime.EventsOn('gamux:profiles-updated', (list) => {
         if (Array.isArray(list)) {
-          this.profiles = list;
+          this.profiles = list.map(normalizeProfile).filter(Boolean);
           this.#notify();
         }
       });
@@ -43,10 +71,10 @@ export class ProfilesState {
         AppAPI.getActiveProfile()
       ]);
       if (Array.isArray(list) && list.length > 0) {
-        this.profiles = list;
+        this.profiles = list.map(normalizeProfile).filter(Boolean);
       }
       if (active && active.id) {
-        this.activeProfile = active;
+        this.activeProfile = normalizeProfile(active);
       }
       this.isLoading = false;
       this.#notify();
@@ -77,12 +105,13 @@ export class ProfilesState {
     try {
       const created = await AppAPI.createProfile(name, steamID, language, country, avatarURL);
       if (created) {
-        this.profiles = [...this.profiles, created];
-        this.activeProfile = created;
+        const normalized = normalizeProfile(created);
+        this.profiles = [...this.profiles, normalized];
+        this.activeProfile = normalized;
         this.#notify();
-        await this.setActive(created.id);
-        notificationStore.success('Profile Created', `Created profile ${created.name}`);
-        return created;
+        await this.setActive(normalized.id);
+        notificationStore.success('Profile Created', `Created profile ${normalized.name}`);
+        return normalized;
       }
     } catch (err) {
       notificationStore.error('Failed to Create Profile', err);
@@ -92,13 +121,14 @@ export class ProfilesState {
 
   async save(p) {
     try {
-      await AppAPI.saveProfile(p);
-      this.profiles = this.profiles.map(item => item.id === p.id ? { ...p } : item);
+      await AppAPI.saveProfile(serializeProfile(p));
+      const normalized = normalizeProfile(p);
+      this.profiles = this.profiles.map(item => item.id === p.id ? normalized : item);
       if (this.activeProfile?.id === p.id) {
-        this.activeProfile = { ...p };
+        this.activeProfile = normalized;
       }
       this.#notify();
-      notificationStore.success('Profile Saved', `Updated profile ${p.name}`);
+      notificationStore.success('Profile Saved', `Updated profile ${normalized.name}`);
       return true;
     } catch (err) {
       notificationStore.error('Failed to Save Profile', err);

@@ -3,6 +3,7 @@ import {
   normalizePath,
   isSamePath,
   normalizeGame,
+  normalizeRunningInstance,
   getInitials,
   isSteamApp,
   getPlatformType,
@@ -127,6 +128,63 @@ describe('Game Data Model & Normalization Helpers', () => {
     expect(normalized.operatingMode).toBe('');
     expect(normalized.runner).toBe('');
     expect(normalized.protonPath).toBe('');
+  });
+
+  it('normalizes running instances from raw backend payloads', () => {
+    const raw = {
+      instance_id: '/games/hl2:p2:p2',
+      game_dir: '/games/hl2/',
+      game_name: 'Half-Life 2',
+      app_id: '220',
+      profile_id: 'p2',
+      seat_id: 'p2',
+      pid: 1234,
+      is_multiseat: true,
+      start_time: 1700000000,
+      mode: 'local'
+    };
+
+    const inst = normalizeRunningInstance(raw);
+    expect(inst.instanceId).toBe('/games/hl2:p2:p2');
+    expect(inst.gameDir).toBe('/games/hl2');
+    expect(inst.gameName).toBe('Half-Life 2');
+    expect(inst.appId).toBe('220');
+    expect(inst.profileId).toBe('p2');
+    expect(inst.seatId).toBe('p2');
+    expect(inst.pid).toBe(1234);
+    expect(inst.isMultiseat).toBe(true);
+    expect(inst.startTime).toBe(1700000000);
+    expect(inst.mode).toBe('local');
+
+    // Verify no legacy alias pollution
+    expect(inst.instance_id).toBeUndefined();
+    expect(inst.game_dir).toBeUndefined();
+    expect(inst.game_name).toBeUndefined();
+    expect(inst.app_id).toBeUndefined();
+    expect(inst.profile_id).toBeUndefined();
+    expect(inst.seat_id).toBeUndefined();
+    expect(inst.is_multiseat).toBeUndefined();
+    expect(inst.start_time).toBeUndefined();
+  });
+
+  it('generates canonical instanceId for solo and multiseat instances if missing', () => {
+    const solo = normalizeRunningInstance({
+      game_dir: '/games/portal',
+      app_id: '400',
+    });
+    expect(solo.instanceId).toBe('400');
+    expect(solo.profileId).toBe('main');
+    expect(solo.seatId).toBe('');
+    expect(solo.isMultiseat).toBe(false);
+
+    const seat = normalizeRunningInstance({
+      gameDir: '/games/portal',
+      appId: '400',
+      profileId: 'p2',
+      seatId: 'p2',
+    });
+    expect(seat.instanceId).toBe('400:p2:p2');
+    expect(seat.isMultiseat).toBe(true);
   });
 
   it('calculates game title initials', () => {

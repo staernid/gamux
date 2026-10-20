@@ -15,16 +15,16 @@
     const updated = {
       ...active,
       name: details.accountName,
-      steam_id: details.accountSteamId,
+      steamId: details.accountSteamId,
       language: details.language,
-      ip_country: details.ipCountry,
-      avatar_url: details.avatarUrl
+      ipCountry: details.ipCountry,
+      avatarUrl: details.avatarUrl
     };
     profilesStore.save(updated);
   }
 
   function confirmDeleteProfile() {
-    if (!active || active.is_main) return;
+    if (!active || active.isMain) return;
     const name = active.name || 'this profile';
     modalStore.open('confirm', {
       title: `Delete Profile "${name}"?`,
@@ -45,8 +45,8 @@
     <div class="p-4 rounded-2xl bg-surface-header/60 border border-surface-border flex items-center justify-between space-x-4">
       <div class="flex items-center space-x-3.5 min-w-0">
         <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-surface-input border border-surface-borderHighlight flex items-center justify-center text-sm font-bold uppercase text-white shadow-md">
-          {#if active?.avatar_url}
-            <img src={active.avatar_url} alt={active.name} class="w-full h-full object-cover" />
+          {#if active?.avatarUrl}
+            <img src={active.avatarUrl} alt={active.name} class="w-full h-full object-cover" />
           {:else}
             <span>{(active?.name || 'GP').slice(0, 2).toUpperCase()}</span>
           {/if}
@@ -54,17 +54,17 @@
         <div class="min-w-0">
           <div class="flex items-center space-x-2">
             <h3 class="text-sm font-bold text-white truncate">{active?.name || 'GamuxPlayer'}</h3>
-            <span class="text-4xs px-2 py-0.5 rounded font-mono font-semibold uppercase tracking-wider {active?.is_main ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-surface-input text-neutral-400 border border-surface-border'}">
-              {active?.is_main ? 'Primary Host' : `Seat ${active?.index || 2}`}
+            <span class="text-4xs px-2 py-0.5 rounded font-mono font-semibold uppercase tracking-wider {active?.isMain ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-surface-input text-neutral-400 border border-surface-border'}">
+              {active?.isMain ? 'Primary Host' : `Seat ${active?.index || 2}`}
             </span>
           </div>
           <p class="text-xs text-neutral-400 mt-0.5 font-mono">
-            {active?.is_main ? 'Uses host environment and default prefix (~/Games/umu)' : 'Isolated sandbox with profile prefix (~/Games/umu)'}
+            {active?.isMain ? 'Uses host environment and default prefix (~/Games/umu)' : 'Isolated sandbox with profile prefix (~/Games/umu)'}
           </p>
         </div>
       </div>
 
-      {#if !active?.is_main}
+      {#if !active?.isMain}
         <button
           type="button"
           onclick={confirmDeleteProfile}
@@ -87,10 +87,10 @@
       {#if active}
         <SteamPersonaCard
           accountName={active.name}
-          accountSteamId={active.steam_id}
+          accountSteamId={active.steamId}
           language={active.language}
-          ipCountry={active.ip_country}
-          avatarUrl={active.avatar_url || ''}
+          ipCountry={active.ipCountry}
+          avatarUrl={active.avatarUrl || ''}
           {languagesList}
           {countriesList}
           onchange={handlePersonaChange}

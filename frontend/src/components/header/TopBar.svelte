@@ -21,8 +21,8 @@
       // Find games that have active multiseat seats (p1, p2...)
       const gamesWithSeats = new Set();
       for (const inst of insts) {
-        if (inst.seatId || inst.seat_id) {
-          gamesWithSeats.add((inst.gameDir || inst.game_dir || '').toLowerCase());
+        if (inst.seatId) {
+          gamesWithSeats.add((inst.gameDir || '').toLowerCase());
         }
       }
 
@@ -30,10 +30,10 @@
       const unique = [];
 
       for (const inst of insts) {
-        const gDir = inst.gameDir || inst.game_dir || '';
+        const gDir = inst.gameDir || '';
         const normDir = gDir.toLowerCase();
-        const seatId = inst.seatId || inst.seat_id || '';
-        const profId = inst.profileId || inst.profile_id || 'main';
+        const seatId = inst.seatId || '';
+        const profId = inst.profileId || 'main';
 
         // Suppress generic orphan non-seat pill if this game has active seats
         if (!seatId && gamesWithSeats.has(normDir)) {
@@ -48,11 +48,11 @@
 
         const game = allGames.find(g => isSamePath(g.gameDir, gDir));
         const profile = profs.find(p => p.id === profId) || (profId === 'main' ? profilesStore.activeProfile : null);
-        const name = inst.gameName || inst.game_name || game?.name || 'Running Game';
+        const name = inst.gameName || game?.name || 'Running Game';
         const isSolo = !seatId && (profId === 'main' || profId === '' || !profId);
 
         unique.push({
-          instanceId: inst.instanceId || inst.instance_id || gDir,
+          instanceId: inst.instanceId || gDir,
           gameDir: gDir,
           game,
           name,
@@ -203,9 +203,9 @@
           <!-- Profile Avatar + Badge (shown for secondary / multiseat profiles; omitted for solo main) -->
           {#if !item.isSolo}
             <div class="flex items-center space-x-1.5 flex-shrink-0" title="{item.profile?.name || item.profileId} ({item.seatId || item.profileId})">
-              {#if item.profile?.avatar_url}
+              {#if item.profile?.avatarUrl}
                 <img
-                  src={item.profile.avatar_url}
+                  src={item.profile.avatarUrl}
                   alt={item.profile.name || item.profileId}
                   class="w-4 h-4 rounded-full object-cover border border-surface-border flex-shrink-0"
                 />

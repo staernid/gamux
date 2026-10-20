@@ -81,8 +81,8 @@
     aria-label="Player Profiles"
     aria-expanded={isOpen}
   >
-    {#if active?.avatar_url}
-      <img src={active.avatar_url} alt={active.name} class="w-full h-full object-cover" />
+    {#if active?.avatarUrl}
+      <img src={active.avatarUrl} alt={active.name} class="w-full h-full object-cover" />
     {:else}
       <div class="w-full h-full flex items-center justify-center bg-surface-input text-neutral-300 font-bold text-2xs uppercase tracking-wider group-hover:text-white transition-colors">
         {getInitials(active?.name)}
@@ -103,7 +103,7 @@
         <div class="flex items-center justify-between mt-0.5">
           <span class="text-xs font-bold text-white truncate">{active?.name || 'GamuxPlayer'}</span>
           <span class="text-4xs px-1.5 py-0.5 rounded font-mono bg-surface-input text-neutral-400 border border-surface-border">
-            {active?.is_main ? 'Host' : `Seat ${active?.index || 2}`}
+            {active?.isMain ? 'Host' : `Seat ${active?.index || 2}`}
           </span>
         </div>
       </div>
@@ -118,8 +118,8 @@
           >
             <div class="flex items-center space-x-2 min-w-0">
               <div class="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 bg-surface-input border border-surface-border flex items-center justify-center text-4xs font-bold uppercase text-neutral-300">
-                {#if p.avatar_url}
-                  <img src={p.avatar_url} alt={p.name} class="w-full h-full object-cover" />
+                {#if p.avatarUrl}
+                  <img src={p.avatarUrl} alt={p.name} class="w-full h-full object-cover" />
                 {:else}
                   {getInitials(p.name)}
                 {/if}
@@ -127,7 +127,7 @@
               <div class="min-w-0 flex flex-col">
                 <span class="text-xs truncate font-medium">{p.name}</span>
                 <span class="text-4xs text-neutral-400 font-mono truncate">
-                  {p.is_main ? '~/Games/umu (Host)' : `~/Games/umu (Seat ${p.index || 2})`}
+                  {p.isMain ? '~/Games/umu (Host)' : `~/Games/umu (Seat ${p.index || 2})`}
                 </span>
               </div>
             </div>

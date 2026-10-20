@@ -52,6 +52,43 @@ export function getExecutablePath(game, candidates = []) {
   return normalizePath(rawExe);
 }
 
+export function normalizeRunningInstance(i) {
+  if (!i) return null;
+  const gameDir = normalizePath(i.gameDir ?? i.game_dir ?? '');
+  const profileId = i.profileId ?? i.profile_id ?? 'main';
+  const seatId = i.seatId ?? i.seat_id ?? '';
+  const appId = String(i.appId ?? i.app_id ?? '');
+  const gameName = i.gameName ?? i.game_name ?? '';
+  const pid = Number(i.pid ?? 0);
+  const isMultiseat = Boolean(i.isMultiseat ?? i.is_multiseat ?? Boolean(seatId));
+  const startTime = Number(i.startTime ?? i.start_time ?? Math.floor(Date.now() / 1000));
+  const mode = i.mode ?? '';
+
+  let instanceId = i.instanceId ?? i.instance_id ?? '';
+  if (!instanceId) {
+    if (seatId) {
+      instanceId = `${appId || gameDir}:${profileId}:${seatId}`;
+    } else if (profileId && profileId !== 'main') {
+      instanceId = `${appId || gameDir}:${profileId}`;
+    } else {
+      instanceId = appId || gameDir;
+    }
+  }
+
+  return {
+    instanceId,
+    gameDir,
+    gameName,
+    appId,
+    profileId,
+    seatId,
+    pid,
+    isMultiseat,
+    startTime,
+    mode
+  };
+}
+
 export function normalizeGame(g) {
   if (!g) return null;
 

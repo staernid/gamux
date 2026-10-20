@@ -651,23 +651,23 @@ function createMultiseatStore() {
         const seatId = s.seat_id || `p${idx + 1}`;
         let prof;
         if (s.seat_id === 'p1' || idx === 0) {
-          prof = activeProf || { name: 'GamuxPlayer', steam_id: '76561197960287930', language: 'english', ip_country: 'US' };
+          prof = activeProf || { name: 'GamuxPlayer', steamId: '76561197960287930', language: 'english', ipCountry: 'US' };
         } else {
           const profId = s.profile_id || (s.seat_id === 'p2' ? (mCfg.player2_profile_id || 'p2') : s.seat_id);
-          prof = allProfs.find(p => p.id === profId) || allProfs.find(p => !p.is_main) || {
+          prof = allProfs.find(p => p.id === profId) || allProfs.find(p => !p.isMain) || {
             id: profId,
             name: `Player${idx + 1}`,
-            steam_id: `7656119899887766${idx + 4}`,
+            steamId: `7656119899887766${idx + 4}`,
             language: 'english',
-            ip_country: 'US',
+            ipCountry: 'US',
           };
         }
 
         const playerProfile = {
           account_name: prof.name || `Player${idx + 1}`,
-          account_steamid: prof.steam_id || `7656119899887766${idx + 4}`,
+          account_steamid: prof.steamId || `7656119899887766${idx + 4}`,
           language: prof.language || 'english',
-          ip_country: prof.ip_country || 'US',
+          ip_country: prof.ipCountry || 'US',
         };
 
         const devPad = resolvedPads[idx] === 'none' ? '' : extractDevNode(resolvedPads[idx]);
