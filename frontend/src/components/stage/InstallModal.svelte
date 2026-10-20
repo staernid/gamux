@@ -99,8 +99,8 @@
   });
 
   function getContentCategory(depot) {
+    if (depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0) || depot.content_category === 'dlc') return 'dlc';
     if (depot.content_category) return depot.content_category;
-    if (depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0)) return 'dlc';
     if (depot.category === 'soundtrack') return 'soundtrack';
     return 'core';
   }

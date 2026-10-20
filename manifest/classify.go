@@ -44,7 +44,14 @@ const depotFlagDirectory = 0x40
 // Rules are evaluated in a fixed precedence order; the first rule that matches wins:
 // executables, metadata, depot name, then file entry analysis.
 func ClassifyDepotContent(depotID uint32, depotName string, files []ManifestFileEntry, meta *DepotMeta) (string, string) {
-	// Any depot containing game executables is definitively CORE content and must
+	// If depot is explicitly a DLC, classify using metadata or default to ContentCategoryDLC
+	if meta != nil && (meta.IsDLC || meta.DLCAppID > 0) {
+		if cat, lang, ok := classifyByMeta(meta, len(files)); ok {
+			return cat, lang
+		}
+		return ContentCategoryDLC, ""
+	}
+	// Any base game depot containing executables is definitively CORE content and must
 	// never be classified as an optional locale or soundtrack.
 	if containsExecutable(files) {
 		return ContentCategoryCore, ""

@@ -129,10 +129,19 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 				}
 
 				if norm != "" {
-					if fi, statErr := os.Stat(filepath.Join(gameDir, norm)); statErr == nil && !fi.IsDir() {
-						installedCount++
-						if isExec {
-							installedExecCount++
+					absPath := filepath.Join(gameDir, norm)
+					if fi, statErr := os.Stat(absPath); statErr == nil && !fi.IsDir() {
+						sizeMatches := f.Size == 0 || uint64(fi.Size()) == f.Size
+						if !sizeMatches && isExec {
+							if util.FileExists(absPath+".orig") || util.FileExists(absPath+".bak") {
+								sizeMatches = true
+							}
+						}
+						if sizeMatches {
+							installedCount++
+							if isExec {
+								installedExecCount++
+							}
 						}
 					}
 				}
@@ -140,17 +149,16 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 
 			var isInstalled bool
 			if fileCount > 0 {
-				if execFileCount > 0 {
-					// Depots with platform binaries MUST have at least one binary present on disk
-					isInstalled = installedExecCount > 0 && float64(installedCount)/float64(fileCount) >= 0.5
-				} else {
-					// Content / asset depots without binaries require high matching ratio
-					isInstalled = installedCount > 0 && float64(installedCount)/float64(fileCount) >= 0.8
-				}
+				ratio := float64(installedCount) / float64(fileCount)
+				isInstalled = ratio >= 0.85
 			}
 			depotName := fmt.Sprintf("Depot %d", dID)
 			if meta != nil && meta.Name != "" {
 				depotName = meta.Name
+			} else if dID == 228983 || dID == 228990 || dID == 229004 || dID == 228991 {
+				depotName = fmt.Sprintf("Steam Common Redistributables (%d)", dID)
+			} else if edition := detectDepotEdition(files); edition != "" {
+				depotName = fmt.Sprintf("%s (%d)", edition, dID)
 			} else if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
 				depotName = fmt.Sprintf("%s Language Pack (%d)", util.TitleCase(lang), dID)
 			} else if contentCat == ContentCategoryOptionalHD {
@@ -207,9 +215,17 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 		}
 	}
 
-	// If no local manifests found on disk, but remote metadata exists (e.g. preview or uninstalled stub)
-	if len(summaries) == 0 && len(metaMap) > 0 {
+	// Always merge remote metadata: append any depots from metaMap not already in summaries (e.g. uninstalled DLCs, additional language packs)
+	if len(metaMap) > 0 {
+		seenDepots := make(map[uint32]bool, len(summaries))
+		for _, s := range summaries {
+			seenDepots[s.DepotID] = true
+		}
+
 		for dID, meta := range metaMap {
+			if seenDepots[dID] {
+				continue
+			}
 			m := meta
 			contentCat, lang := ClassifyDepotContent(dID, m.Name, nil, &m)
 			cat := DepotCategoryCommon
@@ -223,7 +239,9 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 
 			depotName := m.Name
 			if depotName == "" {
-				if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
+				if dID == 228983 || dID == 228990 || dID == 229004 || dID == 228991 {
+					depotName = fmt.Sprintf("Steam Common Redistributables (%d)", dID)
+				} else if strings.HasPrefix(contentCat, ContentCategoryLocalePrefix) {
 					depotName = fmt.Sprintf("%s Language Pack (%d)", util.TitleCase(lang), dID)
 				} else if contentCat == ContentCategoryOptionalHD {
 					depotName = fmt.Sprintf("High-Resolution Assets (%d)", dID)
@@ -238,7 +256,11 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 					}
 					prefix := ""
 					if m.IsDLC && m.DLCAppID > 0 {
-						prefix = fmt.Sprintf("DLC #%d ", m.DLCAppID)
+						if m.DLCName != "" {
+							prefix = fmt.Sprintf("%s - ", m.DLCName)
+						} else {
+							prefix = fmt.Sprintf("DLC #%d ", m.DLCAppID)
+						}
 					}
 					switch cat {
 					case DepotCategoryCommon:
@@ -283,6 +305,26 @@ func InspectGameDepotsWithMetadata(gameDir string, appID uint32, metaMap map[uin
 	})
 
 	return summaries, nil
+}
+
+// detectDepotEdition inspects file entries for regional install scripts and cues.
+func detectDepotEdition(files []ManifestFileEntry) string {
+	for _, f := range files {
+		base := strings.ToLower(filepath.Base(f.Path))
+		switch base {
+		case "ww.vdf", "row.vdf":
+			return "Worldwide / Standard Edition"
+		case "rus.vdf", "ru.vdf":
+			return "Russian Edition"
+		case "jap.vdf", "jp.vdf":
+			return "Japanese Edition"
+		case "ger.vdf", "de.vdf":
+			return "German Edition"
+		case "pol.vdf", "pl.vdf":
+			return "Polish Edition"
+		}
+	}
+	return ""
 }
 
 // DiscoverManifestExecutables discovers candidate launch targets directly from developer depot manifests.
@@ -387,8 +429,8 @@ func UninstallDepot(gameDir string, appID uint32, depotID uint32) (int, uint64, 
 		}
 	}
 
-	// If no depot keys were found locally and appID is known, resolve from default providers
-	if len(depotKeys) == 0 && appID > 0 {
+	// If target depot key is missing and appID is known, resolve from default providers
+	if depotKeys[depotID] == "" && appID > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		chain := NewDefaultProviderChain("", "")
 		if res, err := chain.Resolve(ctx, appID); err == nil && res != nil && len(res.Depots) > 0 {
@@ -436,7 +478,7 @@ func UninstallDepot(gameDir string, appID uint32, depotID uint32) (int, uint64, 
 		return 0, 0, fmt.Errorf("parse manifest: %w", err)
 	}
 
-	// Collect files from other installed depots to prevent deleting shared files
+	// Collect files from other ACTUALLY INSTALLED depots to prevent deleting shared files
 	otherDepotFiles := make(map[string]bool)
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".manifest") {
@@ -449,11 +491,34 @@ func UninstallDepot(gameDir string, appID uint32, depotID uint32) (int, uint64, 
 				if did != depotID {
 					otherData, err := os.ReadFile(filepath.Join(manifestsDir, e.Name()))
 					if err == nil {
-						if oFiles, err := ParseBinaryManifestWithKey(otherData, depotKeys[did]); err == nil {
+						if oFiles, err := ParseBinaryManifestWithKey(otherData, depotKeys[did]); err == nil && len(oFiles) > 0 {
+							// Check if this other depot is actually installed on disk
+							presentCount := 0
+							totalCheck := 0
 							for _, of := range oFiles {
+								if (of.Flags & 0x40) != 0 {
+									continue
+								}
+								totalCheck++
 								norm := NormalizePath(of.Path)
 								if norm != "" {
-									otherDepotFiles[norm] = true
+									absP := filepath.Join(gameDir, norm)
+									if fi, statErr := os.Stat(absP); statErr == nil && !fi.IsDir() {
+										if of.Size == 0 || uint64(fi.Size()) == of.Size {
+											presentCount++
+										}
+									}
+								}
+								if totalCheck >= 30 {
+									break
+								}
+							}
+							if totalCheck > 0 && float64(presentCount)/float64(totalCheck) >= 0.70 {
+								for _, of := range oFiles {
+									norm := NormalizePath(of.Path)
+									if norm != "" {
+										otherDepotFiles[norm] = true
+									}
 								}
 							}
 						}

@@ -72,8 +72,8 @@ func TestInspectRealFactorio(t *testing.T) {
 		}
 		if s.DepotID == 427524 {
 			foundLin32 = true
-			if !s.Installed {
-				t.Errorf("Depot 427524 (Linux 32-bit) SHOULD be installed, but got Installed=false")
+			if s.Installed {
+				t.Errorf("Depot 427524 (Linux 32-bit) should NOT be installed, but got Installed=true")
 			}
 			if s.Category != string(DepotCategoryLinux) {
 				t.Errorf("Depot 427524 should have Category=linux, got %s", s.Category)
@@ -1217,5 +1217,143 @@ func TestErrorMessages_UserFriendly(t *testing.T) {
 				t.Errorf("error message %q should contain %q", msg, tt.contains)
 			}
 		})
+	}
+}
+
+func TestInspectGameDepotsWithMetadata_MergeRemoteAndVerifyFileSizes(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Create Depot 101 manifest (installed, 2 files)
+	depot101Files := []ManifestFileEntry{
+		{Path: "bin/game.exe", Size: 1000, DepotID: 101},
+		{Path: "data/content.dat", Size: 2000, DepotID: 101},
+	}
+	payload101 := buildTestProtobufPayload(depot101Files)
+	if err := os.WriteFile(filepath.Join(manifestsDir, "101_1001.manifest"), payload101, 0644); err != nil {
+		t.Fatalf("write manifest 101: %v", err)
+	}
+
+	// Physically create files on disk matching Depot 101
+	if err := os.MkdirAll(filepath.Join(tmpDir, "bin"), 0755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "data"), 0755); err != nil {
+		t.Fatalf("mkdir data: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "bin/game.exe"), make([]byte, 1000), 0755); err != nil {
+		t.Fatalf("write game.exe: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "data/content.dat"), make([]byte, 2000), 0644); err != nil {
+		t.Fatalf("write content.dat: %v", err)
+	}
+
+	// Create Depot 102 manifest (conflicting regional edition, e.g. Russian, not installed)
+	// It has bin/game.exe with different expected size (950) and ru.vdf (50)
+	depot102Files := []ManifestFileEntry{
+		{Path: "bin/game.exe", Size: 950, DepotID: 102},
+		{Path: "rus.vdf", Size: 50, DepotID: 102},
+	}
+	payload102 := buildTestProtobufPayload(depot102Files)
+	if err := os.WriteFile(filepath.Join(manifestsDir, "102_1002.manifest"), payload102, 0644); err != nil {
+		t.Fatalf("write manifest 102: %v", err)
+	}
+
+	// Remote metadata contains 101, 102, and 103 (uninstalled DLC without local manifest)
+	metaMap := map[uint32]DepotMeta{
+		101: {DepotID: 101, Name: "Base Game", OSList: "windows", Size: 3000},
+		102: {DepotID: 102, Name: "", OSList: "windows", Size: 1000},
+		103: {DepotID: 103, Name: "Expansion Pack 1", IsDLC: true, DLCAppID: 999, OSList: "windows", Size: 5000000},
+	}
+
+	summaries, err := InspectGameDepotsWithMetadata(tmpDir, 100, metaMap)
+	if err != nil {
+		t.Fatalf("InspectGameDepotsWithMetadata failed: %v", err)
+	}
+
+	// We expect all 3 depots to be returned
+	if len(summaries) != 3 {
+		t.Fatalf("expected 3 depots, got %d", len(summaries))
+	}
+
+	// Depot 101 must be installed
+	if summaries[0].DepotID != 101 || !summaries[0].Installed {
+		t.Errorf("expected depot 101 to be installed, got %+v", summaries[0])
+	}
+
+	// Depot 102 must NOT be installed (bin/game.exe size on disk is 1000 != 950, rus.vdf is missing)
+	if summaries[1].DepotID != 102 || summaries[1].Installed {
+		t.Errorf("expected depot 102 to NOT be installed, got %+v", summaries[1])
+	}
+	// Depot 102 should have synthesized name using rus.vdf
+	if !strings.Contains(summaries[1].Name, "Russian Edition") {
+		t.Errorf("expected depot 102 name to contain 'Russian Edition', got %q", summaries[1].Name)
+	}
+
+	// Depot 103 must be present from metaMap, uninstalled, with DLC category
+	if summaries[2].DepotID != 103 || summaries[2].Installed {
+		t.Errorf("expected depot 103 to be uninstalled, got %+v", summaries[2])
+	}
+	if summaries[2].ContentCategory != ContentCategoryDLC || !summaries[2].IsDLC {
+		t.Errorf("expected depot 103 to be ContentCategoryDLC, got %+v", summaries[2])
+	}
+}
+
+func TestUninstallDepot_OnlyProtectsActuallyInstalledDepots(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestsDir := filepath.Join(tmpDir, "[Manifests]")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	// Depot 101 (installed): game.exe and data.dat
+	depot101Files := []ManifestFileEntry{
+		{Path: "bin/game.exe", Size: 1000, DepotID: 101},
+		{Path: "data/data.dat", Size: 2000, DepotID: 101},
+	}
+	payload101 := buildTestProtobufPayload(depot101Files)
+	if err := os.WriteFile(filepath.Join(manifestsDir, "101_1001.manifest"), payload101, 0644); err != nil {
+		t.Fatalf("write manifest 101: %v", err)
+	}
+
+	// Depot 102 (NOT installed): also has data/data.dat in its manifest
+	depot102Files := []ManifestFileEntry{
+		{Path: "data/data.dat", Size: 2000, DepotID: 102},
+		{Path: "other/ru.dat", Size: 500, DepotID: 102},
+	}
+	payload102 := buildTestProtobufPayload(depot102Files)
+	if err := os.WriteFile(filepath.Join(manifestsDir, "102_1002.manifest"), payload102, 0644); err != nil {
+		t.Fatalf("write manifest 102: %v", err)
+	}
+
+	// Create files for Depot 101 on disk
+	_ = os.MkdirAll(filepath.Join(tmpDir, "bin"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "data"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "bin/game.exe"), make([]byte, 1000), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "data/data.dat"), make([]byte, 2000), 0644)
+
+	// Now uninstall Depot 101.
+	// Because Depot 102 is NOT installed on disk, data/data.dat should NOT be protected.
+	deleted, freed, err := UninstallDepot(tmpDir, 100, 101)
+	if err != nil {
+		t.Fatalf("UninstallDepot failed: %v", err)
+	}
+
+	if deleted != 2 {
+		t.Errorf("expected 2 files deleted, got %d", deleted)
+	}
+	if freed != 3000 {
+		t.Errorf("expected 3000 bytes freed, got %d", freed)
+	}
+
+	// Verify files are removed from disk
+	if _, err := os.Stat(filepath.Join(tmpDir, "bin/game.exe")); !os.IsNotExist(err) {
+		t.Errorf("expected bin/game.exe to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "data/data.dat")); !os.IsNotExist(err) {
+		t.Errorf("expected data/data.dat to be removed")
 	}
 }

@@ -59,7 +59,7 @@
   }
 
   function handleUpdateGame(e) {
-    onupdateGame?.(e?.detail);
+    onupdateGame?.(e?.detail ?? e);
   }
 
   function handleNormalizeDirectory() {
@@ -148,7 +148,7 @@
         </p>
       </div>
     {/if}
-    <HubDLCCard {game} />
+    <HubDLCCard {game} onupdateGame={handleUpdateGame} />
   {:else if !isInstalled}
     <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
     <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">

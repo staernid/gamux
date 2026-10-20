@@ -5,16 +5,18 @@
   import { notificationStore } from '../../../../stores/notifications.js';
   import { configStore } from '../../../../stores/config.js';
   import { modalStore } from '../../../../stores/modal.js';
+  import { updateGameInStore } from '../../../../stores/library.js';
   import { formatBytes } from '../../../../utils/format.js';
   import { isSamePath } from '../../../../utils/game.js';
 
   /**
    * @typedef {Object} Props
    * @property {any} [game]
+   * @property {(updated: any) => void} [onupdateGame]
    */
 
   /** @type {Props} */
-  let { game = null } = $props();
+  let { game = null, onupdateGame = undefined } = $props();
 
   let depots = $state([]);
   let dlcs = $state([]);
@@ -81,8 +83,8 @@
   }
 
   function getContentCategory(depot) {
+    if (depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0) || depot.content_category === 'dlc') return 'dlc';
     if (depot.content_category) return depot.content_category;
-    if (depot.is_dlc || (depot.dlc_app_id && Number(depot.dlc_app_id) > 0)) return 'dlc';
     if (depot.category === 'soundtrack') return 'soundtrack';
     return 'core';
   }
@@ -261,7 +263,7 @@
     try {
       await tasksStore.start({
         app_id: Number(appID),
-        platform: depot.category || 'all',
+        platform: game?.platform || (depot.category === 'linux' ? 'linux' : 'win64'),
         target_dir: gameDir,
         game_name: `${game?.name || 'Game'} (${depot.name || depot.depot_id})`,
         included_depots: [Number(depot.depot_id)],
@@ -325,7 +327,11 @@
       onConfirm: async () => {
         isActionRunning = true;
         try {
-          await AppAPI.uninstallDepot(gameDir, Number(depot.depot_id));
+          const res = await AppAPI.uninstallDepot(gameDir, Number(depot.depot_id));
+          if (res) {
+            const normalized = updateGameInStore(res);
+            onupdateGame?.(normalized);
+          }
           notificationStore.items.add({
             type: 'success',
             title: 'Depot Uninstalled',
