@@ -161,3 +161,13 @@ export interface Profile {
   avatarUrl: string;
   isMain: boolean;
 }
+
+export interface SystemCapabilities {
+  hasBwrap: boolean;
+  hasGamescope: boolean;
+  hasCage: boolean;
+  hasSunshine: boolean;
+  hasPipewire: boolean;
+  hasInputPermissions: boolean;
+  inputPermissionsError?: string;
+}

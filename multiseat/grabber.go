@@ -159,6 +159,7 @@ func (g *InputGrabber) Grab() error {
 	g.ctx = ctx
 	g.cancel = cancel
 
+	var lastErr error
 	for _, node := range g.nodes {
 		f, err := os.OpenFile(node, os.O_RDWR, 0)
 		if err != nil {
@@ -166,6 +167,7 @@ func (g *InputGrabber) Grab() error {
 			f, err = os.OpenFile(node, os.O_RDONLY, 0)
 			if err != nil {
 				slog.Warn("Failed to open input device for exclusive grab", "node", node, "error", err)
+				lastErr = fmt.Errorf("open %s: %w", node, err)
 				continue
 			}
 		}
@@ -174,6 +176,7 @@ func (g *InputGrabber) Grab() error {
 		_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), uintptr(EVIOCGRAB), 1)
 		if errno != 0 {
 			slog.Warn("ioctl EVIOCGRAB failed on device", "node", node, "errno", errno)
+			lastErr = fmt.Errorf("ioctl EVIOCGRAB %s: %w", node, errno)
 			_ = f.Close()
 			continue
 		}
@@ -187,6 +190,13 @@ func (g *InputGrabber) Grab() error {
 	}
 
 	g.active = len(g.fds) > 0
+	if len(g.nodes) > 0 && !g.active {
+		cancel()
+		if lastErr != nil {
+			return fmt.Errorf("failed to exclusively grab configured input devices (check 'input' group permissions): %w", lastErr)
+		}
+		return fmt.Errorf("no valid input device nodes available to grab")
+	}
 	return nil
 }
 

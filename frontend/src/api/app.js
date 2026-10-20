@@ -57,11 +57,13 @@ const DEFAULT_MOCKS = {
     { name: 'Display-1', width: 1920, height: 1080, refresh_rate: 60, is_primary: true, scale: 1.0, x: 0, y: 0 }
   ],
   getMultiseatCapabilities: () => ({
-    has_bwrap: true,
-    has_gamescope: true,
-    has_cage: true,
-    has_sunshine: true,
-    has_pipewire: true
+    hasBwrap: true,
+    hasGamescope: true,
+    hasCage: true,
+    hasSunshine: true,
+    hasPipewire: true,
+    hasInputPermissions: true,
+    inputPermissionsError: ''
   }),
   getConnectedGamepads: () => ([
     { dev_node: '/dev/input/event2', name: 'Xbox Wireless Controller', id: 'event2', is_gamepad: true },

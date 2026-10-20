@@ -243,6 +243,10 @@ func (s *Supervisor) prepareSeat(ctx context.Context, sessionCfg MultiseatSessio
 		grabber = NewInputGrabber(sCfg.KeyboardNode, sCfg.MouseNode)
 		if err := grabber.Grab(); err != nil {
 			slog.Warn("Failed to grab input devices", "seat", seatID, "error", err)
+			if sink != nil {
+				sink.Destroy(ctx)
+			}
+			return nil, fmt.Errorf("grab input devices for seat %s: %w", seatID, err)
 		}
 	}
 

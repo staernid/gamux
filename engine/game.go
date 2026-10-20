@@ -841,16 +841,8 @@ func (eng *Engine) CheckGameUpdates(ctx context.Context, gameDir string) (*domai
 		}
 		game.RecomputeState()
 
-		var dirMtime, profileMtime int64
-		if dirFi, sErr := os.Stat(cleanDir); sErr == nil {
-			dirMtime = dirFi.ModTime().UnixNano()
-		}
-		if pFi, sErr := os.Stat(filepath.Join(cleanDir, ".gamux", "launch_profile.json")); sErr == nil {
-			profileMtime = pFi.ModTime().UnixNano()
-		} else if legFi, sErr := os.Stat(filepath.Join(cleanDir, "steam_settings", "launch_profile.json")); sErr == nil {
-			profileMtime = legFi.ModTime().UnixNano()
-		}
-		_ = cache.SaveCachedGame(cleanDir, dirMtime, profileMtime, game)
+		sig := detector.ComputeSentinelSignature(cleanDir)
+		_ = cache.SaveCachedGame(cleanDir, sig, game)
 	}
 
 	return vs, nil

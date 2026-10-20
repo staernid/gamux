@@ -152,11 +152,13 @@ type MultiseatSessionStatus struct {
 
 // SystemCapabilities reports available host tools for multi-seat support.
 type SystemCapabilities struct {
-	HasBwrap     bool `json:"has_bwrap"`
-	HasGamescope bool `json:"has_gamescope"`
-	HasCage      bool `json:"has_cage"`
-	HasSunshine  bool `json:"has_sunshine"`
-	HasPipewire  bool `json:"has_pipewire"`
+	HasBwrap              bool   `json:"hasBwrap"`
+	HasGamescope          bool   `json:"hasGamescope"`
+	HasCage               bool   `json:"hasCage"`
+	HasSunshine           bool   `json:"hasSunshine"`
+	HasPipewire           bool   `json:"hasPipewire"`
+	HasInputPermissions   bool   `json:"hasInputPermissions"`
+	InputPermissionsError string `json:"inputPermissionsError,omitempty"`
 }
 
 // isExplicitDeviceNode reports whether a device node string points to a real device node path,

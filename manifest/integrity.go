@@ -8,11 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/staernid/gamux/util"
+	"golang.org/x/sync/errgroup"
 )
 
 // ScanUntrackedFiles walks gameDir and compares every file on disk against official manifest entries.
@@ -250,6 +253,15 @@ func ScanDepotIntegrityWithProgress(ctx context.Context, gameDir string, appID u
 		})
 	}
 
+	var mu sync.Mutex
+	type integrityCandidate struct {
+		path         string
+		rel          string
+		entry        ManifestFileEntry
+		isDrmWrapped bool
+	}
+	var candidates []integrityCandidate
+
 	walkErr := filepath.WalkDir(gameDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -282,31 +294,15 @@ func ScanDepotIntegrityWithProgress(ctx context.Context, gameDir string, appID u
 		if isOfficial {
 			foundMap[normRel] = true
 			if !d.IsDir() {
-				checkedFiles++
-				checkedBytes += int64(entry.Size)
-				reportProgress(rel, false)
-
 				if fi, err := d.Info(); err == nil {
 					lowerRel := strings.ToLower(rel)
 					isDrmWrapped := (strings.HasSuffix(lowerRel, "steam_api64.dll") || strings.HasSuffix(lowerRel, "steam_api.dll") || strings.HasSuffix(lowerRel, "libsteam_api.so")) && hasOriginalBackup(gameDir, rel)
 
-					corrupted := false
 					if uint64(fi.Size()) != entry.Size {
-						corrupted = true
-					} else if !isDrmWrapped {
-						if entry.SHA1 != "" {
-							localHash, err := util.GetSHA1Hash(path)
-							if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
-								corrupted = true
-							}
-						} else if len(entry.Chunks) > 0 {
-							if !VerifyFileChunksOnDisk(path, entry.Chunks) {
-								corrupted = true
-							}
-						}
-					}
+						checkedFiles++
+						checkedBytes += int64(entry.Size)
+						reportProgress(rel, false)
 
-					if corrupted {
 						if isDrmWrapped {
 							report.IntactCount++
 						} else if IsRedistFile(rel) {
@@ -315,10 +311,17 @@ func ScanDepotIntegrityWithProgress(ctx context.Context, gameDir string, appID u
 							report.ModifiedFiles = append(report.ModifiedFiles, rel)
 						}
 					} else {
-						report.IntactCount++
+						candidates = append(candidates, integrityCandidate{
+							path:         path,
+							rel:          rel,
+							entry:        entry,
+							isDrmWrapped: isDrmWrapped,
+						})
 					}
 				} else {
+					checkedFiles++
 					report.IntactCount++
+					reportProgress(rel, false)
 				}
 			}
 		} else if !d.IsDir() {
@@ -339,6 +342,66 @@ func ScanDepotIntegrityWithProgress(ctx context.Context, gameDir string, appID u
 	})
 	if walkErr != nil {
 		return nil, walkErr
+	}
+
+	if len(candidates) > 0 {
+		workers := runtime.NumCPU()
+		if workers > 8 {
+			workers = 8
+		}
+		if workers < 1 {
+			workers = 1
+		}
+
+		g, gCtx := errgroup.WithContext(ctx)
+		g.SetLimit(workers)
+
+		for _, c := range candidates {
+			cand := c
+			g.Go(func() error {
+				if gCtx.Err() != nil {
+					return gCtx.Err()
+				}
+
+				corrupted := false
+				if !cand.isDrmWrapped {
+					if cand.entry.SHA1 != "" {
+						localHash, err := util.GetSHA1Hash(cand.path)
+						if err != nil || !strings.EqualFold(localHash, cand.entry.SHA1) {
+							corrupted = true
+						}
+					} else if len(cand.entry.Chunks) > 0 {
+						if !VerifyFileChunksOnDisk(cand.path, cand.entry.Chunks) {
+							corrupted = true
+						}
+					}
+				}
+
+				mu.Lock()
+				defer mu.Unlock()
+
+				checkedFiles++
+				checkedBytes += int64(cand.entry.Size)
+				reportProgress(cand.rel, false)
+
+				if corrupted {
+					if cand.isDrmWrapped {
+						report.IntactCount++
+					} else if IsRedistFile(cand.rel) {
+						report.RedistModified = append(report.RedistModified, cand.rel)
+					} else {
+						report.ModifiedFiles = append(report.ModifiedFiles, cand.rel)
+					}
+				} else {
+					report.IntactCount++
+				}
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
 	}
 
 	for normRel, entry := range officialMap {

@@ -133,8 +133,12 @@ func TestCache_WarmLibraryCache(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	SetCacheDir(tmpDir)
 
-	gameDir := "/tmp/TestGameDir"
-	if _, ok := GetCachedGame(gameDir, 1000, 2000); ok {
+	gameDir := filepath.Join(tmpDir, "TestGameDir")
+	_ = os.MkdirAll(gameDir, 0755)
+	dummyExe := filepath.Join(gameDir, "game.exe")
+	_ = os.WriteFile(dummyExe, []byte("dummy-binary"), 0755)
+
+	if _, ok := GetCachedGame(gameDir, "sig-a"); ok {
 		t.Errorf("expected cache miss for unadded game")
 	}
 
@@ -143,32 +147,38 @@ func TestCache_WarmLibraryCache(t *testing.T) {
 			Name:    "Cached Test Game",
 			GameDir: gameDir,
 			AppID:   "12345",
+			ExePath: dummyExe,
 		},
 	}
 
-	if err := SaveCachedGame(gameDir, 1000, 2000, game); err != nil {
+	if err := SaveCachedGame(gameDir, "sig-a", game); err != nil {
 		t.Fatalf("failed to save cached game: %v", err)
 	}
 
-	// 1. Exact timestamp match
-	cached, ok := GetCachedGame(gameDir, 1000, 2000)
+	// 1. Exact signature match
+	cached, ok := GetCachedGame(gameDir, "sig-a")
 	if !ok || cached == nil || cached.Name != "Cached Test Game" {
 		t.Fatalf("expected to retrieve cached game, got %+v (ok=%v)", cached, ok)
 	}
 
-	// 2. Modified directory mtime -> cache miss
-	if _, ok := GetCachedGame(gameDir, 1001, 2000); ok {
-		t.Errorf("expected cache miss on changed dirMtime")
+	// 2. Modified signature -> cache miss
+	if _, ok := GetCachedGame(gameDir, "sig-b"); ok {
+		t.Errorf("expected cache miss on changed signature")
 	}
 
-	// 3. Modified profile mtime -> cache miss
-	if _, ok := GetCachedGame(gameDir, 1000, 2001); ok {
-		t.Errorf("expected cache miss on changed profileMtime")
+	// 3. Modified binary content/size -> cache miss
+	_ = os.WriteFile(dummyExe, []byte("modified-longer-binary"), 0755)
+	if _, ok := GetCachedGame(gameDir, "sig-a"); ok {
+		t.Errorf("expected cache miss on modified executable")
 	}
+
+	// Restore and re-save
+	_ = os.WriteFile(dummyExe, []byte("dummy-binary"), 0755)
+	_ = SaveCachedGame(gameDir, "sig-a", game)
 
 	// 4. Invalidate cache
 	InvalidateGameCache(gameDir)
-	if _, ok := GetCachedGame(gameDir, 1000, 2000); ok {
+	if _, ok := GetCachedGame(gameDir, "sig-a"); ok {
 		t.Errorf("expected cache miss after InvalidateGameCache")
 	}
 }

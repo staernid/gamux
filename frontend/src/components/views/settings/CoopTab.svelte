@@ -262,7 +262,7 @@
     }))
   ]);
   let caps = $derived($multiseatStore.capabilities);
-  let hasBwrap = $derived(caps ? Boolean(caps?.has_bwrap ?? caps?.hasBwrap ?? caps?.HasBwrap) : true);
+  let hasBwrap = $derived(caps ? Boolean(caps?.hasBwrap) : true);
   let profileOptions = $derived((profilesStore.profiles || []).map(p => ({
     value: p.id,
     label: `${p.name} (${p.is_main ? 'Primary Host' : `Seat ${p.index || 2}`})`

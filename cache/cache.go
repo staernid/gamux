@@ -917,11 +917,24 @@ func SaveStoreMetadata(storeName, gameID string, data []byte) error {
 // 10. Warm Library Cache
 // ==========================================
 
-// CachedGameRecord stores an inspected domain.Game entity validated against directory and profile timestamps.
+// CachedGameRecord stores an inspected domain.Game entity validated against sentinel signature and executable stats.
 type CachedGameRecord struct {
-	DirMtime     int64        `json:"dir_mtime"`
-	ProfileMtime int64        `json:"profile_mtime"`
-	Game         *domain.Game `json:"game"`
+	Signature string       `json:"signature"`
+	ExePath   string       `json:"exe_path,omitempty"`
+	ExeMtime  int64        `json:"exe_mtime,omitempty"`
+	ExeSize   int64        `json:"exe_size,omitempty"`
+	Game      *domain.Game `json:"game"`
+}
+
+func isExecutableValid(rec CachedGameRecord) bool {
+	if rec.ExePath == "" {
+		return true
+	}
+	fi, err := os.Stat(rec.ExePath)
+	if err != nil {
+		return false
+	}
+	return fi.ModTime().UnixNano() == rec.ExeMtime && fi.Size() == rec.ExeSize
 }
 
 func getGameCacheKey(gameDir string) string {
@@ -929,8 +942,8 @@ func getGameCacheKey(gameDir string) string {
 	return fmt.Sprintf("%x", h[:16])
 }
 
-// GetCachedGame retrieves a cached domain.Game record if dirMtime and profileMtime match.
-func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.Game, bool) {
+// GetCachedGame retrieves a cached domain.Game record if signature matches and executable is intact.
+func GetCachedGame(gameDir string, signature string) (*domain.Game, bool) {
 	if disableCache.Load() || gameDir == "" {
 		return nil, false
 	}
@@ -938,7 +951,7 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 	// 1. Fast in-memory check
 	gamesMu.RLock()
 	if cached, ok := gamesMemoryCache[gameDir]; ok {
-		if cached.DirMtime == dirMtime && cached.ProfileMtime == profileMtime && cached.Game != nil {
+		if cached.Signature == signature && cached.Game != nil && isExecutableValid(cached) {
 			cloned := cached.Game.Clone()
 			gamesMu.RUnlock()
 			return cloned, true
@@ -959,7 +972,7 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 
 	var rec CachedGameRecord
 	if err := json.Unmarshal(data, &rec); err == nil && rec.Game != nil {
-		if rec.DirMtime == dirMtime && rec.ProfileMtime == profileMtime {
+		if rec.Signature == signature && isExecutableValid(rec) {
 			gamesMu.Lock()
 			gamesMemoryCache[gameDir] = rec
 			gamesMu.Unlock()
@@ -969,16 +982,32 @@ func GetCachedGame(gameDir string, dirMtime int64, profileMtime int64) (*domain.
 	return nil, false
 }
 
-// SaveCachedGame persists an inspected domain.Game record with timestamps to in-memory and disk cache.
-func SaveCachedGame(gameDir string, dirMtime int64, profileMtime int64, game *domain.Game) error {
+// SaveCachedGame persists an inspected domain.Game record with sentinel signature to in-memory and disk cache.
+func SaveCachedGame(gameDir string, signature string, game *domain.Game) error {
 	if disableCache.Load() || gameDir == "" || game == nil {
 		return nil
 	}
 
+	var exePath string
+	var exeMtime, exeSize int64
+	if effExe := game.EffectiveExePath(); effExe != "" {
+		resolvedExe := effExe
+		if !filepath.IsAbs(resolvedExe) {
+			resolvedExe = filepath.Join(gameDir, resolvedExe)
+		}
+		if fi, err := os.Stat(resolvedExe); err == nil && !fi.IsDir() {
+			exePath = resolvedExe
+			exeMtime = fi.ModTime().UnixNano()
+			exeSize = fi.Size()
+		}
+	}
+
 	rec := CachedGameRecord{
-		DirMtime:     dirMtime,
-		ProfileMtime: profileMtime,
-		Game:         game.Clone(),
+		Signature: signature,
+		ExePath:   exePath,
+		ExeMtime:  exeMtime,
+		ExeSize:   exeSize,
+		Game:      game.Clone(),
 	}
 
 	gamesMu.Lock()

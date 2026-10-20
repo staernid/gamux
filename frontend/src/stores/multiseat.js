@@ -194,11 +194,13 @@ export function hydrateStagingFromConfig(mCfg) {
 function createMultiseatStore() {
   const { subscribe, set, update } = writable({
     capabilities: {
-      has_bwrap: true,
-      has_gamescope: true,
-      has_cage: false,
-      has_sunshine: true,
-      has_pipewire: true,
+      hasBwrap: true,
+      hasGamescope: true,
+      hasCage: false,
+      hasSunshine: true,
+      hasPipewire: true,
+      hasInputPermissions: true,
+      inputPermissionsError: '',
     },
     gamepads: [],
     keyboards: [],
@@ -243,11 +245,13 @@ function createMultiseatStore() {
           update(state => ({
             ...state,
             capabilities: {
-              has_bwrap: Boolean(caps.has_bwrap ?? caps.HasBwrap ?? caps.hasBwrap),
-              has_gamescope: Boolean(caps.has_gamescope ?? caps.HasGamescope ?? caps.hasGamescope),
-              has_cage: Boolean(caps.has_cage ?? caps.HasCage ?? caps.hasCage),
-              has_sunshine: Boolean(caps.has_sunshine ?? caps.HasSunshine ?? caps.hasSunshine),
-              has_pipewire: Boolean(caps.has_pipewire ?? caps.HasPipewire ?? caps.hasPipewire),
+              hasBwrap: Boolean(caps.hasBwrap),
+              hasGamescope: Boolean(caps.hasGamescope),
+              hasCage: Boolean(caps.hasCage),
+              hasSunshine: Boolean(caps.hasSunshine),
+              hasPipewire: Boolean(caps.hasPipewire),
+              hasInputPermissions: Boolean(caps.hasInputPermissions),
+              inputPermissionsError: caps.inputPermissionsError || '',
             },
           }));
         }

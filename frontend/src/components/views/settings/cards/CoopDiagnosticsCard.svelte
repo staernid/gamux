@@ -3,11 +3,12 @@
   import { multiseatStore } from '../../../../stores/multiseat.js';
 
   let caps = $derived($multiseatStore.capabilities);
-  let hasBwrap = $derived(Boolean(caps?.has_bwrap ?? caps?.hasBwrap ?? caps?.HasBwrap));
-  let hasGamescope = $derived(Boolean(caps?.has_gamescope ?? caps?.hasGamescope ?? caps?.HasGamescope));
-  let hasCage = $derived(Boolean(caps?.has_cage ?? caps?.hasCage ?? caps?.HasCage));
-  let hasSunshine = $derived(Boolean(caps?.has_sunshine ?? caps?.hasSunshine ?? caps?.HasSunshine));
-  let hasPipewire = $derived(Boolean(caps?.has_pipewire ?? caps?.hasPipewire ?? caps?.HasPipewire));
+  let hasBwrap = $derived(Boolean(caps?.hasBwrap));
+  let hasGamescope = $derived(Boolean(caps?.hasGamescope));
+  let hasCage = $derived(Boolean(caps?.hasCage));
+  let hasSunshine = $derived(Boolean(caps?.hasSunshine));
+  let hasPipewire = $derived(Boolean(caps?.hasPipewire));
+  let hasInputPermissions = $derived(Boolean(caps?.hasInputPermissions));
 </script>
 
 <SettingSection title="System Diagnostics & Isolation Tools">
@@ -66,6 +67,16 @@
           {hasPipewire ? 'Available' : 'Missing'}
         </span>
       </div>
+
+      <div class="p-2.5 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between">
+        <div class="space-y-0.5">
+          <div class="text-xs font-bold text-neutral-200">Input Devices</div>
+          <div class="text-3xs text-neutral-400 font-mono">/dev/input</div>
+        </div>
+        <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold {hasInputPermissions ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'}">
+          {hasInputPermissions ? 'Permitted' : 'Denied'}
+        </span>
+      </div>
     </div>
 
     {#if !hasBwrap}
@@ -77,6 +88,21 @@
           <div class="font-bold text-amber-200">Recommended Package Missing</div>
           <div class="text-2xs text-amber-300/90 leading-relaxed">
             Install <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded">bubblewrap</code> via your package manager for complete filesystem and input device sandboxing between player seats.
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if !hasInputPermissions}
+      <div class="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-start space-x-2.5">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div class="space-y-1">
+          <div class="font-bold text-rose-200">Input Device Permissions Denied</div>
+          <div class="text-2xs text-rose-300/90 leading-relaxed">
+            The active user cannot read evdev input devices. For dedicated controller and keyboard isolation, add your user to the <code class="font-mono bg-rose-500/20 px-1 py-0.5 rounded">input</code> group:
+            <div class="mt-1 font-mono text-3xs bg-black/40 px-2 py-1 rounded text-rose-200">sudo usermod -aG input $USER</div>
           </div>
         </div>
       </div>

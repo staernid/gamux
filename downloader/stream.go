@@ -305,6 +305,12 @@ func (d *depotDownload) processFile(ctx context.Context, entry manifest.Manifest
 	}
 
 	if d.req.DryRun {
+		if len(entry.Chunks) > 0 && fileExists && uint64(info.Size()) == entry.Size && verifyFileChunksOnDisk(filePath, entry.Chunks) {
+			slog.Debug("File is up-to-date", "path", filePath)
+			d.progress.downloadedBytes.Add(int64(entry.Size))
+			d.progress.report(entry.Path)
+			return nil
+		}
 		slog.Debug("[DRY RUN] Would download/update file", "path", filePath, "size", entry.Size)
 		d.progress.updatedCount.Add(1)
 		d.progress.downloadedBytes.Add(int64(entry.Size))
@@ -326,17 +332,23 @@ func (d *depotDownload) processFile(ctx context.Context, entry manifest.Manifest
 	}
 
 	var err error
+	var updated bool
 	if len(entry.Chunks) == 0 {
 		err = d.writeEmptyFile(entry, filePath)
+		updated = true
 	} else {
-		err = d.downloadChunked(ctx, entry, relPath, filePath, info, fileExists)
+		updated, err = d.downloadChunked(ctx, entry, relPath, filePath, info, fileExists)
 	}
 	if err != nil {
 		return err
 	}
 
-	slog.Debug("Successfully updated file", "path", filePath)
-	d.progress.updatedCount.Add(1)
+	if updated {
+		slog.Debug("Successfully updated file", "path", filePath)
+		d.progress.updatedCount.Add(1)
+	} else {
+		slog.Debug("File is up-to-date", "path", filePath)
+	}
 	return nil
 }
 
@@ -350,6 +362,11 @@ func needsDownload(filePath string, entry manifest.ManifestFileEntry, info os.Fi
 		slog.Debug("File size mismatch, redownloading", "path", filePath, "actual", info.Size(), "expected", entry.Size)
 		return true
 	}
+	// For chunked files, pendingChunks in downloadChunked handles chunk-level verification
+	// in a single pass without pre-hashing the full file.
+	if len(entry.Chunks) > 0 {
+		return true
+	}
 	if entry.SHA1 != "" {
 		localHash, err := util.GetSHA1Hash(filePath)
 		if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
@@ -357,10 +374,6 @@ func needsDownload(filePath string, entry manifest.ManifestFileEntry, info os.Fi
 			return true
 		}
 		return false
-	}
-	if len(entry.Chunks) > 0 && !verifyFileChunksOnDisk(filePath, entry.Chunks) {
-		slog.Debug("File chunk verification failed on disk, downloading missing chunks", "path", filePath)
-		return true
 	}
 	return false
 }
@@ -388,20 +401,20 @@ func (d *depotDownload) writeEmptyFile(entry manifest.ManifestFileEntry, filePat
 
 // downloadChunked fetches the chunks of an entry that are missing or stale,
 // finalizes the file, and verifies its SHA-1 (falling back to a full
-// redownload on mismatch).
-func (d *depotDownload) downloadChunked(ctx context.Context, entry manifest.ManifestFileEntry, relPath, filePath string, info os.FileInfo, fileExists bool) error {
+// redownload on mismatch). It returns whether any chunks were fetched/updated.
+func (d *depotDownload) downloadChunked(ctx context.Context, entry manifest.ManifestFileEntry, relPath, filePath string, info os.FileInfo, fileExists bool) (bool, error) {
 	fileDiff, isDelta := d.diffMap[relPath]
 	canDelta := isDelta && fileExists && info.Size() > 0
 
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
-		return fmt.Errorf("open target file %s: %w", filePath, err)
+		return false, fmt.Errorf("open target file %s: %w", filePath, err)
 	}
 
 	if !canDelta && (!fileExists || info.Size() < int64(entry.Size)) {
 		if err := util.PreallocateFile(f, int64(entry.Size)); err != nil {
 			f.Close()
-			return fmt.Errorf("preallocate target file %s: %w", filePath, err)
+			return false, fmt.Errorf("preallocate target file %s: %w", filePath, err)
 		}
 	}
 
@@ -417,19 +430,19 @@ func (d *depotDownload) downloadChunked(ctx context.Context, entry manifest.Mani
 	pending, err := d.pendingChunks(f, entry, relPath, filePath, info, fileExists, unchanged)
 	if err != nil {
 		f.Close()
-		return err
+		return false, err
 	}
 
 	if len(pending) > 0 {
 		if err := d.fetchChunks(ctx, f, entry, relPath, filePath, pending, false); err != nil {
 			f.Close()
-			return err
+			return false, err
 		}
 	}
 
 	if err := f.Truncate(int64(entry.Size)); err != nil {
 		f.Close()
-		return fmt.Errorf("truncate final file %s: %w", filePath, err)
+		return false, fmt.Errorf("truncate final file %s: %w", filePath, err)
 	}
 	f.Close()
 
@@ -437,16 +450,17 @@ func (d *depotDownload) downloadChunked(ctx context.Context, entry manifest.Mani
 		_ = os.Chmod(filePath, 0755)
 	}
 
-	// Post-download integrity verification against SHA-1 if present
-	if entry.SHA1 != "" {
+	// Post-download integrity verification against SHA-1 if present and chunks were updated.
+	// If zero chunks were fetched (len(pending) == 0), the chunks on disk were already verified.
+	if entry.SHA1 != "" && len(pending) > 0 {
 		localHash, err := util.GetSHA1Hash(filePath)
 		if err != nil || !strings.EqualFold(localHash, entry.SHA1) {
 			slog.Warn("Downloaded file hash mismatch, falling back to full file download",
 				"path", filePath, "actual", localHash, "expected", entry.SHA1)
-			return d.redownloadFull(ctx, entry, relPath, filePath)
+			return true, d.redownloadFull(ctx, entry, relPath, filePath)
 		}
 	}
-	return nil
+	return len(pending) > 0, nil
 }
 
 // pendingChunks returns the chunks that still need a network fetch, crediting

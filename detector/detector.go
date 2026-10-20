@@ -2,12 +2,15 @@ package detector
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/staernid/gamux/cache"
@@ -90,6 +93,50 @@ func hasEmulatorArtifacts(dir string) bool {
 	return false
 }
 
+// ComputeSentinelSignature computes a composite signature of configuration sentinels for a game directory.
+func ComputeSentinelSignature(gameDir string) string {
+	sentinels := []string{
+		filepath.Join(gameDir, ".gamux", "launch_profile.json"),
+		filepath.Join(gameDir, "steam_settings", "launch_profile.json"),
+		filepath.Join(gameDir, ".gamux", "steam_appid.txt"),
+		filepath.Join(gameDir, "steam_settings", "steam_appid.txt"),
+		filepath.Join(gameDir, "steam_appid.txt"),
+		filepath.Join(gameDir, "steam_settings", "configs.user.ini"),
+		filepath.Join(gameDir, "steam_settings", "configs.app.ini"),
+		filepath.Join(gameDir, "steam_settings", "configs.main.ini"),
+		filepath.Join(gameDir, ".gamux", "manifest.json"),
+		filepath.Join(gameDir, "[Manifests]"),
+	}
+
+	// Also check for appmanifest_*.acf in gameDir and its parent directory (steamapps/)
+	parentDir := filepath.Dir(gameDir)
+	for _, dir := range []string{gameDir, parentDir} {
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				name := e.Name()
+				if strings.HasPrefix(name, "appmanifest_") && strings.HasSuffix(name, ".acf") {
+					sentinels = append(sentinels, filepath.Join(dir, name))
+				}
+			}
+		}
+	}
+
+	var sb strings.Builder
+	for _, s := range sentinels {
+		if fi, err := os.Stat(s); err == nil {
+			sb.WriteString(s)
+			sb.WriteString(":")
+			sb.WriteString(strconv.FormatInt(fi.ModTime().UnixNano(), 10))
+			sb.WriteString(":")
+			sb.WriteString(strconv.FormatInt(fi.Size(), 10))
+			sb.WriteString(";")
+		}
+	}
+
+	h := sha256.Sum256([]byte(sb.String()))
+	return hex.EncodeToString(h[:16])
+}
+
 // Inspect performs a comprehensive single-pass filesystem inspection of a game directory,
 // extracting identity, platform, executables, backups, manifest integrity markers, and launch configuration.
 func Inspect(ctx context.Context, path string) (*GameInfo, error) {
@@ -98,7 +145,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		return nil, fmt.Errorf("game path cannot be empty")
 	}
 
-	dirFi, err := os.Stat(absPath)
+	_, err := os.Stat(absPath)
 	if os.IsNotExist(err) {
 		return nil, fmt.Errorf("%w: %s", ErrGameNotFound, absPath)
 	}
@@ -110,20 +157,9 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 		return nil, fmt.Errorf("path %s is a runner/wine prefix directory, not a game", absPath)
 	}
 
-	// Warm Library Cache lookup
-	var profileMtime int64
-	if pFi, err := os.Stat(filepath.Join(absPath, ".gamux", "launch_profile.json")); err == nil {
-		profileMtime = pFi.ModTime().UnixNano()
-	} else if legFi, err := os.Stat(filepath.Join(absPath, "steam_settings", "launch_profile.json")); err == nil {
-		profileMtime = legFi.ModTime().UnixNano()
-	}
-
-	var dirMtime int64
-	if dirFi != nil {
-		dirMtime = dirFi.ModTime().UnixNano()
-	}
-
-	if cached, ok := cache.GetCachedGame(absPath, dirMtime, profileMtime); ok && cached != nil {
+	// Warm Library Cache lookup using sentinel signature
+	sentinelSig := ComputeSentinelSignature(absPath)
+	if cached, ok := cache.GetCachedGame(absPath, sentinelSig); ok && cached != nil {
 		if !util.IsPlaceholderTitle(cached.Name, cached.AppID) {
 			return cached, nil
 		}
@@ -586,7 +622,7 @@ func Inspect(ctx context.Context, path string) (*GameInfo, error) {
 	info.RecomputeState()
 
 	// Persist to Warm Library Cache
-	_ = cache.SaveCachedGame(absPath, dirMtime, profileMtime, info)
+	_ = cache.SaveCachedGame(absPath, sentinelSig, info)
 
 	return info, nil
 }

@@ -2,13 +2,58 @@ package multiseat
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/staernid/gamux/config"
 	"github.com/staernid/gamux/events"
 )
+
+// CheckInputPermissions probes if the current user process can access /dev/input event nodes.
+func CheckInputPermissions() (bool, string) {
+	entries, err := os.ReadDir(devInputDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, "/dev/input directory does not exist on host"
+		}
+		if os.IsPermission(err) {
+			return false, "permission denied reading /dev/input directory; add user to 'input' group"
+		}
+		return false, fmt.Sprintf("cannot read /dev/input: %v", err)
+	}
+
+	eventNodes := 0
+	hasReadable := false
+	var lastErr error
+
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "event") {
+			eventNodes++
+			p := filepath.Join(devInputDir, e.Name())
+			f, err := os.OpenFile(p, os.O_RDONLY, 0)
+			if err == nil {
+				_ = f.Close()
+				hasReadable = true
+				break
+			}
+			lastErr = err
+		}
+	}
+
+	if eventNodes == 0 {
+		return true, ""
+	}
+
+	if !hasReadable {
+		return false, fmt.Sprintf("user lacks read permissions on /dev/input/event* nodes (%v); ensure user is in 'input' group", lastErr)
+	}
+
+	return true, ""
+}
 
 // CheckCapabilities probes the host system for multi-seat support dependencies.
 func CheckCapabilities() SystemCapabilities {
@@ -18,12 +63,16 @@ func CheckCapabilities() SystemCapabilities {
 	_, sunshineErr := exec.LookPath("sunshine")
 	_, pactlErr := exec.LookPath("pactl")
 
+	hasInputPerms, inputPermErr := CheckInputPermissions()
+
 	return SystemCapabilities{
-		HasBwrap:     bwrapErr == nil,
-		HasGamescope: gamescopeErr == nil,
-		HasCage:      cageErr == nil,
-		HasSunshine:  sunshineErr == nil,
-		HasPipewire:  pactlErr == nil,
+		HasBwrap:              bwrapErr == nil,
+		HasGamescope:          gamescopeErr == nil,
+		HasCage:               cageErr == nil,
+		HasSunshine:           sunshineErr == nil,
+		HasPipewire:           pactlErr == nil,
+		HasInputPermissions:   hasInputPerms,
+		InputPermissionsError: inputPermErr,
 	}
 }
 
