@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount } from 'svelte';
   import { multiseatStore, resolveGamepadAssignments } from '../../../stores/multiseat.js';
   import { profilesStore } from '../../../stores/profiles.js';
@@ -93,80 +91,39 @@
     },
   ];
   // Ensure nested multiseat defaults exist
-  run(() => {
+  $effect(() => {
     if (!cfgDraft.multiseat) {
       cfgDraft.multiseat = {};
     }
-  });
-  run(() => {
-    if (cfgDraft.multiseat.player2_profile_id === undefined) cfgDraft.multiseat.player2_profile_id = 'p2';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.default_seat1_mode === undefined) cfgDraft.multiseat.default_seat1_mode = 'local';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.default_seat2_mode === undefined) cfgDraft.multiseat.default_seat2_mode = 'local';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.default_layout === undefined) cfgDraft.multiseat.default_layout = 'dual_monitor';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_gamepad === undefined) cfgDraft.multiseat.seat1_gamepad = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_gamepad === undefined) cfgDraft.multiseat.seat2_gamepad = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_keyboard === undefined) cfgDraft.multiseat.seat1_keyboard = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_keyboard === undefined) cfgDraft.multiseat.seat2_keyboard = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_mouse === undefined) cfgDraft.multiseat.seat1_mouse = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_mouse === undefined) cfgDraft.multiseat.seat2_mouse = 'auto';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_force_grab_cursor === undefined) cfgDraft.multiseat.seat1_force_grab_cursor = false;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_grab_keyboard === undefined) cfgDraft.multiseat.seat1_grab_keyboard = false;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_show_cursor === undefined) cfgDraft.multiseat.seat1_show_cursor = true;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_force_grab_cursor === undefined) cfgDraft.multiseat.seat2_force_grab_cursor = false;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_grab_keyboard === undefined) cfgDraft.multiseat.seat2_grab_keyboard = false;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_show_cursor === undefined) cfgDraft.multiseat.seat2_show_cursor = true;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_compositor === undefined || cfgDraft.multiseat.seat2_compositor === '') cfgDraft.multiseat.seat2_compositor = 'gamescope';
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat1_display_index === undefined) cfgDraft.multiseat.seat1_display_index = 0;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.seat2_display_index === undefined) cfgDraft.multiseat.seat2_display_index = 1;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.sunshine_port_p1 === undefined) cfgDraft.multiseat.sunshine_port_p1 = 47989;
-  });
-  run(() => {
-    if (cfgDraft.multiseat.sunshine_port_p2 === undefined) cfgDraft.multiseat.sunshine_port_p2 = 48010;
+    const ms = cfgDraft.multiseat;
+    if (ms.player2_profile_id === undefined) ms.player2_profile_id = 'p2';
+    if (ms.default_seat1_mode === undefined) ms.default_seat1_mode = 'local';
+    if (ms.default_seat2_mode === undefined) ms.default_seat2_mode = 'local';
+    if (ms.default_layout === undefined) ms.default_layout = 'dual_monitor';
+    if (ms.seat1_gamepad === undefined) ms.seat1_gamepad = 'auto';
+    if (ms.seat2_gamepad === undefined) ms.seat2_gamepad = 'auto';
+    if (ms.seat1_keyboard === undefined) ms.seat1_keyboard = 'auto';
+    if (ms.seat2_keyboard === undefined) ms.seat2_keyboard = 'auto';
+    if (ms.seat1_mouse === undefined) ms.seat1_mouse = 'auto';
+    if (ms.seat2_mouse === undefined) ms.seat2_mouse = 'auto';
+    if (ms.seat1_force_grab_cursor === undefined) ms.seat1_force_grab_cursor = false;
+    if (ms.seat1_grab_keyboard === undefined) ms.seat1_grab_keyboard = false;
+    if (ms.seat1_show_cursor === undefined) ms.seat1_show_cursor = true;
+    if (ms.seat2_force_grab_cursor === undefined) ms.seat2_force_grab_cursor = false;
+    if (ms.seat2_grab_keyboard === undefined) ms.seat2_grab_keyboard = false;
+    if (ms.seat2_show_cursor === undefined) ms.seat2_show_cursor = true;
+    if (ms.seat2_compositor === undefined || ms.seat2_compositor === '') ms.seat2_compositor = 'gamescope';
+    if (ms.seat1_display_index === undefined) ms.seat1_display_index = 0;
+    if (ms.seat2_display_index === undefined) ms.seat2_display_index = 1;
+    if (ms.sunshine_port_p1 === undefined) ms.sunshine_port_p1 = 47989;
+    if (ms.sunshine_port_p2 === undefined) ms.sunshine_port_p2 = 48010;
   });
   let seats = $derived($multiseatStore.staging?.seats || [
     $multiseatStore.staging?.seat1 || { seat_id: 'p1', mode: 'local', display_index: 0 },
     $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 1) }
   ]);
   // Sync seats into cfgDraft.multiseat.seats
-  run(() => {
+  $effect(() => {
     if (cfgDraft?.multiseat && Array.isArray(seats)) {
       cfgDraft.multiseat.seats = seats.map((s, idx) => ({
         seat_id: s.seat_id || `p${idx + 1}`,
@@ -224,7 +181,7 @@
     return val;
   }
 
-  run(() => {
+  $effect(() => {
     if (cfgDraft?.multiseat) {
       if (cfgDraft.multiseat.seat1_keyboard) {
         const norm = normalizeDeviceNode(cfgDraft.multiseat.seat1_keyboard, keyboards || []);

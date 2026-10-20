@@ -173,6 +173,11 @@ func (eng *Engine) InspectStatus(ctx context.Context, targetPath string) (*GameS
 		}
 	}
 
+	if status.GameDir != "" && !util.IsPlaceholderTitle(status.Name, status.AppID) {
+		sig := detector.ComputeSentinelSignature(status.GameDir)
+		_ = cache.SaveCachedGame(status.GameDir, sig, status)
+	}
+
 	return status, nil
 }
 
@@ -204,13 +209,34 @@ func (eng *Engine) InspectStatusEx(ctx context.Context, targetPath string, newsC
 }
 
 // BatchInspect scans all candidate game subdirectories in parentDir and returns their GameStatus.
+// Concurrent scans of the same directory are coalesced, with each caller receiving cloned Game entities.
 func (eng *Engine) BatchInspect(ctx context.Context, parentDir string) ([]*GameStatus, error) {
 	ctx = eng.WrapContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	absParent, err := filepath.Abs(parentDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve parent directory path: %w", err)
 	}
 
+	val, err, _ := eng.batchInspectGroup.Do(absParent, func() (any, error) {
+		return eng.batchInspectDir(context.WithoutCancel(ctx), absParent)
+	})
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := val.([]*GameStatus)
+	finalResults := make([]*GameStatus, 0, len(raw))
+	for _, res := range raw {
+		if res != nil {
+			finalResults = append(finalResults, res.Clone())
+		}
+	}
+	return finalResults, nil
+}
+
+func (eng *Engine) batchInspectDir(ctx context.Context, absParent string) ([]*GameStatus, error) {
 	entries, err := os.ReadDir(absParent)
 	if err != nil {
 		return nil, fmt.Errorf("read parent directory %s: %w", absParent, err)
@@ -354,8 +380,14 @@ func (eng *Engine) CheckLibraryUpdates(ctx context.Context, libDirs ...string) (
 		g.Go(func() error {
 			vs, cErr := eng.CheckGameUpdates(ctx, gamePath)
 			if cErr == nil && vs != nil && vs.Checked && !vs.IsUpToDate {
-				// Re-inspect updated game to reflect new HasUpdate status
-				if refreshed, rErr := eng.InspectStatus(ctx, gamePath); rErr == nil && refreshed != nil {
+				// Re-inspect locally to reflect updated HasUpdate status without redundant remote Store/News/Version queries
+				if refreshed, rErr := eng.InspectLocal(ctx, gamePath); rErr == nil && refreshed != nil {
+					refreshed.VersionStatus = vs
+					refreshed.HasUpdate = true
+					if vs.RemoteManifestID != "" {
+						refreshed.RemoteManifestID = vs.RemoteManifestID
+					}
+					refreshed.RecomputeState()
 					mu.Lock()
 					updatedGames = append(updatedGames, refreshed)
 					mu.Unlock()

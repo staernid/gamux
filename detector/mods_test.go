@@ -121,3 +121,22 @@ func TestScanInstalledMods(t *testing.T) {
 		t.Errorf("oldMod should be disabled: %+v", oldMod)
 	}
 }
+
+func TestComputeSentinelSignature_IncludesMods(t *testing.T) {
+	tmp := t.TempDir()
+	sig1 := ComputeSentinelSignature(tmp)
+
+	reg := &ModRegistry{
+		Mods: []domain.InstalledMod{
+			{ID: "mod1", Name: "Mod 1", Enabled: true},
+		},
+	}
+	if err := SaveModRegistry(tmp, reg); err != nil {
+		t.Fatalf("failed to save mod registry: %v", err)
+	}
+
+	sig2 := ComputeSentinelSignature(tmp)
+	if sig1 == sig2 {
+		t.Errorf("expected sentinel signature to change after saving .gamux/mods.json")
+	}
+}

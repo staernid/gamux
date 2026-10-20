@@ -157,6 +157,15 @@ func (a *App) Startup(ctx context.Context) {
 					progressMu.Lock()
 					delete(lastProgress, ev.TaskID)
 					progressMu.Unlock()
+
+					if ev.Type == events.EventTaskCompleted || ev.Type == events.EventTransferCompleted {
+						if ev.Metadata != nil && ev.Metadata["old_game_dir"] != "" {
+							a.RemoveCachedGame(ev.Metadata["old_game_dir"])
+						}
+						if ev.Game != nil {
+							a.UpdateCachedGame(ev.Game)
+						}
+					}
 				}
 
 				safeEmit(a.ctx, "gamux:task-event", ev)

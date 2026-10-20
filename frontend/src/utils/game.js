@@ -79,12 +79,61 @@ const LAUNCH_PROFILE_SNAKE_TO_CAMEL = {
   enable_wayland: 'enableWayland',
 };
 
+const LAUNCH_PROFILE_CAMEL_TO_SNAKE = {
+  gameDir: 'game_dir',
+  exePath: 'exe_path',
+  exeArgs: 'exe_args',
+  appId: 'app_id',
+  operatingMode: 'operating_mode',
+  winePrefix: 'wine_prefix',
+  protonPath: 'proton_path',
+  dllOverrides: 'dll_overrides',
+  mangoHud: 'mangohud',
+  disableOverlay: 'disable_overlay',
+  offlineMode: 'offline_mode',
+  customEnv: 'custom_env',
+  sourceOverride: 'source_override',
+  metadataProvider: 'metadata_provider',
+  metadataId: 'metadata_id',
+  storeAppId: 'store_app_id',
+  gogId: 'gog_id',
+  gamescopeWidth: 'gamescope_width',
+  gamescopeHeight: 'gamescope_height',
+  gamescopeFps: 'gamescope_fps',
+  workingDir: 'working_dir',
+  profileId: 'profile_id',
+  forceEmulation: 'force_emulation',
+  playtimeSeconds: 'playtime_seconds',
+  lastPlayed: 'last_played',
+  installedAt: 'installed_at',
+  customCoverUrl: 'custom_cover_url',
+  customBannerUrl: 'custom_banner_url',
+  customHeroUrl: 'custom_hero_url',
+  customLogoUrl: 'custom_logo_url',
+  customIconUrl: 'custom_icon_url',
+  lockedArtwork: 'locked_artwork',
+  branchPassword: 'branch_password',
+  inhibitSleep: 'inhibit_sleep',
+  preferSdl: 'prefer_sdl',
+  enableWayland: 'enable_wayland',
+};
+
+export function snakeToCamelKey(key) {
+  if (LAUNCH_PROFILE_SNAKE_TO_CAMEL[key]) return LAUNCH_PROFILE_SNAKE_TO_CAMEL[key];
+  return key.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase());
+}
+
+export function camelToSnakeKey(key) {
+  if (LAUNCH_PROFILE_CAMEL_TO_SNAKE[key]) return LAUNCH_PROFILE_CAMEL_TO_SNAKE[key];
+  return key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
 export function normalizeLaunchProfile(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const out = {};
   for (const [k, v] of Object.entries(raw)) {
     if (v === undefined) continue;
-    const camel = LAUNCH_PROFILE_SNAKE_TO_CAMEL[k] || k.replace(/_([a-z0-9])/g, (_, ch) => ch.toUpperCase());
+    const camel = snakeToCamelKey(k);
     if ((camel === 'gameDir' || camel === 'exePath' || camel === 'winePrefix' || camel === 'protonPath' || camel === 'workingDir') && typeof v === 'string') {
       out[camel] = normalizePath(v);
     } else if (camel === 'customEnv' && v && typeof v === 'object') {

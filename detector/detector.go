@@ -105,6 +105,11 @@ func ComputeSentinelSignature(gameDir string) string {
 		filepath.Join(gameDir, "steam_settings", "configs.app.ini"),
 		filepath.Join(gameDir, "steam_settings", "configs.main.ini"),
 		filepath.Join(gameDir, ".gamux", "manifest.json"),
+		filepath.Join(gameDir, ".gamux", "mods.json"),
+		filepath.Join(gameDir, "steam_settings", "mods.json"),
+		filepath.Join(gameDir, "mods"),
+		filepath.Join(gameDir, "Mods"),
+		filepath.Join(gameDir, "BepInEx", "plugins"),
 		filepath.Join(gameDir, "[Manifests]"),
 	}
 

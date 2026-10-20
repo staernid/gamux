@@ -30,6 +30,8 @@ type Options struct {
 // Results tracks mutations, syntheses, unpacks, reports, and errors across executed stages.
 type Results struct {
 	DirectoryNormalized bool                      `json:"directory_normalized"`
+	OriginalDir         string                    `json:"original_dir,omitempty"`
+	RenamedDir          string                    `json:"renamed_dir,omitempty"`
 	ACFSynthesized      bool                      `json:"acf_synthesized"`
 	SteamlessUnpacked   bool                      `json:"steamless_unpacked"`
 	Patched             bool                      `json:"patched"`

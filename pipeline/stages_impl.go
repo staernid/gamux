@@ -281,6 +281,8 @@ func (s *NormalizeStage) Execute(ctx context.Context, pctx *Context) error {
 
 	slog.Info("Successfully normalized game directory name", "from", currentDir, "to", targetDir)
 	pctx.Results.DirectoryNormalized = true
+	pctx.Results.OriginalDir = currentDir
+	pctx.Results.RenamedDir = targetDir
 	pctx.Game.GameDir = targetDir
 	if pctx.Game.ExePath != "" {
 		relExe, err := filepath.Rel(currentDir, pctx.Game.ExePath)
@@ -331,6 +333,8 @@ func (s *NormalizeStage) Rollback(ctx context.Context, pctx *Context) error {
 		_ = compat.SaveProfile(prof)
 	}
 	pctx.Results.DirectoryNormalized = false
+	pctx.Results.OriginalDir = ""
+	pctx.Results.RenamedDir = ""
 	return nil
 }
 

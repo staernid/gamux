@@ -229,12 +229,12 @@
       if (ev?.type === 'task:completed' || ev?.type === 'transfer:completed') {
         const gameDir = ev.game_dir || ev.gameDir;
         if (ev.game) {
-          if (ev.operation === 'normalize' && ev.metadata?.old_game_dir) {
+          if (ev.metadata?.old_game_dir) {
             renameGameInStore(ev.metadata.old_game_dir, ev.game);
           } else {
             updateGameInStore(ev.game);
           }
-        } else if (ev.operation === 'normalize' && ev.metadata?.new_game_dir && ev.metadata?.old_game_dir) {
+        } else if (ev.metadata?.new_game_dir && ev.metadata?.old_game_dir) {
           refreshGame(ev.metadata.new_game_dir).then((g) => {
             if (g) renameGameInStore(ev.metadata.old_game_dir, g);
           });

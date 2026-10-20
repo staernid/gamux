@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/detector"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/steam"
@@ -104,6 +105,7 @@ func (eng *Engine) ToggleGameMod(gamePath, modID string, enable bool) (*domain.I
 		}
 	}
 
+	cache.InvalidateGameCache(cleanPath)
 	return target, nil
 }
 
@@ -152,6 +154,7 @@ func (eng *Engine) DeleteGameMod(gamePath, modID string) error {
 		_ = detector.SaveModRegistry(cleanPath, reg)
 	}
 
+	cache.InvalidateGameCache(cleanPath)
 	return nil
 }
 
@@ -236,6 +239,7 @@ func (eng *Engine) CheckGameModUpdates(ctx context.Context, gamePath string) (*d
 	}
 
 	_ = detector.SaveModRegistry(cleanPath, reg)
+	cache.InvalidateGameCache(cleanPath)
 
 	return eng.GetGameMods(ctx, cleanPath)
 }
@@ -366,6 +370,7 @@ func (eng *Engine) InstallWorkshopMod(ctx context.Context, gamePath, itemURLOrID
 		reg.Mods = append(reg.Mods, modItem)
 	}
 	_ = detector.SaveModRegistry(cleanPath, reg)
+	cache.InvalidateGameCache(cleanPath)
 
 	return &modItem, nil
 }

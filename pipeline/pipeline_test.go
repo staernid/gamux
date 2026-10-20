@@ -351,6 +351,41 @@ func TestPipeline_NewNormalize_Recipe(t *testing.T) {
 	if pctx.Game.GameDir != expectedDir {
 		t.Errorf("expected normalized dir %s, got %s", expectedDir, pctx.Game.GameDir)
 	}
+	if pctx.Results.OriginalDir != originalDir || pctx.Results.RenamedDir != expectedDir {
+		t.Errorf("expected OriginalDir=%s RenamedDir=%s, got %s -> %s", originalDir, expectedDir, pctx.Results.OriginalDir, pctx.Results.RenamedDir)
+	}
+}
+
+func TestPipeline_NormalizeOperation_SetsMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := filepath.Join(tmpDir, "portal_raw")
+	_ = os.MkdirAll(originalDir, 0755)
+	_ = os.WriteFile(filepath.Join(originalDir, "hl2.exe"), []byte("MZ"), 0755)
+
+	acfContent := "\"AppState\"\n{\n\t\"appid\"\t\"400\"\n\t\"name\"\t\"Portal\"\n}"
+	_ = os.WriteFile(filepath.Join(originalDir, "appmanifest_400.acf"), []byte(acfContent), 0644)
+
+	pctx := &Context{
+		Options: Options{
+			Path:         originalDir,
+			NormalizeDir: true,
+		},
+		Game:   domain.NewGame("Portal", originalDir, "400", "win64"),
+		Config: config.DefaultConfig(),
+	}
+	op := NewNormalizeOperation("Portal", originalDir, pctx)
+	ctrl := tasks.NewController(context.Background(), "norm-1", tasks.CapCancellable, nil, nil, nil, nil)
+	if err := op.Execute(context.Background(), ctrl); err != nil {
+		t.Fatalf("NormalizeOperation.Execute failed: %v", err)
+	}
+	meta := ctrl.Metadata()
+	expectedDir := filepath.Join(tmpDir, "Portal")
+	if meta["old_game_dir"] != originalDir {
+		t.Errorf("expected metadata old_game_dir=%q, got %q", originalDir, meta["old_game_dir"])
+	}
+	if meta["new_game_dir"] != expectedDir {
+		t.Errorf("expected metadata new_game_dir=%q, got %q", expectedDir, meta["new_game_dir"])
+	}
 }
 
 func TestPipeline_SteamlessStage_Rollback(t *testing.T) {

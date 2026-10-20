@@ -31,7 +31,7 @@ In Linux filesystems, a directory's `mtime` updates whenever any file is created
 ### Sentinel Signatures & Executable Stat Checking
 - **Invariant**: Game cache identity is keyed on `detector.ComputeSentinelSignature(gameDir)`:
   - Configuration files: `.gamux/launch_profile.json`, `steam_settings/launch_profile.json`, `configs.*.ini`, `steam_appid.txt`
-  - Manifest files: `.gamux/manifest.json`, `[Manifests]`, and `appmanifest_*.acf` (in the game dir and parent `steamapps/`)
+  - Manifest & mod files: `.gamux/manifest.json`, `.gamux/mods.json`, `steam_settings/mods.json`, `mods/`, `BepInEx/plugins/`, `[Manifests]`, and `appmanifest_*.acf` (in the game dir and parent `steamapps/`)
 - In `cache.GetCachedGame`, cache hits further verify the primary executable binary (`cached.ExePath` mtime and size via a single `os.Stat`). If the binary was upgraded, unpacked with Steamless, or replaced, the cache entry is invalidated immediately.
 
 ---

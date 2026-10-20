@@ -2,92 +2,19 @@ import { writable, get } from 'svelte/store';
 import { saveGameProfile, resetGameProfile, rollbackGame, refreshGame, showInspector } from './library.js';
 import { notificationStore } from './notifications.js';
 import { AppAPI } from '../api/app.js';
-import { filterLaunchCandidates, getExecutablePath, normalizeLaunchProfile } from '../utils/game.js';
+import {
+  camelToSnakeKey,
+  filterLaunchCandidates,
+  getExecutablePath,
+  normalizeLaunchProfile,
+  snakeToCamelKey,
+} from '../utils/game.js';
 import * as envDraft from './drawer/envDraft.js';
 
-// Re-export environment draft helpers for backward compatibility
+// Re-export environment & casing helpers for backward compatibility
 export const computeEnvEntries = envDraft.computeEnvEntries;
 export const generateNextCustomKey = envDraft.generateNextCustomKey;
-
-// Bidirectional casing adapters for Go LaunchProfile struct tags <-> JS camelCase
-const SPECIAL_SNAKE_TO_CAMEL = {
-  game_dir: 'gameDir',
-  exe_path: 'exePath',
-  exe_args: 'exeArgs',
-  app_id: 'appId',
-  operating_mode: 'operatingMode',
-  wine_prefix: 'winePrefix',
-  proton_path: 'protonPath',
-  dll_overrides: 'dllOverrides',
-  mangohud: 'mangoHud',
-  mango_hud: 'mangoHud',
-  disable_overlay: 'disableOverlay',
-  offline_mode: 'offlineMode',
-  custom_env: 'customEnv',
-  source_override: 'sourceOverride',
-  metadata_provider: 'metadataProvider',
-  metadata_id: 'metadataId',
-  gamescope_width: 'gamescopeWidth',
-  gamescope_height: 'gamescopeHeight',
-  gamescope_fps: 'gamescopeFps',
-  working_dir: 'workingDir',
-  playtime_seconds: 'playtimeSeconds',
-  last_played: 'lastPlayed',
-  custom_cover_url: 'customCoverUrl',
-  custom_banner_url: 'customBannerUrl',
-  custom_hero_url: 'customHeroUrl',
-  custom_logo_url: 'customLogoUrl',
-  custom_icon_url: 'customIconUrl',
-  locked_artwork: 'lockedArtwork',
-  branch_password: 'branchPassword',
-  inhibit_sleep: 'inhibitSleep',
-  prefer_sdl: 'preferSdl',
-  enable_wayland: 'enableWayland',
-};
-
-const SPECIAL_CAMEL_TO_SNAKE = {
-  gameDir: 'game_dir',
-  exePath: 'exe_path',
-  exeArgs: 'exe_args',
-  appId: 'app_id',
-  operatingMode: 'operating_mode',
-  winePrefix: 'wine_prefix',
-  protonPath: 'proton_path',
-  dllOverrides: 'dll_overrides',
-  mangoHud: 'mangohud',
-  disableOverlay: 'disable_overlay',
-  offlineMode: 'offline_mode',
-  customEnv: 'custom_env',
-  sourceOverride: 'source_override',
-  metadataProvider: 'metadata_provider',
-  metadataId: 'metadata_id',
-  gamescopeWidth: 'gamescope_width',
-  gamescopeHeight: 'gamescope_height',
-  gamescopeFps: 'gamescope_fps',
-  workingDir: 'working_dir',
-  playtimeSeconds: 'playtime_seconds',
-  lastPlayed: 'last_played',
-  customCoverUrl: 'custom_cover_url',
-  customBannerUrl: 'custom_banner_url',
-  customHeroUrl: 'custom_hero_url',
-  customLogoUrl: 'custom_logo_url',
-  customIconUrl: 'custom_icon_url',
-  lockedArtwork: 'locked_artwork',
-  branchPassword: 'branch_password',
-  inhibitSleep: 'inhibit_sleep',
-  preferSdl: 'prefer_sdl',
-  enableWayland: 'enable_wayland',
-};
-
-export function snakeToCamelKey(key) {
-  if (SPECIAL_SNAKE_TO_CAMEL[key]) return SPECIAL_SNAKE_TO_CAMEL[key];
-  return key.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase());
-}
-
-export function camelToSnakeKey(key) {
-  if (SPECIAL_CAMEL_TO_SNAKE[key]) return SPECIAL_CAMEL_TO_SNAKE[key];
-  return key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-}
+export { snakeToCamelKey, camelToSnakeKey };
 
 export function createInitialDraft(game = null, globalCfg = {}) {
   const baseDraft = {

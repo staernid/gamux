@@ -17,22 +17,24 @@ import (
 	"github.com/staernid/gamux/store"
 	"github.com/staernid/gamux/tasks"
 	"github.com/staernid/gamux/tools"
+	"golang.org/x/sync/singleflight"
 )
 
 // Engine is the deep orchestration module for all game management, library scanning,
 // task supervision, DRM setup, execution, savegame backup, and telemetry operations.
 type Engine struct {
-	Config         *config.Config
-	HTTPClient     *http.Client
-	EventBus       *events.Bus
-	Tasks          *tasks.Manager
-	RunnerMgr      *runner.Manager
-	StoreRegistry  *store.Registry
-	ArtworkService *store.ArtworkService
-	Saves          *saves.Service
-	Multiseat      *multiseat.Supervisor
-	Profiles       *profiles.Manager
-	toolManager    *tools.Manager
+	Config            *config.Config
+	HTTPClient        *http.Client
+	EventBus          *events.Bus
+	Tasks             *tasks.Manager
+	RunnerMgr         *runner.Manager
+	StoreRegistry     *store.Registry
+	ArtworkService    *store.ArtworkService
+	Saves             *saves.Service
+	Multiseat         *multiseat.Supervisor
+	Profiles          *profiles.Manager
+	toolManager       *tools.Manager
+	batchInspectGroup singleflight.Group
 }
 
 // New creates a new Engine with all domain and infrastructure services initialized.

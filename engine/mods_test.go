@@ -40,7 +40,17 @@ func TestEngineModsManagement(t *testing.T) {
 	eng := New(nil)
 	ctx := context.Background()
 
-	// 1. GetGameMods
+	// 1. GetGameMods & warm cache via InspectLocal
+	_ = os.WriteFile(filepath.Join(tmpDir, "game.exe"), []byte("MZ"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "steam_appid.txt"), []byte("400"), 0644)
+	inspected, err := eng.InspectLocal(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("InspectLocal failed: %v", err)
+	}
+	if len(inspected.Mods) != 1 || !inspected.Mods[0].Enabled {
+		t.Fatalf("expected 1 enabled mod in InspectLocal, got %+v", inspected.Mods)
+	}
+
 	status, err := eng.GetGameMods(ctx, tmpDir)
 	if err != nil {
 		t.Fatalf("GetGameMods failed: %v", err)
@@ -62,6 +72,15 @@ func TestEngineModsManagement(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(modsDir, "TestMod.pak.disabled")); err != nil {
 		t.Errorf("expected .disabled file on disk: %v", err)
+	}
+
+	// Verify warm cache was invalidated so InspectLocal reflects disabled mod
+	inspectedAfterDisable, err := eng.InspectLocal(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("InspectLocal after disable failed: %v", err)
+	}
+	if len(inspectedAfterDisable.Mods) != 1 || inspectedAfterDisable.Mods[0].Enabled {
+		t.Errorf("expected InspectLocal to reflect disabled mod, got %+v", inspectedAfterDisable.Mods)
 	}
 
 	// Verify status after toggle

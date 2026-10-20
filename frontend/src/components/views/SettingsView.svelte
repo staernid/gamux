@@ -1,6 +1,4 @@
 <script>
-  import { run } from 'svelte/legacy';
-
   import { onMount, onDestroy } from 'svelte';
   import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
@@ -20,7 +18,7 @@
   let advancedSubtab = $state('coop'); // 'coop' | 'maintenance' | 'logs' | 'schema'
 
   // Backward compatibility alias mapper
-  run(() => {
+  $effect(() => {
     if (activeTab === 'credentials') {
       activeTab = 'storage';
     } else if (activeTab === 'coop') {
@@ -104,7 +102,7 @@
     (JSON.stringify(cfgDraft) !== initialCfgJSON || JSON.stringify(userCfgDraft) !== initialUserCfgJSON)
   ));
 
-  run(() => {
+  $effect(() => {
     configStore.setDirty(isDirty);
   });
 
@@ -227,7 +225,7 @@
     }, 350);
   }
 
-  run(() => {
+  $effect(() => {
     if (isDirty) {
       triggerAutoSave();
     }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/staernid/gamux/cache"
 	"github.com/staernid/gamux/domain"
 	"github.com/staernid/gamux/tasks"
 )
@@ -164,7 +165,16 @@ func (p *Pipeline) Execute(ctx context.Context, pctx *Context) error {
 		}
 	}
 
+	if pctx.Options.Path != "" {
+		cache.InvalidateGameCache(pctx.Options.Path)
+	}
+	if pctx.Results.OriginalDir != "" {
+		cache.InvalidateGameCache(pctx.Results.OriginalDir)
+	}
 	if pctx.Game != nil {
+		if pctx.Game.GameDir != "" {
+			cache.InvalidateGameCache(pctx.Game.GameDir)
+		}
 		pctx.Game.RecomputeState()
 	}
 
@@ -246,6 +256,10 @@ func (op *Operation) Execute(ctx context.Context, ctrl *tasks.Controller) error 
 	op.Context.Reporter = ctrl
 	err := op.Pipeline.Execute(ctx, op.Context)
 	if err == nil {
+		if op.Context.Results.DirectoryNormalized && op.Context.Results.OriginalDir != "" && op.Context.Results.RenamedDir != "" {
+			ctrl.SetMetadata("old_game_dir", op.Context.Results.OriginalDir)
+			ctrl.SetMetadata("new_game_dir", op.Context.Results.RenamedDir)
+		}
 		if op.Context.Game != nil {
 			ctrl.SetResultGame(op.Context.Game)
 		}

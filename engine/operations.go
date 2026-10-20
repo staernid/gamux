@@ -129,6 +129,11 @@ func (op *WorkshopOperation) Execute(ctx context.Context, ctrl *tasks.Controller
 	ctrl.ReportStage("Fetching Workshop Details", op.ItemURLOrID)
 	if op.Engine != nil && !op.DryRun {
 		_, err := op.Engine.InstallWorkshopMod(ctx, op.TargetDir, op.ItemURLOrID)
+		if err == nil {
+			if status, inspectErr := op.Engine.InspectLocal(ctx, op.TargetDir); inspectErr == nil && status != nil {
+				ctrl.SetResultGame(status)
+			}
+		}
 		return err
 	}
 	return steam.DownloadWorkshopItem(ctx, op.ItemURLOrID, op.TargetDir, op.DryRun)

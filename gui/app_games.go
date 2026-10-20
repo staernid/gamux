@@ -278,7 +278,13 @@ func (a *App) CheckGameUpdates(gamePath string) (*domain.VersionStatus, error) {
 	}
 	vs, err := a.Engine.CheckGameUpdates(a.getContext(), path)
 	if err == nil && vs != nil {
-		if st, sErr := a.Engine.InspectStatus(a.getContext(), path); sErr == nil && st != nil {
+		if st, sErr := a.Engine.InspectLocal(a.getContext(), path); sErr == nil && st != nil {
+			st.VersionStatus = vs
+			st.HasUpdate = vs.Checked && !vs.IsUpToDate
+			if vs.RemoteManifestID != "" {
+				st.RemoteManifestID = vs.RemoteManifestID
+			}
+			st.RecomputeState()
 			a.UpdateCachedGame(st)
 			safeEmit(a.getContext(), "gamux:game-updated", map[string]any{"game": st})
 		}
@@ -609,7 +615,13 @@ func (a *App) ToggleGameMod(gamePath, modID string, enable bool) (*domain.Instal
 	if a.Engine == nil {
 		return nil, fmt.Errorf("engine not initialized")
 	}
-	return a.Engine.ToggleGameMod(path, modID, enable)
+	mod, err := a.Engine.ToggleGameMod(path, modID, enable)
+	if err == nil {
+		if st, sErr := a.Engine.InspectLocal(a.getContext(), path); sErr == nil && st != nil {
+			a.UpdateCachedGame(st)
+		}
+	}
+	return mod, err
 }
 
 // DeleteGameMod deletes an installed mod and cleans up its registry entry.
@@ -621,7 +633,13 @@ func (a *App) DeleteGameMod(gamePath, modID string) error {
 	if a.Engine == nil {
 		return fmt.Errorf("engine not initialized")
 	}
-	return a.Engine.DeleteGameMod(path, modID)
+	err = a.Engine.DeleteGameMod(path, modID)
+	if err == nil {
+		if st, sErr := a.Engine.InspectLocal(a.getContext(), path); sErr == nil && st != nil {
+			a.UpdateCachedGame(st)
+		}
+	}
+	return err
 }
 
 // CheckGameModUpdates checks for newer versions of installed workshop mods via Steam Web API.
@@ -633,7 +651,13 @@ func (a *App) CheckGameModUpdates(gamePath string) (*domain.GameModStatus, error
 	if a.Engine == nil {
 		return nil, fmt.Errorf("engine not initialized")
 	}
-	return a.Engine.CheckGameModUpdates(a.getContext(), path)
+	res, err := a.Engine.CheckGameModUpdates(a.getContext(), path)
+	if err == nil {
+		if st, sErr := a.Engine.InspectLocal(a.getContext(), path); sErr == nil && st != nil {
+			a.UpdateCachedGame(st)
+		}
+	}
+	return res, err
 }
 
 // InstallWorkshopMod initiates an asynchronous workshop mod installation task and returns the task ID.

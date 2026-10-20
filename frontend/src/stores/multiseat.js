@@ -116,15 +116,18 @@ export function hydrateStagingFromConfig(mCfg) {
   const layout = mCfg.default_layout || 'dual_monitor';
   const p1Port = Number(mCfg.sunshine_port_p1) || 47989;
   const p2Port = Number(mCfg.sunshine_port_p2) || 48010;
+  const isSplitLayout = layout !== 'dual_monitor' && layout !== 'windowed';
+  const p1Disp = Number(mCfg.seat1_display_index ?? 0);
 
   let seats;
   if (Array.isArray(mCfg.seats) && mCfg.seats.length > 0) {
+    const splitDisp = Number(mCfg.seats[0]?.display_index ?? p1Disp);
     seats = mCfg.seats.map((s, idx) => ({
       ...defaultSeats[Math.min(idx, 1)],
       ...s,
       seat_id: s.seat_id || `p${idx + 1}`,
       mode: s.mode || 'local',
-      display_index: Number(s.display_index ?? (idx === 1 ? (mCfg.seat2_display_index ?? 1) : idx)),
+      display_index: isSplitLayout ? splitDisp : Number(s.display_index ?? (idx === 1 ? (mCfg.seat2_display_index ?? 1) : idx)),
       screen_slot: Number(s.screen_slot ?? idx),
       disabled: Boolean(s.disabled),
       gamepad_node: s.gamepad_node ?? (idx === 0 ? (mCfg.seat1_gamepad || '') : (idx === 1 ? (mCfg.seat2_gamepad || '') : '')),
@@ -146,11 +149,12 @@ export function hydrateStagingFromConfig(mCfg) {
       }
     }
   } else {
+    const p2Disp = isSplitLayout ? p1Disp : Number(mCfg.seat2_display_index ?? 1);
     seats = [
       {
         ...defaultSeats[0],
         mode: mCfg.default_seat1_mode || 'local',
-        display_index: Number(mCfg.seat1_display_index ?? 0),
+        display_index: p1Disp,
         screen_slot: 0,
         disabled: false,
         gamepad_node: mCfg.seat1_gamepad || '',
@@ -166,7 +170,7 @@ export function hydrateStagingFromConfig(mCfg) {
       {
         ...defaultSeats[1],
         mode: mCfg.default_seat2_mode || 'local',
-        display_index: Number(mCfg.seat2_display_index ?? 1),
+        display_index: p2Disp,
         screen_slot: 1,
         disabled: false,
         gamepad_node: mCfg.seat2_gamepad || '',
