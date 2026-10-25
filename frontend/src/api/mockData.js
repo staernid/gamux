@@ -350,8 +350,6 @@ export const MOCK_SAVE_LOCATIONS = {
   total_save_bytes: 45219840,
   total_config_files: 3,
   has_cloud_saves: true,
-  primary_save_path: '/home/staernid/Games/umu/umu-default/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077',
-  primary_config_path: '/home/staernid/Games/umu/umu-default/drive_c/users/steamuser/AppData/Local/CD Projekt Red/Cyberpunk 2077',
   locations: [
     {
       path: '/home/staernid/Games/umu/umu-default/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077',

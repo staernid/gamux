@@ -155,7 +155,7 @@
             <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-surface-border/40">
               <div class="flex items-center space-x-2.5">
                 <span class="text-xs font-bold text-white font-mono">{d.name}</span>
-                {#if d.is_primary}
+                {#if d.primary || d.is_primary}
                   <span class="px-1.5 py-0.2 rounded text-4xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Primary</span>
                 {/if}
                 <span class="text-3xs text-neutral-400 font-mono">
