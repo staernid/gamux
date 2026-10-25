@@ -1,6 +1,5 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { get } from 'svelte/store';
   import {
     selectedGame,
     activeView,
@@ -107,7 +106,7 @@
     }
 
     unsubSelected = selectedGame.subscribe(current => {
-      if (current && get(drawerDraft).gameDir !== current.gameDir) {
+      if (current && $drawerDraft.gameDir !== current.gameDir) {
         drawerDraft.init(current, globalCfg);
         integrityReport = null;
         localIntegrityError = '';

@@ -1,5 +1,4 @@
 <script>
-  import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
   import CoverCard from '../blocks/CoverCard.svelte';
   import SearchFilterBar from '../blocks/SearchFilterBar.svelte';
@@ -186,7 +185,7 @@
     }
     const list = $filteredGames || [];
     if (list.length === 0) return;
-    const current = get(selectedGame);
+    const current = $selectedGame;
     const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
     const nextIndex = (currentIndex + dir + list.length) % list.length;
     playTick();

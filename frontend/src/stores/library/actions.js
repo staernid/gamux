@@ -1,9 +1,8 @@
-import { get } from 'svelte/store';
 import { AppAPI } from '../../api/app.js';
 import { normalizeGame, isSamePath } from '../../utils/game.js';
 import { notificationStore } from '../notifications.js';
-import { libraryPaths, libraryPath, setOnPathsChangedHook } from './paths.js';
-import { games, isScanning, updateGameInStore, removeGameFromStore } from './catalog.js';
+import { pathsStore, setOnPathsChangedHook } from './paths.js';
+import { catalogStore, games, isScanning, updateGameInStore, removeGameFromStore } from './catalog.js';
 import { selectedGame, activeView } from './selection.js';
 
 export async function scanLibrary(pathOverride = '') {
@@ -11,9 +10,9 @@ export async function scanLibrary(pathOverride = '') {
   if (pathOverride) {
     targetPaths = [pathOverride];
   } else {
-    targetPaths = get(libraryPaths) || [];
+    targetPaths = pathsStore.paths || [];
     if (targetPaths.length === 0) {
-      const single = get(libraryPath);
+      const single = pathsStore.currentPath;
       if (single) targetPaths = [single];
     }
   }
@@ -47,7 +46,7 @@ setOnPathsChangedHook(() => {
 });
 
 export async function importGame() {
-  const currentLib = get(libraryPath) || '';
+  const currentLib = pathsStore.currentPath || '';
 
   const selected = await AppAPI.selectDirectory('Select Game Folder to Import', currentLib);
   if (!selected) return;
@@ -130,7 +129,7 @@ export async function queueApplyGame(game, customOpts = null) {
 }
 
 export function batchApplyCleanGames() {
-  const allGames = get(games) || [];
+  const allGames = catalogStore.games || [];
   const cleanGames = allGames.filter(g => !g.isPatched);
   if (cleanGames.length === 0) return;
 

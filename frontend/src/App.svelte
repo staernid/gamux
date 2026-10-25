@@ -1,6 +1,5 @@
 <script>
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import TopBar from './components/header/TopBar.svelte';
   import LibraryView from './components/views/LibraryView.svelte';
   import ModalHost from './components/common/ModalHost.svelte';
@@ -72,7 +71,7 @@
   }
 
   function cycleView(dir) {
-    const curr = get(activeView) || 'library';
+    const curr = $activeView || 'library';
     const idx = views.indexOf(curr);
     const validIdx = idx >= 0 ? idx : 0;
     let next = validIdx + dir;
@@ -84,7 +83,7 @@
   function openSelectedGameHub(targetGame = null) {
     const game = targetGame || $selectedGame;
     if (!game) {
-      const all = get(filteredGames) || [];
+      const all = $filteredGames || [];
       if (all.length > 0) {
         selectedGame.set(all[0]);
         playSelect();
@@ -109,10 +108,10 @@
   }
 
   function stepGameSelection(dir) {
-    const list = get(filteredGames) || [];
+    const list = $filteredGames || [];
     if (!list || list.length === 0) return;
 
-    const current = get(selectedGame);
+    const current = $selectedGame;
     const currentIndex = current ? list.findIndex(g => isSamePath(g.gameDir, current.gameDir)) : -1;
 
     let nextIndex = (currentIndex + dir + list.length) % list.length;
@@ -152,7 +151,7 @@
     }
 
     // 1. Check local library first
-    const currentGames = get(games) || [];
+    const currentGames = $games || [];
     const found = currentGames.find(g => g && String(g.appId) === String(appId));
 
     if (found) {
@@ -166,7 +165,7 @@
       return;
     }
 
-    if (get(isScanning)) {
+    if ($isScanning) {
       // Library scan is actively in progress; remember target to promote if found when scan completes
       pendingTargetAppId = appId;
     }
@@ -428,8 +427,8 @@
 
       const actions = gamepadTracker.process(pad);
       if (actions) {
-        const currView = get(activeView) || 'library';
-        const modalActive = !!get(modalStore);
+        const currView = $activeView || 'library';
+        const modalActive = !!$modalStore;
 
         // 1. If a Modal is open, handle Back/Close
         if (modalActive) {
