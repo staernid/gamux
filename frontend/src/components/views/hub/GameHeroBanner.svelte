@@ -41,8 +41,6 @@
     onaddToLibrary = null
   } = $props();
 
-  let logoFailed = $state(false);
-  let heroFailed = $state(false);
   let versionStatus = $state(null);
   let loadedVersionGameDir = $state('');
   let showLaunchMenu = $state(false);
@@ -85,15 +83,9 @@
     ontrash?.();
   }
 
-  $effect(() => {
-    if (game) {
-      logoFailed = false;
-      heroFailed = false;
-    }
-  });
-
   let isSteam = $derived(game ? isSteamApp(game.appId) : false);
 
+  // Asynchronously query version status on game change
   $effect(() => {
     if (game?.gameDir && isSteam) {
       const gdir = game.gameDir;

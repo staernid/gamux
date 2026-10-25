@@ -5,7 +5,7 @@
   let { networkDraft = $bindable(), generalDraft = $bindable(), cfgDraft = $bindable() } = $props();
 
   let targetDraft = $derived(networkDraft || generalDraft || cfgDraft || {});
-  let customSpeedMB = $state('');
+  let userCustomSpeedMB = $state('');
 
   const standardSpeedPresets = [0, 5242880, 10485760, 26214400, 52428800, 104857600];
 
@@ -25,11 +25,9 @@
     ? speedLimit
     : -1);
 
-  $effect(() => {
-    if (selectedSpeedMode === -1 && !customSpeedMB && speedLimit > 0) {
-      customSpeedMB = String(Math.round(speedLimit / 1048576));
-    }
-  });
+  let customSpeedMB = $derived(
+    userCustomSpeedMB || (selectedSpeedMode === -1 && speedLimit > 0 ? String(Math.round(speedLimit / 1048576)) : '')
+  );
 
   function setSpeedLimit(bytes) {
     if (networkDraft) networkDraft.transfer_speed_limit = bytes;
@@ -49,7 +47,7 @@
 
   function handleCustomSpeedInput(e) {
     const mb = parseInt(e.target.value, 10);
-    customSpeedMB = e.target.value;
+    userCustomSpeedMB = e.target.value;
     if (!isNaN(mb) && mb >= 0) {
       setSpeedLimit(mb * 1048576);
     }

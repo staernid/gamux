@@ -77,6 +77,7 @@
     }, 300);
   }
 
+  // Debounce launch preview recalculation when draft config changes
   $effect(() => {
     if ($drawerDraft && game?.gameDir) {
       schedulePreviewUpdate();

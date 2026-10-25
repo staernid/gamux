@@ -91,7 +91,7 @@
     },
   ];
   // Ensure nested multiseat defaults exist
-  $effect(() => {
+  function ensureMultiseatDefaults() {
     if (!cfgDraft.multiseat) {
       cfgDraft.multiseat = {};
     }
@@ -117,7 +117,8 @@
     if (ms.seat2_display_index === undefined) ms.seat2_display_index = 1;
     if (ms.sunshine_port_p1 === undefined) ms.sunshine_port_p1 = 47989;
     if (ms.sunshine_port_p2 === undefined) ms.sunshine_port_p2 = 48010;
-  });
+  }
+  ensureMultiseatDefaults();
   let seats = $derived($multiseatStore.staging?.seats || [
     $multiseatStore.staging?.seat1 || { seat_id: 'p1', mode: 'local', display_index: 0 },
     $multiseatStore.staging?.seat2 || { seat_id: 'p2', mode: 'local', display_index: (cfgDraft.multiseat?.seat2_display_index ?? 1) }
@@ -181,6 +182,7 @@
     return val;
   }
 
+  // Normalize legacy device node strings in cfgDraft when devices are loaded
   $effect(() => {
     if (cfgDraft?.multiseat) {
       if (cfgDraft.multiseat.seat1_keyboard) {

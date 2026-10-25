@@ -84,17 +84,15 @@
     });
   }
 
-  $effect(() => {
-    if (focusedIndex >= filteredResults.length) {
-      focusedIndex = Math.max(0, filteredResults.length - 1);
-    }
-  });
+  let effectiveFocusedIndex = $derived(
+    filteredResults.length > 0 ? Math.min(focusedIndex, filteredResults.length - 1) : 0
+  );
 
   // Scroll focused card into view smoothly
   $effect(() => {
     if (gridContainerEl && filteredResults.length > 0) {
       tick().then(() => {
-        const activeCard = gridContainerEl?.querySelector(`[data-index="${focusedIndex}"]`);
+        const activeCard = gridContainerEl?.querySelector(`[data-index="${effectiveFocusedIndex}"]`);
         if (activeCard && typeof activeCard.scrollIntoView === 'function') {
           activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
@@ -175,8 +173,8 @@
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (filteredResults[focusedIndex]) {
-        selectAndClose(filteredResults[focusedIndex]);
+      if (filteredResults[effectiveFocusedIndex]) {
+        selectAndClose(filteredResults[effectiveFocusedIndex]);
       }
       return;
     }
@@ -344,7 +342,7 @@
           <div data-index={index} class="w-full">
             <CatalogCard
               {item}
-              isFocused={index === focusedIndex}
+              isFocused={index === effectiveFocusedIndex}
               localMatch={getMatchingLocalGame(item)}
               onselect={() => selectAndClose(item)}
               onfocus={() => { focusedIndex = index; }}

@@ -21,14 +21,10 @@
     children
   } = $props();
 
-  let imgFailed = $state(false);
+  let failedUrl = $state('');
 
-  let activeUrl = $derived((!imgFailed && (localHeroUrl || heroUrl)) || '');
-  $effect(() => {
-    if (heroUrl || localHeroUrl) {
-      imgFailed = false;
-    }
-  });
+  let candidateUrl = $derived(localHeroUrl || heroUrl || '');
+  let activeUrl = $derived((candidateUrl && candidateUrl !== failedUrl) ? candidateUrl : '');
 </script>
 
 <div class="relative overflow-hidden select-none {className}" data-testid="game-hero-backdrop">
@@ -39,7 +35,7 @@
       alt="Hero Backdrop"
       class="absolute inset-0 w-full h-full object-cover object-center filter transition-all duration-700 ease-out"
       style="filter: brightness({1 - dimLevel * 0.5});"
-      onerror={() => { imgFailed = true; }}
+      onerror={() => { failedUrl = candidateUrl; }}
     />
   {:else}
     <!-- Dark fallback ambient surface -->

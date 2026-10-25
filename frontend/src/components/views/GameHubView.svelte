@@ -121,6 +121,7 @@
     if (unsubSelected) unsubSelected();
   });
 
+  // Resolve store title metadata for placeholder titles on game change
   $effect(() => {
     if (game) resolvePlaceholderTitle(game);
   });

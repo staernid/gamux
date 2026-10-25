@@ -6,35 +6,20 @@
 
   let targetDraft = $derived(gamescopeDraft || cfgDraft || {});
 
-  let selectedResPreset = $state('auto');
-  let isCustomRes = $state(false);
-
-  $effect(() => {
+  let userSelectedRes = $state(null);
+  let computedRes = $derived.by(() => {
     const w = targetDraft.gamescope_width || 0;
     const h = targetDraft.gamescope_height || 0;
-    if (!w && !h) {
-      selectedResPreset = 'auto';
-      isCustomRes = false;
-    } else if (w === 3840 && h === 2160) {
-      selectedResPreset = '3840x2160';
-      isCustomRes = false;
-    } else if (w === 3440 && h === 1440) {
-      selectedResPreset = '3440x1440';
-      isCustomRes = false;
-    } else if (w === 2560 && h === 1440) {
-      selectedResPreset = '2560x1440';
-      isCustomRes = false;
-    } else if (w === 1920 && h === 1080) {
-      selectedResPreset = '1920x1080';
-      isCustomRes = false;
-    } else if (w === 1280 && h === 720) {
-      selectedResPreset = '1280x720';
-      isCustomRes = false;
-    } else {
-      selectedResPreset = 'custom';
-      isCustomRes = true;
-    }
+    if (!w && !h) return { preset: 'auto', isCustom: false };
+    if (w === 3840 && h === 2160) return { preset: '3840x2160', isCustom: false };
+    if (w === 3440 && h === 1440) return { preset: '3440x1440', isCustom: false };
+    if (w === 2560 && h === 1440) return { preset: '2560x1440', isCustom: false };
+    if (w === 1920 && h === 1080) return { preset: '1920x1080', isCustom: false };
+    if (w === 1280 && h === 720) return { preset: '1280x720', isCustom: false };
+    return { preset: 'custom', isCustom: true };
   });
+  let selectedResPreset = $derived(userSelectedRes ?? computedRes.preset);
+  let isCustomRes = $derived(selectedResPreset === 'custom' || computedRes.isCustom);
 
   function setDimensions(w, h) {
     if (gamescopeDraft) {
@@ -48,16 +33,17 @@
   }
 
   function handleResChange(val) {
-    selectedResPreset = val;
+    userSelectedRes = val;
     if (val === 'auto') {
       setDimensions(0, 0);
-      isCustomRes = false;
     } else if (val === 'custom') {
-      isCustomRes = true;
+      if (!targetDraft.gamescope_width && !targetDraft.gamescope_height) {
+        setDimensions(1920, 1080);
+      }
     } else {
-      isCustomRes = false;
       const parts = val.split('x').map(Number);
       setDimensions(parts[0], parts[1]);
+      userSelectedRes = null;
     }
   }
 
@@ -71,19 +57,16 @@
     { value: 'custom', label: 'Custom Resolution...' }
   ];
 
-  let selectedFpsPreset = $state('0');
-  let isCustomFps = $state(false);
-
-  $effect(() => {
+  let userSelectedFps = $state(null);
+  let computedFps = $derived.by(() => {
     const fps = targetDraft.gamescope_fps || 0;
     if ([0, 60, 100, 120, 144, 165, 240].includes(fps)) {
-      selectedFpsPreset = String(fps);
-      isCustomFps = false;
-    } else {
-      selectedFpsPreset = 'custom';
-      isCustomFps = true;
+      return { preset: String(fps), isCustom: false };
     }
+    return { preset: 'custom', isCustom: true };
   });
+  let selectedFpsPreset = $derived(userSelectedFps ?? computedFps.preset);
+  let isCustomFps = $derived(selectedFpsPreset === 'custom' || computedFps.isCustom);
 
   function setFps(fps) {
     if (gamescopeDraft) gamescopeDraft.gamescope_fps = fps;
@@ -91,12 +74,12 @@
   }
 
   function handleFpsChange(val) {
-    selectedFpsPreset = val;
+    userSelectedFps = val;
     if (val === 'custom') {
-      isCustomFps = true;
+      if (!targetDraft.gamescope_fps) setFps(60);
     } else {
-      isCustomFps = false;
       setFps(Number(val));
+      userSelectedFps = null;
     }
   }
 

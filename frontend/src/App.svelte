@@ -205,6 +205,7 @@
     });
   }
 
+  // Open pending cold-start target game once library finishes loading
   $effect(() => {
     if (pendingTargetAppId && $games?.length > 0) {
       const found = $games.find(g => g && String(g.appId) === String(pendingTargetAppId));

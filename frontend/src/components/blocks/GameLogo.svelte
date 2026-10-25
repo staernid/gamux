@@ -19,14 +19,10 @@
     maxWidth = 'max-w-[420px]'
   } = $props();
 
-  let imgFailed = $state(false);
+  let failedUrl = $state('');
 
-  let activeUrl = $derived((!imgFailed && (localLogoUrl || logoUrl)) || '');
-  $effect(() => {
-    if (logoUrl || localLogoUrl) {
-      imgFailed = false;
-    }
-  });
+  let candidateUrl = $derived(localLogoUrl || logoUrl || '');
+  let activeUrl = $derived((candidateUrl && candidateUrl !== failedUrl) ? candidateUrl : '');
 </script>
 
 <div class="flex items-center min-w-0 {className}" data-testid="game-logo">
@@ -35,7 +31,7 @@
       src={activeUrl}
       alt={title || 'Game Logo'}
       class="object-contain object-left drop-shadow-2xl transition-opacity duration-300 {maxHeight} {maxWidth}"
-      onerror={() => { imgFailed = true; }}
+      onerror={() => { failedUrl = candidateUrl; }}
     />
   {:else if title}
     <h1 class="text-2xl sm:text-4xl font-black text-white tracking-tight drop-shadow-md select-text leading-tight">

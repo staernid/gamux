@@ -25,35 +25,24 @@
     onchange
   } = $props();
 
-  // If checked is passed, sync value from checked
-  $effect(() => {
-    if (checked !== undefined && value !== checked) {
-      value = checked;
-    }
-  });
-
+  let currentValue = $derived(value !== undefined ? value : checked);
   let hasInheritance = $derived(inheritedValue !== undefined && inheritedValue !== null);
-  let isInherited = $derived(hasInheritance && (value === null || value === undefined));
-  let effectiveValue = $derived(isInherited ? Boolean(inheritedValue) : Boolean(value));
+  let isInherited = $derived(hasInheritance && (currentValue === null || currentValue === undefined));
+  let effectiveValue = $derived(isInherited ? Boolean(inheritedValue) : Boolean(currentValue));
   let isOverridden = $derived(hasInheritance && !isInherited);
   let effectiveDescription = $derived(description);
   let isCompact = $derived(compact || (!label && !description));
 
   function toggleSwitch() {
     if (disabled) return;
-    if (hasInheritance) {
-      if (isInherited) {
-        value = !inheritedValue;
-      } else {
-        value = !value;
-      }
-    } else {
-      value = !value;
-    }
+    const next = hasInheritance
+      ? (isInherited ? !inheritedValue : !currentValue)
+      : !effectiveValue;
+    value = next;
     if (checked !== undefined) {
-      checked = value;
+      checked = next;
     }
-    onchange?.(value);
+    onchange?.(next);
   }
 
   function revertToInherit(e) {

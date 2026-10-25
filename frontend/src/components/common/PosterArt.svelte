@@ -33,6 +33,7 @@
   let imgFailed = $state(false);
   let candidateKey = $state('');
 
+  // Reset fallback index and error state when image candidate source changes
   $effect(() => {
     const key = `${isForcedNone}|${localCoverUrl}|${posterUrl}|${appId}|${thumbnailWidth}`;
     if (key !== candidateKey) {

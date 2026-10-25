@@ -74,6 +74,7 @@
     }
   }
 
+  // Asynchronously fetch store metadata when lookup key changes
   $effect(() => {
     if (lookupKey !== currentLookupKey && !isLoading) {
       loadMetadata(providerKey, targetLookupId, lookupKey);

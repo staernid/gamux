@@ -44,17 +44,8 @@
 
   let isInstalled = $derived(game ? (game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0))) : false);
 
-  // svelte-ignore state_referenced_locally
-  let activeFilesSubTab = $state(activeSubTab || (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots')));
-  // svelte-ignore state_referenced_locally
-  let prevActiveSubTab = $state(activeSubTab);
-
-  $effect(() => {
-    if (activeSubTab !== prevActiveSubTab) {
-      prevActiveSubTab = activeSubTab;
-      activeFilesSubTab = activeSubTab || 'depots';
-    }
-  });
+  let userSubTab = $state(null);
+  let activeFilesSubTab = $derived(userSubTab ?? activeSubTab ?? (isInstalled ? 'depots' : (isSteam ? 'branch' : 'depots')));
 
   function handleRunIntegrityCheck() {
     onrunIntegrityCheck?.();
@@ -74,7 +65,7 @@
   <div class="flex items-center space-x-2 bg-surface-card p-1.5 rounded-xl border border-surface-border flex-wrap gap-y-1 shadow-sm">
     <button
       type="button"
-      onclick={() => { activeFilesSubTab = 'depots'; }}
+      onclick={() => { userSubTab = 'depots'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'depots' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,7 +77,7 @@
     {#if isSteam}
       <button
         type="button"
-        onclick={() => { activeFilesSubTab = 'branch'; }}
+        onclick={() => { userSubTab = 'branch'; }}
         class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'branch' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
       >
         <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +94,7 @@
 
     <button
       type="button"
-      onclick={() => { activeFilesSubTab = 'integrity'; }}
+      onclick={() => { userSubTab = 'integrity'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'integrity' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,7 +105,7 @@
 
     <button
       type="button"
-      onclick={() => { activeFilesSubTab = 'logs'; }}
+      onclick={() => { userSubTab = 'logs'; }}
       class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer {activeFilesSubTab === 'logs' ? 'bg-surface-cardHover text-white shadow-sm border border-surface-borderHighlight' : 'text-neutral-400 hover:text-neutral-200 hover:bg-surface-input'}"
     >
       <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">

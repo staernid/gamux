@@ -116,33 +116,22 @@
   let protonDbUrl = $derived(isSteam ? `https://www.protondb.com/app/${encodeURIComponent(effectiveAppId)}` : (name ? `https://www.protondb.com/search?q=${encodeURIComponent(name)}` : ''));
   let steamDbUrl = $derived(isSteam ? `https://steamdb.info/app/${encodeURIComponent(effectiveAppId)}/` : (name ? `https://steamdb.info/search/?a=app&q=${encodeURIComponent(name)}` : ''));
   let hltbUrl = $derived(name ? `https://howlongtobeat.com/?q=${encodeURIComponent(name)}` : '');
-  // Restore cached items immediately to prevent UI flicker on tab return
-  $effect(() => {
-    if (effectiveAppId && overviewNewsCache.has(effectiveAppId)) {
-      const cached = overviewNewsCache.get(effectiveAppId);
-      if (cached && cached.length > 0 && newsItems.length === 0) {
-        newsItems = cached;
-      }
-    } else if (newsItems.length === 0 && game?.newsItems && game.newsItems.length > 0) {
-      newsItems = game.newsItems.slice(0, 3);
-    }
-  });
 
-  $effect(() => {
-    if (game?.gameDir && overviewAchievementsCache.has(game.gameDir)) {
-      const cachedAch = overviewAchievementsCache.get(game.gameDir);
-      if (cachedAch && cachedAch.length > 0 && achievements.length === 0) {
-        achievements = cachedAch;
-      }
-    }
-  });
+  let effectiveAchievements = $derived(
+    achievements.length > 0 ? achievements : (overviewAchievementsCache.get(game?.gameDir) || [])
+  );
+  let effectiveNewsItems = $derived(
+    newsItems.length > 0 ? newsItems : (overviewNewsCache.get(effectiveAppId) || game?.newsItems?.slice(0, 3) || [])
+  );
 
+  // Asynchronously fetch achievements when active game changes
   $effect(() => {
     if (game?.gameDir && game.gameDir !== loadedAchievementsDir) {
       loadAchievements();
     }
   });
 
+  // Asynchronously fetch news articles when effective Steam AppID changes
   $effect(() => {
     if (effectiveAppId && effectiveAppId !== loadedNewsAppId) {
       loadNews();
@@ -237,10 +226,10 @@
   {/if}
 
   <!-- Achievements Ribbon Spotlight -->
-  {#if achievements.length > 0}
+  {#if effectiveAchievements.length > 0}
     <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
       <AchievementRibbon
-        {achievements}
+        achievements={effectiveAchievements}
         onviewAll={() => navigateToCommunity('achievements')}
         onselect={() => navigateToCommunity('achievements')}
       />
@@ -248,10 +237,10 @@
   {/if}
 
   <!-- Latest Updates & Patch Notes Feed -->
-  {#if newsItems.length > 0}
+  {#if effectiveNewsItems.length > 0}
     <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
       <PatchNotesFeed
-        {newsItems}
+        newsItems={effectiveNewsItems}
         onviewAll={() => navigateToCommunity('news')}
         onread={(val) => navigateToCommunity('news', val?.index ?? 0)}
       />

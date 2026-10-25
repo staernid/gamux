@@ -62,14 +62,9 @@
       newProfileName = '';
     }
   }
-
-  $effect(() => {
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  });
 </script>
+
+<svelte:window onclick={handleClickOutside} />
 
 <div class="relative pointer-events-auto" bind:this={containerRef}>
   <!-- Avatar Trigger Button -->

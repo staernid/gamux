@@ -65,6 +65,7 @@
   ];
 
   let lastKnownGameKey = '';
+  // Fetch artwork candidate options when selected target game changes
   $effect(() => {
     const currentKey = `${gameDir}:${appId}:${gameName}`;
     if (currentKey !== lastKnownGameKey) {

@@ -18,22 +18,6 @@
   let activeTab = $state('general'); // 'general' | 'storage' | 'compatibility' | 'profiles' | 'advanced'
   let advancedSubtab = $state('coop'); // 'coop' | 'maintenance' | 'logs' | 'schema'
 
-  // Backward compatibility alias mapper
-  $effect(() => {
-    if (activeTab === 'coop') {
-      activeTab = 'advanced';
-      advancedSubtab = 'coop';
-    } else if (activeTab === 'tools' || activeTab === 'maintenance') {
-      activeTab = 'advanced';
-      advancedSubtab = 'maintenance';
-    } else if (activeTab === 'logs') {
-      activeTab = 'advanced';
-      advancedSubtab = 'logs';
-    } else if (activeTab === 'schema') {
-      activeTab = 'advanced';
-      advancedSubtab = 'schema';
-    }
-  });
   let cfgDraft = $state({
     library_paths: [],
     default_runner: 'umu',
@@ -101,6 +85,7 @@
     (JSON.stringify(cfgDraft) !== initialCfgJSON || JSON.stringify(userCfgDraft) !== initialUserCfgJSON)
   ));
 
+  // Synchronize dirty draft state to global configStore
   $effect(() => {
     configStore.setDirty(isDirty);
   });
@@ -232,6 +217,7 @@
     }, 350);
   }
 
+  // Trigger debounced autosave when settings draft becomes dirty
   $effect(() => {
     if (isDirty) {
       triggerAutoSave();

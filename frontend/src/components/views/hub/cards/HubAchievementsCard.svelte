@@ -68,6 +68,7 @@
     if (filterMode === 'locked') return !a.unlocked;
     return true;
   }));
+  // Asynchronously fetch achievements when active game directory changes
   $effect(() => {
     if (gameDir && gameDir !== loadedGameDir) {
       loadAchievements();

@@ -35,6 +35,7 @@
     }
   }
 
+  // Query live Steam concurrent player metrics on AppID change
   $effect(() => {
     if (game?.appId && isSteamApp(game.appId)) {
       const aid = String(game.appId).trim();

@@ -32,6 +32,7 @@
     }
   }
 
+  // Query filesystem disk metrics when active library path changes
   $effect(() => {
     const p = $libraryPath;
     if (p) {
@@ -39,6 +40,7 @@
     }
   });
 
+  // Accumulate rolling transfer speed samples for sparkline graph
   $effect(() => {
     const currentSpeed = tasksStore.totalSpeedBps || 0;
     untrack(() => {
