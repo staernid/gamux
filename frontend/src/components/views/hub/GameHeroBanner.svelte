@@ -284,7 +284,7 @@
               type="button"
               onclick={handlePrimaryAction}
               disabled={isTaskActive && !isPausableTask}
-              class="relative overflow-hidden px-5 py-3 font-black text-sm transition-all flex items-center justify-center space-x-2 active:scale-95 focus:outline-none cursor-pointer disabled:cursor-not-allowed flex-1 {isTaskActive ? 'text-white' : isGameRunning ? 'hover:bg-rose-500 text-white' : 'hover:bg-neutral-200 text-neutral-950'}"
+              class="relative overflow-hidden px-5 py-3 font-black text-sm transition-all flex items-center justify-center space-x-2 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 cursor-pointer disabled:cursor-not-allowed flex-1 {isTaskActive ? 'text-white' : isGameRunning ? 'hover:bg-rose-500 text-white' : 'hover:bg-neutral-200 text-neutral-950'}"
             >
               {#if isTaskActive}
                 <!-- Animated / Frozen Progress Fill Bar Background -->

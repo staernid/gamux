@@ -196,6 +196,7 @@
                 onclick={() => openExternalUrl(tool.releaseUrl, { title: tool.name || 'GitHub Release' })}
                 class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-surface-border bg-surface-input transition-colors cursor-pointer"
                 title="Open GitHub Release"
+                aria-label="Open GitHub Release"
               >
                 ↗
               </button>

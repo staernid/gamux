@@ -400,6 +400,7 @@
                   onclick={() => handleDeleteBackup(bk.id)}
                   class="p-1 rounded-lg bg-surface-card hover:bg-rose-950/40 text-neutral-400 hover:text-rose-400 border border-surface-border transition-colors cursor-pointer"
                   title="Delete Snapshot"
+                  aria-label="Delete Snapshot"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

@@ -39,9 +39,10 @@
   <div
     role="row"
     tabindex="0"
+    aria-label={name}
     onclick={handleClick}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
-    class="group w-full h-10 px-4 flex items-center justify-between border-b border-surface-border hover:bg-surface-header/80 transition-colors text-xs font-mono select-none cursor-pointer focus:outline-none {selected ? 'bg-surface-header border-l-2 border-l-white' : ''} {className}"
+    class="group w-full h-10 px-4 flex items-center justify-between border-b border-surface-border hover:bg-surface-header/80 transition-colors text-xs font-mono select-none cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 {selected ? 'bg-surface-header border-l-2 border-l-white' : ''} {className}"
     data-testid="compact-game-row"
   >
     <!-- Left: Status Pip + Title -->

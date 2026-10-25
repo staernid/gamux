@@ -60,7 +60,8 @@
   type="button"
   onclick={handleClick}
   onkeydown={handleKeydown}
-  class="contain-card group cursor-pointer flex flex-col items-center text-left transition-transform duration-150 ease-out transform hover:-translate-y-1.5 focus:outline-none select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
+  aria-label={name}
+  class="contain-card group cursor-pointer flex flex-col items-center text-left transition-transform duration-150 ease-out transform hover:-translate-y-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base rounded-2xl select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
   data-testid="cover-card"
 >
   <!-- Poster Art Container -->

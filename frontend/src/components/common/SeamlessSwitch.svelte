@@ -67,7 +67,6 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="flex items-start sm:items-center justify-between gap-3 select-none
     {isCompact ? 'p-0 bg-transparent border-0' : 'p-3 rounded-lg transition-all cursor-pointer ' + (isOverridden ? 'bg-surface-card/70 border border-neutral-500' : 'bg-surface-card/30 border border-surface-border/50')}
