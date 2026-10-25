@@ -41,7 +41,7 @@
     tabindex="0"
     onclick={handleClick}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
-    class="group w-full h-10 px-4 flex items-center justify-between border-b border-[#18181b] hover:bg-[#18181b]/80 transition-colors text-xs font-mono select-none cursor-pointer focus:outline-none {selected ? 'bg-[#1c1c20] border-l-2 border-l-white' : ''} {className}"
+    class="group w-full h-10 px-4 flex items-center justify-between border-b border-surface-border hover:bg-surface-header/80 transition-colors text-xs font-mono select-none cursor-pointer focus:outline-none {selected ? 'bg-surface-header border-l-2 border-l-white' : ''} {className}"
     data-testid="compact-game-row"
   >
     <!-- Left: Status Pip + Title -->

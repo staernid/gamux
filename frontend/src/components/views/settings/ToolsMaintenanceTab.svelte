@@ -137,7 +137,7 @@
           type="button"
           onclick={checkAllTools}
           disabled={isCheckingTools}
-          class="px-2.5 py-1 bg-[#1a1a26] hover:bg-[#242436] border border-[#303046] text-slate-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+          class="px-2.5 py-1 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
         >
           {#if isCheckingTools}
             <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
@@ -159,7 +159,7 @@
       {#each toolStatuses as tool}
         {@const isInstalled = checkIsInstalled(tool)}
         {@const isUpdating = Boolean(updatingTools[tool.key || tool.tool_name])}
-        <div class="bg-[#101013] border border-surface-border p-3 rounded-xl flex flex-col justify-between gap-2.5">
+        <div class="bg-surface-header border border-surface-border p-3 rounded-xl flex flex-col justify-between gap-2.5">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center justify-between gap-1.5">
               <span class="font-semibold text-xs text-white truncate">{tool.name || tool.display_name || tool.key}</span>
@@ -246,7 +246,7 @@
       {/snippet}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
       <!-- 1. Batch Achievements -->
-      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-surface-header border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +305,7 @@
       </div>
 
       <!-- 2. Batch Artwork -->
-      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-surface-header border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,7 +364,7 @@
       </div>
 
       <!-- 3. Batch Apply DRM & Emulator -->
-      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-surface-header border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <div class="flex items-center justify-between gap-1.5">
             <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5 truncate">
@@ -428,7 +428,7 @@
       </div>
 
       <!-- 4. Batch Normalize -->
-      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
+      <div class="bg-surface-header border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -487,7 +487,7 @@
       </div>
 
       <!-- 5. Batch Verify Manifests -->
-      <div class="bg-[#101013] border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
+      <div class="bg-surface-header border border-surface-border hover:border-surface-borderHighlight p-3 rounded-xl flex flex-col justify-between gap-2.5 transition-colors sm:col-span-2 lg:col-span-2">
         <div class="space-y-1">
           <span class="font-bold text-neutral-100 text-xs flex items-center space-x-1.5">
             <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,5 +1,4 @@
 <script>
-  import SettingSection from '../../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
 
@@ -118,75 +117,78 @@
   ];
 </script>
 
-<SettingSection title="Gamescope & Screen Resolution">
-  <div class="space-y-3">
+<div class="pt-4 border-t border-surface-border space-y-3">
+  <div class="space-y-0.5">
+    <h4 class="text-xs font-bold text-neutral-200 uppercase tracking-wider font-mono">
+      Gamescope &amp; Screen Resolution
+    </h4>
     <p class="text-xs text-neutral-400 leading-relaxed">
       Configures base display resolution and target refresh rate for Gamescope. This resolution is applied 1:1 for single-player launches (when enabled) and automatically partitioned across split-screen co-op seats.
     </p>
+  </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-      <SeamlessSwitch
-        label="Enable Single-Player Gamescope"
-        description="Wrap single-player game launches in Gamescope compositor (off by default)"
-        value={targetDraft.gamescope}
-        onchange={handleGamescopeToggle}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+    <SeamlessSwitch
+      label="Enable Single-Player Gamescope"
+      description="Wrap single-player game launches in Gamescope compositor (off by default)"
+      value={targetDraft.gamescope}
+      onchange={handleGamescopeToggle}
+    />
+
+    <div class="space-y-1.5">
+      <InheritSelect
+        label="Base Screen Resolution"
+        value={selectedResPreset}
+        onchange={(val) => handleResChange(val)}
+        options={resPresets}
       />
-
-      <div class="space-y-1.5">
-        <InheritSelect
-          label="Base Screen Resolution"
-          value={selectedResPreset}
-          onchange={(val) => handleResChange(val)}
-          options={resPresets}
-        />
-        {#if isCustomRes}
-          <div class="grid grid-cols-2 gap-2 pt-1">
-            <div>
-              <label for="custom-gamescope-w" class="block text-2xs font-semibold text-neutral-400 mb-1">Width (px)</label>
-              <input
-                id="custom-gamescope-w"
-                type="number"
-                bind:value={targetDraft.gamescope_width}
-                class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
-                placeholder="3440"
-              />
-            </div>
-            <div>
-              <label for="custom-gamescope-h" class="block text-2xs font-semibold text-neutral-400 mb-1">Height (px)</label>
-              <input
-                id="custom-gamescope-h"
-                type="number"
-                bind:value={targetDraft.gamescope_height}
-                class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
-                placeholder="1440"
-              />
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-surface-border">
-      <div class="space-y-1.5">
-        <InheritSelect
-          label="Target Refresh Rate / FPS"
-          value={selectedFpsPreset}
-          onchange={(val) => handleFpsChange(val)}
-          options={fpsPresets}
-        />
-        {#if isCustomFps}
-          <div class="pt-1">
-            <label for="custom-gamescope-fps" class="block text-2xs font-semibold text-neutral-400 mb-1">Target FPS (Hz)</label>
+      {#if isCustomRes}
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label for="custom-gamescope-w" class="block text-2xs font-semibold text-neutral-400 mb-1">Width (px)</label>
             <input
-              id="custom-gamescope-fps"
+              id="custom-gamescope-w"
               type="number"
-              bind:value={targetDraft.gamescope_fps}
+              bind:value={targetDraft.gamescope_width}
               class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
-              placeholder="100"
+              placeholder="3440"
             />
           </div>
-        {/if}
-      </div>
+          <div>
+            <label for="custom-gamescope-h" class="block text-2xs font-semibold text-neutral-400 mb-1">Height (px)</label>
+            <input
+              id="custom-gamescope-h"
+              type="number"
+              bind:value={targetDraft.gamescope_height}
+              class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
+              placeholder="1440"
+            />
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
-</SettingSection>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-surface-border">
+    <div class="space-y-1.5">
+      <InheritSelect
+        label="Target Refresh Rate / FPS"
+        value={selectedFpsPreset}
+        onchange={(val) => handleFpsChange(val)}
+        options={fpsPresets}
+      />
+      {#if isCustomFps}
+        <div class="pt-1">
+          <label for="custom-gamescope-fps" class="block text-2xs font-semibold text-neutral-400 mb-1">Target FPS (Hz)</label>
+          <input
+            id="custom-gamescope-fps"
+            type="number"
+            bind:value={targetDraft.gamescope_fps}
+            class="w-full bg-surface-input px-2.5 py-1.5 rounded-lg text-xs text-white border border-surface-border focus:outline-none focus:border-neutral-400"
+            placeholder="100"
+          />
+        </div>
+      {/if}
+    </div>
+  </div>
+</div>

@@ -27,15 +27,15 @@
   </div>
 
   <!-- 1. Linux & Wine Runtime Layer -->
-  <div class="space-y-3">
-    <div class="flex items-center space-x-2 pb-1 border-b border-surface-border/60">
-      <h3 class="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
         Runtime &amp; Execution Layer
       </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Proton and Wine execution environment for running Windows executables on Linux.
+      </p>
     </div>
-    <p class="text-xs text-neutral-400 leading-relaxed">
-      Proton and Wine execution environment for running Windows executables on Linux.
-    </p>
     <PropertySheet
       includeKeys={['default_runner', 'wine_prefix']}
       groupByCategory={false}
@@ -44,11 +44,14 @@
   </div>
 
   <!-- 2. Graphics & Compositor -->
-  <div class="space-y-3">
-    <div class="flex items-center space-x-2 pb-1 border-b border-surface-border/60">
-      <h3 class="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
         Graphics &amp; Compositor
       </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        MangoHud performance overlay and Gamescope micro-compositor configuration.
+      </p>
     </div>
     <PropertySheet
       includeKeys={['mangohud']}
@@ -59,15 +62,15 @@
   </div>
 
   <!-- 3. Steam & Goldberg Emulation (GBE Fork) -->
-  <div class="space-y-3">
-    <div class="flex items-center space-x-2 pb-1 border-b border-surface-border/60">
-      <h3 class="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
         Steam &amp; Goldberg Emulation
       </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Default Steamworks integration and Goldberg emulator (<code class="font-mono text-neutral-300">gbe_fork</code>) settings applied to Windows Steam titles.
+      </p>
     </div>
-    <p class="text-xs text-neutral-400 leading-relaxed">
-      Default Steamworks integration and Goldberg emulator (<code class="font-mono text-neutral-300">gbe_fork</code>) settings applied to Windows Steam titles.
-    </p>
     <PropertySheet
       includeKeys={['operating_mode', 'steamless', 'achievements', 'language', 'disable_overlay', 'offline_mode']}
       groupByCategory={false}
@@ -76,11 +79,14 @@
   </div>
 
   <!-- 4. Process Environment (Global Variables) -->
-  <div class="space-y-3">
-    <div class="flex items-center space-x-2 pb-1 border-b border-surface-border/60">
-      <h3 class="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
         Process Environment
       </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Global environment variables exported into game process execution environments.
+      </p>
     </div>
     <PropertySheet
       includeKeys={['global_env']}

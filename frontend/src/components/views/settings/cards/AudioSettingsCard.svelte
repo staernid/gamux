@@ -9,7 +9,6 @@
     setMuteInBackground,
     playSelect
   } from '../../../../utils/audio.js';
-  import SettingSection from '../../../common/SettingSection.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
   import ThemeSwitch from '../../../common/ThemeSwitch.svelte';
@@ -46,9 +45,17 @@
   }
 </script>
 
-<div class="space-y-3">
-  <!-- Display & Interface -->
-  <SettingSection title="Display & Interface">
+<div class="space-y-4">
+  <!-- Display & Interface Card -->
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+        Display &amp; Interface
+      </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Interface theme and scaling options.
+      </p>
+    </div>
     <div class="space-y-2.5">
       <ThemeSwitch />
       <InheritSelect
@@ -59,10 +66,18 @@
         onchange={(val) => handleScaleChange(val)}
       />
     </div>
-  </SettingSection>
+  </div>
 
-  <!-- Audio & Sound Effects -->
-  <SettingSection title="Audio & Sound Effects">
+  <!-- Audio & Sound Effects Card -->
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+        Audio &amp; Sound Effects
+      </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Configure UI sound effects, mute behavior, and volume.
+      </p>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
       <SeamlessSwitch
         label="UI Sound Effects"
@@ -80,7 +95,7 @@
     </div>
 
     {#if sfxEnabled}
-      <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in mt-2.5">
+      <div class="p-2.5 bg-surface-header border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in mt-2.5">
         <div class="space-y-0.5 min-w-0">
           <span class="text-xs font-semibold text-neutral-200">Sound Effects Volume</span>
           <p class="text-2xs text-neutral-400">Master output volume for synthetic interface sounds</p>
@@ -108,5 +123,5 @@
         </div>
       </div>
     {/if}
-  </SettingSection>
+  </div>
 </div>

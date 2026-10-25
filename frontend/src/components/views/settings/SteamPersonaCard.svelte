@@ -133,7 +133,7 @@
 <div class="space-y-3">
   <!-- 1-Click Steam Profile Sync -->
   {#if showSync}
-    <div class="p-3 bg-[#111115] border border-surface-border rounded-xl space-y-2.5">
+    <div class="p-3 bg-surface-header border border-surface-border rounded-xl space-y-2.5">
       <div class="flex items-center justify-between gap-3">
         <div class="flex items-center space-x-2.5 min-w-0">
           {#if avatarUrl}
@@ -265,7 +265,7 @@
       />
 
       {#if isCustomCountry || ipCountry === 'CUSTOM'}
-        <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+        <div class="p-2.5 bg-surface-input border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
           <span class="text-xs font-semibold text-neutral-300">Custom ISO Country Code:</span>
           <div class="flex items-center space-x-1.5">
             <input

@@ -1,5 +1,4 @@
 <script>
-  import SettingSection from '../../../common/SettingSection.svelte';
   import InheritSelect from '../../../common/InheritSelect.svelte';
   import SeamlessSwitch from '../../../common/SeamlessSwitch.svelte';
 
@@ -63,7 +62,16 @@
   }
 </script>
 
-<SettingSection title="Network & Downloads">
+<div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+  <div class="space-y-0.5">
+    <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+      Network &amp; Downloads
+    </h3>
+    <p class="text-xs text-neutral-400 leading-relaxed">
+      Global bandwidth limits and launch notification alerts.
+    </p>
+  </div>
+
   <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
     <div class="space-y-2">
       <InheritSelect
@@ -75,7 +83,7 @@
       />
 
       {#if selectedSpeedMode === -1}
-        <div class="p-2.5 bg-[#101013] border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+        <div class="p-2.5 bg-surface-input border border-surface-border rounded-xl flex items-center justify-between gap-3 animate-fade-in">
           <span class="text-xs font-semibold text-neutral-300">Custom Limit (MB/s):</span>
           <div class="flex items-center space-x-1.5">
             <input
@@ -100,4 +108,4 @@
       onchange={handleNotifyChange}
     />
   </div>
-</SettingSection>
+</div>

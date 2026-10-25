@@ -14,12 +14,15 @@
   <!-- Network & Downloads Card -->
   <NetworkDownloadsCard bind:generalDraft bind:cfgDraft />
 
-  <!-- Declarative Lifecycle Settings -->
-  <div class="space-y-3">
-    <div class="flex items-center space-x-2 pb-1 border-b border-surface-border/60">
-      <h3 class="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
-        Process Launch & Window Lifecycle
+  <!-- Declarative Lifecycle Settings Card -->
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+    <div class="space-y-0.5">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+        Process Launch &amp; Window Lifecycle
       </h3>
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Behavior for game process launch, window focus, and system tray minimization.
+      </p>
     </div>
     <PropertySheet
       category="Lifecycle"

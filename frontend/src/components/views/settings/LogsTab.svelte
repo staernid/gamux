@@ -36,7 +36,7 @@
 
       <div class="flex items-center space-x-2 flex-wrap gap-y-1">
         <!-- Filter Chips -->
-        <div class="flex items-center space-x-1 bg-[#101013] p-0.5 rounded-lg border border-surface-border text-2xs font-mono">
+        <div class="flex items-center space-x-1 bg-surface-input p-0.5 rounded-lg border border-surface-border text-2xs font-mono">
           {#each ['all', 'error', 'warning', 'info', 'success'] as f}
             <button
               type="button"
@@ -79,7 +79,7 @@
         </div>
       {:else}
         {#each filteredLogs as item (item.id || item.timestamp)}
-          <div class="flex items-start space-x-2 py-1 border-b border-[#18181b] last:border-0 hover:bg-surface-header px-1.5 rounded transition-colors">
+          <div class="flex items-start space-x-2 py-1 border-b border-surface-border last:border-0 hover:bg-surface-header px-1.5 rounded transition-colors">
             <span class="text-neutral-500 text-3xs select-none pt-0.5 whitespace-nowrap">
               {new Date(item.timestamp).toLocaleTimeString()}
             </span>
