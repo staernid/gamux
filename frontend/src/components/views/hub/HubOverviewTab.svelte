@@ -16,6 +16,7 @@
   import { isSteamApp } from '../../../utils/game.js';
   import { openExternalUrl as openLink } from '../../../utils/navigation.js';
   import HubAboutCard from './cards/HubAboutCard.svelte';
+  import HubExtendedInfoCard from './cards/HubExtendedInfoCard.svelte';
   import AchievementRibbon from '../../blocks/AchievementRibbon.svelte';
   import PatchNotesFeed from '../../blocks/PatchNotesFeed.svelte';
 
@@ -256,4 +257,7 @@
       />
     </div>
   {/if}
+
+  <!-- Extended Game Info & Statistics Card -->
+  <HubExtendedInfoCard {game} />
 </div>

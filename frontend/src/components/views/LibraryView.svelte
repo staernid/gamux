@@ -371,9 +371,6 @@
                 isReady={game.isReady || game.isPatched}
                 isStub={game.isStub}
                 hasUpdate={Boolean(game.hasUpdate || game.hasUpdatesOrIssues || (game.versionStatus && !game.versionStatus.is_up_to_date))}
-                playtimeSeconds={game.playtimeSeconds}
-                lastPlayed={game.lastPlayed}
-                diskSizeBytes={game.diskSizeBytes}
                 size="full"
                 className="w-full"
                 onclick={() => openGameHub(game)}

@@ -76,9 +76,6 @@
         isReady={Boolean(game.isReady || game.isPatched)}
         isStub={Boolean(game.isStub)}
         hasUpdate={Boolean(game.hasUpdate || game.hasUpdatesOrIssues || (game.versionStatus && !game.versionStatus.is_up_to_date))}
-        playtimeSeconds={game.playtimeSeconds || 0}
-        lastPlayed={game.lastPlayed || 0}
-        diskSizeBytes={game.diskSizeBytes || 0}
         selected={idx === selectedIndex}
         size={cardSize}
         onclick={() => handleCardClick(game, idx)}

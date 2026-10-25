@@ -1,7 +1,5 @@
 <script>
-    import PosterArt from '../common/PosterArt.svelte';
-  import { formatPlaytime, formatLastPlayed } from '../../utils/game.js';
-  import { formatBytes } from '../../utils/format.js';
+  import PosterArt from '../common/PosterArt.svelte';
 
   /**
    * @typedef {Object} Props
@@ -14,9 +12,6 @@
    * @property {boolean} [isReady]
    * @property {boolean} [isStub]
    * @property {boolean} [hasUpdate]
-   * @property {number} [playtimeSeconds]
-   * @property {number} [lastPlayed]
-   * @property {number} [diskSizeBytes]
    * @property {boolean} [selected]
    * @property {string} [size] - 'sm' | 'md' | 'lg'
    * @property {string} [className]
@@ -34,9 +29,6 @@
     isReady = true,
     isStub = false,
     hasUpdate = false,
-    playtimeSeconds = 0,
-    lastPlayed = 0,
-    diskSizeBytes = 0,
     selected = false,
     size = 'md',
     className = '',
@@ -109,20 +101,10 @@
         <span>SETUP</span>
       </div>
     {/if}
-
-    <!-- Bottom Playtime Gradient Overlay -->
-    {#if playtimeSeconds > 0}
-      <div class="absolute inset-x-0 bottom-0 pt-6 pb-2 px-2.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-end justify-between text-4xs font-mono text-neutral-300 pointer-events-none">
-        <span>{formatPlaytime(playtimeSeconds)}</span>
-        {#if diskSizeBytes > 0}
-          <span class="text-neutral-400">{formatBytes(diskSizeBytes)}</span>
-        {/if}
-      </div>
-    {/if}
   </div>
 
-  <!-- Title & Metadata Caption -->
-  <div class="w-full mt-2 space-y-0.5 min-w-0">
+  <!-- Title & Metadata Caption (visible on hover / focus / selection) -->
+  <div class="w-full mt-2 space-y-0.5 min-w-0 transition-opacity duration-150 {selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}">
     <h4 class="text-xs text-center font-bold text-neutral-200 group-hover:text-white truncate transition-colors" title={name}>
       {name}
     </h4>

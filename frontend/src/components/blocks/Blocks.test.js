@@ -228,16 +228,16 @@ describe('Universal UI Blocks Catalog', () => {
   });
 
   describe('CoverCard', () => {
-    it('renders poster card with title and triggers click', async () => {
+    it('renders poster card with title and triggers click without size or playtime', async () => {
       const onClick = vi.fn();
       render(CoverCard, {
         name: 'Hollow Knight',
         appId: '367520',
-        diskSizeBytes: 9840000000,
         selected: true,
         onclick: onClick
       });
       expect(screen.getByText('Hollow Knight')).toBeInTheDocument();
+      expect(screen.queryByText(/hrs|mins|GiB|MiB/)).not.toBeInTheDocument();
 
       await fireEvent.click(screen.getByText('Hollow Knight'));
       expect(onClick).toHaveBeenCalledTimes(1);

@@ -5,10 +5,7 @@
   import {
     getPlatformColors,
     getPlatformType,
-    isSteamApp,
-    formatPlaytime,
-    formatLastPlayed,
-    formatInstallDate
+    isSteamApp
   } from '../../../utils/game.js';
   import PosterArt from '../../common/PosterArt.svelte';
   import { multiseatStore, getActiveSession } from '../../../stores/multiseat.js';
@@ -16,7 +13,6 @@
   import { AppAPI } from '../../../api/app.js';
   import GameHeroBackdrop from '../../blocks/GameHeroBackdrop.svelte';
   import GameLogo from '../../blocks/GameLogo.svelte';
-  import LiveCommunityBadge from '../../blocks/LiveCommunityBadge.svelte';
   import MultiseatStatusPill from '../../blocks/MultiseatStatusPill.svelte';
 
   /**
@@ -47,25 +43,9 @@
 
   let logoFailed = $state(false);
   let heroFailed = $state(false);
-  let livePlayerCount = $state(0);
-  let loadedPlayerAppId = $state('');
   let versionStatus = $state(null);
   let loadedVersionGameDir = $state('');
   let showLaunchMenu = $state(false);
-
-
-
-  async function fetchLivePlayers(appId) {
-    try {
-      const count = await AppAPI.getGameCurrentPlayers(appId);
-      if (typeof count === 'number' && count > 0) {
-        livePlayerCount = count;
-      }
-    } catch {
-      livePlayerCount = 0;
-    }
-  }
-
 
   async function checkGameUpdates(gameDir) {
     try {
@@ -109,20 +89,6 @@
     if (game) {
       logoFailed = false;
       heroFailed = false;
-    }
-  });
-
-  $effect(() => {
-    if (game?.appId && isSteamApp(game.appId)) {
-      const aid = String(game.appId).trim();
-      if (aid !== loadedPlayerAppId) {
-        loadedPlayerAppId = aid;
-        livePlayerCount = 0;
-        fetchLivePlayers(aid);
-      }
-    } else if (!isSteamApp(game?.appId)) {
-      livePlayerCount = 0;
-      loadedPlayerAppId = '';
     }
   });
 
@@ -264,57 +230,6 @@
             logoUrl={game.localLogoUrl || game.logoUrl}
             title={game.name}
           />
-
-          <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-neutral-400 font-mono">
-            {#if isInstalled && game.diskSizeBytes > 0}
-              <span>{formatBytes(game.diskSizeBytes)}</span>
-            {:else if isStub}
-              <span class="text-neutral-300 font-bold">In Library (Uninstalled)</span>
-            {:else if isVirtual}
-              <span class="text-neutral-300 font-bold">Online Store Title</span>
-            {/if}
-            {#if isInstalled && !game.isReady}
-              <span class="text-neutral-500">·</span>
-              <span class="text-amber-400">Setup Required</span>
-            {/if}
-            {#if game.playtimeSeconds > 0}
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-200 font-bold flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>{formatPlaytime(game.playtimeSeconds)}</span>
-              </span>
-            {/if}
-            {#if game.lastPlayed > 0}
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-400">Played {formatLastPlayed(game.lastPlayed)}</span>
-            {/if}
-            {#if game.installedAt > 0}
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-400">Installed {formatInstallDate(game.installedAt)}</span>
-            {/if}
-            {#if game.appId && game.appId !== '0'}
-              <span class="text-neutral-500">·</span>
-              <span class="text-neutral-500">#{game.appId}</span>
-            {/if}
-            {#if livePlayerCount > 0}
-              <span class="text-neutral-500">·</span>
-              <LiveCommunityBadge playerCount={livePlayerCount} label="playing" />
-            {/if}
-            {#if (versionStatus && !versionStatus.is_up_to_date) || game?.hasUpdate}
-              <span class="text-neutral-500">·</span>
-              <button
-                type="button"
-                onclick={() => modalStore.open('update', { game, versionStatus })}
-                class="px-2 py-0.5 rounded-lg text-3xs font-bold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-mono flex items-center space-x-1.5 cursor-pointer transition-colors"
-                title={versionStatus?.message || versionStatus?.latest_patch_title || 'Click to view update details'}
-              >
-                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                <span>UPDATE AVAILABLE</span>
-              </button>
-            {/if}
-          </div>
         </div>
       </div>
 

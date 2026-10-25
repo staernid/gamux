@@ -14,7 +14,7 @@ describe('GameHeroBanner Component', () => {
     is_installed: true,
   });
 
-  it('renders title and metadata', () => {
+  it('renders title and logo', () => {
     render(GameHeroBanner, {
       props: {
         game: mockSteamGame,
@@ -24,26 +24,9 @@ describe('GameHeroBanner Component', () => {
     });
 
     expect(screen.getByText('Counter-Strike 2')).toBeInTheDocument();
-    expect(screen.getByText('#730')).toBeInTheDocument();
   });
 
-  it('fetches and displays live player count badge for Steam games', async () => {
-    vi.spyOn(AppAPI, 'getGameCurrentPlayers').mockResolvedValue(55420);
-
-    render(GameHeroBanner, {
-      props: {
-        game: mockSteamGame,
-        isGameRunning: false,
-        isTaskActive: false,
-      },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/55,420 playing/i)).toBeInTheDocument();
-    });
-  });
-
-  it('displays UPDATE AVAILABLE badge when version check detects update', async () => {
+  it('displays UPDATE button when version check detects update', async () => {
     vi.spyOn(AppAPI, 'checkGameUpdates').mockResolvedValue({
       checked: true,
       is_up_to_date: false,
@@ -60,7 +43,7 @@ describe('GameHeroBanner Component', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/UPDATE AVAILABLE/i)).toBeInTheDocument();
+      expect(screen.getByText(/Update/i)).toBeInTheDocument();
     });
   });
 
