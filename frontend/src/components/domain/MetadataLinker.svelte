@@ -3,7 +3,7 @@
   import { AppAPI } from '../../api/app.js';
   import { notificationStore } from '../../stores/notifications.js';
   import { selectedGame, updateGameInStore } from '../../stores/library.js';
-  import { isSamePath } from '../../utils/game.js';
+  import { isSamePath, normalizeMetadataProvider } from '../../utils/game.js';
   import Icon from '../common/Icon.svelte';
 
   /**
@@ -24,10 +24,10 @@
 
   let targetStore = $state('steam'); // 'steam' | 'gog' | 'rawg' | 'standalone'
   let providers = $state([
-    { id: 'steam', display_name: 'Steam', badge: 'AppID' },
-    { id: 'gog', display_name: 'GOG.com', badge: 'GOG ID' },
-    { id: 'rawg', display_name: 'RAWG Database', badge: 'Open DB' },
-    { id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' },
+    { id: 'steam', displayName: 'Steam', badge: 'AppID' },
+    { id: 'gog', displayName: 'GOG.com', badge: 'GOG ID' },
+    { id: 'rawg', displayName: 'RAWG Database', badge: 'Open DB' },
+    { id: 'standalone', displayName: 'Standalone / DRM-Free', badge: 'Direct' },
   ]);
 
   let metaQuery = $state('');
@@ -42,27 +42,28 @@
   let appId = $derived(game?.appId || '');
 
   onMount(() => {
-    const providerKey = (game?.metadataProvider || game?.metadata_provider || game?.store || 'steam').toLowerCase();
+    const providerKey = (game?.metadataProvider || game?.store || 'steam').toLowerCase();
     if (providerKey === 'gog') targetStore = 'gog';
     else if (providerKey === 'rawg') targetStore = 'rawg';
     else if (providerKey === 'standalone' || providerKey === 'custom') targetStore = 'standalone';
     else targetStore = 'steam';
 
     metaQuery = gameName || '';
-    customId = String(game?.metadataId || game?.metadata_id || appId || '');
+    customId = String(game?.metadataId || appId || '');
     if (customId === '0') customId = '';
 
     AppAPI.listMetadataProviders()
       .then(fetched => {
         if (Array.isArray(fetched) && fetched.length > 0) {
           const list = fetched
-            .filter(p => p.id !== 'steamgriddb')
+            .map(normalizeMetadataProvider)
+            .filter(p => p && p.id !== 'steamgriddb')
             .map(p => ({
               id: p.id,
-              display_name: p.display_name,
+              displayName: p.displayName,
               badge: p.id === 'steam' ? 'AppID' : p.id === 'gog' ? 'GOG ID' : p.id === 'rawg' ? 'Open DB' : 'Direct',
             }));
-          list.push({ id: 'standalone', display_name: 'Standalone / DRM-Free', badge: 'Direct' });
+          list.push({ id: 'standalone', displayName: 'Standalone / DRM-Free', badge: 'Direct' });
           providers = list;
         }
       })
@@ -177,7 +178,7 @@
           onclick={() => handleStoreChange(prov.id)}
           class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
         >
-          <span>{prov.display_name}</span>
+          <span>{prov.displayName}</span>
           <span class="text-3xs px-1.5 py-0.5 rounded font-mono {isActive ? 'bg-neutral-200 text-neutral-800' : 'bg-surface-input border border-surface-border text-neutral-500'}">
             {prov.badge}
           </span>

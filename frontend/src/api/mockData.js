@@ -207,17 +207,7 @@ export const MOCK_TASKS = [
       eta_seconds: 650,
       current_items: 3400,
       total_items: 5000
-    },
-    bytes_downloaded: 35651584000,
-    total_bytes: 52000000000,
-    speed_bps: 25165824,
-    eta_seconds: 650,
-    store: 'Steam',
-    depots: [
-      { id: '292031', name: 'Base Content', downloaded_bytes: 28000000000, total_bytes: 35000000000, chunks_downloaded: 2800, total_chunks: 3500, percent: 80.0 },
-      { id: '292032', name: 'Executables & Binaries', downloaded_bytes: 1200000000, total_bytes: 1200000000, chunks_downloaded: 120, total_chunks: 120, percent: 100.0 },
-      { id: '292033', name: 'English Voiceovers', downloaded_bytes: 6451584000, total_bytes: 15800000000, chunks_downloaded: 480, total_chunks: 1380, percent: 40.8 }
-    ]
+    }
   },
   {
     id: 'tr_mock_2',
@@ -237,12 +227,7 @@ export const MOCK_TASKS = [
       eta_seconds: 0,
       current_items: 210,
       total_items: 500
-    },
-    bytes_downloaded: 220200960,
-    total_bytes: 524288000,
-    speed_bps: 0,
-    eta_seconds: 0,
-    store: 'Steam'
+    }
   },
   {
     id: 'tr_mock_3',
@@ -262,12 +247,7 @@ export const MOCK_TASKS = [
       eta_seconds: 0,
       current_items: 0,
       total_items: 1000
-    },
-    bytes_downloaded: 0,
-    total_bytes: 10485760000,
-    speed_bps: 0,
-    eta_seconds: 0,
-    store: 'Steam'
+    }
   },
   {
     id: 'op_mock_verify',
@@ -287,8 +267,7 @@ export const MOCK_TASKS = [
       total_items: 1420,
       bytes_per_sec: 0,
       eta_seconds: 0
-    },
-    store: 'Steam'
+    }
   },
   {
     id: 'op_mock_completed',
@@ -305,8 +284,7 @@ export const MOCK_TASKS = [
       current_items: 1,
       total_items: 1
     },
-    finished_at: Date.now() - 3600000,
-    store: 'Steam'
+    finished_at: Date.now() - 3600000
   }
 ];
 
@@ -316,38 +294,41 @@ export const MOCK_TOOLS_STATUS = [
   {
     name: 'Goldberg Emulator (GBE)',
     key: 'gbe',
-    installed_version: 'v0.2.6',
+    installed_path: '',
     installed_tag: 'v0.2.6',
-    latest_version: 'v0.2.7',
     latest_tag: 'v0.2.7',
+    release_name: 'v0.2.7',
+    release_notes: 'Steam DRM removal and offline multiplayer emulator',
+    release_url: 'https://github.com/Detanup01/gbe_fork/releases/tag/v0.2.7',
+    published_at: '2026-08-15T12:00:00Z',
     has_update: true,
     is_installed: true,
-    description: 'Steam DRM removal and offline multiplayer emulator'
   },
   {
-    tool_name: 'steamless',
     name: 'Steamless DRM Unpacker',
-    display_name: 'Steamless DRM Unpacker',
     key: 'steamless',
-    installed_version: 'v0.1.2',
+    installed_path: '',
     installed_tag: 'v0.1.2',
-    latest_version: 'v0.1.2',
     latest_tag: 'v0.1.2',
+    release_name: 'v0.1.2',
+    release_notes: '• Native ELF header parsing optimization.\n• Support for newer SteamStub packaging wrappers.',
+    release_url: 'https://github.com/atom0s/Steamless/releases/tag/v0.1.2',
+    published_at: '2026-06-15T00:00:00Z',
     has_update: false,
     is_installed: true,
-    release_date: '2026-06-15',
-    release_notes: '• Native ELF header parsing optimization.\n• Support for newer SteamStub packaging wrappers.',
   },
   {
     name: 'UMU Proton Launcher',
     key: 'umu',
-    installed_version: '',
+    installed_path: '',
     installed_tag: '',
-    latest_version: 'v1.1.4',
     latest_tag: 'v1.1.4',
+    release_name: 'v1.1.4',
+    release_notes: 'Unified Linux Wine and Proton runtime launcher',
+    release_url: 'https://github.com/Open-Wine-Components/umu-launcher/releases/tag/v1.1.4',
+    published_at: '2026-09-01T00:00:00Z',
     has_update: true,
     is_installed: false,
-    description: 'Unified Linux Wine and Proton runtime launcher'
   }
 ];
 

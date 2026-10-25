@@ -1,6 +1,6 @@
 // Frontend GUI Diagnostic & Invariant Auditing Bridge
 import { get } from 'svelte/store';
-import { tasksStore } from '../stores/tasks.js';
+import { tasksStore, isActiveStatus } from '../stores/tasks.js';
 import { notificationStore } from '../stores/notifications.js';
 import { configStore } from '../stores/config.js';
 import {
@@ -129,7 +129,7 @@ export class GamuxDevBridge {
         speedLimit: unwrap(tasksStore.speedLimit),
       },
       transfers: {
-        items: unwrap(tasksStore.items).filter(t => t.type === 'download' || t.operation === 'download'),
+        items: unwrap(tasksStore.items).filter(t => t.type === 'download'),
         active: unwrap(tasksStore.activeDownloads),
         queued: unwrap(tasksStore.queuedDownloads),
         paused: unwrap(tasksStore.pausedDownloads),
@@ -154,7 +154,7 @@ export class GamuxDevBridge {
     const allJobs = taskState.items || [];
 
     if (activeTask) {
-      if (activeTask.status !== 'running' && activeTask.status !== 'downloading') {
+      if (!isActiveStatus(activeTask.status)) {
         issues.push({
           severity: 'error',
           component: 'tasks',
@@ -176,7 +176,7 @@ export class GamuxDevBridge {
       }
     }
 
-    const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'downloading');
+    const runningJobs = allJobs.filter(j => isActiveStatus(j.status));
     if (runningJobs.length > 0 && !activeTask) {
       issues.push({
         severity: 'warn',

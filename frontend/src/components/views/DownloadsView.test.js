@@ -25,15 +25,17 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'dl_half_life',
-        game_id: '70',
+        type: 'download',
+        app_id: '70',
         game_name: 'Half-Life',
-        target_dir: '/home/staernid/Games/Half-Life',
-        store: 'steam',
-        bytes_downloaded: 262144000, // 250 MiB
-        total_bytes: 838860800,      // 800 MiB
-        speed_bps: 15728640,         // 15 MiB/s
-        eta_seconds: 38,
-        percent: 31.25,
+        game_dir: '/home/staernid/Games/Half-Life',
+        progress: {
+          current_bytes: 262144000, // 250 MiB
+          total_bytes: 838860800,      // 800 MiB
+          bytes_per_sec: 15728640,         // 15 MiB/s
+          eta_seconds: 38,
+          percent: 31.25,
+        },
         stage: 'Downloading Depots',
         details: 'valve/maps/c1a1b.bsp',
         status: 'downloading',
@@ -54,15 +56,18 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'dl_test_1',
-        game_id: '123',
+        type: 'download',
+        app_id: '123',
         game_name: 'Test Game',
-        target_dir: '/tmp/test',
+        game_dir: '/tmp/test',
         status: 'downloading',
         stage: 'Downloading',
         details: 'chunk1.bin',
-        bytes_downloaded: 1000,
-        total_bytes: 5000,
-        percent: 20,
+        progress: {
+          current_bytes: 1000,
+          total_bytes: 5000,
+          percent: 20,
+        },
       }
     ]);
 
@@ -81,12 +86,15 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'dl_completed_1',
-        game_id: '70',
+        type: 'download',
+        app_id: '70',
         game_name: 'Half-Life',
-        target_dir: '/home/staernid/Games/Half-Life',
+        game_dir: '/home/staernid/Games/Half-Life',
         status: 'completed',
         details: 'Download finished',
-        percent: 100,
+        progress: {
+          percent: 100,
+        },
       }
     ]);
 
@@ -112,15 +120,18 @@ describe('DownloadsView Component', () => {
     vi.spyOn(AppAPI, 'listTasks').mockResolvedValue([
       {
         id: 'dl_witcher',
-        game_id: '292030',
+        type: 'download',
+        app_id: '292030',
         game_name: 'The Witcher 3: Wild Hunt',
-        target_dir: '/home/staernid/Games/The Witcher 3',
+        game_dir: '/home/staernid/Games/The Witcher 3',
         status: 'downloading',
-        bytes_downloaded: 35000000000,
-        total_bytes: 50000000000,
-        percent: 70,
-        current_items: 3500,
-        total_items: 5000,
+        progress: {
+          current_bytes: 35000000000,
+          total_bytes: 50000000000,
+          percent: 70,
+          current_items: 3500,
+          total_items: 5000,
+        },
         depots: [
           { id: '292031', name: 'Base Content', downloaded_bytes: 28000000000, total_bytes: 35000000000, percent: 80 },
           { id: '292032', name: 'Executables', downloaded_bytes: 1000000000, total_bytes: 1000000000, percent: 100 }

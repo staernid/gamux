@@ -4,7 +4,7 @@
   import { activeView } from '../../../stores/library.js';
   import { modalStore } from '../../../stores/modal.js';
   import { configStore } from '../../../stores/config.js';
-  import { tasksStore } from '../../../stores/tasks.js';
+  import { tasksStore, isPendingOrActiveStatus } from '../../../stores/tasks.js';
   import SettingSection from '../../common/SettingSection.svelte';
 
   /**
@@ -38,15 +38,13 @@
 
   function checkIsInstalled(tool) {
     if (!tool) return false;
-    if (typeof tool.is_installed === 'boolean') return tool.is_installed;
-    const tag = (tool.installed_tag || tool.installed_version || '').trim();
-    return Boolean(tag && !['(not installed)', 'Not Installed', 'Unknown', 'none'].includes(tag));
+    return Boolean(tool.isInstalled);
   }
 
   function findActiveBatchTask(kind, items) {
     if (!Array.isArray(items)) return null;
     return items.find((t) => {
-      if (t.status !== 'running' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'downloading') {
+      if (!isPendingOrActiveStatus(t.status)) {
         return false;
       }
       const title = (t.title || '').toLowerCase();
@@ -158,16 +156,16 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
       {#each toolStatuses as tool}
         {@const isInstalled = checkIsInstalled(tool)}
-        {@const isUpdating = Boolean(updatingTools[tool.key || tool.tool_name])}
+        {@const isUpdating = Boolean(updatingTools[tool.key])}
         <div class="bg-surface-header border border-surface-border p-3 rounded-xl flex flex-col justify-between gap-2.5">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center justify-between gap-1.5">
-              <span class="font-semibold text-xs text-white truncate">{tool.name || tool.display_name || tool.key}</span>
+              <span class="font-semibold text-xs text-white truncate">{tool.name}</span>
               {#if !isInstalled}
                 <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
                   Missing
                 </span>
-              {:else if tool.has_update}
+              {:else if tool.hasUpdate}
                 <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
                   Update
                 </span>
@@ -177,25 +175,25 @@
             <div class="text-2xs font-mono text-neutral-400 truncate">
               {#if !isInstalled}
                 <span class="text-amber-400/90 font-medium">Not Installed</span>
-                {#if tool.latest_tag || tool.latest_version}
+                {#if tool.latestTag}
                   <span class="text-neutral-500">·</span>
-                  <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
+                  <span class="text-emerald-400">{tool.latestTag}</span>
                 {/if}
               {:else}
-                <span>{tool.installed_tag || tool.installed_version || 'Installed'}</span>
-                {#if tool.latest_tag || tool.latest_version}
+                <span>{tool.installedTag || 'Installed'}</span>
+                {#if tool.latestTag}
                   <span class="text-neutral-500">·</span>
-                  <span class="text-emerald-400">{tool.latest_tag || tool.latest_version}</span>
+                  <span class="text-emerald-400">{tool.latestTag}</span>
                 {/if}
               {/if}
             </div>
           </div>
 
           <div class="flex items-center space-x-1.5 pt-1 border-t border-surface-border">
-            {#if tool.release_url}
+            {#if tool.releaseUrl}
               <button
                 type="button"
-                onclick={() => openExternalUrl(tool.release_url, { title: tool.name || 'GitHub Release' })}
+                onclick={() => openExternalUrl(tool.releaseUrl, { title: tool.name || 'GitHub Release' })}
                 class="text-neutral-400 hover:text-white text-xs px-2 py-1 rounded-lg border border-surface-border bg-surface-input transition-colors cursor-pointer"
                 title="Open GitHub Release"
               >
@@ -204,18 +202,18 @@
             {/if}
             <button
               type="button"
-              onclick={() => updateTool(tool.key || tool.tool_name, tool.name || tool.display_name)}
+              onclick={() => updateTool(tool.key, tool.name)}
               disabled={isUpdating}
-              class="flex-1 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.has_update ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-400 hover:text-white' : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 shadow-sm'}"
+              class="flex-1 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50 {isInstalled && !tool.hasUpdate ? 'bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-400 hover:text-white' : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 shadow-sm'}"
             >
               {#if isUpdating}
                 <svg class="animate-spin w-3 h-3 text-white" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
-                <span>{isInstalled ? (tool.has_update ? 'Updating...' : 'Reinstalling...') : 'Installing...'}</span>
+                <span>{isInstalled ? (tool.hasUpdate ? 'Updating...' : 'Reinstalling...') : 'Installing...'}</span>
               {:else}
-                <span>{isInstalled ? (tool.has_update ? 'Update' : 'Reinstall') : 'Install'}</span>
+                <span>{isInstalled ? (tool.hasUpdate ? 'Update' : 'Reinstall') : 'Install'}</span>
               {/if}
             </button>
           </div>

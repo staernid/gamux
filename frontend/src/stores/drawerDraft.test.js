@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { drawerDraft, createInitialDraft, computeEnvEntries } from './drawerDraft.js';
+import { drawerDraft, createInitialDraft, computeEnvEntries, createAutosave } from './drawerDraft.js';
 import { AppAPI } from '../api/app.js';
 import { showInspector } from './library.js';
 
@@ -256,6 +256,73 @@ describe('drawerDraft Store', () => {
         future_arbitrary_setting: 'updated_value',
       })
     );
+  });
+
+  it('tracks dirty state accurately across mutations, init, and markSaved', () => {
+    drawerDraft.init(mockGame, mockGlobalConfig);
+    expect(get(drawerDraft.isDirty)).toBe(false);
+
+    drawerDraft.setField('exeArgs', '-vulkan');
+    expect(get(drawerDraft.isDirty)).toBe(true);
+
+    drawerDraft.markSaved();
+    expect(get(drawerDraft.isDirty)).toBe(false);
+
+    drawerDraft.selectCandidate(mockGame.launchCandidates[1]);
+    expect(get(drawerDraft.isDirty)).toBe(true);
+
+    drawerDraft.init(mockGame, mockGlobalConfig);
+    expect(get(drawerDraft.isDirty)).toBe(false);
+  });
+
+  it('triggers exactly one save after debounce on field change, and cancels on re-init', async () => {
+    vi.useFakeTimers();
+    const saveFn = vi.fn().mockImplementation(() => {
+      drawerDraft.markSaved();
+    });
+
+    drawerDraft.init(mockGame, mockGlobalConfig);
+    const autosave = createAutosave(drawerDraft, saveFn, 400);
+
+    expect(get(drawerDraft.isDirty)).toBe(false);
+    expect(saveFn).not.toHaveBeenCalled();
+
+    // 1. Changing a field marks it dirty and schedules debounced save
+    drawerDraft.setField('exeArgs', '-vulkan');
+    expect(get(drawerDraft.isDirty)).toBe(true);
+    expect(saveFn).not.toHaveBeenCalled();
+
+    // Advance 300ms (before debounce expires)
+    vi.advanceTimersByTime(300);
+    expect(saveFn).not.toHaveBeenCalled();
+
+    // Change another field (resets debounce timer)
+    drawerDraft.setField('exeArgs', '-vulkan -novid');
+    vi.advanceTimersByTime(300);
+    expect(saveFn).not.toHaveBeenCalled();
+
+    // Advance past remaining 100ms (total 400ms since last change)
+    vi.advanceTimersByTime(100);
+    expect(saveFn).toHaveBeenCalledTimes(1);
+    expect(get(drawerDraft.isDirty)).toBe(false);
+
+    // 2. Re-initialising for another game does not trigger save
+    drawerDraft.setField('exeArgs', '-dx12');
+    expect(get(drawerDraft.isDirty)).toBe(true);
+
+    vi.advanceTimersByTime(200);
+    // Re-init for another game before debounce fires
+    const otherGame = { ...mockGame, gameDir: '/games/Other', name: 'Other' };
+    drawerDraft.init(otherGame, mockGlobalConfig);
+    expect(get(drawerDraft.isDirty)).toBe(false);
+
+    // Advance past debounce delay
+    vi.advanceTimersByTime(500);
+    // Still only 1 save from the first change, none from the second
+    expect(saveFn).toHaveBeenCalledTimes(1);
+
+    autosave.destroy();
+    vi.useRealTimers();
   });
 });
 

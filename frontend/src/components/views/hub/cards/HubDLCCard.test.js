@@ -80,6 +80,7 @@ describe('HubDLCCard Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Torchlight II: Pet Pack')).toBeInTheDocument();
+      expect(screen.getByText('AppID #200715')).toBeInTheDocument();
       expect(screen.getByText(/Sync Steam DLCs/i)).toBeInTheDocument();
     });
 

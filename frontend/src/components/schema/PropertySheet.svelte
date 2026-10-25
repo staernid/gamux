@@ -9,7 +9,6 @@
   import SliderControl from './controls/SliderControl.svelte';
   import TextControl from './controls/TextControl.svelte';
   import { snakeToCamelKey } from '../../stores/drawerDraft.js';
-  import { MOCK_CONFIG_SCHEMA } from '../../api/mockData.js';
 
   /**
    * @typedef {Object} Props
@@ -45,7 +44,7 @@
     onreset = null
   } = $props();
 
-  let loadedSchema = $state(Array.isArray(MOCK_CONFIG_SCHEMA) ? MOCK_CONFIG_SCHEMA : []);
+  let loadedSchema = $state([]);
 
   let effectiveSchema = $derived((schema && schema.length > 0) ? schema : loadedSchema);
 

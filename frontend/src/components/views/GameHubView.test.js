@@ -467,6 +467,31 @@ describe('GameHubView Component', () => {
 
     expect(stubSpy).toHaveBeenCalledWith(expect.any(String), '1145350', 'Hades II', 'Steam', 'public');
   });
+
+  it('derives integrity check task and error state cleanly', async () => {
+    // Inject a failed verify task into tasksStore
+    tasksStore.items = [{
+      id: 'verify_1',
+      type: 'verify',
+      status: 'failed',
+      error: 'Corrupted depot files detected',
+      gameDir: '/home/user/Games/Cyberpunk 2077',
+      appId: '1091500'
+    }];
+
+    render(GameHubView);
+
+    // Switch to Files & Depots
+    const filesBtn = screen.getByRole('button', { name: /^Files & Depots$/i });
+    await fireEvent.click(filesBtn);
+
+    // Switch to Integrity & Repair subtab
+    const integritySubTab = screen.getByRole('button', { name: /Integrity & Repair/i });
+    await fireEvent.click(integritySubTab);
+
+    // The derived error should be displayed
+    expect(screen.getByText('Corrupted depot files detected')).toBeInTheDocument();
+  });
 });
 
 

@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import ToolsMaintenanceTab from './ToolsMaintenanceTab.svelte';
 import { tasksStore } from '../../../stores/tasks.js';
 import { activeView } from '../../../stores/library.js';
+import { normalizeTool } from '../../../utils/tools.js';
 
 describe('ToolsMaintenanceTab Component', () => {
   const mockTools = [
@@ -30,7 +31,7 @@ describe('ToolsMaintenanceTab Component', () => {
       latest_tag: 'v1.1.4',
       has_update: false
     }
-  ];
+  ].map(normalizeTool);
 
   it('correctly labels uninstalled tools with "Install" and "Not Installed" badge', () => {
     render(ToolsMaintenanceTab, {

@@ -1,4 +1,4 @@
-import { AppAPI } from '../api/app.js';
+import { AppAPI, onRuntimeEvent } from '../api/app.js';
 import { notificationStore } from './notifications.js';
 
 export function normalizeProfile(p) {
@@ -46,20 +46,18 @@ export class ProfilesState {
   #subscribers = new Set();
 
   constructor() {
-    if (typeof window !== 'undefined' && window.runtime?.EventsOn) {
-      window.runtime.EventsOn('gamux:active-profile-changed', (p) => {
-        if (p && p.id) {
-          this.activeProfile = normalizeProfile(p);
-          this.#notify();
-        }
-      });
-      window.runtime.EventsOn('gamux:profiles-updated', (list) => {
-        if (Array.isArray(list)) {
-          this.profiles = list.map(normalizeProfile).filter(Boolean);
-          this.#notify();
-        }
-      });
-    }
+    onRuntimeEvent('gamux:active-profile-changed', (p) => {
+      if (p && p.id) {
+        this.activeProfile = normalizeProfile(p);
+        this.#notify();
+      }
+    });
+    onRuntimeEvent('gamux:profiles-updated', (list) => {
+      if (Array.isArray(list)) {
+        this.profiles = list.map(normalizeProfile).filter(Boolean);
+        this.#notify();
+      }
+    });
   }
 
   async load() {

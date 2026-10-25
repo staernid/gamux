@@ -3,7 +3,7 @@ import { notificationStore } from '../stores/notifications.js';
 
 /**
  * Opens an external URL in the user's default web browser.
- * Falls back gracefully across Wails runtime, browser window.open, and clipboard copy.
+ * Delegates to the Go backend (`App.OpenURL`); browser previews use the mock in api/app.js.
  *
  * @param {string} url The HTTP/HTTPS or external URI to open
  * @param {Object} [options]
@@ -19,15 +19,7 @@ export async function openExternalUrl(url, options = {}) {
   const { title = '', notify = Boolean(title) } = options;
 
   try {
-    if (typeof AppAPI?.openURL === 'function') {
-      await AppAPI.openURL(trimmedUrl);
-    } else if (typeof window !== 'undefined' && window.runtime?.BrowserOpenURL) {
-      window.runtime.BrowserOpenURL(trimmedUrl);
-    } else if (typeof window !== 'undefined' && typeof window.open === 'function') {
-      window.open(trimmedUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      throw new Error('No supported URL opening mechanism available');
-    }
+    await AppAPI.openURL(trimmedUrl);
 
     if (notify) {
       notificationStore.info(

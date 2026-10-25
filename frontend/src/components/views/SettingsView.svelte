@@ -13,6 +13,7 @@
   import LogsTab from './settings/LogsTab.svelte';
   import PropertySheet from '../schema/PropertySheet.svelte';
   import { RUNNER_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS } from '../../constants/options.js';
+  import { normalizeTool } from '../../utils/tools.js';
 
   let activeTab = $state('general'); // 'general' | 'storage' | 'compatibility' | 'profiles' | 'advanced'
   let advancedSubtab = $state('coop'); // 'coop' | 'maintenance' | 'logs' | 'schema'
@@ -204,7 +205,7 @@
     isCheckingTools = true;
     try {
       const statuses = await AppAPI.getToolsStatus();
-      toolStatuses = Array.isArray(statuses) ? statuses : Object.entries(statuses || {}).map(([k, v]) => ({ key: k, ...v }));
+      toolStatuses = Array.isArray(statuses) ? statuses.map(normalizeTool).filter(Boolean) : [];
     } catch {
       toolStatuses = [];
     } finally {

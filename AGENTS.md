@@ -46,6 +46,7 @@ Essential guidelines, architecture patterns, and conventions for development on 
 - `make check-go` — Go formatting check, `go vet`, `golangci-lint`, and fast unit tests.
 - `make check-ui` — Svelte type check (`svelte-check`), full Vitest suite, and GUI invariant audit.
 - `make test-go-fast` — Runs all Go unit tests without `-race` overhead.
+- `make bindings` — Regenerate `frontend/src/api/bindings.gen.js` (bound `gui.App` method names + arity) after changing any `App` method signature. `AppAPI` rejects unknown methods and wrong argument counts in all environments.
 - `make gui-dump` — Dump GUI store state, event timeline, and invariant report as JSON.
 - `make gui-trace` — Run lifecycle trace scenario in headless browser and print event table.
 - `make gui-audit` — Run automated GUI store and event invariant audit.

@@ -1,5 +1,6 @@
 import { AppAPI } from '../api/app.js';
 import { generateId } from '../utils/format.js';
+import { isSamePath } from '../utils/game.js';
 import { notificationStore } from './notifications.js';
 
 export function isActiveStatus(status) {
@@ -22,17 +23,33 @@ export function isPendingOrActiveStatus(status) {
   return isActiveStatus(status) || isQueuedStatus(status);
 }
 
+export function isLiveStatus(status) {
+  return isActiveStatus(status) || isQueuedStatus(status) || isPausedStatus(status);
+}
+
+export function taskMatchesGame(task, game) {
+  if (!task || !game) return false;
+  const tDir = task.gameDir || task.game_dir;
+  const gDir = game.gameDir || game.game_dir;
+  if (tDir && gDir && isSamePath(tDir, gDir)) {
+    return true;
+  }
+  const tApp = String(task.appId || task.app_id || '').trim();
+  const gApp = String(game.appId || game.app_id || '').trim();
+  if (tApp && tApp !== '0' && gApp && gApp !== '0' && tApp === gApp) {
+    return true;
+  }
+  return false;
+}
+
 export function isDownloadTask(t) {
   if (!t) return false;
-  if (t.type === 'download' || t.operation === 'download' || t.status === 'downloading') return true;
+  if (t.type === 'download' || t.status === 'downloading') return true;
   if (typeof t.id === 'string' && (t.id.startsWith('download_') || t.id.startsWith('transfer_') || t.id.startsWith('dl_') || t.id.startsWith('tr_mock_') || t.id.startsWith('diag_tr_'))) return true;
   if (t.type && ['apply', 'verify', 'update', 'tool_update', 'normalize', 'rollback', 'workshop'].includes(t.type)) {
     return false;
   }
-  if (t.operation && ['apply', 'verify', 'update', 'tool_update', 'normalize', 'rollback', 'workshop'].includes(t.operation)) {
-    return false;
-  }
-  return Boolean(t.bytes_downloaded || (t.speed_bps && t.speed_bps > 0) || (t.depots && t.depots.length > 0));
+  return false;
 }
 
 export function extractTaskProgress(source) {
@@ -48,54 +65,16 @@ export function extractTaskProgress(source) {
     };
   }
 
-  const prog = source.progress || {};
-
-  const percent = typeof source.percent === 'number'
-    ? source.percent
-    : (typeof prog.percent === 'number' ? prog.percent : 0);
-
-  const currentBytes = typeof source.currentBytes === 'number'
-    ? source.currentBytes
-    : (source.current_bytes ?? prog.current_bytes ?? prog.currentBytes ?? source.bytes_downloaded ?? 0);
-
-  const totalBytes = typeof source.totalBytes === 'number'
-    ? source.totalBytes
-    : (source.total_bytes ?? prog.total_bytes ?? prog.totalBytes ?? 0);
-
-  const speedBps = typeof source.speedBps === 'number'
-    ? source.speedBps
-    : (typeof source.bytes_per_sec === 'number'
-      ? source.bytes_per_sec
-      : (typeof source.speed_bps === 'number'
-        ? source.speed_bps
-        : (typeof prog.bytes_per_sec === 'number'
-          ? prog.bytes_per_sec
-          : (typeof prog.bytesPerSec === 'number'
-            ? prog.bytesPerSec
-            : (typeof prog.speedBps === 'number'
-              ? prog.speedBps
-              : (source.bytesPerSec ?? 0))))));
-
-  const etaSeconds = typeof source.etaSeconds === 'number'
-    ? source.etaSeconds
-    : (prog.eta_seconds ?? prog.etaSeconds ?? source.eta_seconds ?? 0);
-
-  const currentItems = typeof source.currentItems === 'number'
-    ? source.currentItems
-    : (prog.current_items ?? prog.currentItems ?? source.current_items ?? 0);
-
-  const totalItems = typeof source.totalItems === 'number'
-    ? source.totalItems
-    : (prog.total_items ?? prog.totalItems ?? source.total_items ?? 0);
+  const prog = source.progress || source;
 
   return {
-    percent,
-    currentBytes,
-    totalBytes,
-    speedBps,
-    etaSeconds,
-    currentItems,
-    totalItems,
+    percent: typeof prog.percent === 'number' ? prog.percent : 0,
+    currentBytes: prog.current_bytes ?? 0,
+    totalBytes: prog.total_bytes ?? 0,
+    speedBps: prog.bytes_per_sec ?? 0,
+    etaSeconds: prog.eta_seconds ?? 0,
+    currentItems: prog.current_items ?? 0,
+    totalItems: prog.total_items ?? 0,
   };
 }
 
@@ -105,15 +84,13 @@ export function normalizeTask(t) {
   const prog = extractTaskProgress(t);
   const speed = isStopped ? 0 : prog.speedBps;
   const eta = isStopped ? 0 : prog.etaSeconds;
-  const gameName = t.game_name || t.gameName || t.title || 'Task';
-  const isDl = isDownloadTask(t);
-  const taskType = t.type || (isDl ? 'download' : (t.operation || 'operation'));
-  const appId = String(t.app_id ?? t.appId ?? t.game_id ?? '');
-  const gameDir = t.game_dir || t.gameDir || t.target_dir || t.targetDir || '';
+  const gameName = t.game_name || t.title || 'Task';
+  const appId = t.app_id ? String(t.app_id) : '';
+  const gameDir = t.game_dir || '';
 
   return {
-    id: t.id || t.task_id,
-    type: taskType,
+    id: t.id || '',
+    type: t.type || (isDownloadTask(t) ? 'download' : 'operation'),
     title: t.title || gameName,
     gameName,
     gameDir,
@@ -129,13 +106,14 @@ export function normalizeTask(t) {
     etaSeconds: eta,
     currentItems: prog.currentItems,
     totalItems: prog.totalItems,
-    store: t.store || 'Steam',
-    posterUrl: t.poster_url || t.posterUrl || '',
-    depots: t.depots || [],
     capabilities: t.capabilities || 0,
-    createdAt: t.created_at || t.createdAt || 0,
-    finishedAt: t.finished_at || t.finishedAt || 0,
+    createdAt: t.created_at || 0,
+    startedAt: t.started_at || 0,
+    finishedAt: t.finished_at || 0,
     error: t.error || '',
+    metadata: t.metadata || {},
+    game: t.game || null,
+    depots: t.depots || [],
     progress: {
       percent: prog.percent,
       currentBytes: prog.currentBytes,
@@ -192,7 +170,7 @@ export class TasksState {
   }
 
   set items(val) {
-    this._items = Array.isArray(val) ? val.map(normalizeTask) : [];
+    this._items = Array.isArray(val) ? val : [];
     this.#notifySubscribers();
   }
 
@@ -228,7 +206,7 @@ export class TasksState {
 
   handleTaskEvent(ev) {
     if (!ev || !ev.type) return;
-    const taskID = ev.task_id || ev.taskId || (typeof ev.id === 'string' && (ev.id.startsWith('task_') || ev.id.startsWith('dl_') || ev.id.startsWith('transfer_') || ev.id.startsWith('op_')) ? ev.id : null);
+    const taskID = ev.task_id || (typeof ev.id === 'string' && (ev.id.startsWith('task_') || ev.id.startsWith('dl_') || ev.id.startsWith('transfer_') || ev.id.startsWith('op_')) ? ev.id : null);
     if (!taskID) {
       if (ev.stage || ev.details || ev.progress) {
         const active = this.items.find((t) => t.status === 'running' || t.status === 'downloading');
@@ -246,13 +224,13 @@ export class TasksState {
     const isDl = ev.operation === 'download' || (ev.type && ev.type.startsWith('transfer:')) || (typeof taskID === 'string' && (taskID.startsWith('transfer_') || taskID.startsWith('dl_') || taskID.startsWith('download_')));
 
     const idx = this.items.findIndex((t) => t.id === taskID);
-    let raw = idx >= 0 ? { ...this.items[idx] } : {
+    let item = idx >= 0 ? { ...this.items[idx] } : {
       id: taskID,
       type: isDl ? 'download' : (ev.operation || 'operation'),
-      title: ev.game_name || ev.gameName || (ev.operation ? `${ev.operation.toUpperCase()} ${ev.game_name || ev.gameName || ''}` : 'Task'),
-      gameName: ev.game_name || ev.gameName || '',
-      gameDir: ev.game_dir || ev.gameDir || '',
-      appId: String(ev.app_id || ev.appId || ''),
+      title: ev.game_name || 'Task',
+      gameName: ev.game_name || '',
+      gameDir: ev.game_dir || '',
+      appId: String(ev.app_id || ''),
       status: 'queued',
       stage: ev.stage || 'Queued',
       details: ev.details || '',
@@ -260,89 +238,127 @@ export class TasksState {
       currentBytes: 0,
       totalBytes: 0,
       speedBps: 0,
+      bytesPerSec: 0,
       etaSeconds: 0,
-      createdAt: ev.timestamp || now
+      currentItems: 0,
+      totalItems: 0,
+      capabilities: 0,
+      createdAt: ev.timestamp || now,
+      startedAt: 0,
+      finishedAt: 0,
+      error: '',
+      progress: {
+        percent: 0,
+        currentBytes: 0,
+        totalBytes: 0,
+        currentItems: 0,
+        totalItems: 0,
+        speedBps: 0,
+        etaSeconds: 0,
+      }
     };
 
-    if (isDl) raw.type = 'download';
+    if (isDl) item.type = 'download';
 
     if (ev.progress) {
-      raw.progress = { ...raw.progress, ...ev.progress };
       const prog = extractTaskProgress(ev.progress);
-      if (typeof ev.progress.percent === 'number' || typeof ev.progress.progress === 'number') raw.percent = prog.percent;
-      if (prog.currentBytes > 0 || typeof ev.progress.current_bytes === 'number' || typeof ev.progress.currentBytes === 'number') raw.currentBytes = prog.currentBytes;
-      if (prog.totalBytes > 0 || typeof ev.progress.total_bytes === 'number' || typeof ev.progress.totalBytes === 'number') raw.totalBytes = prog.totalBytes;
-      if (prog.speedBps > 0 || typeof ev.progress.bytes_per_sec === 'number' || typeof ev.progress.speedBps === 'number' || typeof ev.progress.speed_bps === 'number') raw.speedBps = prog.speedBps;
-      if (prog.etaSeconds > 0 || typeof ev.progress.eta_seconds === 'number' || typeof ev.progress.etaSeconds === 'number') raw.etaSeconds = prog.etaSeconds;
-      if (prog.currentItems > 0 || typeof ev.progress.current_items === 'number' || typeof ev.progress.currentItems === 'number') raw.currentItems = prog.currentItems;
-      if (prog.totalItems > 0 || typeof ev.progress.total_items === 'number' || typeof ev.progress.totalItems === 'number') raw.totalItems = prog.totalItems;
+      if (typeof ev.progress.percent === 'number') item.percent = prog.percent;
+      if (prog.currentBytes > 0) item.currentBytes = prog.currentBytes;
+      if (prog.totalBytes > 0) item.totalBytes = prog.totalBytes;
+      if (prog.speedBps > 0) {
+        item.speedBps = prog.speedBps;
+        item.bytesPerSec = prog.speedBps;
+      }
+      if (prog.etaSeconds > 0) item.etaSeconds = prog.etaSeconds;
+      if (prog.currentItems > 0) item.currentItems = prog.currentItems;
+      if (prog.totalItems > 0) item.totalItems = prog.totalItems;
+      item.progress = {
+        percent: item.percent,
+        currentBytes: item.currentBytes,
+        totalBytes: item.totalBytes,
+        currentItems: item.currentItems,
+        totalItems: item.totalItems,
+        speedBps: item.speedBps,
+        etaSeconds: item.etaSeconds,
+      };
     }
 
     switch (ev.type) {
       case 'task:started':
-        raw.status = 'running';
-        raw.started_at = ev.timestamp || now;
+        item.status = 'running';
+        item.startedAt = ev.timestamp || now;
         break;
 
       case 'transfer:started':
-        raw.status = 'downloading';
-        raw.started_at = ev.timestamp || now;
+        item.status = 'downloading';
+        item.startedAt = ev.timestamp || now;
         break;
 
       case 'task:stage_change':
       case 'task:progress':
-        if (raw.status !== 'paused' && raw.status !== 'completed' && raw.status !== 'failed' && raw.status !== 'cancelled') {
-          raw.status = (ev.stage === 'Completed' || ev.progress?.percent === 100) ? 'completed' : 'running';
+        if (item.status !== 'paused' && item.status !== 'completed' && item.status !== 'failed' && item.status !== 'cancelled') {
+          item.status = (ev.stage === 'Completed' || ev.progress?.percent === 100) ? 'completed' : 'running';
         }
         break;
 
       case 'transfer:progress':
-        if (raw.status !== 'paused' && raw.status !== 'completed' && raw.status !== 'failed' && raw.status !== 'cancelled') {
-          raw.status = (ev.stage === 'Completed' || ev.progress?.percent === 100) ? 'completed' : 'downloading';
+        if (item.status !== 'paused' && item.status !== 'completed' && item.status !== 'failed' && item.status !== 'cancelled') {
+          item.status = (ev.stage === 'Completed' || ev.progress?.percent === 100) ? 'completed' : 'downloading';
         }
         break;
 
       case 'task:paused':
       case 'transfer:paused':
-        raw.status = 'paused';
-        raw.speedBps = 0;
+        item.status = 'paused';
+        item.speedBps = 0;
+        item.bytesPerSec = 0;
+        if (item.progress) item.progress.speedBps = 0;
         break;
 
       case 'task:resumed':
-        raw.status = raw.stage === 'Queued' ? 'queued' : 'running';
+        item.status = item.stage === 'Queued' ? 'queued' : 'running';
         break;
 
       case 'transfer:resumed':
-        raw.status = raw.stage === 'Queued' ? 'queued' : 'downloading';
+        item.status = item.stage === 'Queued' ? 'queued' : 'downloading';
         break;
 
       case 'task:completed':
       case 'transfer:completed':
-        raw.status = 'completed';
-        raw.percent = 100;
-        raw.speedBps = 0;
-        raw.finished_at = ev.timestamp || now;
-        notificationStore.success(`${raw.title || 'Task'} Complete`, raw.details || 'Completed successfully.', raw.gameName);
+        item.status = 'completed';
+        item.percent = 100;
+        item.speedBps = 0;
+        item.bytesPerSec = 0;
+        if (item.progress) {
+          item.progress.speedBps = 0;
+          item.progress.percent = 100;
+        }
+        item.finishedAt = ev.timestamp || now;
+        notificationStore.success(`${item.title || 'Task'} Complete`, item.details || 'Completed successfully.', item.gameName);
         break;
 
       case 'task:failed':
       case 'transfer:failed':
-        raw.status = 'failed';
-        raw.speedBps = 0;
-        raw.error = ev.error || ev.details || 'Task failed';
-        raw.finished_at = ev.timestamp || now;
-        notificationStore.error(`${raw.title || 'Task'} Failed`, raw.error, raw.gameName);
+        item.status = 'failed';
+        item.speedBps = 0;
+        item.bytesPerSec = 0;
+        if (item.progress) item.progress.speedBps = 0;
+        item.error = ev.error || ev.details || 'Task failed';
+        item.finishedAt = ev.timestamp || now;
+        notificationStore.error(`${item.title || 'Task'} Failed`, item.error, item.gameName);
         break;
 
       case 'task:cancelled':
       case 'transfer:cancelled':
-        raw.status = 'cancelled';
-        raw.speedBps = 0;
-        raw.finished_at = ev.timestamp || now;
+        item.status = 'cancelled';
+        item.speedBps = 0;
+        item.bytesPerSec = 0;
+        if (item.progress) item.progress.speedBps = 0;
+        item.finishedAt = ev.timestamp || now;
         break;
     }
 
-    const task = normalizeTask(raw);
+    const task = item;
     const updated = [...this.items];
     if (idx >= 0) {
       updated[idx] = task;
@@ -505,7 +521,7 @@ export class TasksState {
 
   updateDownloadProgress(data) {
     if (!data) return;
-    const appIdStr = data.app_id ? String(data.app_id) : (data.appId ? String(data.appId) : '');
+    const appIdStr = data.app_id ? String(data.app_id) : '';
     const dl = this.items.find((t) => isDownloadTask(t) && (
       (appIdStr && t.appId === appIdStr) ||
       t.status === 'downloading' ||

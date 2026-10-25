@@ -12,7 +12,7 @@
 <script>
   import { AppAPI } from '../../../../api/app.js';
   import { modalStore } from '../../../../stores/modal.js';
-  import { getMetadataInfo, isSteamApp, getGameSource } from '../../../../utils/game.js';
+  import { getMetadataInfo, isSteamApp, getGameSource, normalizeGameMetadata } from '../../../../utils/game.js';
   import { GameSynopsis, GenrePillGroup } from '../../../blocks/index.js';
 
   /**
@@ -51,10 +51,11 @@
     isLoading = true;
     try {
       const res = await AppAPI.getGameMetadata(prov, id);
-      if (res && (res.short_description || res.about_the_game || res.detailed_description || res.developers)) {
-        metadataCache[key] = res;
+      const meta = normalizeGameMetadata(res);
+      if (meta && (meta.shortDescription || meta.aboutTheGame || meta.detailedDescription || meta.developers.length > 0)) {
+        metadataCache[key] = meta;
         if (lookupKey === key) {
-          metadata = res;
+          metadata = meta;
           currentLookupKey = key;
         }
       } else {
@@ -91,10 +92,10 @@
       .trim();
   }
 
-  let summaryText = $derived(metadata?.short_description
-    ? cleanDescription(metadata.short_description)
-    : metadata?.about_the_game
-    ? cleanDescription(metadata.about_the_game)
+  let summaryText = $derived(metadata?.shortDescription
+    ? cleanDescription(metadata.shortDescription)
+    : metadata?.aboutTheGame
+    ? cleanDescription(metadata.aboutTheGame)
     : game?.description
     ? cleanDescription(game.description)
     : '');
@@ -102,7 +103,7 @@
   let developers = $derived(metadata?.developers || []);
   let publishers = $derived(metadata?.publishers || []);
   let genres = $derived(metadata?.genres || []);
-  let releaseDate = $derived(metadata?.release_date || '');
+  let releaseDate = $derived(metadata?.releaseDate || '');
 </script>
 
 <div class="space-y-4 animate-fade-in text-neutral-200">

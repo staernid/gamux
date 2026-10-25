@@ -44,6 +44,7 @@
     getMetadataInfo,
     isSamePath,
     normalizeGame,
+    normalizeGameMetadata,
     formatPlaytime,
     formatLastPlayed,
     formatInstallDate
@@ -173,7 +174,7 @@
     // 2. Open directly as Virtual Store Title in GameHubView
     let meta = null;
     try {
-      meta = await AppAPI.getGameMetadata('steam', appId);
+      meta = normalizeGameMetadata(await AppAPI.getGameMetadata('steam', appId));
     } catch {
       // Offline or metadata fetch fallback
     }
@@ -183,8 +184,8 @@
       app_id: String(appId),
       store: 'Steam',
       source: 'Steam',
-      cover_url: meta?.header_image || `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
-      release_date: meta?.release_date || '',
+      cover_url: meta?.headerImage || `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+      release_date: meta?.releaseDate || '',
       is_installed: false,
       is_stub: false,
       is_virtual: true,

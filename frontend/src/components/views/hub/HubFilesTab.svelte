@@ -12,6 +12,7 @@
    * @property {boolean} [isGameRunning]
    * @property {boolean} [isTaskActive]
    * @property {any} [activeGameTask]
+   * @property {any} [activeVerifyTask]
    * @property {boolean} [isCheckingIntegrity]
    * @property {boolean} [isNormalizing]
    * @property {string} [integrityError]
@@ -25,6 +26,7 @@
     isGameRunning = false,
     isTaskActive = false,
     activeGameTask = null,
+    activeVerifyTask = null,
     isCheckingIntegrity = false,
     isNormalizing = false,
     integrityError = '',
@@ -166,6 +168,7 @@
     {:else if activeFilesSubTab === 'integrity'}
       <HubIntegrityCard
         {activeGameTask}
+        {activeVerifyTask}
         {isCheckingIntegrity}
         {isNormalizing}
         isUpdating={isTaskActive}

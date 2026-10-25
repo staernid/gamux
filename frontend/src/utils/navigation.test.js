@@ -29,9 +29,8 @@ describe('navigation utility', () => {
       expect(notifySpy).toHaveBeenCalledWith('Opening Link', 'Launched Example Site in web browser');
     });
 
-    it('falls back to window.open when AppAPI.openURL throws or is not available', async () => {
+    it('reports an error toast when AppAPI.openURL throws', async () => {
       vi.spyOn(AppAPI, 'openURL').mockImplementation(() => { throw new Error('API down'); });
-      const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
       const notifySpy = vi.spyOn(notificationStore, 'error');
 
       const result = await openExternalUrl('https://example.com');

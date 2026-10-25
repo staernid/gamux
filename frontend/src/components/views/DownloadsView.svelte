@@ -1,11 +1,10 @@
 <script>
   import { onMount, untrack } from 'svelte';
   import { libraryPath, games, selectedGame, activeView } from '../../stores/library.js';
-  import { tasksStore, isDownloadTask } from '../../stores/tasks.js';
+  import { tasksStore, isDownloadTask, taskMatchesGame } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
   import { AppAPI } from '../../api/app.js';
   import { formatBytes } from '../../utils/format.js';
-  import { isSamePath } from '../../utils/game.js';
   import TaskCard from './tasks/TaskCard.svelte';
   import TaskQueueSection from './tasks/TaskQueueSection.svelte';
   import TaskHistorySection from './tasks/TaskHistorySection.svelte';
@@ -77,7 +76,7 @@
     const task = e.detail || e;
     if (!task) return;
     const allGames = $games || [];
-    const game = allGames.find(g => (task.gameDir && isSamePath(g.gameDir, task.gameDir)) || (task.appId && String(g.appId || g.app_id) === String(task.appId)));
+    const game = allGames.find(g => taskMatchesGame(task, g));
     if (game) {
       selectedGame.set(game);
       activeView.set('game-hub');

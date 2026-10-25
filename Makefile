@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LDFLAGS = -s -w -X main.Version=$(VERSION)
 GUI_TAGS = -tags desktop,production,gtk3,webkit2_41
 
-.PHONY: all build build-all build-cli build-gui build-frontend appimage clean clean-all test test-go test-go-fast test-frontend lint fmt fmt-check check check-fast check-go check-ui run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
+.PHONY: all bindings build build-all build-cli build-gui build-frontend appimage clean clean-all test test-go test-go-fast test-frontend lint fmt fmt-check check check-fast check-go check-ui run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
 all: test build
 
@@ -72,6 +72,9 @@ test: test-go test-frontend
 
 fmt:
 	gofmt -w $(shell git ls-files '*.go')
+
+bindings:
+	UPDATE_BINDINGS=1 go test $(GUI_TAGS) -run TestBindingsManifestUpToDate ./gui/
 
 fmt-check:
 	@out=$$(gofmt -l $(shell git ls-files '*.go')); \

@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { isWailsDesktop } from '../../api/app.js';
 
 function getInitialLibraryPaths() {
   if (typeof localStorage !== 'undefined') {
@@ -14,7 +15,7 @@ function getInitialLibraryPaths() {
     const single = localStorage.getItem('gamux_library_path');
     if (single) return [single];
   }
-  if (typeof window !== 'undefined' && !window.go) {
+  if (typeof window !== 'undefined' && !isWailsDesktop()) {
     return ['~/Games'];
   }
   return [];

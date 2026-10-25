@@ -1,8 +1,7 @@
 /**
  * Canonical Domain Entity Type Definitions for Gamux Frontend
  *
- * All frontend entities are standardized on camelCase idioms with
- * backwards-compatible snake_case aliases across the IPC boundary.
+ * All frontend entities are standardized on camelCase schemas at store ingestion.
  */
 
 export interface ModTopology {
@@ -33,6 +32,44 @@ export interface GameModStatus {
   topology: ModTopology;
   mods: InstalledMod[];
   outdatedCount: number;
+}
+
+export interface DLC {
+  appId: string;
+  name: string;
+}
+
+export interface ToolStatus {
+  name: string;
+  key: string;
+  installedPath: string;
+  installedTag: string;
+  latestTag: string;
+  releaseName: string;
+  releaseNotes: string;
+  releaseUrl: string;
+  publishedAt: string;
+  hasUpdate: boolean;
+  isInstalled: boolean;
+}
+
+export interface MetadataProvider {
+  id: string;
+  displayName: string;
+  description?: string;
+  capabilities?: any;
+}
+
+export interface GameMetadata {
+  name: string;
+  shortDescription: string;
+  detailedDescription: string;
+  aboutTheGame: string;
+  headerImage: string;
+  developers: string[];
+  publishers: string[];
+  genres: string[];
+  releaseDate: string;
 }
 
 export interface LaunchCandidate {

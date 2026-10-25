@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { AppAPI } from '../api/app.js';
 import {
   libraryPaths,
   libraryPath,
@@ -13,6 +14,7 @@ import {
   updateGameInStore,
   renameGameInStore,
   patchGameInStore,
+  resolvePlaceholderTitle,
   activeFilter,
   searchQuery,
   sortBy,
@@ -212,10 +214,10 @@ describe('Decoupled Library Stores', () => {
     expect(unchangedResult).toBe(initialList[0]);
     expect(get(games)).toBe(initialList); // strict reference equality
 
-    // 2. Patch with new delta values using snake_case normalization
+    // 2. Patch with new delta values
     const patched = patchGameInStore('/games/eldenring', {
-      playtime_seconds: 7200,
-      last_played: 1700005000,
+      playtimeSeconds: 7200,
+      lastPlayed: 1700005000,
     });
     expect(patched).not.toBeNull();
     expect(patched.playtimeSeconds).toBe(7200);
@@ -233,6 +235,49 @@ describe('Decoupled Library Stores', () => {
     // 3. Patch non-existent game -> returns null
     const nonExistent = patchGameInStore('/games/unknown', { playtimeSeconds: 10 });
     expect(nonExistent).toBeNull();
+  });
+
+  it('deduplicates concurrent calls in resolvePlaceholderTitle', async () => {
+    const rawGame = {
+      name: 'Steam App 12345',
+      app_id: '12345',
+      game_dir: '/games/app12345',
+      store: 'Steam',
+    };
+    updateGameInStore(rawGame);
+
+    let resolveApi;
+    const apiPromise = new Promise((resolve) => {
+      resolveApi = resolve;
+    });
+
+    const metaSpy = vi.spyOn(AppAPI, 'getGameMetadata').mockImplementation(() => apiPromise);
+
+    const game = get(games)[0];
+    selectedGame.set(game);
+
+    // Call resolvePlaceholderTitle twice concurrently
+    const p1 = resolvePlaceholderTitle(game);
+    const p2 = resolvePlaceholderTitle(game);
+
+    // Resolve the network call
+    resolveApi({
+      name: 'Resolved Real Title',
+      header_image: 'https://cdn.steam.com/header.jpg',
+    });
+
+    await Promise.all([p1, p2]);
+
+    // Should make only 1 AppAPI call
+    expect(metaSpy).toHaveBeenCalledTimes(1);
+    expect(metaSpy).toHaveBeenCalledWith('steam', '12345');
+
+    // Should update store and selection
+    expect(get(games)[0].name).toBe('Resolved Real Title');
+    expect(get(games)[0].coverUrl).toBe('https://cdn.steam.com/header.jpg');
+    expect(get(selectedGame).name).toBe('Resolved Real Title');
+
+    metaSpy.mockRestore();
   });
 });
 

@@ -67,7 +67,7 @@ export async function importGame() {
 
 export async function refreshGame(gameDir) {
   if (!gameDir) return null;
-  const raw = await AppAPI.inspectGame(gameDir);
+  const raw = await AppAPI.inspectGame(gameDir, 0);
   return updateGameInStore(raw);
 }
 

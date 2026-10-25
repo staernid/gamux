@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tasksStore, extractTaskProgress } from './tasks.js';
+import {
+  tasksStore,
+  extractTaskProgress,
+  normalizeTask,
+  isLiveStatus,
+  taskMatchesGame
+} from './tasks.js';
 
 describe('tasksStore', () => {
   beforeEach(() => {
@@ -262,7 +268,7 @@ describe('tasksStore', () => {
     expect(item).toBeUndefined();
   });
 
-  it('extractTaskProgress correctly extracts camelCase and snake_case properties', () => {
+  it('extractTaskProgress correctly extracts Go wire progress properties', () => {
     const emptyProg = extractTaskProgress(null);
     expect(emptyProg.percent).toBe(0);
     expect(emptyProg.currentBytes).toBe(0);
@@ -286,19 +292,102 @@ describe('tasksStore', () => {
     expect(extractedSnake.etaSeconds).toBe(1);
     expect(extractedSnake.currentItems).toBe(3);
     expect(extractedSnake.totalItems).toBe(4);
+  });
 
-    const camelObj = {
-      currentBytes: 1234,
-      totalBytes: 5678,
-      speedBps: 999,
-      etaSeconds: 5,
-      currentItems: 1,
-      totalItems: 2,
+  it('normalizeTask normalizes raw Go task wire shape to canonical camelCase Task', () => {
+    const rawGoTask = {
+      id: 'task_wire_1',
+      type: 'download',
+      title: 'Hades II',
+      game_name: 'Hades II',
+      game_dir: '/games/Hades2',
+      app_id: '1145360',
+      status: 'running',
+      stage: 'Downloading Depots',
+      details: 'chunk_123.bin',
+      capabilities: 15,
+      progress: {
+        percent: 45.5,
+        current_bytes: 45500000,
+        total_bytes: 100000000,
+        bytes_per_sec: 25000000,
+        eta_seconds: 4,
+        current_items: 45,
+        total_items: 100,
+      },
+      created_at: 1700000000,
+      started_at: 1700000010,
     };
-    const extractedCamel = extractTaskProgress(camelObj);
-    expect(extractedCamel.currentBytes).toBe(1234);
-    expect(extractedCamel.totalBytes).toBe(5678);
-    expect(extractedCamel.speedBps).toBe(999);
-    expect(extractedCamel.etaSeconds).toBe(5);
+
+    const task = normalizeTask(rawGoTask);
+    expect(task.id).toBe('task_wire_1');
+    expect(task.type).toBe('download');
+    expect(task.title).toBe('Hades II');
+    expect(task.gameName).toBe('Hades II');
+    expect(task.gameDir).toBe('/games/Hades2');
+    expect(task.appId).toBe('1145360');
+    expect(task.status).toBe('running');
+    expect(task.percent).toBe(45.5);
+    expect(task.currentBytes).toBe(45500000);
+    expect(task.totalBytes).toBe(100000000);
+    expect(task.speedBps).toBe(25000000);
+    expect(task.bytesPerSec).toBe(25000000);
+    expect(task.etaSeconds).toBe(4);
+    expect(task.currentItems).toBe(45);
+    expect(task.totalItems).toBe(100);
+    expect(task.progress).toEqual({
+      percent: 45.5,
+      currentBytes: 45500000,
+      totalBytes: 100000000,
+      currentItems: 45,
+      totalItems: 100,
+      speedBps: 25000000,
+      etaSeconds: 4,
+    });
+  });
+
+  describe('isLiveStatus', () => {
+    it('returns true for active, queued, or paused statuses', () => {
+      expect(isLiveStatus('running')).toBe(true);
+      expect(isLiveStatus('downloading')).toBe(true);
+      expect(isLiveStatus('queued')).toBe(true);
+      expect(isLiveStatus('pending')).toBe(true);
+      expect(isLiveStatus('paused')).toBe(true);
+    });
+
+    it('returns false for terminal or empty statuses', () => {
+      expect(isLiveStatus('completed')).toBe(false);
+      expect(isLiveStatus('failed')).toBe(false);
+      expect(isLiveStatus('cancelled')).toBe(false);
+      expect(isLiveStatus('')).toBe(false);
+      expect(isLiveStatus(null)).toBe(false);
+      expect(isLiveStatus(undefined)).toBe(false);
+    });
+  });
+
+  describe('taskMatchesGame', () => {
+    it('matches by gameDir via isSamePath', () => {
+      expect(taskMatchesGame({ gameDir: '/games/Hades2' }, { gameDir: '/games/Hades2/' })).toBe(true);
+      expect(taskMatchesGame({ gameDir: '/games/Hades2' }, { gameDir: '/games/Other' })).toBe(false);
+    });
+
+    it('matches by appId when both are valid non-zero strings/numbers', () => {
+      expect(taskMatchesGame({ appId: '1145360' }, { appId: 1145360 })).toBe(true);
+      expect(taskMatchesGame({ appId: '1145360' }, { appId: '1091500' })).toBe(false);
+    });
+
+    it('ignores 0, empty, or missing sentinels per tenet 4', () => {
+      expect(taskMatchesGame({ appId: '0' }, { appId: '0' })).toBe(false);
+      expect(taskMatchesGame({ appId: 0 }, { appId: 0 })).toBe(false);
+      expect(taskMatchesGame({ appId: '' }, { appId: '' })).toBe(false);
+      expect(taskMatchesGame({ appId: '123' }, { appId: '0' })).toBe(false);
+      expect(taskMatchesGame({ appId: '0' }, { appId: '123' })).toBe(false);
+    });
+
+    it('safely handles null/undefined arguments', () => {
+      expect(taskMatchesGame(null, null)).toBe(false);
+      expect(taskMatchesGame({ gameDir: '/a' }, null)).toBe(false);
+      expect(taskMatchesGame(null, { gameDir: '/a' })).toBe(false);
+    });
   });
 });

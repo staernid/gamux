@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, get, derived } from 'svelte/store';
 import { saveGameProfile, resetGameProfile, rollbackGame, refreshGame, showInspector } from './library.js';
 import { notificationStore } from './notifications.js';
 import { AppAPI } from '../api/app.js';
@@ -102,40 +102,58 @@ export function createInitialDraft(game = null, globalCfg = {}) {
 }
 
 function createDrawerDraftStore() {
-  const { subscribe, set, update } = writable(createInitialDraft());
+  const draftWritable = writable(createInitialDraft());
+  const isDirty = writable(false);
+  const isDirtyReadable = derived(isDirty, ($d) => $d);
+
+  function setDraft(val, markDirty = true) {
+    draftWritable.set(val);
+    if (markDirty) isDirty.set(true);
+  }
+
+  function updateDraft(fn, markDirty = true) {
+    draftWritable.update(fn);
+    if (markDirty) isDirty.set(true);
+  }
 
   return {
-    subscribe,
-    set,
-    update,
+    subscribe: draftWritable.subscribe,
+    set: (val) => setDraft(val, true),
+    update: (fn) => updateDraft(fn, true),
+    isDirty: isDirtyReadable,
 
     init(game, globalCfg = {}) {
-      set(createInitialDraft(game, globalCfg));
+      setDraft(createInitialDraft(game, globalCfg), false);
+      isDirty.set(false);
+    },
+
+    markSaved() {
+      isDirty.set(false);
     },
 
     syncIdentity(game) {
       if (!game) return;
       const lp = normalizeLaunchProfile(game.launchProfile || game.launch_profile) || {};
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         appId: lp.appId || game.appId || state.appId,
         metadataProvider: lp.metadataProvider || game.metadataProvider || state.metadataProvider,
         metadataId: lp.metadataId || game.metadataId || state.metadataId,
         name: lp.name || game.name || state.name,
-      }));
+      }), true);
     },
 
     setField(key, value) {
-      update(state => ({ ...state, [key]: value }));
+      updateDraft(state => ({ ...state, [key]: value }), true);
     },
 
     selectCandidate(candidate) {
       if (!candidate) return;
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         exePath: candidate.executable || state.exePath,
         exeArgs: candidate.arguments !== undefined ? candidate.arguments : state.exeArgs,
-      }));
+      }), true);
     },
 
     async browseExecutable(gameDir) {
@@ -155,38 +173,38 @@ function createDrawerDraftStore() {
     },
 
     addCustomEnv(globalEnv = {}) {
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         customEnv: envDraft.addCustomEnv(state.customEnv, globalEnv),
-      }));
+      }), true);
     },
 
     updateCustomEnv(key, value) {
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         customEnv: envDraft.updateCustomEnv(state.customEnv, key, value),
-      }));
+      }), true);
     },
 
     overrideEnv(key, globalValue) {
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         customEnv: envDraft.overrideEnv(state.customEnv, key, globalValue),
-      }));
+      }), true);
     },
 
     revertEnv(key) {
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         customEnv: envDraft.revertEnv(state.customEnv, key),
-      }));
+      }), true);
     },
 
     deleteCustomEnv(key) {
-      update(state => ({
+      updateDraft(state => ({
         ...state,
         customEnv: envDraft.deleteCustomEnv(state.customEnv, key),
-      }));
+      }), true);
     },
 
     async save(game) {
@@ -240,6 +258,8 @@ function createDrawerDraftStore() {
         const updated = await saveGameProfile(gameDir, launchProfile);
         if (updated) {
           this.init(updated);
+        } else {
+          this.markSaved();
         }
         showInspector.set(false);
         notificationStore.success('Settings Saved', `Updated configuration for ${game.name || 'game'}`);
@@ -272,6 +292,45 @@ function createDrawerDraftStore() {
       rollbackGame(game.gameDir, false);
       showInspector.set(false);
     },
+  };
+}
+
+export function createAutosave(draftStore, saveFn, delay = 400) {
+  let timer = null;
+
+  function cancel() {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  function trigger() {
+    cancel();
+    if (!get(draftStore.isDirty)) return;
+    timer = setTimeout(async () => {
+      timer = null;
+      if (get(draftStore.isDirty)) {
+        await saveFn();
+      }
+    }, delay);
+  }
+
+  const unsubscribe = draftStore.subscribe(() => {
+    if (get(draftStore.isDirty)) {
+      trigger();
+    } else {
+      cancel();
+    }
+  });
+
+  return {
+    trigger,
+    cancel,
+    destroy() {
+      cancel();
+      unsubscribe();
+    }
   };
 }
 

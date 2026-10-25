@@ -1,4 +1,5 @@
-import { normalizeGame, normalizeRunningInstance, isSamePath } from '../../utils/game.js';
+import { normalizeGame, normalizeRunningInstance, isSamePath, normalizeGameMetadata, isPlaceholderTitle } from '../../utils/game.js';
+import { AppAPI } from '../../api/app.js';
 import { selectedGame } from './selection.js';
 
 export function isGamePathRunning(runningSetOrArray, path) {
@@ -25,6 +26,7 @@ export class CatalogState {
   #scanSubscribers = new Set();
   #runningGamesSubscribers = new Set();
   #runningInstancesSubscribers = new Set();
+  #inFlightPlaceholderFetches = new Set();
 
   isGamePathRunning(path) {
     return isGamePathRunning(this.runningGames, path);
@@ -40,11 +42,11 @@ export class CatalogState {
 
   setGameRunning(gameDir, isRunning, playtimeSeconds, lastPlayed, extra = {}) {
     if (!gameDir) return;
-    const profileId = extra.profileId || extra.profile_id || 'main';
-    const seatId = extra.seatId || extra.seat_id || '';
-    const appId = extra.appId || extra.app_id || '';
-    const gameName = extra.gameName || extra.game_name || '';
-    const instanceId = extra.instanceId || extra.instance_id || (seatId ? `${appId || gameDir}:${profileId}:${seatId}` : `${appId || gameDir}:${profileId}:`);
+    const profileId = extra.profileId || 'main';
+    const seatId = extra.seatId || '';
+    const appId = extra.appId || '';
+    const gameName = extra.gameName || '';
+    const instanceId = extra.instanceId || (seatId ? `${appId || gameDir}:${profileId}:${seatId}` : `${appId || gameDir}:${profileId}:`);
 
     const current = this.runningInstances;
     const filtered = current.filter(i => {
@@ -123,29 +125,12 @@ export class CatalogState {
   patchGameInStore(gameDir, delta) {
     if (!gameDir || !delta || typeof delta !== 'object') return null;
 
-    const normalizedDelta = { ...delta };
-    if (delta.playtime_seconds !== undefined && delta.playtimeSeconds === undefined) {
-      normalizedDelta.playtimeSeconds = delta.playtime_seconds;
-    }
-    if (delta.last_played !== undefined && delta.lastPlayed === undefined) {
-      normalizedDelta.lastPlayed = delta.last_played;
-    }
-    if (delta.is_patched !== undefined && delta.isPatched === undefined) {
-      normalizedDelta.isPatched = delta.is_patched;
-    }
-    if (delta.game_dir !== undefined && delta.gameDir === undefined) {
-      normalizedDelta.gameDir = delta.game_dir;
-    }
-    if (delta.app_id !== undefined && delta.appId === undefined) {
-      normalizedDelta.appId = String(delta.app_id);
-    }
-
     const idx = this.games.findIndex(g => isSamePath(g.gameDir, gameDir));
     if (idx < 0) return null;
 
     const current = this.games[idx];
     let hasChanges = false;
-    for (const [key, value] of Object.entries(normalizedDelta)) {
+    for (const [key, value] of Object.entries(delta)) {
       if (value !== undefined && current[key] !== value) {
         hasChanges = true;
         break;
@@ -157,7 +142,7 @@ export class CatalogState {
     }
 
     const merged = { ...current };
-    for (const [key, value] of Object.entries(normalizedDelta)) {
+    for (const [key, value] of Object.entries(delta)) {
       if (value !== undefined) {
         merged[key] = value;
       }
@@ -171,14 +156,14 @@ export class CatalogState {
     selectedGame.update(curr => {
       if (curr && isSamePath(curr.gameDir, gameDir)) {
         let hasSelectedChanges = false;
-        for (const [key, value] of Object.entries(normalizedDelta)) {
+        for (const [key, value] of Object.entries(delta)) {
           if (value !== undefined && curr[key] !== value) {
             hasSelectedChanges = true;
             break;
           }
         }
         if (!hasSelectedChanges) return curr;
-        return { ...curr, ...normalizedDelta };
+        return { ...curr, ...delta };
       }
       return curr;
     });
@@ -226,6 +211,34 @@ export class CatalogState {
       }
       return current;
     });
+  }
+
+  async resolvePlaceholderTitle(game) {
+    if (!game || !isPlaceholderTitle(game.name, game.appId)) return null;
+    const prov = (game.metadataProvider || game.store || 'steam').toLowerCase();
+    const id = game.metadataId || game.appId;
+    if (!id || id === '0') return null;
+
+    const key = `${prov}:${id}`;
+    if (this.#inFlightPlaceholderFetches.has(key)) return null;
+    this.#inFlightPlaceholderFetches.add(key);
+
+    try {
+      const raw = await AppAPI.getGameMetadata(prov, id);
+      const meta = normalizeGameMetadata(raw);
+      if (meta && meta.name && !isPlaceholderTitle(meta.name, id)) {
+        const updated = { ...game, name: meta.name };
+        if (meta.headerImage && (!game.coverUrl || game.coverUrl.includes('header.jpg'))) {
+          updated.coverUrl = meta.headerImage;
+        }
+        return this.updateGameInStore(updated);
+      }
+    } catch (err) {
+      console.warn(`[catalog] Failed to resolve placeholder title for ${key}:`, err);
+    } finally {
+      this.#inFlightPlaceholderFetches.delete(key);
+    }
+    return null;
   }
 
   #notifyGames() {
@@ -357,4 +370,8 @@ export function updateGameInStore(rawOrNormalizedGame) {
 
 export function removeGameFromStore(gameDir) {
   return catalogStore.removeGameFromStore(gameDir);
+}
+
+export function resolvePlaceholderTitle(game) {
+  return catalogStore.resolvePlaceholderTitle(game);
 }

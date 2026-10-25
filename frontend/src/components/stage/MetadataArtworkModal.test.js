@@ -39,7 +39,6 @@ describe('MetadataArtworkModal Component', () => {
   it('switches between metadata and artwork tabs', async () => {
     vi.spyOn(AppAPI, 'listMetadataProviders').mockResolvedValue([]);
     vi.spyOn(AppAPI, 'searchStoreGames').mockResolvedValue([]);
-    vi.spyOn(AppAPI, 'getArtworkOptions').mockResolvedValue([]);
 
     render(MetadataArtworkModal, { props: { game: mockGame, initialTab: 'metadata' } });
 
@@ -54,7 +53,6 @@ describe('MetadataArtworkModal Component', () => {
 
   it('renders artwork tab directly when initialTab is artwork', () => {
     vi.spyOn(AppAPI, 'listMetadataProviders').mockResolvedValue([]);
-    vi.spyOn(AppAPI, 'getArtworkOptions').mockResolvedValue([]);
 
     render(MetadataArtworkModal, { props: { game: mockGame, initialTab: 'artwork' } });
 

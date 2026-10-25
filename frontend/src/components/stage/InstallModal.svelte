@@ -143,7 +143,7 @@
   }
 
   async function fetchDepots() {
-    const rawAppId = game?.appId || game?.app_id || game?.AppID;
+    const rawAppId = game?.appId;
     const strAppId = rawAppId ? String(rawAppId).trim() : '';
     if (!strAppId && !game?.gameDir) {
       isLoading = false;
@@ -245,7 +245,7 @@
 
   async function handleStartInstall() {
     if (isStarting) return;
-    const rawAppId = game?.appId || game?.app_id || game?.AppID;
+    const rawAppId = game?.appId;
     const appID = parseInt(rawAppId, 10);
     if (!appID || isNaN(appID)) {
       notificationStore.error('Install Failed', 'Invalid Steam AppID');

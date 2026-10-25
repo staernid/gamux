@@ -7,7 +7,7 @@
   import { modalStore } from '../../../../stores/modal.js';
   import { updateGameInStore } from '../../../../stores/library.js';
   import { formatBytes } from '../../../../utils/format.js';
-  import { isSamePath } from '../../../../utils/game.js';
+  import { isSamePath, normalizeDlc } from '../../../../utils/game.js';
 
   /**
    * @typedef {Object} Props
@@ -52,7 +52,7 @@
     isLoadingDLCs = true;
     try {
       const res = await AppAPI.getGameDLCs(gameDir);
-      dlcs = Array.isArray(res) ? res : [];
+      dlcs = Array.isArray(res) ? res.map(normalizeDlc).filter(Boolean) : [];
     } catch {
       dlcs = [];
     } finally {
@@ -410,11 +410,11 @@
 
     {#if dlcs.length > 0}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-        {#each dlcs as dlc (dlc.app_id)}
+        {#each dlcs as dlc (dlc.appId)}
           <div class="p-2.5 bg-surface-card border border-surface-border rounded-lg flex items-center justify-between gap-2">
             <div class="min-w-0">
-              <span class="font-bold text-neutral-200 text-xs block truncate">{dlc.name || `DLC ${dlc.app_id}`}</span>
-              <span class="text-3xs font-mono text-neutral-400">AppID #{dlc.app_id}</span>
+              <span class="font-bold text-neutral-200 text-xs block truncate">{dlc.name || `DLC ${dlc.appId}`}</span>
+              <span class="text-3xs font-mono text-neutral-400">AppID #{dlc.appId}</span>
             </div>
             <span class="px-2 py-0.5 rounded text-3xs font-bold bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 flex-shrink-0">
               Active

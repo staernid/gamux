@@ -5,6 +5,7 @@
   import { formatDate } from '../../../utils/format.js';
   import { notificationStore } from '../../../stores/notifications.js';
   import { updateGameInStore, selectedGame } from '../../../stores/library.js';
+  import { isActiveStatus, isPausedStatus } from '../../../stores/tasks.js';
 
   /**
    * @typedef {Object} Props
@@ -331,7 +332,7 @@
             <p class="text-2xs text-neutral-400 font-mono">
               Installed files: #{cleanInstalledBuild} &rarr; Target branch files: #{targetBuildId}
             </p>
-            {#if activeGameTask && (activeGameTask.status === 'downloading' || activeGameTask.status === 'running' || activeGameTask.status === 'paused')}
+            {#if activeGameTask && (isActiveStatus(activeGameTask.status) || isPausedStatus(activeGameTask.status))}
               <p class="text-3xs text-neutral-400 font-mono">
                 Active task: {activeGameTask.status === 'paused' ? 'Paused - ' : ''}{activeGameTask.stage || activeGameTask.details || 'Syncing files...'}
               </p>

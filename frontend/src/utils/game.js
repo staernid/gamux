@@ -319,6 +319,39 @@ export function normalizeGame(g) {
   };
 }
 
+export function normalizeDlc(raw) {
+  if (!raw) return null;
+  return {
+    appId: String(raw.app_id ?? ''),
+    name: raw.name || '',
+  };
+}
+
+export function normalizeMetadataProvider(raw) {
+  if (!raw) return null;
+  return {
+    id: raw.id || '',
+    displayName: raw.display_name || '',
+    description: raw.description || '',
+    capabilities: raw.capabilities || {},
+  };
+}
+
+export function normalizeGameMetadata(raw) {
+  if (!raw) return null;
+  return {
+    name: raw.name || '',
+    shortDescription: raw.short_description || '',
+    detailedDescription: raw.detailed_description || '',
+    aboutTheGame: raw.about_the_game || '',
+    headerImage: raw.header_image || '',
+    developers: Array.isArray(raw.developers) ? raw.developers : [],
+    publishers: Array.isArray(raw.publishers) ? raw.publishers : [],
+    genres: Array.isArray(raw.genres) ? raw.genres : [],
+    releaseDate: raw.release_date || '',
+  };
+}
+
 export function getInitials(name) {
   if (!name) return 'GX';
   const parts = name.trim().split(/[\s_-]+/);

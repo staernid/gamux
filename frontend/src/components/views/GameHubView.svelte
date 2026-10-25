@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import {
     selectedGame,
     activeView,
@@ -11,17 +12,18 @@
     libraryPath,
     libraryPaths,
     updateGameInStore,
+    resolvePlaceholderTitle,
     trashGame
   } from '../../stores/library.js';
-  import { tasksStore } from '../../stores/tasks.js';
+  import { tasksStore, isActiveStatus, isLiveStatus, isPendingOrActiveStatus, taskMatchesGame } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
   import { configStore } from '../../stores/config.js';
   import { notificationStore } from '../../stores/notifications.js';
-  import { drawerDraft } from '../../stores/drawerDraft.js';
+  import { drawerDraft, createAutosave } from '../../stores/drawerDraft.js';
   import { multiseatStore, getActiveSession } from '../../stores/multiseat.js';
   import { profilesStore } from '../../stores/profiles.js';
   import { AppAPI } from '../../api/app.js';
-  import { isSamePath, countOverrides, normalizeGame, isSteamApp, isPlaceholderTitle } from '../../utils/game.js';
+  import { isSamePath, countOverrides, normalizeGame, isSteamApp } from '../../utils/game.js';
   import HubSavesCard from './hub/cards/HubSavesCard.svelte';
   import GameHeroBanner from './hub/GameHeroBanner.svelte';
   import HubOverviewTab from './hub/HubOverviewTab.svelte';
@@ -41,13 +43,13 @@
   let isSaving = $state(false);
   let saveSuccess = $state(false);
   let saveSuccessTimer = null;
-  let autoSaveTimeout = null;
-  let initialDraftJSON = $state('');
+  let autosave = null;
+  let unsubSelected = null;
 
   // Integrity State
   let integrityReport = $state(null);
-  let integrityError = $state('');
-  let isCheckingIntegrity = $state(false);
+  let localIntegrityError = $state('');
+  let isStartingVerify = $state(false);
   let isNormalizing = $state(false);
 
   const allTasks = tasksStore.items;
@@ -57,43 +59,29 @@
 
   let activeGameTask = $derived.by(() => {
     const tasks = $allTasks || [];
-    return tasks.find(t => {
-      if (t.status !== 'running' && t.status !== 'downloading' && t.status !== 'queued' && t.status !== 'pending' && t.status !== 'paused') return false;
-      if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
-      if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
-      return false;
-    });
+    return tasks.find(t => isLiveStatus(t.status) && taskMatchesGame(t, game));
   });
   let isTaskActive = $derived(Boolean(activeGameTask));
 
-  $effect(() => {
+  let verifyTask = $derived.by(() => {
     const tasks = $allTasks || [];
-    const vTask = tasks.find(t => {
-      if (t.type !== 'verify' && t.operation !== 'verify') return false;
-      if (game?.gameDir && isSamePath(t.gameDir, game.gameDir)) return true;
-      if (game?.appId && game.appId !== '0' && (String(t.appId) === String(game.appId))) return true;
-      return false;
-    });
-    if (vTask) {
-      if (vTask.status === 'completed') {
-        if (isCheckingIntegrity) isCheckingIntegrity = false;
-        if (vTask.metadata?.integrity_report && !integrityReport) {
-          try {
-            integrityReport = JSON.parse(vTask.metadata.integrity_report);
-          } catch (_) {}
-        }
-      } else if (vTask.status === 'failed') {
-        if (isCheckingIntegrity) {
-          isCheckingIntegrity = false;
-          integrityError = vTask.error || 'Integrity check failed.';
-        }
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      const t = tasks[i];
+      if (t.type === 'verify' && taskMatchesGame(t, game)) {
+        return t;
       }
     }
+    return null;
   });
+
+  let isCheckingIntegrity = $derived(Boolean(isStartingVerify || (verifyTask && isActiveStatus(verifyTask.status))));
+  let integrityError = $derived(verifyTask?.status === 'failed' ? (verifyTask.error || 'Integrity check failed.') : localIntegrityError);
 
   let overrideCount = $derived(countOverrides($drawerDraft, game, globalCfg));
 
   onMount(async () => {
+    autosave = createAutosave(drawerDraft, () => handleSaveSettings(true), 400);
+
     try {
       globalCfg = await AppAPI.getConfig();
     } catch {
@@ -116,61 +104,25 @@
 
     if (game) {
       drawerDraft.init(game, globalCfg);
-      initialDraftJSON = JSON.stringify($drawerDraft);
     }
+
+    unsubSelected = selectedGame.subscribe(current => {
+      if (current && get(drawerDraft).gameDir !== current.gameDir) {
+        drawerDraft.init(current, globalCfg);
+        integrityReport = null;
+        localIntegrityError = '';
+      }
+    });
   });
 
   onDestroy(() => {
     if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
-    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
-  });
-
-  function triggerAutoSave() {
-    if (!game?.gameDir || !initialDraftJSON) return;
-    const currentJSON = JSON.stringify($drawerDraft);
-    if (currentJSON === initialDraftJSON || isSaving) return;
-    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(() => {
-      handleSaveSettings(true);
-    }, 400);
-  }
-
-  $effect(() => {
-    if ($drawerDraft && initialDraftJSON) {
-      triggerAutoSave();
-    }
+    if (autosave) autosave.destroy();
+    if (unsubSelected) unsubSelected();
   });
 
   $effect(() => {
-    if (game && $drawerDraft) {
-      if ($drawerDraft.gameDir !== game.gameDir) {
-        drawerDraft.init(game, globalCfg);
-        initialDraftJSON = JSON.stringify($drawerDraft);
-        integrityReport = null;
-        integrityError = '';
-      } else if (!initialDraftJSON) {
-        initialDraftJSON = JSON.stringify($drawerDraft);
-      }
-    }
-  });
-
-  $effect(() => {
-    if (game && isPlaceholderTitle(game.name, game.appId)) {
-      const prov = (game.metadataProvider || game.store || 'steam').toLowerCase();
-      const id = game.metadataId || game.appId;
-      if (id && id !== '0') {
-        AppAPI.getGameMetadata(prov, id).then(meta => {
-          if (meta && meta.name && !isPlaceholderTitle(meta.name, id)) {
-            const updated = { ...game, name: meta.name };
-            if (meta.header_image && (!game.coverUrl || game.coverUrl.includes('header.jpg'))) {
-              updated.coverUrl = meta.header_image;
-            }
-            selectedGame.set(normalizeGame(updated));
-            updateGameInStore(updated);
-          }
-        }).catch(() => {});
-      }
-    }
+    if (game) resolvePlaceholderTitle(game);
   });
 
   function returnToShelf() {
@@ -247,7 +199,7 @@
         await tasksStore.resume(activeGameTask.id);
         return;
       }
-      if (activeGameTask.status === 'running' || activeGameTask.status === 'downloading' || activeGameTask.status === 'queued' || activeGameTask.status === 'pending') {
+      if (isPendingOrActiveStatus(activeGameTask.status)) {
         await tasksStore.pause(activeGameTask.id);
         return;
       }
@@ -387,12 +339,11 @@
 
 
   async function handleSaveSettings(silent = false) {
-    if (!game?.gameDir) return;
+    if (!game?.gameDir || isSaving) return;
     isSaving = true;
     try {
       const ok = await drawerDraft.save(game);
       if (ok) {
-        initialDraftJSON = JSON.stringify($drawerDraft);
         saveSuccess = true;
         if (saveSuccessTimer) clearTimeout(saveSuccessTimer);
         saveSuccessTimer = setTimeout(() => {
@@ -415,7 +366,6 @@
   async function handleResetSettings() {
     if (game) {
       await drawerDraft.resetDefaults(game, globalCfg);
-      initialDraftJSON = JSON.stringify($drawerDraft);
     }
   }
 
@@ -468,8 +418,8 @@
 
   async function runIntegrityCheck() {
     if (!game?.gameDir) return;
-    isCheckingIntegrity = true;
-    integrityError = '';
+    isStartingVerify = true;
+    localIntegrityError = '';
     integrityReport = null;
     try {
       await AppAPI.startVerifyGameTask(game.gameDir);
@@ -480,8 +430,9 @@
         gameName: game.name
       });
     } catch (err) {
-      integrityError = err?.message || 'Failed to start integrity verification.';
-      isCheckingIntegrity = false;
+      localIntegrityError = err?.message || 'Failed to start integrity verification.';
+    } finally {
+      isStartingVerify = false;
     }
   }
 
@@ -717,6 +668,7 @@
             {isGameRunning}
             {isTaskActive}
             {activeGameTask}
+            activeVerifyTask={verifyTask}
             {isCheckingIntegrity}
             {isNormalizing}
             {integrityError}

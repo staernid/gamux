@@ -1,9 +1,10 @@
-// Dynamic Zero-Boilerplate Wails API Bridge & Event Subscription Hub
+// Wails v3 API bridge (validated against generated bindings.gen.js) & event subscription hub
 import { Call, Events } from '@wailsio/runtime';
 import * as mockData from './mockData.js';
+import { BINDINGS, BINDING_PREFIX } from './bindings.gen.js';
 
 // Declarative default mock implementations for browser testing & offline dev
-const DEFAULT_MOCKS = {
+export const DEFAULT_MOCKS = {
   getConfig: () => mockData.MOCK_CONFIG,
   saveConfig: () => Promise.resolve(),
   getGSEUserConfig: () => ({
@@ -234,16 +235,6 @@ const DEFAULT_MOCKS = {
       release_date: 'Dec 10, 2020'
     });
   },
-  getGameDetails: (appId) => Promise.resolve({
-    name: 'Cyberpunk 2077',
-    short_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
-    detailed_description: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour, and body modification.',
-    about_the_game: 'Cyberpunk 2077 is an open-world, action-adventure RPG set in the world of Night City.',
-    developers: ['CD PROJEKT RED'],
-    publishers: ['CD PROJEKT RED'],
-    genres: ['RPG', 'Action', 'Open World', 'Sci-Fi'],
-    release_date: 'Dec 10, 2020'
-  }),
   getDiskSpace: (path) => ({
     path: path || '/home/staernid/Games',
     total_bytes: 1099511627776, // 1 TiB
@@ -295,8 +286,8 @@ const DEFAULT_MOCKS = {
   ]),
   resolveArtwork: () => Promise.resolve({ cover_url: '', local_cover: '' }),
   fetchNews: (appId, count) => Promise.resolve(mockData.MOCK_GAMES[0].news_items || []),
-  getGameNews: (appId, count) => Promise.resolve(mockData.MOCK_GAMES[0].news_items || []),
   getPatchNote: () => Promise.resolve([null, '']),
+  openURL: (url) => { window.open(url, '_blank', 'noopener,noreferrer'); },
   selectDirectory: (title, defaultPath) => defaultPath || '/mock/path',
   selectFile: (title, filterName, filterPattern) => '/mock/file.exe',
   getGameSaveLocations: (path) => Promise.resolve(mockData.MOCK_SAVE_LOCATIONS),
@@ -324,93 +315,77 @@ export function isWailsDesktop() {
   return false;
 }
 
-async function callWailsBinding(prop, args) {
-  const pascal = toPascalCase(prop);
-  const candidateNames = [
-    `github.com/staernid/gamux/gui.App.${pascal}`,
-    `gui.App.${pascal}`,
-    `main.App.${pascal}`,
-  ];
-
-  let lastErr = null;
-  for (const name of candidateNames) {
-    try {
-      return await Call.ByName(name, ...args);
-    } catch (err) {
-      lastErr = err;
-      const msg = err?.message || String(err);
-      if (!msg.includes('unknown bound method') && err?.name !== 'ReferenceError') {
-        throw err;
-      }
-    }
-  }
-  throw lastErr;
-}
-
+/**
+ * Builds the dispatcher for a bound Go method. The method name and argument
+ * count are validated against the generated BINDINGS manifest in every
+ * environment so wrong calls fail in Vitest/browser preview exactly as they
+ * would against the real Wails v3 backend (which enforces strict arity).
+ * @param {string} prop camelCase method name present in BINDINGS
+ */
 function createMethodDispatcher(prop) {
+  const arity = BINDINGS[prop];
   return async (...args) => {
-    // Ensure InspectGame receives (gamePath, newsCount) defaults
-    if (prop === 'inspectGame' && args.length === 1) {
-      args = [args[0], 0];
-    }
-    // Ensure SelectDirectory receives (title, defaultDir) defaults
-    if (prop === 'selectDirectory' && args.length === 1) {
-      args = [args[0], ''];
+    if (args.length !== arity) {
+      throw new TypeError(`AppAPI.${prop} expects ${arity} argument(s), got ${args.length}`);
     }
 
-    // 1. In native Wails v3 desktop environment, call Go backend directly
+    // 1. Native Wails v3 desktop: call the Go backend directly.
     if (isWailsDesktop()) {
       try {
-        return await callWailsBinding(prop, args);
+        return await Call.ByName(BINDING_PREFIX + toPascalCase(prop), ...args);
       } catch (err) {
         console.error(`Wails v3 binding call error for ${prop}:`, err);
         throw err;
       }
     }
 
-    // 2. Try Wails v2 Go backend runtime binding (window.go.gui.App)
-    const wailsApp = typeof window !== 'undefined' ? window.go?.gui?.App : null;
-    if (wailsApp) {
-      const pascal = toPascalCase(prop);
-      if (typeof wailsApp[pascal] === 'function') {
-        return await wailsApp[pascal](...args);
-      }
-      if (typeof wailsApp[prop] === 'function') {
-        return await wailsApp[prop](...args);
-      }
+    // 2. Browser preview, Vitest, or offline evaluation: declarative mocks.
+    const mock = DEFAULT_MOCKS[prop];
+    if (typeof mock !== 'function') {
+      throw new Error(`AppAPI.${prop} has no mock implementation in DEFAULT_MOCKS (browser/test mode)`);
     }
-
-    // 3. Fallback to declarative mocks in browser preview, Vitest, or offline evaluation
-    if (typeof DEFAULT_MOCKS[prop] === 'function') {
-      return await DEFAULT_MOCKS[prop](...args);
-    }
-
-    // 4. Transparent fallback
-    return null;
+    return await mock(...args);
   };
 }
 
-// Dynamic Proxy forwarding any AppAPI.methodName(...) to window.go.gui.App.MethodName(...)
+/** @type {Map<string, Function>} */
+const dispatcherCache = new Map();
+
+/**
+ * Typed-by-manifest bridge to the Go `gui.App` service. Only methods listed in
+ * the generated `bindings.gen.js` exist; any other property is `undefined`, so
+ * `AppAPI.typo()` throws immediately. Tests may still assign overrides
+ * (`AppAPI.getConfig = vi.fn()`), which take precedence.
+ */
 export const AppAPI = new Proxy({}, {
   get(target, prop) {
     if (typeof prop !== 'string') return target[prop];
     if (prop in target) return target[prop];
-    return createMethodDispatcher(prop);
+    if (!Object.hasOwn(BINDINGS, prop)) return undefined;
+    let fn = dispatcherCache.get(prop);
+    if (!fn) {
+      fn = createMethodDispatcher(prop);
+      dispatcherCache.set(prop, fn);
+    }
+    return fn;
   },
   set(target, prop, value) {
     target[prop] = value;
     return true;
   },
-  has(target, prop) {
+  deleteProperty(target, prop) {
+    delete target[prop];
     return true;
   },
+  has(target, prop) {
+    return prop in target || (typeof prop === 'string' && Object.hasOwn(BINDINGS, prop));
+  },
   getOwnPropertyDescriptor(target, prop) {
-    return {
-      value: target[prop] || createMethodDispatcher(prop),
-      writable: true,
-      enumerable: true,
-      configurable: true
-    };
+    if (prop in target) return Object.getOwnPropertyDescriptor(target, prop);
+    if (typeof prop === 'string' && Object.hasOwn(BINDINGS, prop)) {
+      return { value: this.get(target, prop), writable: true, enumerable: true, configurable: true };
+    }
+    return undefined;
   }
 });
 
@@ -425,35 +400,34 @@ const RUNTIME_EVENT_MAP = [
   { key: 'onSystemThemeChanged', event: 'gamux:system-theme-changed' },
 ];
 
+/**
+ * Subscribes to a backend runtime event (Wails v3) and mirrors it to the dev
+ * bridge so browser previews and GUI audits can replay it.
+ * @param {string} event Event name, e.g. `gamux:task-event`
+ * @param {(payload: any) => void} cb Receives the event payload (`ev.data`)
+ */
+export function onRuntimeEvent(event, cb) {
+  if (typeof window !== 'undefined' && window.__GAMUX_DEV__) {
+    window.__GAMUX_DEV__.registerEventListener(event, cb);
+  }
+
+  if (isWailsDesktop()) {
+    try {
+      Events.On(event, (ev) => {
+        const payload = ev?.data !== undefined ? ev.data : ev;
+        window.__GAMUX_DEV__?.recordIncoming('wails', event, payload);
+        cb(payload);
+      });
+    } catch (e) {
+      console.warn(`Failed to bind Wails v3 event listener for ${event}:`, e);
+    }
+  }
+}
+
 // Initialize and bind all runtime event listeners to Wails and dev bridge
 export function initRuntimeEvents(listeners = {}) {
   RUNTIME_EVENT_MAP.forEach(({ key, event }) => {
     const cb = listeners[key];
-    if (!cb) return;
-
-    if (typeof window !== 'undefined' && window.__GAMUX_DEV__) {
-      window.__GAMUX_DEV__.registerEventListener(event, cb);
-    }
-
-    // Wails v3 @wailsio/runtime
-    if (isWailsDesktop()) {
-      try {
-        Events.On(event, (ev) => {
-          const payload = ev?.data !== undefined ? ev.data : ev;
-          window.__GAMUX_DEV__?.recordIncoming('wails', event, payload);
-          cb(payload);
-        });
-      } catch (e) {
-        console.warn(`Failed to bind Wails v3 event listener for ${event}:`, e);
-      }
-    }
-
-    // Wails v2 fallback if present
-    if (typeof window !== 'undefined' && window.runtime?.EventsOn) {
-      window.runtime.EventsOn(event, (ev) => {
-        window.__GAMUX_DEV__?.recordIncoming('wails', event, ev);
-        cb(ev);
-      });
-    }
+    if (cb) onRuntimeEvent(event, cb);
   });
 }

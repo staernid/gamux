@@ -3,6 +3,9 @@ import {
   normalizePath,
   isSamePath,
   normalizeGame,
+  normalizeDlc,
+  normalizeMetadataProvider,
+  normalizeGameMetadata,
   normalizeRunningInstance,
   getInitials,
   isSteamApp,
@@ -416,5 +419,71 @@ describe('Game Data Model & Normalization Helpers', () => {
     // Invalid inputs return empty string
     expect(getThumbnailUrl('', 300, '')).toBe('');
     expect(getThumbnailUrl(null, 300, '')).toBe('');
+  });
+
+  it('normalizes raw Go DLC entity into canonical camelCase DLC model', () => {
+    expect(normalizeDlc(null)).toBeNull();
+    expect(normalizeDlc(undefined)).toBeNull();
+
+    const raw = {
+      app_id: '200715',
+      name: 'Torchlight II: Pet Pack',
+    };
+
+    const dlc = normalizeDlc(raw);
+    expect(dlc).toEqual({
+      appId: '200715',
+      name: 'Torchlight II: Pet Pack',
+    });
+  });
+
+  it('normalizes raw Go ProviderDescriptor into canonical camelCase MetadataProvider', () => {
+    expect(normalizeMetadataProvider(null)).toBeNull();
+    expect(normalizeMetadataProvider(undefined)).toBeNull();
+
+    const raw = {
+      id: 'steam',
+      display_name: 'Steam',
+      description: 'Official Steam Store',
+      capabilities: { is_game_store: true },
+    };
+
+    const provider = normalizeMetadataProvider(raw);
+    expect(provider).toEqual({
+      id: 'steam',
+      displayName: 'Steam',
+      description: 'Official Steam Store',
+      capabilities: { is_game_store: true },
+    });
+  });
+
+  it('normalizes raw Go GameMetadataDetails into canonical camelCase GameMetadata', () => {
+    expect(normalizeGameMetadata(null)).toBeNull();
+    expect(normalizeGameMetadata(undefined)).toBeNull();
+
+    const raw = {
+      name: 'Cyberpunk 2077',
+      short_description: 'An open-world action-adventure RPG',
+      detailed_description: 'Full story description',
+      about_the_game: 'About description',
+      header_image: 'https://cdn.example.com/header.jpg',
+      developers: ['CD Projekt Red'],
+      publishers: ['CD Projekt Red'],
+      genres: ['RPG', 'Action'],
+      release_date: '2020-12-10',
+    };
+
+    const meta = normalizeGameMetadata(raw);
+    expect(meta).toEqual({
+      name: 'Cyberpunk 2077',
+      shortDescription: 'An open-world action-adventure RPG',
+      detailedDescription: 'Full story description',
+      aboutTheGame: 'About description',
+      headerImage: 'https://cdn.example.com/header.jpg',
+      developers: ['CD Projekt Red'],
+      publishers: ['CD Projekt Red'],
+      genres: ['RPG', 'Action'],
+      releaseDate: '2020-12-10',
+    });
   });
 });
