@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { AppAPI } from '../../../../api/app.js';
   import { notificationStore } from '../../../../stores/notifications.js';
+  import { modalStore } from '../../../../stores/modal.js';
   import { formatBytes, formatTimeAgo } from '../../../../utils/format.js';
 
   /**
@@ -86,39 +87,51 @@
 
   async function handleRestoreBackup(backupId) {
     if (!game?.gameDir || !backupId || isRestoring) return;
-    if (!confirm(`Restore save backup "${backupId}"? This will overwrite active save files.`)) {
-      return;
-    }
-    isRestoring = true;
-    try {
-      await AppAPI.restoreSaveBackup(game.gameDir, backupId);
-      notificationStore.items.add({
-        type: 'info',
-        title: 'Save Backup Restored',
-        message: `Restored snapshot ${backupId} for ${game.name}`
-      });
-      await loadData();
-    } catch (err) {
-      notificationStore.error('Restore Failed', err?.message || String(err));
-    } finally {
-      isRestoring = false;
-    }
+    modalStore.open('confirm', {
+      title: 'Restore Save Backup',
+      message: `Restore save backup "${backupId}"? This will overwrite active save files on disk.`,
+      danger: true,
+      confirmLabel: 'Restore Backup',
+      onconfirm: async () => {
+        isRestoring = true;
+        try {
+          await AppAPI.restoreSaveBackup(game.gameDir, backupId);
+          notificationStore.items.add({
+            type: 'info',
+            title: 'Save Backup Restored',
+            message: `Restored snapshot ${backupId} for ${game.name}`
+          });
+          await loadData();
+        } catch (err) {
+          notificationStore.error('Restore Failed', err?.message || String(err));
+        } finally {
+          isRestoring = false;
+        }
+      }
+    });
   }
 
   async function handleDeleteBackup(backupId) {
     if (!game?.gameDir || !backupId) return;
-    if (!confirm(`Delete snapshot "${backupId}" permanently?`)) return;
-    try {
-      await AppAPI.deleteSaveBackup(game.gameDir, backupId);
-      backups = backups.filter(b => b.id !== backupId);
-      notificationStore.items.add({
-        type: 'info',
-        title: 'Snapshot Deleted',
-        message: `Removed backup ${backupId}`
-      });
-    } catch (err) {
-      notificationStore.error('Delete Failed', err?.message || String(err));
-    }
+    modalStore.open('confirm', {
+      title: 'Delete Save Snapshot',
+      message: `Delete snapshot "${backupId}" permanently? This cannot be undone.`,
+      danger: true,
+      confirmLabel: 'Delete Snapshot',
+      onconfirm: async () => {
+        try {
+          await AppAPI.deleteSaveBackup(game.gameDir, backupId);
+          backups = backups.filter(b => b.id !== backupId);
+          notificationStore.items.add({
+            type: 'info',
+            title: 'Snapshot Deleted',
+            message: `Removed backup ${backupId}`
+          });
+        } catch (err) {
+          notificationStore.error('Delete Failed', err?.message || String(err));
+        }
+      }
+    });
   }
 
   async function handleUpdateManifest() {
@@ -151,61 +164,73 @@
   }
 </script>
 
-<div class="space-y-4">
+<div class="space-y-6 animate-fade-in text-neutral-200">
   {#if isLoading}
-    <div class="flex flex-col items-center justify-center p-12 text-neutral-400 space-y-3">
-      <div class="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+    <div class="bg-surface-card border border-surface-border rounded-2xl p-12 text-center text-neutral-400 space-y-3 shadow-sm">
+      <div class="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
       <span class="text-xs font-mono">Discovering game save and config paths...</span>
     </div>
   {:else if errorMsg}
-    <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs">
+    <div class="p-4 rounded-2xl bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs">
       {errorMsg}
     </div>
   {:else}
-    <!-- Top Summary Metrics Banner -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Total Save Size</span>
-        <p class="font-mono text-sm font-bold text-neutral-100">
-          {formatBytes(saveResult?.total_save_bytes || 0)}
-        </p>
+    <!-- 1. Top Summary Metrics Card -->
+    <div class="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2 text-xs font-mono font-bold uppercase tracking-wider text-neutral-400">
+        <svg class="w-4 h-4 text-neutral-400 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+        </svg>
+        <span>Save & Data Metrics</span>
       </div>
 
-      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Discovered Paths</span>
-        <p class="font-mono text-sm font-bold text-neutral-100">
-          {(saveResult?.locations || []).filter(l => l.exists).length} / {(saveResult?.locations || []).length}
-        </p>
-      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-1">
+          <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider block">Total Save Size</span>
+          <p class="font-mono text-sm font-bold text-neutral-100">
+            {formatBytes(saveResult?.total_save_bytes || 0)}
+          </p>
+        </div>
 
-      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Steam Cloud Emulation</span>
-        <p class="font-mono text-sm font-bold {saveResult?.has_cloud_saves ? 'text-neutral-100' : 'text-neutral-500'}">
-          {saveResult?.has_cloud_saves ? 'Active (GSE)' : 'None'}
-        </p>
-      </div>
+        <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-1">
+          <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider block">Discovered Paths</span>
+          <p class="font-mono text-sm font-bold text-neutral-100">
+            {(saveResult?.locations || []).filter(l => l.exists).length} / {(saveResult?.locations || []).length}
+          </p>
+        </div>
 
-      <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-0.5">
-        <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider">Backup Snapshots</span>
-        <p class="font-mono text-sm font-bold text-neutral-100">
-          {backups.length}
-        </p>
+        <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-1">
+          <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider block">Cloud Emulation</span>
+          <p class="font-mono text-sm font-bold {saveResult?.has_cloud_saves ? 'text-neutral-100' : 'text-neutral-500'}">
+            {saveResult?.has_cloud_saves ? 'Active (GSE)' : 'None'}
+          </p>
+        </div>
+
+        <div class="bg-surface-header border border-surface-border p-3 rounded-xl space-y-1">
+          <span class="text-3xs text-neutral-400 uppercase font-bold tracking-wider block">Backup Snapshots</span>
+          <p class="font-mono text-sm font-bold text-neutral-100">
+            {backups.length}
+          </p>
+        </div>
       </div>
     </div>
 
-    <!-- Discovered Save & Config Locations Section -->
-    <div class="space-y-2">
+    <!-- 2. Discovered Save & Config Locations Card -->
+    <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-sm space-y-4">
       <div class="flex items-center justify-between">
-        <span class="block text-neutral-400 font-bold uppercase tracking-wider text-3xs">
-          Discovered Save & Config Directories
-        </span>
+        <div class="flex items-center space-x-2 text-xs font-mono font-bold uppercase tracking-wider text-neutral-400">
+          <svg class="w-4 h-4 text-neutral-400 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          <span>Discovered Save & Config Directories</span>
+        </div>
         <button
           type="button"
           onclick={handleUpdateManifest}
-          class="text-3xs text-neutral-300 hover:text-white font-bold transition-colors cursor-pointer"
+          class="text-3xs text-neutral-400 hover:text-white font-mono font-bold transition-colors cursor-pointer"
           title="Force update Ludusavi database from GitHub"
         >
-          Refresh Manifest
+          ↻ Refresh Manifest
         </button>
       </div>
 
@@ -213,29 +238,29 @@
         <div class="space-y-2">
           {#each saveResult.locations as loc}
             {@const badge = getCategoryBadge(loc.category)}
-            <div class="p-3 bg-[#0d0d12] border border-[#20202c] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all">
+            <div class="p-3 bg-surface-header border border-surface-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all">
               <div class="space-y-1 min-w-0 flex-1">
                 <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                   <span class="px-2 py-0.5 rounded-md text-4xs font-bold border font-mono {badge.class}">
                     {badge.label}
                   </span>
                   {#if loc.exists}
-                    <span class="text-3xs text-slate-400 font-mono">
+                    <span class="text-3xs text-neutral-400 font-mono">
                       {formatBytes(loc.size_bytes)} ({loc.file_count} {loc.file_count === 1 ? 'file' : 'files'})
                     </span>
                   {:else}
-                    <span class="text-3xs text-slate-500 italic">
+                    <span class="text-3xs text-neutral-500 italic">
                       Not created on disk yet
                     </span>
                   {/if}
                   {#if loc.source}
-                    <span class="text-4xs text-slate-500 font-mono">
+                    <span class="text-4xs text-neutral-500 font-mono">
                       · {loc.source}
                     </span>
                   {/if}
                 </div>
 
-                <p class="font-mono text-xs text-slate-300 truncate select-all" title={loc.path}>
+                <p class="font-mono text-xs text-neutral-300 truncate select-all" title={loc.path}>
                   {loc.display_path || loc.path}
                 </p>
               </div>
@@ -244,7 +269,7 @@
                 <button
                   type="button"
                   onclick={() => handleCopyPath(loc.path)}
-                  class="px-2.5 py-1.5 rounded-lg bg-[#1a1a24] hover:bg-[#252535] text-slate-300 hover:text-white border border-[#2b2b3c] text-2xs font-bold transition-colors flex items-center space-x-1"
+                  class="px-2.5 py-1.5 rounded-lg bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white border border-surface-border text-2xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
                   title="Copy directory path to clipboard"
                 >
                   {#if copiedPath === loc.path}
@@ -273,28 +298,31 @@
           {/each}
         </div>
       {:else}
-        <div class="p-4 rounded-xl bg-surface-header border border-surface-border text-center text-neutral-400 text-xs">
+        <div class="p-6 rounded-xl bg-surface-header border border-surface-border text-center text-neutral-400 text-xs">
           No save locations identified yet. Launch the game once to create initial saves.
         </div>
       {/if}
     </div>
 
-    <!-- Snapshot History & Backup Manager Section -->
-    <div class="space-y-2 pt-2 border-t border-surface-border">
+    <!-- 3. Save Snapshots & Backups Card -->
+    <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-sm space-y-4">
       <div class="flex items-center justify-between">
-        <div>
-          <span class="block text-neutral-300 font-bold uppercase tracking-wider text-3xs">
-            Save Snapshots & Backups
-          </span>
-          <span class="text-3xs text-neutral-400">
+        <div class="space-y-0.5">
+          <div class="flex items-center space-x-2 text-xs font-mono font-bold uppercase tracking-wider text-neutral-400">
+            <svg class="w-4 h-4 text-neutral-400 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Save Snapshots & Backups</span>
+          </div>
+          <p class="text-2xs text-neutral-400">
             Portable cross-device .zip snapshots (PC ↔ Steam Deck).
-          </span>
+          </p>
         </div>
 
         <button
           type="button"
           onclick={() => { showBackupInput = !showBackupInput; }}
-          class="bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 text-2xs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer"
+          class="bg-surface-header hover:bg-surface-cardHover text-neutral-200 hover:text-white text-xs font-bold px-3.5 py-1.5 rounded-xl border border-surface-border transition-colors flex items-center space-x-1.5 shadow-sm cursor-pointer"
         >
           <span>+ Create Backup</span>
         </button>
@@ -302,7 +330,7 @@
 
       <!-- New Backup Note Input Form -->
       {#if showBackupInput}
-        <div class="p-3 bg-surface-header border border-emerald-700/50 rounded-xl space-y-2 animate-fade-in">
+        <div class="p-3.5 bg-surface-header border border-surface-borderHighlight rounded-xl space-y-2 animate-fade-in">
           <label for="backupNoteInput" class="block text-neutral-200 text-xs font-bold">
             Backup Description / Note (Optional)
           </label>
@@ -318,7 +346,7 @@
               type="button"
               onclick={handleCreateBackup}
               disabled={isCreatingBackup}
-              class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-neutral-950 font-black text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0 cursor-pointer"
+              class="bg-white hover:bg-neutral-200 active:bg-neutral-300 disabled:opacity-50 text-neutral-950 font-bold text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0 cursor-pointer"
             >
               {isCreatingBackup ? 'Saving...' : 'Take Snapshot'}
             </button>
@@ -335,13 +363,13 @@
 
       <!-- Backups List -->
       {#if backups.length > 0}
-        <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+        <div class="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
           {#each backups as bk}
-            <div class="p-2.5 bg-surface-header border border-surface-border rounded-xl flex items-center justify-between gap-2.5 text-xs">
+            <div class="p-3 bg-surface-header border border-surface-border rounded-xl flex items-center justify-between gap-2.5 text-xs">
               <div class="space-y-0.5 min-w-0">
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2 flex-wrap">
                   <span class="font-mono font-bold text-neutral-200">{bk.id}</span>
-                  <span class="text-3xs text-neutral-400">({formatTimeAgo(bk.created_at)})</span>
+                  <span class="text-3xs text-neutral-400 font-mono">({formatTimeAgo(bk.created_at)})</span>
                   <span class="text-4xs px-1.5 py-0.2 rounded border font-mono {bk.created_by === 'auto_exit' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-neutral-800 text-neutral-300 border-neutral-700'}">
                     {bk.created_by === 'auto_exit' ? 'Auto Exit' : 'Manual'}
                   </span>
@@ -361,7 +389,7 @@
                   type="button"
                   onclick={() => handleRestoreBackup(bk.id)}
                   disabled={isRestoring}
-                  class="px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 text-2xs font-bold transition-colors"
+                  class="px-2.5 py-1 rounded-lg bg-surface-card hover:bg-surface-cardHover text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 text-2xs font-bold transition-colors cursor-pointer"
                   title="Restore this save snapshot"
                 >
                   {isRestoring ? 'Restoring...' : 'Restore'}
@@ -370,7 +398,7 @@
                 <button
                   type="button"
                   onclick={() => handleDeleteBackup(bk.id)}
-                  class="p-1 rounded-lg bg-[#181822] hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-[#2b2b3c] transition-colors"
+                  class="p-1 rounded-lg bg-surface-card hover:bg-rose-950/40 text-neutral-400 hover:text-rose-400 border border-surface-border transition-colors cursor-pointer"
                   title="Delete Snapshot"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -382,7 +410,7 @@
           {/each}
         </div>
       {:else}
-        <div class="p-3 bg-[#09090d] border border-[#20202e] rounded-xl text-center text-slate-500 text-xs">
+        <div class="p-6 bg-surface-header border border-surface-border rounded-xl text-center text-neutral-500 text-xs">
           No backup snapshots created yet. Click "+ Create Backup" to take your first save snapshot.
         </div>
       {/if}

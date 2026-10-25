@@ -743,9 +743,7 @@
             />
           </div>
         {:else if activeTab === 'saves'}
-          <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl">
-            <HubSavesCard {game} />
-          </div>
+          <HubSavesCard {game} />
         {:else if !(game.isInstalled ?? (Boolean(game.exePath) || (game.fileCount > 0)))}
           <!-- Uninstalled State Placeholder for Technical Tabs -->
           <div class="bg-surface-card border border-surface-border rounded-2xl p-10 text-center space-y-4 max-w-lg mx-auto mt-8">

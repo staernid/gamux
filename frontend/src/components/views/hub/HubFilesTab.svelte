@@ -67,9 +67,9 @@
   }
 </script>
 
-<div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-6">
+<div class="space-y-4 animate-fade-in text-neutral-200">
   <!-- Files Sub-Pills -->
-  <div class="flex items-center space-x-2 bg-surface-header p-1.5 rounded-xl border border-surface-border flex-wrap gap-y-1">
+  <div class="flex items-center space-x-2 bg-surface-card p-1.5 rounded-xl border border-surface-border flex-wrap gap-y-1 shadow-sm">
     <button
       type="button"
       onclick={() => { activeFilesSubTab = 'depots'; }}
@@ -125,16 +125,32 @@
     </button>
   </div>
 
-  <!-- Files Sub-View Content -->
-  {#if activeFilesSubTab === 'branch'}
-    <HubBetasTab
-      {game}
-      {isTaskActive}
-      {activeGameTask}
-      onupdateGame={handleUpdateGame}
-    />
-  {:else if activeFilesSubTab === 'depots'}
-    {#if !isInstalled}
+  <!-- Files Sub-View Surface Card -->
+  <div class="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-sm">
+    {#if activeFilesSubTab === 'branch'}
+      <HubBetasTab
+        {game}
+        {isTaskActive}
+        {activeGameTask}
+        onupdateGame={handleUpdateGame}
+      />
+    {:else if activeFilesSubTab === 'depots'}
+      {#if !isInstalled}
+        <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
+        <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3 mb-4">
+          <div class="w-10 h-10 rounded-xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </div>
+          <h3 class="font-bold text-white text-sm">Game Files Not Installed</h3>
+          <p class="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
+            Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs. You can inspect available content depots and select language packs below.
+          </p>
+        </div>
+      {/if}
+      <HubDLCCard {game} onupdateGame={handleUpdateGame} />
+    {:else if !isInstalled}
       <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
       <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">
         <div class="w-10 h-10 rounded-xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
@@ -144,37 +160,23 @@
         </div>
         <h3 class="font-bold text-white text-sm">Game Files Not Installed</h3>
         <p class="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
-          Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs. You can inspect available content depots and select language packs below.
+          Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs.
         </p>
       </div>
+    {:else if activeFilesSubTab === 'integrity'}
+      <HubIntegrityCard
+        {activeGameTask}
+        {isCheckingIntegrity}
+        {isNormalizing}
+        isUpdating={isTaskActive}
+        {integrityError}
+        {integrityReport}
+        onRunIntegrityCheck={handleRunIntegrityCheck}
+        onUpdateGame={handleUpdateGame}
+        onNormalizeDirectory={handleNormalizeDirectory}
+      />
+    {:else if activeFilesSubTab === 'logs'}
+      <HubLogsCard {game} />
     {/if}
-    <HubDLCCard {game} onupdateGame={handleUpdateGame} />
-  {:else if !isInstalled}
-    <!-- Uninstalled State Placeholder for disk-dependent subtabs -->
-    <div class="bg-surface-header border border-surface-border rounded-xl p-8 text-center space-y-3">
-      <div class="w-10 h-10 rounded-xl bg-surface-cardHover border border-surface-borderHighlight text-neutral-300 flex items-center justify-center mx-auto">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-      </div>
-      <h3 class="font-bold text-white text-sm">Game Files Not Installed</h3>
-      <p class="text-xs text-neutral-400 leading-relaxed max-w-md mx-auto">
-        Download and install {game?.name || 'this game'} to inspect installed DLCs, verify depot checksums, or review runtime execution logs.
-      </p>
-    </div>
-  {:else if activeFilesSubTab === 'integrity'}
-    <HubIntegrityCard
-      {activeGameTask}
-      {isCheckingIntegrity}
-      {isNormalizing}
-      isUpdating={isTaskActive}
-      {integrityError}
-      {integrityReport}
-      onRunIntegrityCheck={handleRunIntegrityCheck}
-      onUpdateGame={handleUpdateGame}
-      onNormalizeDirectory={handleNormalizeDirectory}
-    />
-  {:else if activeFilesSubTab === 'logs'}
-    <HubLogsCard {game} />
-  {/if}
+  </div>
 </div>
