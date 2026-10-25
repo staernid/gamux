@@ -107,4 +107,19 @@ describe('HubModsTab Component', () => {
 
     expect(installSpy).toHaveBeenCalledWith('/games/ror2', '315783921');
   });
+
+  it('renders retryable error banner when loading mods fails', async () => {
+    vi.spyOn(AppAPI, 'getGameMods').mockRejectedValueOnce(new Error('Permission denied'));
+
+    render(HubModsTab, { props: { game: mockGame } });
+
+    expect(await screen.findByText('Permission denied')).toBeInTheDocument();
+    const retryBtn = screen.getByRole('button', { name: /Retry/i });
+    expect(retryBtn).toBeInTheDocument();
+
+    vi.spyOn(AppAPI, 'getGameMods').mockResolvedValueOnce(mockModStatus);
+    await fireEvent.click(retryBtn);
+
+    expect(await screen.findByText('unity')).toBeInTheDocument();
+  });
 });

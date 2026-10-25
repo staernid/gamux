@@ -89,4 +89,21 @@ describe('InstallModal Component', () => {
       expect(configStore.skipInstallConfirm).toBe(true);
     });
   });
+
+  it('renders retryable error banner when depot loading fails', async () => {
+    vi.spyOn(AppAPI, 'getAppDepots').mockRejectedValueOnce(new Error('Network offline'));
+    render(InstallModal, { game: mockGame });
+
+    await waitFor(() => {
+      expect(screen.getByText('Network offline')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+    });
+
+    vi.spyOn(AppAPI, 'getAppDepots').mockResolvedValueOnce(mockDepots);
+    await fireEvent.click(screen.getByRole('button', { name: /Retry/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 of 1 DLCs Included/i)).toBeInTheDocument();
+    });
+  });
 });

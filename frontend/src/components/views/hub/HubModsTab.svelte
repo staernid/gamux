@@ -16,6 +16,7 @@
 
   let modStatus = $state(null);
   let isLoading = $state(true);
+  let loadError = $state(null);
   let isCheckingUpdates = $state(false);
   let isInstalling = $state(false);
   let workshopInput = $state('');
@@ -75,6 +76,7 @@
   async function loadMods() {
     if (!gameDir) return;
     isLoading = true;
+    loadError = null;
     try {
       const res = await AppAPI.getGameMods(gameDir);
       if (res) {
@@ -82,6 +84,7 @@
       }
     } catch (err) {
       console.warn('Failed to load mods:', err);
+      loadError = err?.message || 'Failed to load mods';
     } finally {
       isLoading = false;
     }
@@ -213,6 +216,19 @@
 </script>
 
 <div class="space-y-6 animate-fade-in text-neutral-200">
+  {#if loadError}
+    <div class="p-3 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between text-xs">
+      <span class="text-rose-400 font-medium">{loadError}</span>
+      <button
+        type="button"
+        onclick={loadMods}
+        class="px-2.5 py-1 rounded-lg bg-surface-button hover:bg-surface-buttonHover border border-surface-border text-xs text-white cursor-pointer"
+      >
+        Retry
+      </button>
+    </div>
+  {/if}
+
   <!-- Topology & Status Header -->
   <div class="bg-surface-card rounded-2xl p-5 border border-surface-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div class="flex items-start md:items-center space-x-3.5">

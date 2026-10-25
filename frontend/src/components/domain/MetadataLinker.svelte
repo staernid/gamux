@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { AppAPI } from '../../api/app.js';
   import { notificationStore } from '../../stores/notifications.js';
-  import { selectedGame, updateGameInStore } from '../../stores/library.js';
+  import { selectedGame, updateGameInStore, searchStore } from '../../stores/library.js';
   import { isSamePath, normalizeMetadataProvider } from '../../utils/game.js';
   import Icon from '../common/Icon.svelte';
 
@@ -80,13 +80,12 @@
     isSearchingMeta = true;
     selectedMetaCandidate = null;
     try {
-      const results = await AppAPI.searchStoreGames(metaQuery.trim());
+      const results = await searchStore(metaQuery.trim());
       metaCandidates = (results || []).filter(c => {
         const storeLower = (c.store || '').toLowerCase();
         return storeLower === storeToMatch;
       });
-    } catch (err) {
-      console.warn('Failed to search store games:', err);
+    } catch {
       metaCandidates = [];
     } finally {
       isSearchingMeta = false;

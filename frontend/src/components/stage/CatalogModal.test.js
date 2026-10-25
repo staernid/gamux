@@ -188,4 +188,19 @@ describe('CatalogModal Component', () => {
     expect(current?.name).toBe('Balatro');
     expect(closeSpy).toHaveBeenCalled();
   });
+
+  it('surfaces notification error when store search fails', async () => {
+    const { AppAPI } = await import('../../api/app.js');
+    const { notificationStore } = await import('../../stores/notifications.js');
+    const errorSpy = vi.spyOn(notificationStore, 'error');
+    vi.spyOn(AppAPI, 'searchStoreGames').mockRejectedValueOnce(new Error('Search server offline'));
+
+    render(CatalogModal);
+
+    const input = screen.getByPlaceholderText(/Search Steam, GOG, RAWG catalogs/i);
+    await fireEvent.input(input, { target: { value: 'Crash' } });
+
+    await new Promise(r => setTimeout(r, 300));
+    expect(errorSpy).toHaveBeenCalledWith('Store Search Failed', expect.any(Error));
+  });
 });

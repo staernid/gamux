@@ -149,3 +149,62 @@ export async function trashGame(gameDir) {
     throw err;
   }
 }
+
+/**
+ * Ensures a game stub exists in the library prior to downloading or adding.
+ * Deduplicated helper used across install dialogs and game hub actions.
+ * @param {import('../../types/domain').Game} game
+ * @param {string} [libraryRoot]
+ * @returns {Promise<string>} Target game directory
+ */
+export async function ensureGameStub(game, libraryRoot = '') {
+  if (!game) return '';
+  if (game.gameDir && !game.isVirtual) {
+    return game.gameDir;
+  }
+
+  const lib = libraryRoot || pathsStore.currentPath || '~/Games';
+  const appID = game.appId || '';
+
+  try {
+    const stub = await AppAPI.createGameStub(
+      lib,
+      String(appID),
+      game.name,
+      game.store || 'Steam',
+      game.branch || 'public'
+    );
+    if (stub) {
+      const normalized = updateGameInStore(stub);
+      if (normalized?.gameDir) {
+        selectedGame.set(normalized);
+        return normalized.gameDir;
+      } else if (stub.game_dir || stub.gameDir) {
+        return stub.game_dir || stub.gameDir;
+      }
+    }
+    return '';
+  } catch (err) {
+    notificationStore.error('Failed to Create Library Stub', err);
+    throw err;
+  }
+}
+
+/**
+ * Searches store catalogs for games matching the given query string.
+ * Deduplicated helper used by CatalogModal, LibraryView, and MetadataLinker.
+ * @param {string} query
+ * @returns {Promise<any[]>}
+ */
+export async function searchStore(query) {
+  const q = (query || '').trim();
+  if (!q) return [];
+  try {
+    const results = await AppAPI.searchStoreGames(q);
+    return results || [];
+  } catch (err) {
+    notificationStore.error('Store Search Failed', err);
+    throw err;
+  }
+}
+

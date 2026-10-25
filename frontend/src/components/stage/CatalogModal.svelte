@@ -4,7 +4,7 @@
   import Icon from '../common/Icon.svelte';
   import CatalogCard from './catalog/CatalogCard.svelte';
   import CatalogEmptyState from './catalog/CatalogEmptyState.svelte';
-  import { games, selectedGame, activeView } from '../../stores/library.js';
+  import { games, selectedGame, activeView, searchStore } from '../../stores/library.js';
   import { normalizeGame } from '../../utils/game.js';
   import { AppAPI } from '../../api/app.js';
 
@@ -47,12 +47,11 @@
         isSearchingStore = true;
         storeSearchTimeout = setTimeout(async () => {
           try {
-            const res = await AppAPI.searchStoreGames(q);
+            const res = await searchStore(q);
             if (lastStoreQuery === q) {
               storeResults = res || [];
             }
-          } catch (err) {
-            console.warn('Store search failed:', err);
+          } catch {
             if (lastStoreQuery === q) storeResults = [];
           } finally {
             if (lastStoreQuery === q) isSearchingStore = false;

@@ -151,7 +151,10 @@
   const languagesList = LANGUAGE_OPTIONS;
   const countriesList = COUNTRY_OPTIONS;
 
-  onMount(async () => {
+  let settingsLoadError = $state(null);
+
+  async function loadSettings() {
+    settingsLoadError = null;
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
@@ -198,7 +201,12 @@
       await loadToolsStatus();
     } catch (err) {
       console.warn('Failed to load initial settings:', err);
+      settingsLoadError = err?.message || 'Failed to load initial settings';
     }
+  }
+
+  onMount(() => {
+    loadSettings();
   });
 
   async function loadToolsStatus() {
@@ -470,6 +478,19 @@
       {/if}
     </div>
   </div>
+
+  {#if settingsLoadError}
+    <div class="p-3 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between text-xs">
+      <span class="text-rose-400 font-medium">{settingsLoadError}</span>
+      <button
+        type="button"
+        onclick={loadSettings}
+        class="px-2.5 py-1 rounded-lg bg-surface-button hover:bg-surface-buttonHover border border-surface-border text-xs text-white cursor-pointer"
+      >
+        Retry
+      </button>
+    </div>
+  {/if}
 
   <!-- Segmented Top Tabs (5 Consolidated Macro-Surfaces) -->
   <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs" role="tablist">

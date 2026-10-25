@@ -12,7 +12,8 @@
     libraryPaths,
     updateGameInStore,
     resolvePlaceholderTitle,
-    trashGame
+    trashGame,
+    ensureGameStub
   } from '../../stores/library.js';
   import { tasksStore, isActiveStatus, isLiveStatus, isPendingOrActiveStatus, taskMatchesGame } from '../../stores/tasks.js';
   import { modalStore } from '../../stores/modal.js';
@@ -248,20 +249,12 @@
       // If it's a virtual store title or lacks a directory, register the stub in the library first
       if (!dest || game.isVirtual) {
         try {
-          const stub = await AppAPI.createGameStub(lib, String(appID), game.name, game.store || 'Steam', game.branch || 'public');
-          if (stub) {
-            const normalized = updateGameInStore(stub);
-            if (normalized) {
-              selectedGame.set(normalized);
-              dest = normalized.gameDir;
-            } else if (stub.game_dir || stub.gameDir) {
-              dest = stub.game_dir || stub.gameDir;
-            }
+          const stubDir = await ensureGameStub(game, lib);
+          if (stubDir) {
+            dest = stubDir;
           }
-        } catch (err) {
-          console.warn('Could not initialize library stub prior to download:', err);
-          const cleanName = game.name.replace(/[™®©]/g, '').replace(/[:/\\?*<>|"]/g, '').replace(/\s+/g, ' ').trim() || game.name;
-          dest = `${lib}/${cleanName}`;
+        } catch {
+          return;
         }
       }
 

@@ -149,5 +149,19 @@ describe('SettingsView Component', () => {
 
     expect(screen.getByText('Declarative Configuration Engine')).toBeInTheDocument();
   });
+
+  it('renders retryable error banner when initial settings fail to load', async () => {
+    vi.spyOn(AppAPI, 'getConfig').mockRejectedValueOnce(new Error('Config disk error'));
+    render(SettingsView);
+
+    expect(await screen.findByText('Config disk error')).toBeInTheDocument();
+    const retryBtn = screen.getByRole('button', { name: /Retry/i });
+    expect(retryBtn).toBeInTheDocument();
+
+    await fireEvent.click(retryBtn);
+    await waitFor(() => {
+      expect(screen.queryByText('Config disk error')).not.toBeInTheDocument();
+    });
+  });
 });
 

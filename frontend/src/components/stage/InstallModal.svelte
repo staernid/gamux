@@ -7,7 +7,7 @@
   import { notificationStore } from '../../stores/notifications.js';
   import { AppAPI } from '../../api/app.js';
   import { formatBytes } from '../../utils/format.js';
-  import { updateGameInStore, selectedGame } from '../../stores/library.js';
+  import { updateGameInStore, selectedGame, ensureGameStub } from '../../stores/library.js';
 
   /**
    * @typedef {Object} Props
@@ -20,6 +20,7 @@
 
   let depots = $state([]);
   let isLoading = $state(true);
+  let loadError = $state(null);
   let isStarting = $state(false);
   let dontAskAgain = $state(false);
   let showDlcList = $state(false);
@@ -143,6 +144,7 @@
   }
 
   async function fetchDepots() {
+    loadError = null;
     const rawAppId = game?.appId;
     const strAppId = rawAppId ? String(rawAppId).trim() : '';
     if (!strAppId && !game?.gameDir) {
@@ -163,6 +165,7 @@
       selectedDepotIds = computeDefaultSelections(platformDepots, selectedLanguage);
     } catch (err) {
       console.warn('Failed to load depots for install dialog:', err);
+      loadError = err?.message || 'Failed to load depots';
       depots = game?.depots || [];
       selectedDepotIds = computeDefaultSelections(platformDepots, selectedLanguage);
     } finally {
@@ -264,24 +267,13 @@
     // Ensure game stub is registered if virtual or lacking directory
     if (!game?.gameDir || game.isVirtual) {
       try {
-        const stub = await AppAPI.createGameStub(
-          libRoot,
-          String(appID),
-          game.name,
-          game.store || 'Steam',
-          game.branch || 'public'
-        );
-        if (stub) {
-          const normalized = updateGameInStore(stub);
-          if (normalized?.gameDir) {
-            selectedGame.set(normalized);
-            finalDir = normalized.gameDir;
-          } else if (stub.game_dir || stub.gameDir) {
-            finalDir = stub.game_dir || stub.gameDir;
-          }
+        const stubDir = await ensureGameStub(game, libRoot);
+        if (stubDir) {
+          finalDir = stubDir;
         }
-      } catch (err) {
-        console.warn('Could not initialize library stub prior to download:', err);
+      } catch {
+        isStarting = false;
+        return;
       }
     }
 
@@ -315,6 +307,19 @@
   {onclose}
 >
   <div class="w-full max-w-xl mx-auto bg-surface-header border border-surface-border rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 text-xs text-neutral-300">
+    {#if loadError}
+      <div class="p-3 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between text-xs">
+        <span class="text-rose-400 font-medium">{loadError}</span>
+        <button
+          type="button"
+          onclick={fetchDepots}
+          class="px-2.5 py-1 rounded-lg bg-surface-button hover:bg-surface-buttonHover border border-surface-border text-xs text-white cursor-pointer"
+        >
+          Retry
+        </button>
+      </div>
+    {/if}
+
     <!-- Target Library Directory Selection -->
     <div class="space-y-1.5">
       <label for="install-library-select" class="block font-bold text-neutral-200 text-2xs uppercase tracking-wider">

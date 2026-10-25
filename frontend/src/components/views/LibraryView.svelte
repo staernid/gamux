@@ -13,7 +13,8 @@
     sortBy,
     activeFilter,
     searchQuery,
-    stats
+    stats,
+    searchStore
   } from '../../stores/library.js';
   import {
     getPlatformColors,
@@ -102,12 +103,11 @@
         isSearchingStore = true;
         storeSearchTimeout = setTimeout(async () => {
           try {
-            const res = await AppAPI.searchStoreGames(q);
+            const res = await searchStore(q);
             if (lastStoreQuery === q) {
               storeResults = res || [];
             }
-          } catch (err) {
-            console.warn('Store search failed:', err);
+          } catch {
             if (lastStoreQuery === q) storeResults = [];
           } finally {
             if (lastStoreQuery === q) isSearchingStore = false;
