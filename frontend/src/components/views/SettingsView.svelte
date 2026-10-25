@@ -19,9 +19,7 @@
 
   // Backward compatibility alias mapper
   $effect(() => {
-    if (activeTab === 'credentials') {
-      activeTab = 'storage';
-    } else if (activeTab === 'coop') {
+    if (activeTab === 'coop') {
       activeTab = 'advanced';
       advancedSubtab = 'coop';
     } else if (activeTab === 'tools' || activeTab === 'maintenance') {
