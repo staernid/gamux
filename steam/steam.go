@@ -88,25 +88,36 @@ type AppGenre struct {
 	Description string `json:"description"`
 }
 
+// AppScreenshot represents an in-game screenshot asset.
+type AppScreenshot struct {
+	ID            int    `json:"id"`
+	PathThumbnail string `json:"path_thumbnail"`
+	PathFull      string `json:"path_full"`
+}
+
 // AppDetails holds metadata returned from the Steam Store API.
 type AppDetails struct {
-	SteamAppID         uint32         `json:"steam_appid,omitempty"`
-	Name               string         `json:"name"`
-	Type               string         `json:"type"`
-	IsFree             bool           `json:"is_free"`
-	HeaderImage        string         `json:"header_image"`
-	RequiredAge        int            `json:"required_age"`
-	About              string         `json:"about_the_game"`
-	ShortDesc          string         `json:"short_description"`
-	DetailedDesc       string         `json:"detailed_description"`
-	Developers         []string       `json:"developers"`
-	Publishers         []string       `json:"publishers"`
-	Genres             []AppGenre     `json:"genres"`
-	SupportedLanguages string         `json:"supported_languages"`
-	ReleaseDate        ReleaseDate    `json:"release_date"`
-	Platforms          AppPlatforms   `json:"platforms"`
-	PriceOverview      *PriceOverview `json:"price_overview,omitempty"`
-	DLC                []uint32       `json:"dlc,omitempty"`
+	SteamAppID         uint32          `json:"steam_appid,omitempty"`
+	Name               string          `json:"name"`
+	Type               string          `json:"type"`
+	IsFree             bool            `json:"is_free"`
+	HeaderImage        string          `json:"header_image"`
+	CapsuleImage       string          `json:"capsule_image,omitempty"`
+	Background         string          `json:"background,omitempty"`
+	BackgroundRaw      string          `json:"background_raw,omitempty"`
+	RequiredAge        int             `json:"required_age"`
+	About              string          `json:"about_the_game"`
+	ShortDesc          string          `json:"short_description"`
+	DetailedDesc       string          `json:"detailed_description"`
+	Developers         []string        `json:"developers"`
+	Publishers         []string        `json:"publishers"`
+	Genres             []AppGenre      `json:"genres"`
+	SupportedLanguages string          `json:"supported_languages"`
+	ReleaseDate        ReleaseDate     `json:"release_date"`
+	Platforms          AppPlatforms    `json:"platforms"`
+	PriceOverview      *PriceOverview  `json:"price_overview,omitempty"`
+	DLC                []uint32        `json:"dlc,omitempty"`
+	Screenshots        []AppScreenshot `json:"screenshots,omitempty"`
 }
 
 // AppPlatforms holds platform availability flags.

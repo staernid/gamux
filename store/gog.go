@@ -334,97 +334,111 @@ func (g *GOGProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork, 
 }
 
 func (g *GOGProvider) QueryArtworkCandidates(ctx context.Context, query ArtworkQuery) ([]ArtworkOption, error) {
-	var gogID string
+	var gogIDs []string
 
 	if query.GOGID != "" {
-		gogID = query.GOGID
+		gogIDs = append(gogIDs, query.GOGID)
 	} else if query.Title != "" {
 		results, err := g.Search(ctx, query.Title)
 		if err == nil && len(results) > 0 {
 			for _, r := range results {
 				if util.IsTitleMatch(r.Name, query.Title) {
-					gogID = r.ID
-					break
+					gogIDs = append(gogIDs, r.ID)
+					if len(gogIDs) >= 3 {
+						break
+					}
 				}
 			}
-			if gogID == "" && len(results) > 0 {
-				gogID = results[0].ID
+			if len(gogIDs) == 0 && len(results) > 0 {
+				gogIDs = append(gogIDs, results[0].ID)
 			}
 		}
 	}
 
-	if gogID == "" {
+	if len(gogIDs) == 0 {
 		return nil, nil
 	}
-
-	meta, err := g.GetMetadata(ctx, gogID)
-	if err != nil || meta == nil {
-		return nil, nil
-	}
-
-	catProduct, _ := g.fetchCatalogProduct(ctx, meta.ID, meta.Name, "")
 
 	var candidates []ArtworkOption
-	switch strings.ToLower(query.AssetType) {
-	case domain.AssetCover:
-		cover := meta.PosterImage
-		if catProduct != nil && catProduct.CoverVertical != "" {
-			cover = catProduct.CoverVertical
+	for _, gogID := range gogIDs {
+		meta, err := g.GetMetadata(ctx, gogID)
+		if err != nil || meta == nil {
+			continue
 		}
-		if cover != "" {
-			candidates = append(candidates, ArtworkOption{
-				ID:       "gog-cover-vert",
-				Provider: "gog",
-				Type:     domain.AssetCover,
-				URL:      cover,
-				ThumbURL: cover,
-				Style:    "official",
-				Score:    100,
-			})
-		}
-	case domain.AssetBanner:
-		banner := meta.HeaderImage
-		if catProduct != nil && catProduct.CoverHorizontal != "" {
-			banner = catProduct.CoverHorizontal
-		}
-		if banner != "" {
-			candidates = append(candidates, ArtworkOption{
-				ID:       "gog-banner-horiz",
-				Provider: "gog",
-				Type:     domain.AssetBanner,
-				URL:      banner,
-				ThumbURL: banner,
-				Style:    "official",
-				Score:    100,
-			})
-		}
-	case domain.AssetHero:
-		hero := meta.HeaderImage
-		if catProduct != nil && catProduct.GalaxyBackgroundImage != "" {
-			hero = catProduct.GalaxyBackgroundImage
-		}
-		if hero != "" {
-			candidates = append(candidates, ArtworkOption{
-				ID:       "gog-hero-bg",
-				Provider: "gog",
-				Type:     domain.AssetHero,
-				URL:      hero,
-				ThumbURL: hero,
-				Style:    "official",
-				Score:    100,
-			})
-		}
-	case domain.AssetLogo:
-		if catProduct != nil && catProduct.Logo != "" {
-			candidates = append(candidates, ArtworkOption{
-				ID:       "gog-logo",
-				Provider: "gog",
-				Type:     domain.AssetLogo,
-				URL:      catProduct.Logo,
-				ThumbURL: catProduct.Logo,
-				Style:    "official",
-				Score:    100,
-			})
+
+		catProduct, _ := g.fetchCatalogProduct(ctx, meta.ID, meta.Name, "")
+
+		switch strings.ToLower(query.AssetType) {
+		case domain.AssetCover:
+			cover := meta.PosterImage
+			if catProduct != nil && catProduct.CoverVertical != "" {
+				cover = catProduct.CoverVertical
+			}
+			if cover != "" {
+				candidates = append(candidates, ArtworkOption{
+					ID:       fmt.Sprintf("gog-%s-cover-vert", meta.ID),
+					Provider: "gog",
+					Type:     domain.AssetCover,
+					URL:      cover,
+					ThumbURL: cover,
+					Width:    600,
+					Height:   800,
+					Style:    "official",
+					Author:   meta.Name,
+					Score:    100,
+				})
+			}
+		case domain.AssetBanner:
+			banner := meta.HeaderImage
+			if catProduct != nil && catProduct.CoverHorizontal != "" {
+				banner = catProduct.CoverHorizontal
+			}
+			if banner != "" {
+				candidates = append(candidates, ArtworkOption{
+					ID:       fmt.Sprintf("gog-%s-banner-horiz", meta.ID),
+					Provider: "gog",
+					Type:     domain.AssetBanner,
+					URL:      banner,
+					ThumbURL: banner,
+					Width:    460,
+					Height:   215,
+					Style:    "official",
+					Author:   meta.Name,
+					Score:    100,
+				})
+			}
+		case domain.AssetHero:
+			hero := meta.HeaderImage
+			if catProduct != nil && catProduct.GalaxyBackgroundImage != "" {
+				hero = catProduct.GalaxyBackgroundImage
+			}
+			if hero != "" {
+				candidates = append(candidates, ArtworkOption{
+					ID:       fmt.Sprintf("gog-%s-hero-bg", meta.ID),
+					Provider: "gog",
+					Type:     domain.AssetHero,
+					URL:      hero,
+					ThumbURL: hero,
+					Width:    1920,
+					Height:   1080,
+					Style:    "official",
+					Author:   meta.Name,
+					Score:    100,
+				})
+			}
+		case domain.AssetLogo:
+			if catProduct != nil && catProduct.Logo != "" {
+				candidates = append(candidates, ArtworkOption{
+					ID:       fmt.Sprintf("gog-%s-logo", meta.ID),
+					Provider: "gog",
+					Type:     domain.AssetLogo,
+					URL:      catProduct.Logo,
+					ThumbURL: catProduct.Logo,
+					Style:    "official",
+					Author:   meta.Name,
+					Score:    100,
+				})
+			}
 		}
 	}
 

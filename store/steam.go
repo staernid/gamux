@@ -120,13 +120,24 @@ func (s *SteamProvider) GetMetadata(ctx context.Context, gameID string) (*Metada
 }
 
 func (s *SteamProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork, error) {
-	return &Artwork{
+	art := &Artwork{
 		CoverURL:  fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", gameID),
 		BannerURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/header.jpg", gameID),
 		HeroURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_hero.jpg", gameID),
 		LogoURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/logo.png", gameID),
 		IconURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/capsule_sm_120.jpg", gameID),
-	}, nil
+	}
+	if details, err := steam.FetchAppDetails(ctx, gameID); err == nil && details != nil {
+		if details.HeaderImage != "" {
+			art.BannerURL = details.HeaderImage
+		}
+		if details.BackgroundRaw != "" {
+			art.HeroURL = details.BackgroundRaw
+		} else if details.Background != "" {
+			art.HeroURL = details.Background
+		}
+	}
+	return art, nil
 }
 
 // GetNews retrieves news and patch notes for a Steam AppID.
@@ -141,9 +152,9 @@ func (s *SteamProvider) QueryArtworkCandidates(ctx context.Context, query Artwor
 		assetType = "cover"
 	}
 
-	// 1. Direct AppID resolution (0 network calls)
+	// 1. Direct AppID resolution
 	if query.SteamAppID > 0 {
-		return s.generateCDNOptions(query.SteamAppID, assetType), nil
+		return s.generateCDNOptions(ctx, query.SteamAppID, assetType), nil
 	}
 
 	// 2. Fuzzy title search
@@ -159,7 +170,7 @@ func (s *SteamProvider) QueryArtworkCandidates(ctx context.Context, query Artwor
 			}
 			numID, err := strconv.ParseUint(res.ID, 10, 32)
 			if err == nil && numID > 0 {
-				allOpts = append(allOpts, s.generateCDNOptions(uint32(numID), assetType)...)
+				allOpts = append(allOpts, s.generateCDNOptions(ctx, uint32(numID), assetType)...)
 			}
 		}
 		return allOpts, nil
@@ -168,8 +179,13 @@ func (s *SteamProvider) QueryArtworkCandidates(ctx context.Context, query Artwor
 	return nil, nil
 }
 
-func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []ArtworkOption {
+func (s *SteamProvider) generateCDNOptions(ctx context.Context, appID uint32, assetType string) []ArtworkOption {
 	idStr := strconv.FormatUint(uint64(appID), 10)
+	var details *steam.AppDetails
+	if d, err := steam.FetchAppDetails(ctx, idStr); err == nil && d != nil {
+		details = d
+	}
+
 	var opts []ArtworkOption
 	switch assetType {
 	case "cover":
@@ -208,7 +224,48 @@ func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []Art
 				Score:    90,
 			},
 		)
+		if details != nil {
+			if details.CapsuleImage != "" {
+				opts = append(opts, ArtworkOption{
+					ID:       idStr + "-capsule-live",
+					Provider: "steam",
+					Type:     "cover",
+					URL:      details.CapsuleImage,
+					ThumbURL: details.CapsuleImage,
+					Width:    231,
+					Height:   87,
+					Style:    "capsule",
+					Score:    85,
+				})
+			}
+			if details.HeaderImage != "" {
+				opts = append(opts, ArtworkOption{
+					ID:       idStr + "-header-cover-fallback",
+					Provider: "steam",
+					Type:     "cover",
+					URL:      details.HeaderImage,
+					ThumbURL: details.HeaderImage,
+					Width:    460,
+					Height:   215,
+					Style:    "banner",
+					Score:    80,
+				})
+			}
+		}
 	case "banner":
+		if details != nil && details.HeaderImage != "" {
+			opts = append(opts, ArtworkOption{
+				ID:       idStr + "-header-live",
+				Provider: "steam",
+				Type:     "banner",
+				URL:      details.HeaderImage,
+				ThumbURL: details.HeaderImage,
+				Width:    460,
+				Height:   215,
+				Style:    "official",
+				Score:    100,
+			})
+		}
 		opts = append(opts,
 			ArtworkOption{
 				ID:       idStr + "-header",
@@ -219,7 +276,7 @@ func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []Art
 				Width:    460,
 				Height:   215,
 				Style:    "official",
-				Score:    100,
+				Score:    95,
 			},
 			ArtworkOption{
 				ID:       idStr + "-capsule-banner",
@@ -246,18 +303,56 @@ func (s *SteamProvider) generateCDNOptions(appID uint32, assetType string) []Art
 				Style:    "official",
 				Score:    100,
 			},
-			ArtworkOption{
-				ID:       idStr + "-hero-header",
-				Provider: "steam",
-				Type:     "hero",
-				URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
-				ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
-				Width:    460,
-				Height:   215,
-				Style:    "banner",
-				Score:    80,
-			},
 		)
+		if details != nil {
+			bg := details.BackgroundRaw
+			if bg == "" {
+				bg = details.Background
+			}
+			if bg != "" {
+				opts = append(opts, ArtworkOption{
+					ID:       idStr + "-bg-hero",
+					Provider: "steam",
+					Type:     "hero",
+					URL:      bg,
+					ThumbURL: bg,
+					Width:    1920,
+					Height:   1080,
+					Style:    "wallpaper",
+					Score:    95,
+				})
+			}
+			for idx, shot := range details.Screenshots {
+				if shot.PathFull == "" {
+					continue
+				}
+				opts = append(opts, ArtworkOption{
+					ID:       fmt.Sprintf("%s-shot-%d", idStr, shot.ID),
+					Provider: "steam",
+					Type:     "hero",
+					URL:      shot.PathFull,
+					ThumbURL: shot.PathThumbnail,
+					Width:    1920,
+					Height:   1080,
+					Style:    "screenshot",
+					Score:    90 - idx,
+				})
+				if idx >= 4 {
+					break
+				}
+			}
+		}
+		opts = append(opts, ArtworkOption{
+			ID:       idStr + "-hero-header",
+			Provider: "steam",
+			Type:     "hero",
+			URL:      fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+			ThumbURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", idStr),
+			Width:    460,
+			Height:   215,
+			Style:    "banner",
+			Score:    80,
+		})
 	case "logo":
 		opts = append(opts, ArtworkOption{
 			ID:       idStr + "-logo",

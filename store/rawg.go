@@ -323,7 +323,10 @@ func (p *RAWGProvider) GetMetadata(ctx context.Context, gameID string) (*Metadat
 	return meta, nil
 }
 
-// GetArtwork resolves background, hero, and cover art for a RAWG ID.
+// GetArtwork resolves background, hero, and banner art for a RAWG ID.
+// Note: CoverURL is intentionally empty because RAWG background images are 16:9 wallpapers,
+// not 2:3 vertical covers. This allows downstream waterfall stages (linked Steam/GOG, SGDB,
+// or SteamGrid proxy) to resolve a proper vertical cover first before falling back to cross-asset copying.
 func (p *RAWGProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork, error) {
 	meta, err := p.GetMetadata(ctx, gameID)
 	if err != nil {
@@ -331,7 +334,7 @@ func (p *RAWGProvider) GetArtwork(ctx context.Context, gameID string) (*Artwork,
 	}
 
 	art := &Artwork{
-		CoverURL:  meta.PosterImage,
+		CoverURL:  "",
 		BannerURL: meta.HeaderImage,
 		HeroURL:   meta.HeaderImage,
 	}
@@ -376,15 +379,18 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 
 	// Add primary artwork from main background image if present
 	if targetPoster != "" {
+		// As a cover, RAWG background is a wide wallpaper fallback with lower precedence than true 2:3 vertical covers
 		options = append(options, ArtworkOption{
 			ID:       fmt.Sprintf("rawg_%s_cover_main", targetID),
 			Provider: "rawg",
 			Type:     domain.AssetCover,
 			URL:      targetPoster,
 			ThumbURL: targetPoster,
-			Style:    "official",
+			Width:    1920,
+			Height:   1080,
+			Style:    "wallpaper",
 			Author:   targetName,
-			Score:    100,
+			Score:    50,
 		})
 		options = append(options, ArtworkOption{
 			ID:       fmt.Sprintf("rawg_%s_hero_main", targetID),
@@ -477,16 +483,6 @@ func (p *RAWGProvider) QueryArtworkCandidates(ctx context.Context, query Artwork
 						if s.Image == "" {
 							continue
 						}
-						options = append(options, ArtworkOption{
-							ID:       fmt.Sprintf("rawg_%s_cover_%d", targetID, s.ID),
-							Provider: "rawg",
-							Type:     domain.AssetCover,
-							URL:      s.Image,
-							ThumbURL: s.Image,
-							Style:    "screenshot",
-							Author:   targetName,
-							Score:    90 - idx,
-						})
 						options = append(options, ArtworkOption{
 							ID:       fmt.Sprintf("rawg_%s_hero_%d", targetID, s.ID),
 							Provider: "rawg",

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -299,5 +301,22 @@ func (r *Registry) QueryArtworkOptions(ctx context.Context, query ArtworkQuery) 
 	}
 
 	wg.Wait()
-	return allOptions, nil
+
+	// Deduplicate candidate options by trimmed URL and sort by score descending
+	seen := make(map[string]bool)
+	deduped := make([]ArtworkOption, 0, len(allOptions))
+	for _, opt := range allOptions {
+		cleanURL := strings.TrimSpace(opt.URL)
+		if cleanURL == "" || seen[cleanURL] {
+			continue
+		}
+		seen[cleanURL] = true
+		deduped = append(deduped, opt)
+	}
+
+	sort.SliceStable(deduped, func(i, j int) bool {
+		return deduped[i].Score > deduped[j].Score
+	})
+
+	return deduped, nil
 }

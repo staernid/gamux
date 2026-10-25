@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/staernid/gamux/domain"
+	"github.com/staernid/gamux/steam"
 	"github.com/staernid/gamux/util"
 )
 
@@ -450,6 +451,39 @@ func (s *ArtworkService) resolveSteamCDN(ctx context.Context, game *domain.Game,
 		}
 	}
 
+	// Modern Steam Storefront asset fallback if static CDN endpoints 404ed (e.g. newer Steam releases)
+	if loc.LocalPath == "" && spec.AssetType != domain.AssetIcon {
+		if details, err := steam.FetchAppDetails(ctx, idStr); err == nil && details != nil {
+			switch spec.AssetType {
+			case domain.AssetBanner:
+				if details.HeaderImage != "" && s.DownloadFile(ctx, details.HeaderImage, cachedPath) == nil {
+					loc.LocalPath = cachedPath
+					loc.RemoteURL = details.HeaderImage
+				}
+			case domain.AssetHero:
+				heroCandidate := details.BackgroundRaw
+				if heroCandidate == "" {
+					heroCandidate = details.Background
+				}
+				if heroCandidate == "" && len(details.Screenshots) > 0 {
+					heroCandidate = details.Screenshots[0].PathFull
+				}
+				if heroCandidate != "" && s.DownloadFile(ctx, heroCandidate, cachedPath) == nil {
+					loc.LocalPath = cachedPath
+					loc.RemoteURL = heroCandidate
+				}
+			case domain.AssetCover:
+				if details.CapsuleImage != "" && s.DownloadFile(ctx, details.CapsuleImage, cachedPath) == nil {
+					loc.LocalPath = cachedPath
+					loc.RemoteURL = details.CapsuleImage
+				} else if details.HeaderImage != "" && s.DownloadFile(ctx, details.HeaderImage, cachedPath) == nil {
+					loc.LocalPath = cachedPath
+					loc.RemoteURL = details.HeaderImage
+				}
+			}
+		}
+	}
+
 	game.SetAsset(spec.AssetType, loc)
 }
 
@@ -703,6 +737,10 @@ func (s *ArtworkService) applyProviderArtwork(ctx context.Context, game *domain.
 }
 
 func (s *ArtworkService) applyCrossAssetFallbacks(ctx context.Context, game *domain.Game, gameArtDir string) {
+	if err := os.MkdirAll(gameArtDir, 0755); err != nil {
+		return
+	}
+
 	coverLoc := game.GetAsset(domain.AssetCover)
 	heroLoc := game.GetAsset(domain.AssetHero)
 	bannerLoc := game.GetAsset(domain.AssetBanner)
