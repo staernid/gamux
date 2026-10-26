@@ -216,7 +216,7 @@
       </button>
 
       {#if showPreview}
-        <div class="mt-1 p-3 rounded-xl bg-[#09090b] border border-surface-border space-y-2">
+        <div class="mt-1 p-3 rounded-xl bg-surface-base border border-surface-border space-y-2">
           {#if isLoadingPreview && !launchPreview}
             <div class="text-xs font-mono text-neutral-500 animate-pulse">Resolving launch specification...</div>
           {:else if launchPreview?.command}

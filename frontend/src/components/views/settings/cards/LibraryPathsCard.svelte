@@ -50,13 +50,13 @@
   {/snippet}
 
   {#if (libraryPaths || []).length === 0}
-    <div class="p-3 bg-[#101013] border border-surface-border rounded-xl text-center">
+    <div class="p-3 bg-surface-input border border-surface-border rounded-xl text-center">
       <p class="text-xs text-neutral-400">No library directories configured. Add a directory to start scanning.</p>
     </div>
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
       {#each libraryPaths as p}
-        <div class="flex items-center justify-between p-2.5 bg-[#101013] border {pendingRemovePath === p ? 'border-rose-500/50 bg-rose-950/10' : 'border-surface-border'} rounded-lg transition-colors">
+        <div class="flex items-center justify-between p-2.5 bg-surface-input border {pendingRemovePath === p ? 'border-rose-500/50 bg-rose-950/10' : 'border-surface-border'} rounded-lg transition-colors">
           <div class="flex items-center space-x-2 min-w-0 flex-1">
             <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />

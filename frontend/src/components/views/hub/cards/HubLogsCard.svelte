@@ -89,12 +89,12 @@
           <span>Live Log (Running)</span>
         </span>
       {:else if logContent}
-        <span class="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-[#1a1a24] border border-[#2a2a3a] text-slate-300 font-mono text-2xs">
+        <span class="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-surface-header border border-surface-border text-neutral-300 font-mono text-2xs">
           <span class="w-2 h-2 rounded-full bg-slate-500"></span>
           <span>Last Run Log</span>
         </span>
       {:else}
-        <span class="text-slate-400 text-xs">No active log</span>
+        <span class="text-neutral-400 text-xs">No active log</span>
       {/if}
     </div>
 
@@ -104,7 +104,7 @@
         type="button"
         onclick={handleRefresh}
         disabled={isLoading}
-        class="bg-[#1a1a26] hover:bg-[#242436] text-slate-300 hover:text-white border border-[#2c2c3e] px-3 py-1.5 rounded-xl font-bold transition disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
+        class="bg-surface-card hover:bg-surface-cardHover text-neutral-300 hover:text-white border border-surface-border px-3 py-1.5 rounded-xl font-bold transition disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
         title="Reload log from disk"
       >
         <svg class="w-3.5 h-3.5 {isLoading ? 'animate-spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,23 +130,23 @@
 
   <!-- Monospace Log Container -->
   {#if error && !logContent}
-    <div class="p-6 rounded-2xl bg-[#0e0e14] border border-[#202030] text-center space-y-2 font-mono text-xs">
-      <p class="text-slate-400 font-sans">{error}</p>
-      <p class="text-2xs text-slate-500 font-sans">
+    <div class="p-6 rounded-2xl bg-surface-input border border-surface-border text-center space-y-2 font-mono text-xs">
+      <p class="text-neutral-400 font-sans">{error}</p>
+      <p class="text-2xs text-neutral-500 font-sans">
         Launch the game to generate real-time stdout and stderr execution traces.
       </p>
     </div>
   {:else if logContent}
     <div
       bind:this={logContainerRef}
-      class="w-full bg-[#060609] border border-[#1c1c28] rounded-2xl p-4 font-mono text-2xs leading-relaxed text-slate-300 max-h-96 sm:max-h-[28rem] overflow-y-auto overflow-x-auto whitespace-pre custom-scrollbar select-text shadow-inner"
+      class="w-full bg-surface-base border border-surface-border rounded-2xl p-4 font-mono text-2xs leading-relaxed text-neutral-300 max-h-96 sm:max-h-[28rem] overflow-y-auto overflow-x-auto whitespace-pre custom-scrollbar select-text shadow-inner"
     >
       {logContent}
     </div>
   {:else}
-    <div class="p-8 rounded-2xl bg-[#0e0e14] border border-dashed border-[#242436] text-center space-y-2 text-xs">
-      <p class="text-slate-300 font-bold">No Execution Logs Recorded</p>
-      <p class="text-slate-500 font-mono text-2xs">
+    <div class="p-8 rounded-2xl bg-surface-input border border-dashed border-surface-border text-center space-y-2 text-xs">
+      <p class="text-neutral-300 font-bold">No Execution Logs Recorded</p>
+      <p class="text-neutral-500 font-mono text-2xs">
         Outputs from UMU, Wine, Proton, and native executables will appear here automatically when launched.
       </p>
     </div>

@@ -558,7 +558,7 @@
         </div>
 
         {#if codeFeedback}
-          <div class="p-3 rounded-xl text-xs space-y-1 {codeFeedback.type === 'success' ? 'bg-neutral-900 border border-neutral-700 text-neutral-200' : 'bg-[#181214] border border-rose-900/50 text-rose-300'}">
+          <div class="p-3 rounded-xl text-xs space-y-1 {codeFeedback.type === 'success' ? 'bg-neutral-900 border border-neutral-700 text-neutral-200' : 'bg-rose-950/40 border border-rose-900/50 text-rose-300'}">
             <p>{codeFeedback.message}</p>
           </div>
         {/if}

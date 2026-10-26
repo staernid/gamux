@@ -14,7 +14,7 @@
 
 {#if count > 0}
   <div
-    class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#121214] border border-[#27272a] text-3xs font-mono text-neutral-300 shadow-sm select-none {className}"
+    class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-surface-header border border-surface-border text-3xs font-mono text-neutral-300 shadow-sm select-none {className}"
     data-testid="live-community-badge"
     title="{count.toLocaleString()} players currently in-game"
   >

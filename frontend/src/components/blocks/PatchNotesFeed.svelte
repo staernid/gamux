@@ -69,13 +69,13 @@
         <button
           type="button"
           onclick={() => handleCardClick(item, idx)}
-          class="bg-[#121214] hover:bg-[#18181b] border border-[#27272a] hover:border-neutral-500 p-3.5 rounded-2xl transition-all shadow-sm flex flex-col justify-between space-y-2.5 text-left group cursor-pointer"
+          class="bg-surface-header hover:bg-surface-card border border-surface-border hover:border-neutral-500 p-3.5 rounded-2xl transition-all shadow-sm flex flex-col justify-between space-y-2.5 text-left group cursor-pointer"
         >
           <div class="space-y-1.5">
             <div class="flex items-center justify-between text-4xs font-mono text-neutral-500">
               <span>{item.date ? formatDate(item.date) : ''}</span>
               {#if item.feedlabel || item.feed_label}
-                <span class="px-1.5 py-0.5 rounded bg-[#18181b] text-neutral-400 border border-[#27272a]">
+                <span class="px-1.5 py-0.5 rounded bg-surface-card text-neutral-400 border border-surface-border">
                   {item.feedlabel || item.feed_label}
                 </span>
               {/if}
@@ -92,7 +92,7 @@
             {/if}
           </div>
 
-          <div class="pt-2 border-t border-[#27272a] flex items-center justify-between text-3xs font-mono text-neutral-400 group-hover:text-white transition">
+          <div class="pt-2 border-t border-surface-border flex items-center justify-between text-3xs font-mono text-neutral-400 group-hover:text-white transition">
             <span>Read Update</span>
             <Icon name="chevron-right" className="w-3 h-3 text-neutral-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
           </div>

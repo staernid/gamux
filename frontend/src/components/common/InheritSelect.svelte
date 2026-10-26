@@ -100,7 +100,7 @@
         <button
           type="button"
           onclick={revertToInherit}
-          class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >
@@ -170,7 +170,7 @@
         <button
           type="button"
           onclick={revertToInherit}
-          class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
           title={`Reset to global default (${resolvedGlobalLabel})`}
           aria-label="Reset to global default"
         >

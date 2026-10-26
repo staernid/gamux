@@ -67,7 +67,7 @@
 <div
   class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg transition-all
     {isOverridden && scope === 'game'
-      ? 'bg-[#18181c] border border-neutral-600 shadow-xs'
+      ? 'bg-surface-card border border-surface-borderHighlight shadow-xs'
       : 'bg-surface-card/30 border border-surface-border/50 hover:bg-surface-card/50 hover:border-surface-borderHighlight'}"
   data-testid={`property-row-${property.key}`}
 >
@@ -100,7 +100,7 @@
           </button>
         {:else}
           <span
-            class="px-1.5 py-0.2 rounded text-4xs font-mono text-neutral-400 bg-[#121215] border border-neutral-800"
+            class="px-1.5 py-0.2 rounded text-4xs font-mono text-neutral-400 bg-surface-header border border-surface-border"
             data-testid={`property-pill-inherited-${property.key}`}
           >
             Inherited: {formatInherited(inheritedValue)}

@@ -531,7 +531,7 @@
   });
 </script>
 
-<div class="bg-surface-base text-neutral-900 dark:text-[#f4f4f6] flex flex-col h-screen overflow-hidden antialiased select-none relative">
+<div class="bg-surface-base text-neutral-900 dark:text-neutral-100 flex flex-col h-screen overflow-hidden antialiased select-none relative">
   <!-- Minimal Floating Navigation Pill at Top -->
   <TopBar />
 

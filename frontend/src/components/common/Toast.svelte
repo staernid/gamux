@@ -72,8 +72,8 @@
     {#each bottomRightToasts as toast (toast.id)}
       {@const isError = toast.type === 'error'}
       {@const isSuccess = toast.type === 'success'}
-      {@const bgClass = isError ? 'bg-[#181214]/95 border-rose-800 text-rose-100 shadow-rose-950/50' :
-                        isSuccess ? 'bg-[#121614]/95 border-emerald-800 text-emerald-100 shadow-emerald-950/50' :
+      {@const bgClass = isError ? 'bg-rose-950/90 border-rose-800 text-rose-100 shadow-rose-950/50' :
+                        isSuccess ? 'bg-emerald-950/90 border-emerald-800 text-emerald-100 shadow-emerald-950/50' :
                         'bg-surface-input/95 border-surface-border text-neutral-100 shadow-2xl'}
       <div class="{bgClass} pointer-events-auto border rounded-2xl p-3.5 shadow-2xl  transition-all duration-300 flex items-start space-x-3 animate-fade-in">
         {#if isError}
@@ -128,7 +128,7 @@
 {#if $undoQueue && $undoQueue.length > 0}
   <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none" data-testid="undo-snackbar-container">
     {#each $undoQueue as item (item.id)}
-      <div class="pointer-events-auto bg-[#18181b] border border-[#3f3f46] text-white shadow-2xl px-4 py-2.5 rounded-2xl flex items-center space-x-3 text-xs animate-fade-in">
+      <div class="pointer-events-auto bg-surface-elevated border border-surface-borderHighlight text-white shadow-2xl px-4 py-2.5 rounded-2xl flex items-center space-x-3 text-xs animate-fade-in">
         <span class="text-neutral-200 font-medium">{item.message}</span>
         <button
           type="button"

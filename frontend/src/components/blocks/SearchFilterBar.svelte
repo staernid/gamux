@@ -48,7 +48,7 @@
 </script>
 
 <div
-  class="relative flex items-center bg-[#121214] border border-[#27272a] focus-within:border-neutral-400 rounded-2xl px-3.5 py-2 transition-colors shadow-inner select-none {className}"
+  class="relative flex items-center bg-surface-header border border-surface-border focus-within:border-neutral-400 rounded-2xl px-3.5 py-2 transition-colors shadow-inner select-none {className}"
   data-testid="search-filter-bar"
 >
   <!-- Search Magnifier Icon -->
@@ -68,7 +68,7 @@
   <!-- Count Pill & Clear Button -->
   <div class="flex items-center space-x-2 ml-2 flex-shrink-0">
     {#if totalCount > 0}
-      <span class="text-4xs font-mono text-neutral-500 bg-[#18181b] px-2 py-0.5 rounded-md border border-[#27272a]">
+      <span class="text-4xs font-mono text-neutral-500 bg-surface-card px-2 py-0.5 rounded-md border border-surface-border">
         {filteredCount !== undefined ? filteredCount : totalCount} / {totalCount}
       </span>
     {/if}

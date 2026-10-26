@@ -61,13 +61,13 @@
   <div class="w-full space-y-2" data-testid={`control-env-${property.key}`}>
     <!-- Key-Value Pair Listing -->
     {#if envKeys.length === 0}
-      <div class="p-2 rounded bg-[#101013] border border-surface-border text-center">
+      <div class="p-2 rounded bg-surface-input border border-surface-border text-center">
         <p class="text-3xs text-neutral-500 font-mono">No environment variables defined</p>
       </div>
     {:else}
       <div class="space-y-1">
         {#each envKeys as k}
-          <div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[#101013] border border-surface-border">
+          <div class="flex items-center justify-between gap-2 p-1.5 rounded bg-surface-input border border-surface-border">
             <div class="flex items-center space-x-2 min-w-0 flex-1 font-mono text-xs">
               <span class="font-bold text-neutral-200 truncate">{k}</span>
               <span class="text-neutral-500">=</span>
@@ -97,7 +97,7 @@
         bind:value={newKey}
         {disabled}
         onkeydown={handleKeyDown}
-        class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-neutral-700
+        class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-surface-border
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Name"
       />
@@ -107,7 +107,7 @@
         bind:value={newValue}
         {disabled}
         onkeydown={handleKeyDown}
-        class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-neutral-700
+        class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-2.5 py-1.5 border border-surface-border
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Value"
       />
@@ -115,7 +115,7 @@
         type="button"
         {disabled}
         onclick={addPair}
-        class="px-2.5 py-1.5 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+        class="px-2.5 py-1.5 text-xs font-semibold bg-surface-card hover:bg-surface-cardHover text-neutral-200 border border-surface-border rounded-lg transition-colors whitespace-nowrap cursor-pointer"
         aria-label="Add Variable"
       >
         Add
@@ -142,13 +142,13 @@
 
     <!-- Key-Value Pair Listing -->
     {#if envKeys.length === 0}
-      <div class="p-2 rounded bg-[#101013] border border-surface-border text-center">
+      <div class="p-2 rounded bg-surface-input border border-surface-border text-center">
         <p class="text-xs text-neutral-500 font-mono">No environment variables defined</p>
       </div>
     {:else}
       <div class="space-y-1.5">
         {#each envKeys as k}
-          <div class="flex items-center justify-between gap-2 p-2 rounded bg-[#101013] border border-surface-border">
+          <div class="flex items-center justify-between gap-2 p-2 rounded bg-surface-input border border-surface-border">
             <div class="flex items-center space-x-2 min-w-0 flex-1 font-mono text-xs">
               <span class="font-bold text-neutral-200 truncate">{k}</span>
               <span class="text-neutral-500">=</span>
@@ -178,7 +178,7 @@
         bind:value={newKey}
         {disabled}
         onkeydown={handleKeyDown}
-        class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
+        class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-surface-border
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Name"
       />
@@ -188,7 +188,7 @@
         bind:value={newValue}
         {disabled}
         onkeydown={handleKeyDown}
-        class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
+        class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-surface-border
           focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         aria-label="Variable Value"
       />
@@ -196,7 +196,7 @@
         type="button"
         {disabled}
         onclick={addPair}
-        class="px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors whitespace-nowrap"
+        class="px-3 py-2 text-xs font-semibold bg-surface-card hover:bg-surface-cardHover text-neutral-200 border border-surface-border rounded-lg transition-colors whitespace-nowrap"
         aria-label="Add Variable"
       >
         Add

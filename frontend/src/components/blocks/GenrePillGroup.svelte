@@ -40,14 +40,14 @@
       type="button"
       disabled={!clickable}
       onclick={() => handleClick(genre)}
-      class="px-2 py-0.5 rounded-lg text-3xs font-mono font-bold uppercase tracking-wider transition-all duration-150 border select-none {clickable ? 'cursor-pointer' : 'cursor-default'} {isSelected ? 'bg-neutral-100 text-neutral-950 border-white shadow-sm' : 'bg-[#18181b]/90 hover:bg-[#27272a] text-neutral-300 border-[#27272a] hover:border-neutral-500'}"
+      class="px-2 py-0.5 rounded-lg text-3xs font-mono font-bold uppercase tracking-wider transition-all duration-150 border select-none {clickable ? 'cursor-pointer' : 'cursor-default'} {isSelected ? 'bg-neutral-100 text-neutral-950 border-white shadow-sm' : 'bg-surface-card/90 hover:bg-surface-cardHover text-neutral-300 border-surface-border hover:border-neutral-500'}"
     >
       {genre}
     </button>
   {/each}
 
   {#if remainingCount > 0}
-    <span class="px-1.5 py-0.5 rounded-lg text-4xs font-mono text-neutral-500 bg-[#121214] border border-[#27272a]">
+    <span class="px-1.5 py-0.5 rounded-lg text-4xs font-mono text-neutral-500 bg-surface-header border border-surface-border">
       +{remainingCount}
     </span>
   {/if}

@@ -80,13 +80,13 @@
       </div>
 
       {#if pathList.length === 0}
-        <div class="p-2 rounded bg-[#101013] border border-surface-border text-center">
+        <div class="p-2 rounded bg-surface-input border border-surface-border text-center">
           <p class="text-3xs text-neutral-500 font-mono">No folders added</p>
         </div>
       {:else}
         <div class="space-y-1">
           {#each pathList as p}
-            <div class="flex items-center justify-between gap-2 p-1.5 rounded bg-[#101013] border border-surface-border">
+            <div class="flex items-center justify-between gap-2 p-1.5 rounded bg-surface-input border border-surface-border">
               <span class="text-3xs font-mono text-neutral-300 truncate select-all">{p}</span>
               <button
                 type="button"
@@ -113,14 +113,14 @@
           placeholder={typeof property.default === 'string' ? property.default : '/path/to/directory'}
           oninput={handleInputChange}
           aria-label={property.label || property.key}
-          class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
+          class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-surface-border
             focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         />
         <button
           type="button"
           {disabled}
           onclick={browseSingle}
-          class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors cursor-pointer"
+          class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-surface-card hover:bg-surface-cardHover text-neutral-200 border border-surface-border rounded-lg transition-colors cursor-pointer"
         >
           Browse
         </button>
@@ -161,13 +161,13 @@
 
     {#if isList}
       {#if pathList.length === 0}
-        <div class="p-2 rounded bg-[#101013] border border-surface-border text-center">
+        <div class="p-2 rounded bg-surface-input border border-surface-border text-center">
           <p class="text-xs text-neutral-500 font-mono">No folders added</p>
         </div>
       {:else}
         <div class="space-y-1">
           {#each pathList as p}
-            <div class="flex items-center justify-between gap-2 p-2 rounded bg-[#101013] border border-surface-border">
+            <div class="flex items-center justify-between gap-2 p-2 rounded bg-surface-input border border-surface-border">
               <span class="text-xs font-mono text-neutral-300 truncate select-all">{p}</span>
               <button
                 type="button"
@@ -193,14 +193,14 @@
           {disabled}
           placeholder={typeof property.default === 'string' ? property.default : '/path/to/directory'}
           oninput={handleInputChange}
-          class="flex-1 bg-[#121215] text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-neutral-700
+          class="flex-1 bg-surface-input text-neutral-200 text-xs font-mono rounded-lg px-3 py-2 border border-surface-border
             focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors"
         />
         <button
           type="button"
           {disabled}
           onclick={browseSingle}
-          class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg transition-colors"
+          class="flex-shrink-0 px-3 py-2 text-xs font-semibold bg-surface-card hover:bg-surface-cardHover text-neutral-200 border border-surface-border rounded-lg transition-colors"
         >
           Browse
         </button>

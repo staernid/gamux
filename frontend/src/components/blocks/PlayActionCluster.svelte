@@ -108,7 +108,7 @@
   <button
     type="button"
     onclick={handleConfigureClick}
-    class="p-3 rounded-2xl bg-[#121214]/90 hover:bg-[#222225] border border-[#27272a] hover:border-neutral-500 text-neutral-400 hover:text-white transition-all shadow-md cursor-pointer flex items-center justify-center"
+    class="p-3 rounded-2xl bg-surface-header/90 hover:bg-surface-cardHover border border-surface-border hover:border-neutral-500 text-neutral-400 hover:text-white transition-all shadow-md cursor-pointer flex items-center justify-center"
     title="Tuning & Compatibility Options"
     aria-label="Tuning & Compatibility Options"
   >

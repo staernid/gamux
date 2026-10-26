@@ -27,7 +27,7 @@
 <button
   type="button"
   onclick={() => onclick?.()}
-  class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#121214]/90 hover:bg-[#1c1c20] border border-[#27272a] hover:border-neutral-500 text-3xs font-mono transition-all shadow-sm cursor-pointer select-none {className}"
+  class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-surface-header/90 hover:bg-surface-cardHover border border-surface-border hover:border-neutral-500 text-3xs font-mono transition-all shadow-sm cursor-pointer select-none {className}"
   data-testid="multiseat-status-pill"
   title="Multiseat Co-op Session Management"
 >

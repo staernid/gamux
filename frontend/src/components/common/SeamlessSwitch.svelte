@@ -110,7 +110,7 @@
       <button
         type="button"
         onclick={revertToInherit}
-        class="p-1.5 rounded-lg bg-[#202024] hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
+        class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer"
         title={`Reset to default (${inheritedValue ? 'On' : 'Off'})`}
         aria-label="Reset to global default"
       >

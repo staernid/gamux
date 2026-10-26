@@ -154,7 +154,7 @@
   {/if}
 
   {#if integrityError}
-    <div class="p-3.5 rounded-xl bg-[#181214] border border-rose-900/50 text-rose-300 text-xs space-y-1">
+    <div class="p-3.5 rounded-xl bg-rose-950/40 border border-rose-900/50 text-rose-300 text-xs space-y-1">
       <strong class="block font-bold">Verification Notice</strong>
       <p>{integrityError}</p>
     </div>

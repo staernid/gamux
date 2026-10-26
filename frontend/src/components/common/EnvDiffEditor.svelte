@@ -58,14 +58,14 @@
     </div>
 
     {#if customKeys.length === 0}
-      <div class="p-3 bg-[#101013] border border-surface-border rounded-xl text-center">
+      <div class="p-3 bg-surface-input border border-surface-border rounded-xl text-center">
         <p class="text-xs text-neutral-500 font-mono">No custom variables configured for this game.</p>
       </div>
     {:else}
       <div class="space-y-1.5">
         {#each customKeys as k}
           {@const isOverridingGlobal = Boolean(globalEnv && globalEnv[k] !== undefined)}
-          <div class="flex items-center justify-between gap-3 p-2.5 bg-[#101013] border border-surface-border rounded-xl">
+          <div class="flex items-center justify-between gap-3 p-2.5 bg-surface-input border border-surface-border rounded-xl">
             <div class="flex items-center space-x-2 min-w-0 flex-1">
               <span class="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" title="Active variable"></span>
               <span class="font-mono text-xs font-bold text-white truncate">{k}</span>
@@ -135,7 +135,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
         {#each globalKeys as gk}
           {@const isOverridden = Boolean(customEnv && customEnv[gk] !== undefined)}
-          <div class="flex items-center justify-between p-2 rounded-lg bg-[#101013] border border-surface-border {isOverridden ? 'opacity-40 line-through' : ''}">
+          <div class="flex items-center justify-between p-2 rounded-lg bg-surface-input border border-surface-border {isOverridden ? 'opacity-40 line-through' : ''}">
             <div class="flex items-center space-x-1.5 min-w-0">
               <span class="font-mono text-2xs text-neutral-400 truncate">{gk}</span>
               <span class="text-neutral-600 text-2xs font-mono">=</span>

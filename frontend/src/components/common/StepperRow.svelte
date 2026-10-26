@@ -66,7 +66,7 @@
 </script>
 
 <div
-  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 bg-[#101013] hover:bg-surface-card focus-within:bg-surface-card border border-surface-border focus-within:border-neutral-500 rounded-xl transition-all select-none group"
+  class="flex items-start sm:items-center justify-between gap-3 p-2.5 sm:p-3 bg-surface-input hover:bg-surface-card focus-within:bg-surface-card border border-surface-border focus-within:border-neutral-500 rounded-xl transition-all select-none group"
   role="group"
   aria-label={label}
 >
@@ -110,7 +110,7 @@
       tabindex="-1"
       onclick={(e) => { e.stopPropagation(); step(-1); }}
       {disabled}
-      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
+      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-surface-cardHover disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Previous Option (Left)"
       aria-label="Previous Option"
     >
@@ -130,7 +130,7 @@
       tabindex="-1"
       onclick={(e) => { e.stopPropagation(); step(1); }}
       {disabled}
-      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#202024] disabled:opacity-30 transition-colors outline-none cursor-pointer"
+      class="p-1 rounded text-neutral-400 hover:text-white hover:bg-surface-cardHover disabled:opacity-30 transition-colors outline-none cursor-pointer"
       title="Next Option (Right)"
       aria-label="Next Option"
     >

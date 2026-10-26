@@ -31,7 +31,7 @@
 
 {#if count > 0 && currentTask}
   <div
-    class="w-full h-9 bg-[#0e0e11] border-t border-[#27272a] px-4 flex items-center justify-between text-xs font-mono select-none transition-all {className}"
+    class="w-full h-9 bg-surface-header border-t border-surface-border px-4 flex items-center justify-between text-xs font-mono select-none transition-all {className}"
     data-testid="task-status-bar"
   >
     <!-- Left: Activity Ring & Active Task Description -->
@@ -62,7 +62,7 @@
       {/if}
 
       {#if count > 1}
-        <span class="text-4xs text-neutral-500 bg-[#18181b] px-2 py-0.5 rounded-md border border-[#27272a]">
+        <span class="text-4xs text-neutral-500 bg-surface-card px-2 py-0.5 rounded-md border border-surface-border">
           +{count - 1} queued
         </span>
       {/if}

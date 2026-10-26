@@ -46,7 +46,7 @@
     value={numValue}
     {disabled}
     oninput={(e) => updateVal(e.target.value)}
-    class="flex-1 h-1.5 bg-[#18181b] rounded-lg appearance-none cursor-pointer accent-white disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700"
+    class="flex-1 h-1.5 bg-surface-card rounded-lg appearance-none cursor-pointer accent-white disabled:opacity-40 disabled:cursor-not-allowed border border-surface-border"
     aria-label={property.label || property.key}
   />
 
@@ -59,7 +59,7 @@
       value={numValue}
       {disabled}
       oninput={(e) => updateVal(e.target.value)}
-      class="w-full bg-[#121215] text-neutral-200 text-xs font-mono text-center rounded-lg px-2 py-1.5 border border-neutral-700
+      class="w-full bg-surface-input text-neutral-200 text-xs font-mono text-center rounded-lg px-2 py-1.5 border border-surface-border
         focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       aria-label={`${property.label || property.key} numerical value`}
     />

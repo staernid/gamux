@@ -40,7 +40,7 @@
   {#if isLoadingNews}
     <div class="py-8 text-center text-neutral-400 font-mono text-xs animate-pulse">Fetching official Steam news...</div>
   {:else if newsError && newsItems.length === 0}
-    <div class="p-4 rounded-xl bg-[#181214] border border-rose-900/50 text-center space-y-2">
+    <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-900/50 text-center space-y-2">
       <p class="text-xs text-rose-300 font-medium">{newsError}</p>
       <button
         type="button"

@@ -379,7 +379,7 @@
           <!-- Launch Options Dropdown Popover -->
           {#if showLaunchMenu}
             <div
-              class="absolute right-0 bottom-full mb-2 w-52 bg-[#121215] border border-[#27272a] rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in space-y-1 text-left"
+              class="absolute right-0 bottom-full mb-2 w-52 bg-surface-header border border-surface-border rounded-xl shadow-2xl p-1.5 z-50 animate-fade-in space-y-1 text-left"
               onclick={(e) => e.stopPropagation()}
               onkeydown={(e) => e.stopPropagation()}
               role="menu"

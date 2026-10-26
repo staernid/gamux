@@ -40,7 +40,7 @@
     placeholder={typeof property.default === 'string' ? property.default : ''}
     oninput={handleInput}
     aria-label={property.label || property.key}
-    class="w-full bg-[#121215] text-neutral-200 text-xs rounded-lg px-3 py-2 border border-neutral-700
+    class="w-full bg-surface-input text-neutral-200 text-xs rounded-lg px-3 py-2 border border-surface-border
       focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
   />
 </div>

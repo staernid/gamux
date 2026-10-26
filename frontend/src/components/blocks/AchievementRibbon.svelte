@@ -46,7 +46,7 @@
       <div class="flex items-center space-x-2">
         <Icon name="trophy" className="w-4 h-4 text-neutral-400" />
         <span class="text-xs font-bold text-neutral-200">Achievements</span>
-        <span class="text-3xs font-mono font-bold text-neutral-400 bg-[#18181b] px-2 py-0.5 rounded-md border border-[#27272a]">
+        <span class="text-3xs font-mono font-bold text-neutral-400 bg-surface-card px-2 py-0.5 rounded-md border border-surface-border">
           {unlocked} / {total} ({percent}%)
         </span>
       </div>
@@ -62,7 +62,7 @@
     </div>
 
     <!-- Progress Bar -->
-    <div class="w-full bg-[#18181b] border border-[#27272a] rounded-full h-1.5 overflow-hidden">
+    <div class="w-full bg-surface-card border border-surface-border rounded-full h-1.5 overflow-hidden">
       <div
         class="h-full bg-neutral-200 rounded-full transition-all duration-300"
         style="width: {percent}%"
@@ -77,9 +77,9 @@
             type="button"
             onclick={() => handleBadgeClick(ach)}
             title="{ach.name}: {ach.description || 'Achievement'}"
-            class="group flex items-center space-x-2 p-1.5 rounded-xl bg-[#121214] hover:bg-[#1c1c20] border border-[#27272a] hover:border-neutral-500 transition cursor-pointer flex-shrink-0"
+            class="group flex items-center space-x-2 p-1.5 rounded-xl bg-surface-header hover:bg-surface-cardHover border border-surface-border hover:border-neutral-500 transition cursor-pointer flex-shrink-0"
           >
-            <div class="w-8 h-8 rounded-lg overflow-hidden bg-black/40 border border-[#27272a] relative flex-shrink-0">
+            <div class="w-8 h-8 rounded-lg overflow-hidden bg-black/40 border border-surface-border relative flex-shrink-0">
               {#if ach.unlocked && (ach.icon_url || ach.icon)}
                 <img src={ach.icon_url || ach.icon} alt={ach.name} class="w-full h-full object-cover" />
               {:else if ach.icon_gray_url || ach.icon_url || ach.icon}

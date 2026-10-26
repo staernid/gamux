@@ -227,7 +227,7 @@
 
   <!-- Achievements Ribbon Spotlight -->
   {#if effectiveAchievements.length > 0}
-    <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
+    <div class="bg-surface-header border border-surface-border rounded-2xl p-5 shadow-sm">
       <AchievementRibbon
         achievements={effectiveAchievements}
         onviewAll={() => navigateToCommunity('achievements')}
@@ -238,7 +238,7 @@
 
   <!-- Latest Updates & Patch Notes Feed -->
   {#if effectiveNewsItems.length > 0}
-    <div class="bg-[#121215] border border-surface-border rounded-2xl p-5 shadow-sm">
+    <div class="bg-surface-header border border-surface-border rounded-2xl p-5 shadow-sm">
       <PatchNotesFeed
         newsItems={effectiveNewsItems}
         onviewAll={() => navigateToCommunity('news')}
