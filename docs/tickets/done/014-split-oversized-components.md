@@ -7,10 +7,10 @@ These files are big enough that they're hard to change safely:
 
 | File | Lines | Status |
 |---|---|---|
-| `components/views/GameHubView.svelte` | ~770 | Pending |
+| `components/views/GameHubView.svelte` | 288 | Done (split into HubNavTabs, HubTabContent, utils/hub.js, utils/hubActions.js) |
 | `components/views/hub/cards/HubDLCCard.svelte` | 342 | Done (split into HubDLCConfiguredList, HubDepotRow, HubDepotFilters, HubDepotSummaryBanner, utils/depot.js) |
-| `components/views/SettingsView.svelte` | ~680 | Pending |
-| `components/views/hub/HubBetasTab.svelte` | ~570 | Pending |
+| `components/views/SettingsView.svelte` | 242 | Done (split into SettingsHeader, SettingsNav, SettingsAdvancedTab, utils/settings.js) |
+| `components/views/hub/HubBetasTab.svelte` | 281 | Done (split into HubBetasStatusBanner, HubBranchList, HubPrivateBetasCard, utils/betas.js) |
 | `components/views/settings/ToolsMaintenanceTab.svelte` | 212 | Done (split into ToolCard, BatchOperationCard, utils/tools.js) |
 
 ## Do (per component)
