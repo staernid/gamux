@@ -1,3 +1,5 @@
+import { isPendingOrActiveStatus } from '../stores/tasks.js';
+
 /**
  * Normalizes a raw tools.ToolStatus Go entity into a canonical camelCase ToolStatus model.
  * @param {Record<string, unknown> | null | undefined} raw
@@ -19,3 +21,39 @@ export function normalizeTool(raw) {
     isInstalled: Boolean(raw.is_installed),
   };
 }
+
+/**
+ * Finds an active batch task matching a given kind.
+ * @param {'achievements' | 'artwork' | 'apply' | 'normalize' | 'verify'} kind
+ * @param {Array<any>} items
+ * @returns {any | null}
+ */
+export function findActiveBatchTask(kind, items) {
+  if (!Array.isArray(items)) return null;
+  return items.find((t) => {
+    if (!isPendingOrActiveStatus(t.status)) {
+      return false;
+    }
+    const title = (t.title || '').toLowerCase();
+    const type = (t.type || '').toLowerCase();
+    const batchKind = (t.metadata?.batch_kind || '').toLowerCase();
+
+    if (kind === 'achievements') {
+      return batchKind === 'achievements' || title.includes('achievement');
+    }
+    if (kind === 'artwork') {
+      return batchKind === 'artwork' || title.includes('artwork');
+    }
+    if (kind === 'apply') {
+      return batchKind === 'apply' || (type === 'apply' && title.includes('batch')) || title.includes('apply setup') || title.includes('apply drm');
+    }
+    if (kind === 'normalize') {
+      return batchKind === 'normalize' || (type === 'normalize' && title.includes('batch')) || title.includes('normalize');
+    }
+    if (kind === 'verify') {
+      return batchKind === 'verify' || (type === 'verify' && title.includes('batch')) || title.includes('verify');
+    }
+    return false;
+  }) || null;
+}
+

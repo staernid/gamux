@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTool } from './tools.js';
+import { normalizeTool, findActiveBatchTask } from './tools.js';
 
 describe('tools utilities', () => {
   it('normalizes raw Go ToolStatus wire shape to canonical camelCase ToolStatus', () => {
@@ -34,5 +34,21 @@ describe('tools utilities', () => {
       hasUpdate: true,
       isInstalled: true,
     });
+  });
+
+  it('finds active batch tasks matching kinds', () => {
+    expect(findActiveBatchTask('achievements', null)).toBeNull();
+    expect(findActiveBatchTask('achievements', [])).toBeNull();
+
+    const tasks = [
+      { id: '1', title: 'Batch Achievements', status: 'running', metadata: { batch_kind: 'achievements' } },
+      { id: '2', title: 'Batch Normalize', status: 'completed', metadata: { batch_kind: 'normalize' } },
+      { id: '3', title: 'Batch Verify Manifests', status: 'running', metadata: { batch_kind: 'verify' } },
+    ];
+
+    expect(findActiveBatchTask('achievements', tasks)?.id).toBe('1');
+    expect(findActiveBatchTask('normalize', tasks)).toBeNull(); // completed
+    expect(findActiveBatchTask('verify', tasks)?.id).toBe('3');
+    expect(findActiveBatchTask('artwork', tasks)).toBeNull();
   });
 });
