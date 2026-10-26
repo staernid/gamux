@@ -74,7 +74,7 @@ fmt:
 	gofmt -w $(shell git ls-files '*.go')
 
 bindings:
-	UPDATE_BINDINGS=1 go test $(GUI_TAGS) -run TestBindingsManifestUpToDate ./gui/
+	wails3 generate bindings -ts -d frontend/src/api/gen -f "$(GUI_TAGS)" ./cmd/gamux-gui ./gui
 
 fmt-check:
 	@out=$$(gofmt -l $(shell git ls-files '*.go')); \

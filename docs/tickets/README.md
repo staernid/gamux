@@ -17,11 +17,10 @@ to `docs/tickets/done/`) in the same commit.
 
 - `frontend/src/api/app.js` exports `AppAPI`. Calls map to Go methods on
   `gui.App` (`gui/*.go`): `AppAPI.inspectGame(a, b)` → `App.InspectGame`.
-- `frontend/src/api/bindings.gen.js` is **generated** (`make bindings`). It lists
-  every bound method and its exact argument count. Unknown methods are
+- `frontend/src/api/gen/` contains **generated typed Wails v3 bindings** (`make bindings`). It lists
+  every bound method, typed parameters, return models, and its exact argument count. Unknown methods are
   `undefined`; wrong argument counts throw, in tests too (Wails v3 is strict).
-- After adding/removing/changing a Go `App` method signature: run
-  `make bindings`. The Go test `TestBindingsManifestUpToDate` fails otherwise.
+- After adding/removing/changing a Go `App` method signature: run `make bindings`.
 - In Vitest/browser mode calls go to `DEFAULT_MOCKS` in `app.js`. A bound method
   without a mock throws. Add a mock if a component needs one in tests.
 - Backend JSON is **snake_case** (Go `json:"game_dir"` tags; also persisted on

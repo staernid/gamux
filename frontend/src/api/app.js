@@ -1,9 +1,9 @@
-// Wails v3 API bridge (validated against generated bindings.gen.js) & event subscription hub
-import { Call, Events } from '@wailsio/runtime';
-import { BINDINGS, BINDING_PREFIX } from './bindings.gen.js';
+// Wails v3 API bridge (validated against generated Wails v3 App bindings) & event subscription hub
+import * as AppService from './gen/github.com/staernid/gamux/gui/app.js';
+import { Events } from '@wailsio/runtime';
 import { DEFAULT_MOCKS } from './mocks.js';
 
-export { DEFAULT_MOCKS };
+export { AppService, DEFAULT_MOCKS };
 
 function toPascalCase(str) {
   if (!str) return str;
@@ -22,22 +22,23 @@ export function isWailsDesktop() {
 
 /**
  * Builds the dispatcher for a bound Go method. The method name and argument
- * count are validated against the generated BINDINGS manifest in every
+ * count are validated against the generated Wails v3 App service in every
  * environment so wrong calls fail in Vitest/browser preview exactly as they
  * would against the real Wails v3 backend (which enforces strict arity).
- * @param {string} prop camelCase method name present in BINDINGS
+ * @param {string} prop camelCase or PascalCase method name
+ * @param {Function} serviceFn generated service function on AppService
  */
-function createMethodDispatcher(prop) {
-  const arity = BINDINGS[prop];
+function createMethodDispatcher(prop, serviceFn) {
+  const arity = serviceFn.length;
   return async (...args) => {
     if (args.length !== arity) {
       throw new TypeError(`AppAPI.${prop} expects ${arity} argument(s), got ${args.length}`);
     }
 
-    // 1. Native Wails v3 desktop: call the Go backend directly.
+    // 1. Native Wails v3 desktop: call the generated Go service method directly.
     if (isWailsDesktop()) {
       try {
-        return await Call.ByName(BINDING_PREFIX + toPascalCase(prop), ...args);
+        return await serviceFn(...args);
       } catch (err) {
         console.error(`Wails v3 binding call error for ${prop}:`, err);
         throw err;
@@ -45,7 +46,8 @@ function createMethodDispatcher(prop) {
     }
 
     // 2. Browser preview, Vitest, or offline evaluation: declarative mocks.
-    const mock = DEFAULT_MOCKS[prop];
+    const camel = prop.charAt(0).toLowerCase() + prop.slice(1);
+    const mock = DEFAULT_MOCKS[camel] || DEFAULT_MOCKS[prop];
     if (typeof mock !== 'function') {
       throw new Error(`AppAPI.${prop} has no mock implementation in DEFAULT_MOCKS (browser/test mode)`);
     }
@@ -57,8 +59,8 @@ function createMethodDispatcher(prop) {
 const dispatcherCache = new Map();
 
 /**
- * Typed-by-manifest bridge to the Go `gui.App` service. Only methods listed in
- * the generated `bindings.gen.js` exist; any other property is `undefined`, so
+ * Typed-by-service bridge to the Go `gui.App` service. Only methods present in
+ * the generated Wails v3 `AppService` exist; any other property is `undefined`, so
  * `AppAPI.typo()` throws immediately. Tests may still assign overrides
  * (`AppAPI.getConfig = vi.fn()`), which take precedence.
  */
@@ -66,10 +68,12 @@ export const AppAPI = new Proxy({}, {
   get(target, prop) {
     if (typeof prop !== 'string') return target[prop];
     if (prop in target) return target[prop];
-    if (!Object.hasOwn(BINDINGS, prop)) return undefined;
+    const pascal = toPascalCase(prop);
+    const serviceFn = AppService[pascal];
+    if (typeof serviceFn !== 'function') return undefined;
     let fn = dispatcherCache.get(prop);
     if (!fn) {
-      fn = createMethodDispatcher(prop);
+      fn = createMethodDispatcher(prop, serviceFn);
       dispatcherCache.set(prop, fn);
     }
     return fn;
@@ -83,14 +87,30 @@ export const AppAPI = new Proxy({}, {
     return true;
   },
   has(target, prop) {
-    return prop in target || (typeof prop === 'string' && Object.hasOwn(BINDINGS, prop));
+    if (prop in target) return true;
+    if (typeof prop !== 'string') return false;
+    const pascal = toPascalCase(prop);
+    return typeof AppService[pascal] === 'function';
   },
   getOwnPropertyDescriptor(target, prop) {
     if (prop in target) return Object.getOwnPropertyDescriptor(target, prop);
-    if (typeof prop === 'string' && Object.hasOwn(BINDINGS, prop)) {
-      return { value: this.get(target, prop), writable: true, enumerable: true, configurable: true };
+    if (typeof prop === 'string') {
+      const pascal = toPascalCase(prop);
+      if (typeof AppService[pascal] === 'function') {
+        return { value: this.get(target, prop), writable: true, enumerable: true, configurable: true };
+      }
     }
     return undefined;
+  },
+  ownKeys(target) {
+    const keys = new Set(Reflect.ownKeys(target));
+    for (const pascal of Object.keys(AppService)) {
+      if (typeof AppService[pascal] === 'function') {
+        const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1);
+        keys.add(camel);
+      }
+    }
+    return Array.from(keys);
   }
 });
 

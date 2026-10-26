@@ -1,17 +1,33 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, vi } from 'vitest';
 
-// Mock @wailsio/runtime so importing app.js in unit tests doesn't trigger Wails v3's
-// "Browser Environment Detected" stderr banner 62 times across test workers.
-vi.mock('@wailsio/runtime', () => ({
-  Call: {
-    ByName: vi.fn(),
-  },
-  Events: {
-    On: vi.fn(),
-    Emit: vi.fn(),
-  },
-}));
+// Mock @wailsio/runtime Call and Events so unit tests don't make real backend calls,
+// while preserving Create and other runtime utilities needed by generated models.
+vi.mock('@wailsio/runtime', async (importOriginal) => {
+  const origWarn = console.warn;
+  console.warn = (...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('Browser Environment Detected')) return;
+    origWarn.apply(console, args);
+  };
+  try {
+    const actual = await importOriginal();
+    return {
+      ...actual,
+      Call: {
+        ...actual.Call,
+        ByName: vi.fn(),
+        ByID: vi.fn(),
+      },
+      Events: {
+        ...actual.Events,
+        On: vi.fn(),
+        Emit: vi.fn(),
+      },
+    };
+  } finally {
+    console.warn = origWarn;
+  }
+});
 
 // Global mock for Wails window.runtime & window.go if needed
 beforeEach(() => {
