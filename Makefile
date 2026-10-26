@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LDFLAGS = -s -w -X main.Version=$(VERSION)
 GUI_TAGS = -tags desktop,production,gtk3,webkit2_41
 
-.PHONY: all bindings build build-all build-cli build-gui build-frontend appimage clean clean-all test test-go test-go-fast test-frontend lint fmt fmt-check check check-fast check-go check-ui run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
+.PHONY: all bindings build build-all build-cli build-gui build-frontend package clean clean-all test test-go test-go-fast test-frontend lint fmt fmt-check check check-fast check-go check-ui run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
 all: test build
 
@@ -26,8 +26,17 @@ build-gui: build-frontend
 	@mkdir -p bin
 	go build -trimpath -ldflags "$(LDFLAGS)" $(GUI_TAGS) -o $(GUI_BINARY) ./cmd/gamux-gui
 
-appimage: build-gui
-	@./scripts/build-appimage.sh $(GUI_BINARY) bin/gamux-gui-x86_64.AppImage
+package: build-all
+	@mkdir -p bin/pkg/gamux/assets
+	@rm -rf bin/pkg/gamux/*
+	@mkdir -p bin/pkg/gamux/assets
+	@cp $(CLI_BINARY) $(GUI_BINARY) bin/pkg/gamux/
+	@cp scripts/install.sh bin/pkg/gamux/
+	@find assets -maxdepth 1 -type f ! -name "*.go" -exec cp {} bin/pkg/gamux/assets/ \;
+	@cp LICENSE README.md bin/pkg/gamux/
+	@tar -czf bin/gamux_linux_amd64.tar.gz -C bin/pkg/gamux .
+	@rm -rf bin/pkg
+	@echo "==> Successfully packaged bin/gamux_linux_amd64.tar.gz"
 
 update-steamless:
 	@echo "Fetching latest Steamless release binaries from GitHub..."
