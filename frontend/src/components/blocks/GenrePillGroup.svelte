@@ -2,12 +2,12 @@
   
   /**
    * @typedef {Object} Props
-   * @property {any} [genres]
-   * @property {any} [selectedGenre]
+   * @property {string[]} [genres]
+   * @property {string | null} [selectedGenre]
    * @property {boolean} [clickable]
    * @property {number} [maxVisible]
    * @property {string} [className]
-   * @property {any} [onselect]
+   * @property {((genre: string) => void) | null} [onselect]
    */
 
   /** @type {Props} */

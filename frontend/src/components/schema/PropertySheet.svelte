@@ -12,18 +12,19 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [schema]
-   * @property {any} [values]
-   * @property {any} [inheritedValues] - Global configuration for inheritance resolution
-   * @property {any} [category] - optional category filter: string | string[]
-   * @property {any} [excludeKeys] - optional keys to exclude
-   * @property {any} [includeKeys] - optional keys to exclusively include
-   * @property {any} [scope] - optional scope filter: 'global' | 'game'
+   * @property {import('../../types/domain').PropertyDescriptor[]} [schema]
+   * @property {Record<string, unknown>} [values]
+   * @property {Record<string, unknown>} [inheritedValues] - Global configuration for inheritance resolution
+   * @property {string | string[]} [category] - optional category filter: string | string[]
+   * @property {string[]} [excludeKeys] - optional keys to exclude
+   * @property {string[]} [includeKeys] - optional keys to exclusively include
+   * @property {'global' | 'game' | 'both'} [scope] - optional scope filter: 'global' | 'game'
    * @property {boolean} [groupByCategory]
    * @property {boolean} [disabled]
-   * @property {any} [onChange]
-   * @property {any} [onchange]
-   * @property {any} [onReset]
+   * @property {((key: string, value: unknown) => void) | null} [onChange]
+   * @property {((key: string, value: unknown) => void) | null} [onchange]
+   * @property {((key: string) => void) | null} [onReset]
+   * @property {((key: string) => void) | null} [onreset]
    */
 
   /** @type {Props} */

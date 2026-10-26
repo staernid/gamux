@@ -8,7 +8,7 @@
    * @property {number} [totalCount]
    * @property {number} [filteredCount]
    * @property {string} [className]
-   * @property {any} [oninput]
+   * @property {((q: string) => void) | null} [oninput]
    */
 
   /** @type {Props} */

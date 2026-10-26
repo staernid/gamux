@@ -8,10 +8,10 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../types/domain').Game} [game]
    * @property {string} [assetType] - 'cover' | 'banner' | 'hero' | 'logo'
-   * @property {any} [onapply]
-   * @property {any} [onupdated]
+   * @property {((type: string, url: string) => void) | null} [onapply]
+   * @property {((game: import('../../types/domain').Game) => void) | null} [onupdated]
    */
 
   /** @type {Props} */

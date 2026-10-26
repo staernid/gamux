@@ -57,7 +57,7 @@ export interface MetadataProvider {
   id: string;
   displayName: string;
   description?: string;
-  capabilities?: any;
+  capabilities?: Record<string, unknown>;
 }
 
 export interface GameMetadata {
@@ -151,15 +151,15 @@ export interface Game {
   logoUrl?: string;
   iconUrl?: string;
   rawDepotLayout?: boolean;
-  depots?: any[];
+  depots?: Record<string, unknown>[];
   availablePlatforms?: string[];
   supportedLanguages?: string[];
-  versionStatus?: any;
+  versionStatus?: Record<string, unknown>;
   hasUpdate?: boolean;
   remoteManifestId?: string;
   manifestId?: string;
   buildId?: string;
-  newsItems?: any[];
+  newsItems?: NewsItem[];
   summary?: string;
   releaseDate?: string;
   developers?: string[];
@@ -213,7 +213,7 @@ export interface Task {
   totalItems: number;
   store: string;
   posterUrl: string;
-  depots: any[];
+  depots: Record<string, unknown>[];
   capabilities: number;
   createdAt: number;
   finishedAt: number;
@@ -241,3 +241,70 @@ export interface SystemCapabilities {
   hasInputPermissions: boolean;
   inputPermissionsError?: string;
 }
+
+export interface PropertyOption {
+  value: string | number | boolean;
+  label: string;
+}
+
+export interface PropertyDescriptor {
+  key: string;
+  label: string;
+  description: string;
+  type: 'boolean' | 'select' | 'path' | 'path_list' | 'env' | 'string' | 'number';
+  category: string;
+  scope?: 'global' | 'game' | 'both';
+  default?: unknown;
+  options?: PropertyOption[];
+  inherits_from?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export interface AchievementItem {
+  id: string;
+  name: string;
+  description: string;
+  icon_url: string;
+  icon_gray_url?: string;
+  hidden: boolean;
+  unlocked: boolean;
+  unlock_time?: number;
+  global_percent?: number;
+  rarity?: string;
+}
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  url: string;
+  author?: string;
+  contents: string;
+  feedlabel?: string;
+  date: number;
+  feedname?: string;
+  appid?: number;
+}
+
+export interface StoreSearchResult {
+  id: string;
+  store: string;
+  name: string;
+  poster_url?: string;
+  release_date?: string;
+}
+
+export interface IntegrityReport {
+  official_count?: number;
+  OfficialCount?: number;
+  intact_count?: number;
+  IntactCount?: number;
+  modified_files?: string[];
+  ModifiedFiles?: string[];
+  missing_files?: string[];
+  MissingFiles?: string[];
+  untracked_files?: string[];
+  UntrackedFiles?: string[];
+}
+

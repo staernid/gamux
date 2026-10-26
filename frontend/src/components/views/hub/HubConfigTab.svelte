@@ -12,8 +12,8 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
-   * @property {any} [globalCfg]
+   * @property {import('../../../types/domain').Game} [game]
+   * @property {Record<string, unknown>} [globalCfg]
    * @property {number} [overrideCount]
    * @property {boolean} [isSaving]
    * @property {boolean} [saveSuccess]

@@ -4,7 +4,7 @@
   /**
    * @typedef {Object} Props
    * @property {boolean} [isCoop]
-   * @property {any} [session]
+   * @property {Record<string, unknown> | null} [session]
    * @property {string} [p1Gamepad]
    * @property {string} [p2Gamepad]
    * @property {string} [className]

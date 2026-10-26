@@ -4,11 +4,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [activeTasks]
+   * @property {import('../../types/domain').Task[]} [activeTasks]
    * @property {number} [totalSpeedBps]
    * @property {boolean} [isExpanded]
    * @property {string} [className]
-   * @property {any} [ontoggle]
+   * @property {(() => void) | null} [ontoggle]
    */
 
   /** @type {Props} */

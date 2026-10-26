@@ -2,11 +2,11 @@
   
   /**
    * @typedef {Object} Props
-   * @property {any} [property]
+   * @property {import('../../../types/domain').PropertyDescriptor} [property]
    * @property {string} [value]
    * @property {boolean} [disabled]
-   * @property {any} [onChange]
-   * @property {any} [onchange]
+   * @property {((val: string) => void) | null} [onChange]
+   * @property {((val: string) => void) | null} [onchange]
    */
 
   /** @type {Props} */

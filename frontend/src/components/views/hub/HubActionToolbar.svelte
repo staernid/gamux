@@ -6,8 +6,8 @@
    * @property {number} [overrideCount]
    * @property {boolean} [isSaving]
    * @property {boolean} [saveSuccess]
-   * @property {any} [onsave]
-   * @property {any} [onreset]
+   * @property {(() => void | Promise<void>) | null} [onsave]
+   * @property {(() => void | Promise<void>) | null} [onreset]
    */
 
   /** @type {Props} */

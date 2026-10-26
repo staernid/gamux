@@ -2,11 +2,11 @@
   /**
    * @typedef {Object} Props
    * @property {string} [description]
-   * @property {any} [developers]
-   * @property {any} [publishers]
+   * @property {string[] | string} [developers]
+   * @property {string[] | string} [publishers]
    * @property {string} [releaseDate]
    * @property {string} [buildId]
-   * @property {any} [clampLines] - e.g. 3 or null for natural wrap
+   * @property {number | null} [clampLines] - e.g. 3 or null for natural wrap
    * @property {string} [className]
    */
 

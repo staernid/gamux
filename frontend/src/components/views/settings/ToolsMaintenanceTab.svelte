@@ -9,9 +9,9 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [toolStatuses]
+   * @property {import('../../../types/domain').ToolStatus[]} [toolStatuses]
    * @property {boolean} [isCheckingTools]
-   * @property {any} [updatingTools]
+   * @property {Record<string, boolean>} [updatingTools]
    * @property {boolean} [isSubmittingBatch]
    * @property {number} [gamesCount]
    * @property {number} [unpatchedGamesCount]

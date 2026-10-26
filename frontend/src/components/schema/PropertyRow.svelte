@@ -3,12 +3,13 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [property]
+   * @property {import('../../types/domain').PropertyDescriptor} [property]
    * @property {boolean} [isOverridden]
-   * @property {any} [inheritedValue]
+   * @property {unknown} [inheritedValue]
    * @property {string} [scope]
    * @property {boolean} [disabled]
-   * @property {any} [onReset]
+   * @property {((key: string) => void) | null} [onReset]
+   * @property {((key: string) => void) | null} [onreset]
    * @property {import('svelte').Snippet} [children]
    */
 

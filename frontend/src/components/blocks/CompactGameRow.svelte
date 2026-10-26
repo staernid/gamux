@@ -4,12 +4,12 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../types/domain').Game} [game]
    * @property {boolean} [selected]
    * @property {boolean} [isRunning]
    * @property {string} [className]
-   * @property {any} [onclick]
-   * @property {any} [onplay]
+   * @property {(() => void) | null} [onclick]
+   * @property {(() => void) | null} [onplay]
    */
 
   /** @type {Props} */

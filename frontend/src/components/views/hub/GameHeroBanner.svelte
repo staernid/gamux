@@ -17,11 +17,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../../types/domain').Game} [game]
    * @property {boolean} [isGameRunning]
    * @property {boolean} [isTaskActive]
-   * @property {any} [activeGameTask]
-   * @property {any} [globalCfg]
+   * @property {import('../../../types/domain').Task | null} [activeGameTask]
+   * @property {Record<string, unknown>} [globalCfg]
    */
 
   /** @type {Props} */

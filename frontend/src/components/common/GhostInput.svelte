@@ -13,7 +13,7 @@
    * @property {string} [type]
    * @property {string} [status]
    * @property {boolean} [stacked]
-   * @property {any} [id]
+   * @property {string} [id]
    * @property {import('svelte').Snippet} [action]
    */
 

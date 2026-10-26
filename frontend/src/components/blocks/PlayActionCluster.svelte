@@ -14,12 +14,12 @@
    * @property {string} [primaryLabel]
    * @property {number} [pid]
    * @property {string} [className]
-   * @property {any} [onplay]
-   * @property {any} [onstop]
-   * @property {any} [onsetup]
-   * @property {any} [oninstall]
-   * @property {any} [onconfigure]
-   * @property {any} [ontaskClick]
+   * @property {(() => void) | null} [onplay]
+   * @property {(() => void) | null} [onstop]
+   * @property {(() => void) | null} [onsetup]
+   * @property {(() => void) | null} [oninstall]
+   * @property {(() => void) | null} [onconfigure]
+   * @property {(() => void) | null} [ontaskClick]
    */
 
   /** @type {Props} */

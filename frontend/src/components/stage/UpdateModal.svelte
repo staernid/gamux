@@ -6,8 +6,8 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
-   * @property {any} [versionStatus]
+   * @property {import('../../types/domain').Game} [game]
+   * @property {Record<string, unknown>} [versionStatus]
    * @property {() => void} [onclose]
    * @property {() => void | Promise<void>} [onupdate]
    */

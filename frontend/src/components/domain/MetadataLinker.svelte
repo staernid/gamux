@@ -8,10 +8,10 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
-   * @property {any} [onlinked]
-   * @property {any} [onunlinked]
-   * @property {any} [onupdated]
+   * @property {import('../../types/domain').Game} [game]
+   * @property {((game: import('../../types/domain').Game) => void) | null} [onlinked]
+   * @property {((game: import('../../types/domain').Game) => void) | null} [onunlinked]
+   * @property {((game: import('../../types/domain').Game) => void) | null} [onupdated]
    */
 
   /** @type {Props} */

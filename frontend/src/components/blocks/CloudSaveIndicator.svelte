@@ -8,7 +8,7 @@
    * @property {number} [lastBackupTime] - unix timestamp or 0
    * @property {boolean} [isSynced]
    * @property {string} [className]
-   * @property {any} [onrestore]
+   * @property {(() => void) | null} [onrestore]
    */
 
   /** @type {Props} */

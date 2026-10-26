@@ -5,8 +5,8 @@
    * @property {string} [description]
    * @property {string} [tooltip]
    * @property {boolean} [value] - boolean or null (for inherit mode)
-   * @property {any} [checked]
-   * @property {any} [inheritedValue] - boolean global default if in inherit mode
+   * @property {boolean} [checked]
+   * @property {boolean} [inheritedValue] - boolean global default if in inherit mode
    * @property {boolean} [disabled]
    * @property {boolean} [compact]
    */

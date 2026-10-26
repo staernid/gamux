@@ -11,7 +11,7 @@
   /**
    * @typedef {Object} Props
    * @property {string} [initialQuery]
-   * @property {any} [onclose]
+   * @property {(() => void) | null} [onclose]
    */
 
   /** @type {Props} */

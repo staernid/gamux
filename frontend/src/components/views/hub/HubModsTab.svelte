@@ -8,7 +8,7 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../../types/domain').Game} [game]
    */
 
   /** @type {Props} */

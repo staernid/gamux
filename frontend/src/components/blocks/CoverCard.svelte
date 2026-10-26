@@ -15,7 +15,7 @@
    * @property {boolean} [selected]
    * @property {string} [size] - 'sm' | 'md' | 'lg'
    * @property {string} [className]
-   * @property {any} [onclick]
+   * @property {(() => void) | null} [onclick]
    */
 
   /** @type {Props} */

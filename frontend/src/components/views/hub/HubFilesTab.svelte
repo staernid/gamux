@@ -7,16 +7,16 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../../types/domain').Game} [game]
    * @property {string} [activeSubTab] - 'depots' | 'branch' | 'integrity' | 'logs'
    * @property {boolean} [isGameRunning]
    * @property {boolean} [isTaskActive]
-   * @property {any} [activeGameTask]
-   * @property {any} [activeVerifyTask]
+   * @property {import('../../../types/domain').Task | null} [activeGameTask]
+   * @property {import('../../../types/domain').Task | null} [activeVerifyTask]
    * @property {boolean} [isCheckingIntegrity]
    * @property {boolean} [isNormalizing]
    * @property {string} [integrityError]
-   * @property {any} [integrityReport]
+   * @property {import('../../../types/domain').IntegrityReport | null} [integrityReport]
    */
 
   /** @type {Props} */

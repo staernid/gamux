@@ -3,11 +3,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [achievements]
+   * @property {import('../../types/domain').AchievementItem[]} [achievements]
    * @property {number} [maxBadges]
    * @property {string} [className]
-   * @property {any} [onselect]
-   * @property {any} [onviewAll]
+   * @property {((ach: import('../../types/domain').AchievementItem) => void) | null} [onselect]
+   * @property {(() => void) | null} [onviewAll]
    */
 
   /** @type {Props} */

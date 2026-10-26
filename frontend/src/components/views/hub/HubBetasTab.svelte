@@ -9,11 +9,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
+   * @property {import('../../../types/domain').Game} [game]
    * @property {boolean} [isTaskActive]
-   * @property {any} [activeGameTask]
-   * @property {any} [onbranchChange]
-   * @property {any} [onupdateGame]
+   * @property {import('../../../types/domain').Task | null} [activeGameTask]
+   * @property {((branch: string) => void | Promise<void>) | null} [onbranchChange]
+   * @property {(() => void | Promise<void>) | null} [onupdateGame]
    */
 
   /** @type {Props} */

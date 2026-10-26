@@ -5,10 +5,10 @@
    * @typedef {Object} Props
    * @property {boolean} [isLoadingNews]
    * @property {string} [newsError]
-   * @property {any} [newsItems]
+   * @property {import('../../../../types/domain').NewsItem[]} [newsItems]
    * @property {number} [expandedNewsIndex]
-   * @property {any} [onRefreshNews]
-   * @property {any} [onToggleExpand]
+   * @property {(() => void | Promise<void>) | null} [onRefreshNews]
+   * @property {((index: number) => void) | null} [onToggleExpand]
    */
 
   /** @type {Props} */

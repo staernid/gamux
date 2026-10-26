@@ -3,12 +3,12 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [property]
-   * @property {string} [value]
+   * @property {import('../../../types/domain').PropertyDescriptor} [property]
+   * @property {string | string[]} [value]
    * @property {boolean} [disabled]
    * @property {boolean} [hideHeader]
-   * @property {any} [onChange]
-   * @property {any} [onchange]
+   * @property {((val: string | string[]) => void) | null} [onChange]
+   * @property {((val: string | string[]) => void) | null} [onchange]
    */
 
   /** @type {Props} */

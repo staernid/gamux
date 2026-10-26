@@ -5,16 +5,16 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [activeGameTask]
-   * @property {any} [activeVerifyTask]
+   * @property {import('../../../../types/domain').Task | null} [activeGameTask]
+   * @property {import('../../../../types/domain').Task | null} [activeVerifyTask]
    * @property {boolean} [isCheckingIntegrity]
    * @property {boolean} [isNormalizing]
    * @property {boolean} [isUpdating]
    * @property {string} [integrityError]
-   * @property {any} [integrityReport]
-   * @property {any} [onRunIntegrityCheck]
-   * @property {any} [onUpdateGame]
-   * @property {any} [onNormalizeDirectory]
+   * @property {import('../../../../types/domain').IntegrityReport | null} [integrityReport]
+   * @property {(() => void | Promise<void>) | null} [onRunIntegrityCheck]
+   * @property {(() => void | Promise<void>) | null} [onUpdateGame]
+   * @property {(() => void | Promise<void>) | null} [onNormalizeDirectory]
    */
 
   /** @type {Props} */

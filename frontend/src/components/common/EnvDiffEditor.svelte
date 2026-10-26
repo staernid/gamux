@@ -2,8 +2,8 @@
   
   /**
    * @typedef {Object} Props
-   * @property {any} [globalEnv] - { KEY: VALUE }
-   * @property {any} [customEnv] - { KEY: VALUE }
+   * @property {Record<string, string>} [globalEnv] - { KEY: VALUE }
+   * @property {Record<string, string>} [customEnv] - { KEY: VALUE }
    * @property {boolean} [disabled]
    */
 

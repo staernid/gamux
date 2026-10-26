@@ -11,8 +11,8 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [game]
-   * @property {(updated: any) => void} [onupdateGame]
+   * @property {import('../../../../types/domain').Game} [game]
+   * @property {(updated: import('../../../../types/domain').Game) => void} [onupdateGame]
    */
 
   /** @type {Props} */

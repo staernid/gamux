@@ -1,6 +1,6 @@
 /**
  * Normalizes a raw tools.ToolStatus Go entity into a canonical camelCase ToolStatus model.
- * @param {any} raw
+ * @param {Record<string, unknown> | null | undefined} raw
  * @returns {import('../types/domain.d.ts').ToolStatus | null}
  */
 export function normalizeTool(raw) {

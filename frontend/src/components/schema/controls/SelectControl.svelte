@@ -1,14 +1,14 @@
 <script>
   import SelectControl from './SelectControl.svelte';
-  
+
   /**
    * @typedef {Object} Props
-   * @property {any} [property]
-   * @property {string} [value]
+   * @property {import('../../../types/domain').PropertyDescriptor} [property]
+   * @property {string | number | boolean} [value]
    * @property {boolean} [disabled]
    * @property {boolean} [hideHeader]
-   * @property {any} [onChange]
-   * @property {any} [onchange]
+   * @property {((val: string | number | boolean) => void) | null} [onChange]
+   * @property {((val: string | number | boolean) => void) | null} [onchange]
    */
 
   /** @type {Props} */

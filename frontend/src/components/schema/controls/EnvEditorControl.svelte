@@ -2,12 +2,12 @@
   
   /**
    * @typedef {Object} Props
-   * @property {any} [property]
-   * @property {any} [value]
+   * @property {import('../../../types/domain').PropertyDescriptor} [property]
+   * @property {Record<string, string>} [value]
    * @property {boolean} [disabled]
    * @property {boolean} [hideHeader]
-   * @property {any} [onChange]
-   * @property {any} [onchange]
+   * @property {((val: Record<string, string>) => void) | null} [onChange]
+   * @property {((val: Record<string, string>) => void) | null} [onchange]
    */
 
   /** @type {Props} */

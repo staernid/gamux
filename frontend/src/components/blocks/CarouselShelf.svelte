@@ -4,11 +4,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [games]
+   * @property {import('../../types/domain').Game[]} [games]
    * @property {number} [selectedIndex]
    * @property {string} [cardSize]
    * @property {string} [className]
-   * @property {any} [onselect]
+   * @property {((game: import('../../types/domain').Game, index: number) => void) | null} [onselect]
    */
 
   /** @type {Props} */

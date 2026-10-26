@@ -4,11 +4,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [newsItems]
+   * @property {import('../../types/domain').NewsItem[]} [newsItems]
    * @property {number} [maxItems]
    * @property {string} [className]
-   * @property {any} [onread]
-   * @property {any} [onviewAll]
+   * @property {((item: import('../../types/domain').NewsItem) => void) | null} [onread]
+   * @property {(() => void) | null} [onviewAll]
    */
 
   /** @type {Props} */

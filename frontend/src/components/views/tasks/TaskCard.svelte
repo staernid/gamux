@@ -6,11 +6,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} task
-   * @property {any} [expandedDepots]
-   * @property {any} [onpause]
-   * @property {any} [oncancel]
-   * @property {any} [ontoggleDepots]
+   * @property {import('../../../types/domain').Task} task
+   * @property {Record<string, boolean>} [expandedDepots]
+   * @property {((taskId: string) => void) | null} [onpause]
+   * @property {((taskId: string) => void) | null} [oncancel]
+   * @property {((taskId: string) => void) | null} [ontoggleDepots]
    */
 
   /** @type {Props} */

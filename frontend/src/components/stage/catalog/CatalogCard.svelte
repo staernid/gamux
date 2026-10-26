@@ -3,11 +3,11 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} item
+   * @property {import('../../../types/domain').StoreSearchResult} item
    * @property {boolean} [isFocused]
-   * @property {any} [localMatch]
-   * @property {any} [onselect]
-   * @property {any} [onfocus]
+   * @property {import('../../../types/domain').Game | null} [localMatch]
+   * @property {((item: import('../../../types/domain').StoreSearchResult) => void) | null} [onselect]
+   * @property {(() => void) | null} [onfocus]
    */
 
   /** @type {Props} */

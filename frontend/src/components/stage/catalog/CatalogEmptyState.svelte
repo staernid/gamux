@@ -3,7 +3,7 @@
 
   /**
    * @typedef {Object} Props
-   * @property {any} [onsuggest]
+   * @property {((query: string) => void) | null} [onsuggest]
    */
 
   /** @type {Props} */
