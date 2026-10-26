@@ -61,12 +61,12 @@
   onclick={handleClick}
   onkeydown={handleKeydown}
   aria-label={name}
-  class="contain-card group cursor-pointer flex flex-col items-center text-left transition-transform duration-150 ease-out transform hover:-translate-y-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base rounded-2xl select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
+  class="contain-card group cursor-pointer flex flex-col items-center text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base rounded-2xl select-none bg-transparent border-0 p-0 {sizeClasses} {className}"
   data-testid="cover-card"
 >
   <!-- Poster Art Container -->
   <div
-    class="gpu-layer relative w-full aspect-2/3 rounded-2xl overflow-hidden shadow-lg border transition-colors duration-150 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-surface-border group-hover:border-neutral-400'}"
+    class="gpu-layer relative w-full aspect-2/3 rounded-2xl overflow-hidden shadow-lg border transition-all duration-150 ease-out transform group-hover:-translate-y-1.5 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-surface-border group-hover:border-neutral-400'}"
   >
     <PosterArt
       {appId}
@@ -105,8 +105,8 @@
   </div>
 
   <!-- Title & Metadata Caption (visible on hover / focus / selection) -->
-  <div class="w-full mt-2 space-y-0.5 min-w-0 transition-opacity duration-150 {selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}">
-    <h4 class="text-xs text-center font-bold text-neutral-200 group-hover:text-white truncate transition-colors" title={name}>
+  <div class="w-full mt-2 space-y-0.5 min-w-0 pointer-events-none transition-opacity duration-150 {selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}">
+    <h4 class="text-xs text-center font-bold text-neutral-200 group-hover:text-white truncate" title={name}>
       {name}
     </h4>
   </div>

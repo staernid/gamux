@@ -4,7 +4,7 @@ PREFIX ?= $(HOME)/.local
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS = -s -w -X main.Version=$(VERSION)
-GUI_TAGS = -tags desktop,production,gtk3,webkit2_41
+GUI_TAGS = -tags desktop,production
 
 .PHONY: all bindings build build-all build-cli build-gui build-frontend package clean clean-all test test-go test-go-fast test-frontend lint fmt fmt-check check check-fast check-go check-ui run run-cli run-gui install uninstall tidy update-steamless gui-audit gui-trace gui-dump gui-snap
 
@@ -92,11 +92,11 @@ fmt-check:
 lint: fmt-check
 	go vet $(GUI_TAGS) ./...
 	@cd frontend && npm run check
-	@if which golangci-lint > /dev/null 2>&1; then golangci-lint run --build-tags desktop,production,gtk3,webkit2_41; else echo "golangci-lint not installed; skipping"; fi
+	@if which golangci-lint > /dev/null 2>&1; then golangci-lint run --build-tags desktop,production; else echo "golangci-lint not installed; skipping"; fi
 
 check-go: fmt-check
 	go vet $(GUI_TAGS) ./...
-	@if which golangci-lint > /dev/null 2>&1; then golangci-lint run --build-tags desktop,production,gtk3,webkit2_41; else echo "golangci-lint not installed; skipping"; fi
+	@if which golangci-lint > /dev/null 2>&1; then golangci-lint run --build-tags desktop,production; else echo "golangci-lint not installed; skipping"; fi
 	go test $(GUI_TAGS) ./...
 
 check-ui:

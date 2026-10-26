@@ -33,7 +33,7 @@ jobs:
       - name: Install Linux GTK & WebKit Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libei-dev pkg-config
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libei-dev pkg-config
 
       - name: Fetch Steamless binaries
         env:
@@ -50,7 +50,7 @@ jobs:
           args: --timeout=5m
 
       - name: Test Suite (with Race Detector)
-        run: go test -race -tags desktop,production,gtk3,webkit2_41 ./...
+        run: go test -race -tags desktop,production ./...
 
       - name: Build Dual Binaries
         run: make build-all

@@ -415,18 +415,18 @@ html.light [class*="border-neutral-700"] {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 .animate-fade-in {
@@ -441,18 +441,25 @@ html.light [class*="border-neutral-700"] {
   animation: slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Performance: GPU compositing isolation for heavy 3D transform containers */
+/* Performance: Card styling */
 .contain-paint {
-  contain: layout style paint;
+  contain: paint;
 }
 
 .contain-card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 280px;
-  contain: layout style paint;
+  /* Clean standard layout without WebKit subpixel containment bugs */
+}
+
+.contain-card:hover,
+.contain-card:focus-within {
+  will-change: transform;
 }
 
 .gpu-layer {
-  transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+.group:hover .gpu-layer,
+.group:focus-within .gpu-layer {
+  will-change: transform;
 }

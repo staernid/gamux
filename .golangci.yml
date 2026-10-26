@@ -1,7 +1,7 @@
 version: "2"
 run:
   timeout: 5m
-  build-tags: [desktop, production, gtk3, webkit2_41]
+  build-tags: [desktop, production]
 linters:
   default: standard
   enable:
