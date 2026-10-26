@@ -5,13 +5,13 @@
 ## Context
 These files are big enough that they're hard to change safely:
 
-| File | Lines |
-|---|---|
-| `components/views/GameHubView.svelte` | ~770 (shrinks after 007–009) |
-| `components/views/hub/cards/HubDLCCard.svelte` | ~690 |
-| `components/views/SettingsView.svelte` | ~680 |
-| `components/views/hub/HubBetasTab.svelte` | ~570 |
-| `components/views/settings/ToolsMaintenanceTab.svelte` | ~550 |
+| File | Lines | Status |
+|---|---|---|
+| `components/views/GameHubView.svelte` | ~770 | Pending |
+| `components/views/hub/cards/HubDLCCard.svelte` | 342 | Done (split into HubDLCConfiguredList, HubDepotRow, HubDepotFilters, HubDepotSummaryBanner, utils/depot.js) |
+| `components/views/SettingsView.svelte` | ~680 | Pending |
+| `components/views/hub/HubBetasTab.svelte` | ~570 | Pending |
+| `components/views/settings/ToolsMaintenanceTab.svelte` | 212 | Done (split into ToolCard, BatchOperationCard, utils/tools.js) |
 
 ## Do (per component)
 1. Read the component and its test. Find the 2–4 visually or logically
