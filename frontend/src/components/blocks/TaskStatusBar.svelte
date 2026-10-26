@@ -36,7 +36,7 @@
   >
     <!-- Left: Activity Ring & Active Task Description -->
     <div class="flex items-center space-x-3 min-w-0 flex-1 pr-4">
-      <Icon name="spinner" className="w-3.5 h-3.5 text-neutral-300 flex-shrink-0" />
+      <Icon name="spinner" className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
 
       <span class="text-neutral-400 font-bold uppercase tracking-wider text-4xs">
         {currentTask.operation || currentTask.type || 'TASK'}:
@@ -54,7 +54,7 @@
     </div>
 
     <!-- Center/Right: Speed & Expand Toggle -->
-    <div class="flex items-center space-x-4 flex-shrink-0">
+    <div class="flex items-center space-x-4 shrink-0">
       {#if totalSpeedBps > 0}
         <span class="text-3xs text-neutral-300 font-bold">
           {formatBytes(totalSpeedBps)}/s

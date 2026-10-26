@@ -232,7 +232,7 @@
   <!-- Topology & Status Header -->
   <div class="bg-surface-card rounded-2xl p-5 border border-surface-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div class="flex items-start md:items-center space-x-3.5">
-      <div class="w-10 h-10 rounded-xl bg-surface-input border border-surface-borderHighlight flex items-center justify-center flex-shrink-0 text-neutral-300">
+      <div class="w-10 h-10 rounded-xl bg-surface-input border border-surface-borderHighlight flex items-center justify-center shrink-0 text-neutral-300">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
@@ -284,7 +284,7 @@
   {#if outdatedCount > 0}
     <div class="bg-amber-950/30 border border-amber-600/40 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-200 animate-fade-in">
       <div class="flex items-center space-x-3">
-        <svg class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div>
@@ -326,7 +326,7 @@
       <button
         type="submit"
         disabled={!workshopInput.trim() || isInstalling}
-        class="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold transition-all disabled:opacity-40 disabled:hover:bg-white cursor-pointer flex-shrink-0"
+        class="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold transition-all disabled:opacity-40 disabled:hover:bg-white cursor-pointer shrink-0"
       >
         {isInstalling ? 'Installing...' : 'Download & Install'}
       </button>
@@ -379,7 +379,7 @@
           <div class="bg-surface-card hover:bg-surface-cardHover transition-colors rounded-2xl p-4 border border-surface-border flex items-center justify-between gap-4">
             <div class="flex items-center space-x-3.5 min-w-0 flex-1">
               <!-- Non-destructive Toggle Switch -->
-              <div class="flex-shrink-0">
+              <div class="shrink-0">
                 <SeamlessSwitch
                   compact={true}
                   checked={mod.enabled}
@@ -430,7 +430,7 @@
             </div>
 
             <!-- Mod Actions -->
-            <div class="flex items-center space-x-1.5 flex-shrink-0">
+            <div class="flex items-center space-x-1.5 shrink-0">
               {#if mod.workshopId}
                 <button
                   type="button"

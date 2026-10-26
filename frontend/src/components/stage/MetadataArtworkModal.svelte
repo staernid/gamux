@@ -46,7 +46,7 @@
   onclose={() => onclose?.()}
 >
   <!-- Primary Tab Selector (Store Link vs Artwork Gallery) -->
-  <div class="max-w-4xl w-full mx-auto mb-4 flex items-center justify-between border-b border-surface-border pb-3 flex-shrink-0 gap-4">
+  <div class="max-w-4xl w-full mx-auto mb-4 flex items-center justify-between border-b border-surface-border pb-3 shrink-0 gap-4">
     <div class="flex items-center space-x-2">
       <button
         type="button"

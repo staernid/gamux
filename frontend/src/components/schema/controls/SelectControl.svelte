@@ -79,7 +79,7 @@
       {/if}
     </div>
 
-    <div class="flex-shrink-0 w-full sm:w-auto min-w-[12rem]">
+    <div class="shrink-0 w-full sm:w-auto min-w-[12rem]">
       <SelectControl
         {property}
         {value}

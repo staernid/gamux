@@ -45,7 +45,7 @@
     {#each topCenterToasts as toast (toast.id)}
       <div class="pointer-events-auto bg-surface-header/95 border border-surface-border text-white shadow-2xl  px-5 py-2 rounded-full flex items-center space-x-2.5 animate-fade-in">
         {#if toast.icon === 'sort' || toast.type === 'osd'}
-          <svg class="w-4 h-4 text-neutral-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-neutral-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
           </svg>
         {/if}
@@ -77,21 +77,21 @@
                         'bg-surface-input/95 border-surface-border text-neutral-100 shadow-2xl'}
       <div class="{bgClass} pointer-events-auto border rounded-2xl p-3.5 shadow-2xl  transition-all duration-300 flex items-start space-x-3 animate-fade-in">
         {#if isError}
-          <svg class="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         {:else if isSuccess}
-          <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
         {:else}
-          <svg class="w-4 h-4 text-neutral-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-neutral-300 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         {/if}
         <div class="flex-1 text-xs min-w-0">
           <strong class="block font-bold mb-0.5 text-white truncate">{toast.title}</strong>
-          <p class="text-neutral-300 leading-relaxed break-words">{toast.message}</p>
+          <p class="text-neutral-300 leading-relaxed wrap-break-word">{toast.message}</p>
           {#if toast.gameName}
             <span class="inline-block mt-1 text-3xs font-mono bg-black/40 text-neutral-300 px-1.5 py-0.5 rounded border border-neutral-700">
               {toast.gameName}

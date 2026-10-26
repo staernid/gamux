@@ -117,7 +117,7 @@
   </div>
 
   <!-- Control Slot -->
-  <div class="flex-shrink-0 w-full sm:w-auto min-w-[10rem] flex justify-end">
+  <div class="shrink-0 w-full sm:w-auto min-w-[10rem] flex justify-end">
     {@render children?.()}
   </div>
 </div>

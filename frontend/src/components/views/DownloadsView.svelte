@@ -201,7 +201,7 @@
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-surface-card border border-surface-border text-2xs font-mono text-neutral-300"
           title="Drive {diskSpace.path}: {formatBytes(diskSpace.free_bytes)} free of {formatBytes(diskSpace.total_bytes)}"
         >
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
           <span class="font-bold text-neutral-200">{formatBytes(diskSpace.free_bytes)}</span>
           <span class="text-neutral-500">Free</span>
         </div>
@@ -213,7 +213,7 @@
           {tasksStore.totalSpeedBps > 0 ? `${formatBytes(tasksStore.totalSpeedBps)}/s` : '0 B/s'}
         </span>
         {#if tasksStore.totalSpeedBps > 0 && speedHistory.length > 2}
-          <svg class="w-12 h-3.5 text-neutral-400 flex-shrink-0" viewBox="0 0 100 22" aria-hidden="true">
+          <svg class="w-12 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 100 22" aria-hidden="true">
             <polyline
               fill="none"
               stroke="currentColor"

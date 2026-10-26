@@ -77,7 +77,7 @@
               type="button"
               {disabled}
               onclick={() => removePair(k)}
-              class="p-0.5 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0 cursor-pointer"
+              class="p-0.5 text-neutral-500 hover:text-rose-400 transition-colors shrink-0 cursor-pointer"
               aria-label={`Remove variable ${k}`}
             >
               <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -158,7 +158,7 @@
               type="button"
               {disabled}
               onclick={() => removePair(k)}
-              class="p-1 text-neutral-500 hover:text-rose-400 transition-colors flex-shrink-0"
+              class="p-1 text-neutral-500 hover:text-rose-400 transition-colors shrink-0"
               aria-label={`Remove variable ${k}`}
             >
               <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">

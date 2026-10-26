@@ -98,7 +98,7 @@
       <button
         type="button"
         onclick={() => multiseatStore.refreshDisplays()}
-        class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer"
+        class="px-3 py-1 bg-surface-header hover:bg-surface-card border border-surface-border text-neutral-300 hover:text-white rounded-lg text-2xs font-bold transition flex items-center space-x-1.5 shrink-0 cursor-pointer"
         title="Rescan connected monitors"
       >
         <svg class="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,7 +170,7 @@
                     class="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-3xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30"
                     title="Gamux ScaleGuard will temporarily lock this monitor to 100% scale while games run to eliminate 1px seams and blur, then restore {d.scale}x on exit."
                   >
-                    <svg class="w-3 h-3 text-amber-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <svg class="w-3 h-3 text-amber-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
                     </svg>
                     <span>🔒 {d.scale}x ➔ 1.0x Scale Lock (Auto in game)</span>

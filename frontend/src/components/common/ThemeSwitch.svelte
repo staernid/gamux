@@ -46,7 +46,7 @@
 
   <!-- Segmented 3-Mode Pill Selector -->
   <div
-    class="flex items-center p-1 rounded-xl bg-surface-base border border-surface-border flex-shrink-0"
+    class="flex items-center p-1 rounded-xl bg-surface-base border border-surface-border shrink-0"
     role="radiogroup"
     aria-label="Theme selection"
   >
@@ -60,7 +60,7 @@
         class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer {isActive ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 font-bold shadow-sm' : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-surface-cardHover'}"
         title="{opt.label} — {opt.desc}"
       >
-        <Icon name={opt.icon} className="w-3.5 h-3.5 flex-shrink-0" />
+        <Icon name={opt.icon} className="w-3.5 h-3.5 shrink-0" />
         <span>{opt.label}</span>
       </button>
     {/each}

@@ -48,11 +48,11 @@
     <!-- Left: Status Pip + Title -->
     <div class="flex items-center space-x-3 min-w-0 flex-1 pr-4">
       {#if isRunning}
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Running"></span>
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" title="Running"></span>
       {:else if !isReady && !isStub}
-        <span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title="Setup Required"></span>
+        <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Setup Required"></span>
       {:else}
-        <span class="w-2 h-2 rounded-full bg-neutral-700 flex-shrink-0"></span>
+        <span class="w-2 h-2 rounded-full bg-neutral-700 shrink-0"></span>
       {/if}
 
       <span class="font-bold text-neutral-200 group-hover:text-white truncate" title={game.name}>
@@ -61,7 +61,7 @@
     </div>
 
     <!-- Center/Right Columns: Platform, Size, Playtime, Runner -->
-    <div class="flex items-center space-x-6 text-neutral-400 text-3xs flex-shrink-0">
+    <div class="flex items-center space-x-6 text-neutral-400 text-3xs shrink-0">
       <span class="w-16 uppercase text-neutral-500 truncate">{game.platform || 'win64'}</span>
       <span class="w-20 text-right">{game.diskSizeBytes ? formatBytes(game.diskSizeBytes) : '—'}</span>
       <span class="w-24 text-right">{game.playtimeSeconds ? formatPlaytime(game.playtimeSeconds) : '—'}</span>

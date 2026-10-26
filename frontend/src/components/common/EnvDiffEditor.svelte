@@ -67,12 +67,12 @@
           {@const isOverridingGlobal = Boolean(globalEnv && globalEnv[k] !== undefined)}
           <div class="flex items-center justify-between gap-3 p-2.5 bg-surface-input border border-surface-border rounded-xl">
             <div class="flex items-center space-x-2 min-w-0 flex-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" title="Active variable"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white shrink-0" title="Active variable"></span>
               <span class="font-mono text-xs font-bold text-white truncate">{k}</span>
               <span class="text-neutral-500 text-xs font-mono">=</span>
               <span class="font-mono text-xs text-neutral-200 truncate">{customEnv[k]}</span>
               {#if isOverridingGlobal}
-                <span class="px-1.5 py-0.5 rounded text-3xs font-mono bg-neutral-800 text-neutral-300 border border-neutral-700 flex-shrink-0">
+                <span class="px-1.5 py-0.5 rounded text-3xs font-mono bg-neutral-800 text-neutral-300 border border-neutral-700 shrink-0">
                   Overrides Global ({globalEnv[k]})
                 </span>
               {/if}
@@ -82,7 +82,7 @@
               type="button"
               onclick={() => removeVariable(k)}
               {disabled}
-              class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0"
+              class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
               title="Remove variable"
               aria-label={`Remove variable ${k}`}
             >
@@ -115,7 +115,7 @@
         <button
           type="button"
           onclick={addVariable}
-          class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-xl text-xs font-semibold transition-colors flex-shrink-0 cursor-pointer flex items-center space-x-1"
+          class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer flex items-center space-x-1"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />

@@ -52,7 +52,7 @@
       >
         <div class="flex items-center space-x-3.5 min-w-0 flex-1">
           <!-- Game Cover Artwork: True 2:3 uncropped ratio -->
-          <div class="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-surface-base border border-surface-border group-hover:border-surface-borderHighlight flex-shrink-0 shadow-md transition">
+          <div class="w-16 sm:w-20 aspect-2/3 rounded-xl overflow-hidden bg-surface-base border border-surface-border group-hover:border-surface-borderHighlight shrink-0 shadow-md transition">
             <PosterArt
               appId={tr.appId}
               name={tr.gameName}
@@ -63,7 +63,7 @@
 
           <div class="min-w-0 space-y-1">
             <div class="flex items-center space-x-2">
-              <span class="w-2 h-2 rounded-full flex-shrink-0 {tr.status === 'completed' ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
+              <span class="w-2 h-2 rounded-full shrink-0 {tr.status === 'completed' ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
               <span class="font-bold text-white text-sm sm:text-base truncate group-hover:text-white transition" title={tr.gameName || tr.title}>
                 {tr.gameName || tr.title}
               </span>
@@ -84,7 +84,7 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-2 flex-shrink-0">
+        <div class="flex items-center space-x-2 shrink-0">
           {#if tr.gameDir}
             <button
               type="button"

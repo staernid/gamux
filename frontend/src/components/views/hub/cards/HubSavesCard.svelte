@@ -265,7 +265,7 @@
                 </p>
               </div>
 
-              <div class="flex items-center space-x-2 flex-shrink-0 self-end sm:self-center">
+              <div class="flex items-center space-x-2 shrink-0 self-end sm:self-center">
                 <button
                   type="button"
                   onclick={() => handleCopyPath(loc.path)}
@@ -346,7 +346,7 @@
               type="button"
               onclick={handleCreateBackup}
               disabled={isCreatingBackup}
-              class="bg-white hover:bg-neutral-200 active:bg-neutral-300 disabled:opacity-50 text-neutral-950 font-bold text-xs px-4 py-1.5 rounded-lg transition shadow-md flex-shrink-0 cursor-pointer"
+              class="bg-white hover:bg-neutral-200 active:bg-neutral-300 disabled:opacity-50 text-neutral-950 font-bold text-xs px-4 py-1.5 rounded-lg transition shadow-md shrink-0 cursor-pointer"
             >
               {isCreatingBackup ? 'Saving...' : 'Take Snapshot'}
             </button>
@@ -384,7 +384,7 @@
                 </div>
               </div>
 
-              <div class="flex items-center space-x-1.5 flex-shrink-0">
+              <div class="flex items-center space-x-1.5 shrink-0">
                 <button
                   type="button"
                   onclick={() => handleRestoreBackup(bk.id)}

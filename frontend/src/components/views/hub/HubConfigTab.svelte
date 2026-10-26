@@ -111,7 +111,7 @@
 <div class="space-y-6 animate-fade-in text-neutral-200">
   {#if !isInstalled}
     <div class="p-3.5 bg-surface-card border border-surface-border rounded-2xl flex items-center space-x-3 text-xs text-neutral-300 shadow-sm">
-      <span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0 animate-pulse"></span>
+      <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0 animate-pulse"></span>
       <p class="leading-relaxed">
         <strong class="text-white font-bold">Pre-installation Configuration:</strong> Customize runner, wine prefix, launch arguments, or environment variables now. These options will be applied when the game is installed and launched.
       </p>
@@ -123,7 +123,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <!-- Status Badge & Description -->
       <div class="flex items-center space-x-3 min-w-0">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 {overrideCount > 0 ? 'bg-neutral-800 border border-neutral-600 text-white' : 'bg-emerald-950/40 border border-emerald-800/40 text-emerald-400'}">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 {overrideCount > 0 ? 'bg-neutral-800 border border-neutral-600 text-white' : 'bg-emerald-950/40 border border-emerald-800/40 text-emerald-400'}">
           {#if overrideCount > 0}
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -171,7 +171,7 @@
       </div>
 
       <!-- Controls & Filter Toolbar -->
-      <div class="flex items-center space-x-2 flex-shrink-0">
+      <div class="flex items-center space-x-2 shrink-0">
         {#if overrideCount > 0}
           <button
             type="button"
@@ -225,7 +225,7 @@
               <button
                 type="button"
                 onclick={copyLaunchCommand}
-                class="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-3xs font-mono font-bold text-neutral-300 hover:text-white transition flex-shrink-0 cursor-pointer flex items-center space-x-1"
+                class="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-3xs font-mono font-bold text-neutral-300 hover:text-white transition shrink-0 cursor-pointer flex items-center space-x-1"
               >
                 {#if previewCopied}
                   <span class="text-emerald-400">✓ Copied</span>
@@ -295,7 +295,7 @@
                     </div>
                     <p class="font-mono text-3xs text-neutral-400 truncate">{cand.executable}</p>
                   </div>
-                  <div class="w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 {isSelected ? 'border-white bg-white' : 'border-surface-borderHighlight'}" aria-hidden="true">
+                  <div class="w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 {isSelected ? 'border-white bg-white' : 'border-surface-borderHighlight'}" aria-hidden="true">
                     {#if isSelected}
                       <div class="w-1.5 h-1.5 rounded-full bg-neutral-950"></div>
                     {/if}
@@ -315,7 +315,7 @@
             <button
               type="button"
               onclick={() => drawerDraft.browseExecutable(game?.gameDir)}
-              class="px-3.5 py-2 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition cursor-pointer flex-shrink-0"
+              class="px-3.5 py-2 rounded-lg bg-surface-cardHover hover:bg-surface-elevated border border-surface-border text-neutral-200 hover:text-white text-xs font-bold transition cursor-pointer shrink-0"
             >
               Browse...
             </button>
@@ -408,12 +408,12 @@
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2 min-w-0">
               <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
-                <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
                 Physical Source
               </span>
-              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap flex-shrink-0">
+              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap shrink-0">
                 {$drawerDraft.sourceOverride || game?.source || game?.store || 'Standalone'}
                 {#if $drawerDraft.appId || (game?.appId && game.appId !== '0')}
                   <span class="text-neutral-400 font-mono ml-1">#{$drawerDraft.appId || game?.appId}</span>
@@ -440,12 +440,12 @@
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2 min-w-0">
               <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
-                <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
                 Store Metadata
               </span>
-              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap flex-shrink-0">
+              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-200 border border-surface-border whitespace-nowrap shrink-0">
                 {hasMatch ? metaInfo.provider : 'Unlinked'}
                 {#if hasMatch && metaInfo.id}
                   <span class="text-neutral-400 font-mono ml-1">#{metaInfo.id}</span>
@@ -471,12 +471,12 @@
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2 min-w-0">
               <span class="text-3xs uppercase font-mono font-bold tracking-wider text-neutral-400 flex items-center gap-1.5 truncate">
-                <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 Artwork Hub
               </span>
-              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-300 border border-surface-border whitespace-nowrap flex-shrink-0">
+              <span class="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-surface-cardHover text-neutral-300 border border-surface-border whitespace-nowrap shrink-0">
                 {game?.lockedArtwork ? 'Custom' : 'Active'}
               </span>
             </div>

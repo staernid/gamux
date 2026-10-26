@@ -65,7 +65,7 @@
 >
   {#if !customHeader && (title || header || headerActions)}
     <!-- Standard Modal Header Bar -->
-    <div class="flex items-center justify-between {maxWidth} w-full mx-auto mb-5 flex-shrink-0">
+    <div class="flex items-center justify-between {maxWidth} w-full mx-auto mb-5 shrink-0">
       <div class="min-w-0 pr-4">
         {#if header}
           {@render header?.()}
@@ -89,7 +89,7 @@
       </div>
 
       <!-- Header Actions & Close Button -->
-      <div class="flex items-center space-x-2 flex-shrink-0">
+      <div class="flex items-center space-x-2 shrink-0">
         {@render headerActions?.()}
 
         {#if showClose}

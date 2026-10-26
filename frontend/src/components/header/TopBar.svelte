@@ -138,7 +138,7 @@
         title="Shelf (1)"
         aria-label="Shelf (1)"
       >
-        <Icon name="shelf" className="w-4 h-4 flex-shrink-0" />
+        <Icon name="shelf" className="w-4 h-4 shrink-0" />
       </button>
 
       <!-- Downloads (2) -->
@@ -149,7 +149,7 @@
         title="Downloads (2)"
         aria-label="Downloads (2)"
       >
-        <Icon name="tasks" className="w-4 h-4 flex-shrink-0" />
+        <Icon name="tasks" className="w-4 h-4 shrink-0" />
         {#if tasksStore.activeTransfersCount > 0}
           <span class="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[15px] text-center text-4xs rounded-full bg-white text-neutral-950 font-black font-mono shadow">
             {tasksStore.activeTransfersCount}
@@ -166,7 +166,7 @@
         aria-label={$selectedGame ? `Selected: ${$selectedGame.name} (3)` : 'Selected Game (3)'}
         disabled={!hasSelectedOrAnyGame}
       >
-        <Icon name="gamepad" className="w-4 h-4 flex-shrink-0" />
+        <Icon name="gamepad" className="w-4 h-4 shrink-0" />
       </button>
 
       <!-- Settings (4) -->
@@ -177,7 +177,7 @@
         title="Settings (4)"
         aria-label="Settings (4)"
       >
-        <Icon name="settings" className="w-4 h-4 flex-shrink-0" />
+        <Icon name="settings" className="w-4 h-4 shrink-0" />
       </button>
 
       <!-- Online Catalog (5) - Rightmost -->
@@ -188,7 +188,7 @@
         title="Catalog (5)"
         aria-label="Catalog (5)"
       >
-        <Icon name="globe" className="w-4 h-4 flex-shrink-0" />
+        <Icon name="globe" className="w-4 h-4 shrink-0" />
       </button>
     </nav>
   </div>
@@ -202,15 +202,15 @@
         <div class="pointer-events-auto flex items-center space-x-2.5 bg-surface-header/95 border border-surface-border hover:border-surface-borderHighlight px-3 py-1.5 rounded-2xl shadow-2xl animate-fade-in transition-colors">
           <!-- Profile Avatar + Badge (shown for secondary / multiseat profiles; omitted for solo main) -->
           {#if !item.isSolo}
-            <div class="flex items-center space-x-1.5 flex-shrink-0" title="{item.profile?.name || item.profileId} ({item.seatId || item.profileId})">
+            <div class="flex items-center space-x-1.5 shrink-0" title="{item.profile?.name || item.profileId} ({item.seatId || item.profileId})">
               {#if item.profile?.avatarUrl}
                 <img
                   src={item.profile.avatarUrl}
                   alt={item.profile.name || item.profileId}
-                  class="w-4 h-4 rounded-full object-cover border border-surface-border flex-shrink-0"
+                  class="w-4 h-4 rounded-full object-cover border border-surface-border shrink-0"
                 />
               {:else}
-                <div class="w-4 h-4 rounded-full bg-surface-input text-neutral-300 font-bold text-4xs uppercase flex items-center justify-center flex-shrink-0 border border-surface-border">
+                <div class="w-4 h-4 rounded-full bg-surface-input text-neutral-300 font-bold text-4xs uppercase flex items-center justify-center shrink-0 border border-surface-border">
                   {getInitials(item.profile?.name || item.profileId)}
                 </div>
               {/if}
@@ -231,7 +231,7 @@
             class="flex items-center space-x-2 text-xs text-neutral-200 hover:text-white font-bold transition-colors truncate max-w-[160px] sm:max-w-[220px] cursor-pointer"
             title="Jump to Game Hub ({item.name})"
           >
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
             <span class="truncate">{item.name}</span>
           </button>
 
@@ -239,7 +239,7 @@
           <button
             type="button"
             onclick={(e) => { e.stopPropagation(); handleStopInstance(item); }}
-            class="px-2 py-0.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-2xs font-mono font-bold border border-rose-900/40 hover:border-rose-700/60 transition-all flex items-center space-x-1 flex-shrink-0 active:scale-95 cursor-pointer shadow-sm"
+            class="px-2 py-0.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-2xs font-mono font-bold border border-rose-900/40 hover:border-rose-700/60 transition-all flex items-center space-x-1 shrink-0 active:scale-95 cursor-pointer shadow-sm"
             title="Stop Process (Terminate {item.name}{!item.isSolo ? ` - ${item.profileId}` : ''})"
           >
             <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">

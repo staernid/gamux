@@ -50,13 +50,13 @@
       <div class="mt-2 pt-2 border-t border-surface-border space-y-1.5 animate-fade-in">
         <div class="flex items-center justify-between text-2xs">
           <span class="text-neutral-200 font-semibold truncate flex items-center space-x-1.5">
-            <svg class="animate-spin w-3 h-3 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin w-3 h-3 text-white shrink-0" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
             </svg>
             <span class="truncate">{task.stage || task.details || 'Processing...'}</span>
           </span>
-          <span class="font-mono text-neutral-300 font-bold ml-2 flex-shrink-0">{Math.round(task.percent || 0)}%</span>
+          <span class="font-mono text-neutral-300 font-bold ml-2 shrink-0">{Math.round(task.percent || 0)}%</span>
         </div>
         <div class="w-full bg-surface-input rounded-full h-1.5 overflow-hidden border border-surface-border">
           <div class="bg-white h-1.5 rounded-full transition-all duration-300" style="width: {Math.max(2, Math.min(100, task.percent || 0))}%"></div>
@@ -66,7 +66,7 @@
           <button
             type="button"
             onclick={() => onviewTasks?.()}
-            class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 flex-shrink-0 cursor-pointer"
+            class="text-neutral-300 hover:text-white font-bold flex items-center space-x-0.5 ml-2 shrink-0 cursor-pointer"
           >
             <span>View in Tasks</span>
             <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>

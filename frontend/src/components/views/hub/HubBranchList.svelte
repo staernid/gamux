@@ -114,7 +114,7 @@
           </div>
 
           <!-- Select Action -->
-          <div class="flex-shrink-0 self-start sm:self-auto">
+          <div class="shrink-0 self-start sm:self-auto">
             {#if isActive}
               <div class="px-3 py-1.5 rounded-xl bg-surface-header text-neutral-400 border border-surface-border text-xs font-mono flex items-center space-x-1.5">
                 <svg class="w-3.5 h-3.5 text-neutral-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -35,7 +35,7 @@
   <div class="flex items-center space-x-3 min-w-0">
     {#if !isInstalled}
       <!-- Pre-download selection checkbox -->
-      <label class="flex items-center cursor-pointer flex-shrink-0" title="Select depot for download">
+      <label class="flex items-center cursor-pointer shrink-0" title="Select depot for download">
         <input
           type="checkbox"
           checked={isSelected}
@@ -45,7 +45,7 @@
       </label>
     {:else}
       <!-- Installed Status Indicator -->
-      <div class="w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 {depot.installed ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/60' : 'bg-surface-header text-neutral-600 border border-surface-border'}">
+      <div class="w-4 h-4 rounded-md flex items-center justify-center shrink-0 {depot.installed ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/60' : 'bg-surface-header text-neutral-600 border border-surface-border'}">
         {#if depot.installed}
           <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -87,7 +87,7 @@
   </div>
 
   <!-- Actions -->
-  <div class="flex items-center space-x-2 flex-shrink-0">
+  <div class="flex items-center space-x-2 shrink-0">
     {#if depot.category === 'soundtrack'}
       <button
         type="button"

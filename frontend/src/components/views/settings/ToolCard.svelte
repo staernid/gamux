@@ -23,11 +23,11 @@
     <div class="flex items-center justify-between gap-1.5">
       <span class="font-semibold text-xs text-white truncate">{tool.name}</span>
       {#if !isInstalled}
-        <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
+        <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
           Missing
         </span>
       {:else if tool.hasUpdate}
-        <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
+        <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
           Update
         </span>
       {/if}

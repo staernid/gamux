@@ -43,7 +43,7 @@
     <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface-card border-b border-surface-border">
       <div class="flex items-center space-x-2 min-w-0">
         {#if icon}
-          <div class="text-neutral-400 flex-shrink-0 flex items-center justify-center">
+          <div class="text-neutral-400 shrink-0 flex items-center justify-center">
             {@render icon?.()}
           </div>
         {/if}
@@ -60,7 +60,7 @@
       </div>
 
       {#if action}
-        <div class="flex items-center space-x-2 flex-shrink-0">
+        <div class="flex items-center space-x-2 shrink-0">
           {@render action?.()}
         </div>
       {/if}

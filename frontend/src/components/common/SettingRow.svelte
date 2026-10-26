@@ -53,7 +53,7 @@
     </div>
   {/if}
 
-  <div class="{inline ? 'flex-shrink-0 w-full sm:w-auto flex items-center justify-start sm:justify-end' : 'w-full'}">
+  <div class="{inline ? 'shrink-0 w-full sm:w-auto flex items-center justify-start sm:justify-end' : 'w-full'}">
     {@render children?.()}
   </div>
 </div>

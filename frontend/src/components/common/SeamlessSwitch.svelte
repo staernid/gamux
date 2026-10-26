@@ -81,7 +81,7 @@
   {#if !isCompact}
     <!-- Left Side: Label & Description with Override Dot -->
     <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
-      <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
+      <div class="w-1.5 h-1.5 rounded-full shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
 
       <div class="space-y-0.5 min-w-0 flex-1">
         <div class="flex items-center space-x-2 flex-wrap">
@@ -105,7 +105,7 @@
   {/if}
 
   <!-- Right Side: Reset Button + Switch -->
-  <div class="flex items-center space-x-2 flex-shrink-0">
+  <div class="flex items-center space-x-2 shrink-0">
     {#if isOverridden}
       <button
         type="button"
@@ -122,7 +122,7 @@
 
     <!-- The Switch Track & Thumb -->
     <div
-      class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out border
+      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out border
         {isInherited
           ? (effectiveValue ? 'bg-neutral-700 border-neutral-600' : 'bg-neutral-900/80 border-neutral-800')
           : (effectiveValue ? 'bg-white border-white' : 'bg-neutral-900 border-neutral-700')}"

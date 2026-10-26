@@ -85,7 +85,7 @@
             </span>
 
             <!-- Level Badge -->
-            <span class="px-1.5 py-0.5 rounded text-3xs font-black uppercase tracking-wider flex-shrink-0 {item.type === 'error' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : item.type === 'warning' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : item.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}">
+            <span class="px-1.5 py-0.5 rounded text-3xs font-black uppercase tracking-wider shrink-0 {item.type === 'error' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : item.type === 'warning' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : item.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-neutral-800 text-neutral-300 border border-neutral-700'}">
               {item.type || 'INFO'}
             </span>
 
@@ -100,10 +100,10 @@
                 {/if}
               </div>
               {#if item.message}
-                <p class="text-neutral-400 text-2xs break-words">{item.message}</p>
+                <p class="text-neutral-400 text-2xs wrap-break-word">{item.message}</p>
               {/if}
               {#if item.details}
-                <p class="text-neutral-500 text-3xs break-words">{item.details}</p>
+                <p class="text-neutral-500 text-3xs wrap-break-word">{item.details}</p>
               {/if}
             </div>
           </div>

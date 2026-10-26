@@ -61,7 +61,7 @@
       <div class="p-3.5 flex items-center justify-between hover:bg-surface-cardHover transition gap-3">
         <div class="flex items-center space-x-3 min-w-0">
           <!-- Mini Poster Art: True 2:3 uncropped ratio -->
-          <div class="w-14 sm:w-16 aspect-[2/3] rounded-xl overflow-hidden bg-surface-base border border-surface-border flex-shrink-0 shadow-md">
+          <div class="w-14 sm:w-16 aspect-2/3 rounded-xl overflow-hidden bg-surface-base border border-surface-border shrink-0 shadow-md">
             <PosterArt
               appId={tr.appId}
               name={tr.gameName}
@@ -72,7 +72,7 @@
 
           <div class="min-w-0 space-y-0.5">
             <div class="flex items-center space-x-2">
-              <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-header text-neutral-300 uppercase font-mono border border-surface-border flex-shrink-0">
+              <span class="px-1.5 py-0.5 text-4xs font-bold rounded bg-surface-header text-neutral-300 uppercase font-mono border border-surface-border shrink-0">
                 {tr.status}
               </span>
               <span class="font-bold text-white text-xs truncate" title={tr.gameName || tr.title}>
@@ -89,7 +89,7 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-1.5 flex-shrink-0">
+        <div class="flex items-center space-x-1.5 shrink-0">
           <!-- Reorder buttons if multiple in queue -->
           {#if tasks.length > 1}
             <div class="flex items-center space-x-0.5 mr-1 bg-surface-input p-0.5 rounded-lg border border-surface-border">

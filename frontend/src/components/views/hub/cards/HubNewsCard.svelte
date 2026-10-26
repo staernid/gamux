@@ -73,7 +73,7 @@
             </span>
           </button>
 
-          <div class="flex items-center space-x-2 flex-shrink-0">
+          <div class="flex items-center space-x-2 shrink-0">
             {#if item.url}
               <a
                 href={item.url}

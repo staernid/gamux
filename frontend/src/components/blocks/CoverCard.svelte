@@ -66,7 +66,7 @@
 >
   <!-- Poster Art Container -->
   <div
-    class="gpu-layer relative w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-lg border transition-colors duration-150 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-surface-border group-hover:border-neutral-400'}"
+    class="gpu-layer relative w-full aspect-2/3 rounded-2xl overflow-hidden shadow-lg border transition-colors duration-150 {selected ? 'border-white ring-2 ring-white/50 shadow-white/10' : 'border-surface-border group-hover:border-neutral-400'}"
   >
     <PosterArt
       {appId}

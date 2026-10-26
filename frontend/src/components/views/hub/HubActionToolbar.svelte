@@ -35,7 +35,7 @@
   </div>
 
   <!-- Status Badge & Save Actions -->
-  <div class="flex items-center space-x-2 flex-shrink-0">
+  <div class="flex items-center space-x-2 shrink-0">
     {#if overrideCount > 0}
       <span class="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-neutral-800 text-neutral-200 border border-neutral-700 flex items-center space-x-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-neutral-300"></span>

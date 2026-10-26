@@ -150,7 +150,7 @@
       {#each filteredAchievements as ach (ach.id)}
         <div class="flex items-start space-x-3.5 p-3 rounded-xl border transition-all {ach.unlocked ? 'bg-emerald-950/15 border-emerald-800/30 hover:border-emerald-700/50' : 'bg-surface-card border-surface-border opacity-70'}">
           <!-- Icon -->
-          <div class="w-12 h-12 rounded-lg overflow-hidden bg-black/40 border border-surface-border flex-shrink-0 relative">
+          <div class="w-12 h-12 rounded-lg overflow-hidden bg-black/40 border border-surface-border shrink-0 relative">
             {#if ach.unlocked && ach.icon_url}
               <img src={ach.icon_url} alt={ach.name} class="w-full h-full object-cover" />
             {:else if ach.icon_gray_url || ach.icon_url}
@@ -178,7 +178,7 @@
                 <h5 class="text-xs font-bold truncate {ach.unlocked ? 'text-emerald-300' : 'text-neutral-200'}">{ach.name || ach.id}</h5>
                 {#if typeof ach.global_percent === 'number' && ach.global_percent > 0}
                   <span
-                    class="text-4xs font-mono font-bold px-1.5 py-0.5 rounded border tracking-wider uppercase flex-shrink-0 {
+                    class="text-4xs font-mono font-bold px-1.5 py-0.5 rounded border tracking-wider uppercase shrink-0 {
                       ach.rarity === 'ultra_rare'
                         ? 'bg-neutral-800 text-amber-200 border-amber-400/40'
                         : ach.rarity === 'rare'
@@ -192,7 +192,7 @@
                 {/if}
               </div>
               {#if ach.unlocked && ach.unlock_time > 0}
-                <span class="text-3xs font-mono text-emerald-400/80 flex-shrink-0">{formatLastPlayed(ach.unlock_time)}</span>
+                <span class="text-3xs font-mono text-emerald-400/80 shrink-0">{formatLastPlayed(ach.unlock_time)}</span>
               {/if}
             </div>
             <p class="text-2xs text-neutral-400 mt-0.5 line-clamp-2 leading-relaxed">{ach.description || (ach.hidden ? 'Hidden achievement' : 'No description available')}</p>

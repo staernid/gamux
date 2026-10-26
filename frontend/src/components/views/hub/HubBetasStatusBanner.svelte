@@ -37,7 +37,7 @@
 <div class="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-sm space-y-3">
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 rounded-xl bg-surface-header border border-surface-border text-neutral-300 flex items-center justify-center flex-shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-surface-header border border-surface-border text-neutral-300 flex items-center justify-center shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v10M8 7a3 3 0 100-6 3 3 0 000 6zm0 10a3 3 0 100 6 3 3 0 000-6zm8-6a3 3 0 100-6 3 3 0 000 6zm-8 4h3a5 5 0 005-5V7" />
         </svg>

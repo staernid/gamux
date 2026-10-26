@@ -75,13 +75,13 @@
     <div class="space-y-1 min-w-0">
       <div class="flex items-center justify-between gap-1.5 min-w-0">
         <div class="flex items-center space-x-2 min-w-0 flex-1">
-          <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
+          <div class="w-1.5 h-1.5 rounded-full shrink-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
           <label for={id} class="text-xs font-semibold cursor-pointer truncate {isOverridden ? 'text-white font-bold' : 'text-neutral-200'}">
             {label}
           </label>
         </div>
 
-        <div class="flex items-center space-x-1.5 flex-shrink-0">
+        <div class="flex items-center space-x-1.5 shrink-0">
           {#if isOverridden}
             <span class="text-3xs font-mono text-neutral-300 font-medium">
               (Override)
@@ -145,7 +145,7 @@
         <button
           type="button"
           onclick={revertToInherit}
-          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer shrink-0"
           title="Reset to global default"
           aria-label="Reset to global default"
         >
@@ -164,7 +164,7 @@
   >
     <!-- Left Side: Label & Description with Override Dot -->
     <div class="flex items-start sm:items-center space-x-2.5 min-w-0 flex-1">
-      <div class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
+      <div class="w-1.5 h-1.5 rounded-full shrink-0 mt-1 sm:mt-0 {isOverridden ? 'bg-white' : 'bg-transparent'}" aria-hidden="true"></div>
 
       <div class="space-y-0.5 min-w-0 flex-1">
         <div class="flex items-center space-x-2 flex-wrap">
@@ -187,7 +187,7 @@
     </div>
 
     <!-- Right Side: Input + Optional Status/Slot + Reset Button -->
-    <div class="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto">
+    <div class="flex items-center space-x-2 shrink-0 w-full sm:w-auto">
       <div class="relative flex-1 sm:w-60">
         <input
           {id}
@@ -224,7 +224,7 @@
       </div>
 
       {#if status}
-        <span class="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-3xs font-mono font-bold flex-shrink-0">
+        <span class="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-3xs font-mono font-bold shrink-0">
           {status}
         </span>
       {/if}
@@ -235,7 +235,7 @@
         <button
           type="button"
           onclick={revertToInherit}
-          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer flex-shrink-0"
+          class="p-1.5 rounded-lg bg-surface-cardHover hover:bg-surface-border border border-surface-borderHighlight text-neutral-300 hover:text-white text-xs transition-colors flex items-center justify-center cursor-pointer shrink-0"
           title="Reset to global default"
           aria-label="Reset to global default"
         >

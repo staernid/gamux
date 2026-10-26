@@ -76,7 +76,7 @@
       <span class="block font-bold text-neutral-200 text-xs group-focus-within:text-white transition-colors">{label}</span>
       {#if effectiveTooltip}
         <span
-          class="text-neutral-400 hover:text-white transition-colors cursor-help p-0.5 flex-shrink-0"
+          class="text-neutral-400 hover:text-white transition-colors cursor-help p-0.5 shrink-0"
           title={effectiveTooltip}
           aria-label={effectiveTooltip}
         >
@@ -93,7 +93,7 @@
 
   <!-- Unified Stepper Control Capsule (Single Focus Stop for Controller & Keyboard) -->
   <div
-    class="flex items-center space-x-1 bg-surface-input border border-surface-border focus:border-white focus:ring-1 focus:ring-white/20 rounded-lg p-0.5 flex-shrink-0 outline-none transition-all hover:border-neutral-500"
+    class="flex items-center space-x-1 bg-surface-input border border-surface-border focus:border-white focus:ring-1 focus:ring-white/20 rounded-lg p-0.5 shrink-0 outline-none transition-all hover:border-neutral-500"
     tabindex="0"
     role="slider"
     aria-label={`${label}: ${currentLabel}`}

@@ -140,7 +140,7 @@
 <svelte:window onclick={() => { showLaunchMenu = false; }} onkeydown={(e) => { if (e.key === 'Escape') showLaunchMenu = false; }} />
 
 <!-- Hero Banner Background & Vignette -->
-<div class="relative w-full h-96 sm:h-[420px] flex-shrink-0 overflow-hidden select-none">
+<div class="relative w-full h-96 sm:h-[420px] shrink-0 overflow-hidden select-none">
   <!-- Hero Backdrop Component -->
   <div class="absolute inset-0">
     <GameHeroBackdrop
@@ -172,7 +172,7 @@
       <div class="flex items-end space-x-5 min-w-0">
         <!-- Poster Art (Cover 600x900) -->
         <div
-          class="w-24 sm:w-32 aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border flex-shrink-0 hidden xs:block bg-black/40 group/poster relative cursor-pointer"
+          class="w-24 sm:w-32 aspect-2/3 rounded-2xl overflow-hidden shadow-2xl border shrink-0 hidden xs:block bg-black/40 group/poster relative cursor-pointer"
           style="border-color: {pColors.border}; box-shadow: 0 12px 30px -8px {pColors.glow};"
           onclick={() => modalStore.open('artwork-picker', { game, initialTab: 'cover' })}
           title="Change Cover Artwork"
@@ -226,7 +226,7 @@
       </div>
 
       <!-- Right: Primary CTA & Actions -->
-      <div class="flex flex-col items-start sm:items-end space-y-2.5 flex-shrink-0">
+      <div class="flex flex-col items-start sm:items-end space-y-2.5 shrink-0">
         <div class="flex items-center space-x-3">
         {#if isVirtual}
           <button
@@ -295,7 +295,7 @@
                 >
                   {#if !isTaskPaused}
                     <!-- Moving diagonal stripes overlay -->
-                    <div class="absolute inset-0 opacity-25 bg-[linear-gradient(45deg,rgba(255,255,255,0.35)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.35)_50%,rgba(255,255,255,0.35)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-progress-stripes"></div>
+                    <div class="absolute inset-0 opacity-25 bg-[linear-gradient(45deg,rgba(255,255,255,0.35)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.35)_50%,rgba(255,255,255,0.35)_75%,transparent_75%,transparent)] bg-size-[20px_20px] animate-progress-stripes"></div>
                   {/if}
                 </div>
               {/if}

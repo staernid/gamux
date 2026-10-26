@@ -100,7 +100,7 @@
           <span class="text-xs font-semibold text-neutral-200">Sound Effects Volume</span>
           <p class="text-2xs text-neutral-400">Master output volume for synthetic interface sounds</p>
         </div>
-        <div class="flex items-center space-x-2.5 flex-shrink-0">
+        <div class="flex items-center space-x-2.5 shrink-0">
           <span class="text-xs font-mono text-neutral-300 w-10 text-right">{Math.round(sfxVolume * 100)}%</span>
           <input
             type="range"

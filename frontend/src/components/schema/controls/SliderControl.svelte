@@ -50,7 +50,7 @@
     aria-label={property.label || property.key}
   />
 
-  <div class="w-18 flex-shrink-0">
+  <div class="w-18 shrink-0">
     <input
       type="number"
       {min}

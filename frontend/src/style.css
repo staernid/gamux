@@ -1,6 +1,29 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 0.95rem;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.85rem;
+  --text-4xs: 0.5625rem;
+  --text-4xs--line-height: 0.75rem;
+
+  --color-surface-base: rgb(var(--surface-base));
+  --color-surface-header: rgb(var(--surface-header));
+  --color-surface-card: rgb(var(--surface-card));
+  --color-surface-card-hover: rgb(var(--surface-card-hover));
+  --color-surface-cardHover: rgb(var(--surface-card-hover));
+  --color-surface-elevated: rgb(var(--surface-elevated));
+  --color-surface-border: rgb(var(--surface-border));
+  --color-surface-border-subtle: rgb(var(--surface-border-subtle));
+  --color-surface-borderSubtle: rgb(var(--surface-border-subtle));
+  --color-surface-border-highlight: rgb(var(--surface-border-highlight));
+  --color-surface-borderHighlight: rgb(var(--surface-border-highlight));
+  --color-surface-input: rgb(var(--surface-input));
+  --color-surface-pill: rgb(var(--surface-pill));
+}
 
 @layer base {
   :root,
@@ -77,39 +100,41 @@
   }
 }
 
-/* Minimalist Clean Scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
+@layer utilities {
+  /* Minimalist Clean Scrollbars */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 9999px;
-}
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 9999px;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
-}
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
 
-html.light ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-}
+  html.light ::-webkit-scrollbar-thumb {
+    background: #d4d4d8;
+  }
 
-html.light ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
-}
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1aa;
+  }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @layer components {

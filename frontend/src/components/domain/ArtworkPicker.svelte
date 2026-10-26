@@ -235,7 +235,7 @@
         <button
           type="button"
           onclick={() => selectAssetType(type.id)}
-          class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1.5 flex-shrink-0 {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
+          class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
         >
           <span>{type.label}</span>
           <span class="text-3xs font-mono {isActive ? 'text-neutral-600' : 'text-neutral-500'}">({type.hint})</span>
@@ -258,7 +258,7 @@
         type="button"
         onclick={fetchArtworkOptions}
         disabled={isLoadingArt}
-        class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex-shrink-0"
+        class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shrink-0"
       >
         Search
       </button>
@@ -269,7 +269,7 @@
   <div class="bg-surface-card border border-surface-border rounded-xl p-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
     <!-- URL Input -->
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <span class="text-3xs font-mono font-bold uppercase tracking-wider text-neutral-500 pl-1 flex-shrink-0">URL:</span>
+      <span class="text-3xs font-mono font-bold uppercase tracking-wider text-neutral-500 pl-1 shrink-0">URL:</span>
       <input
         type="url"
         bind:value={customArtUrl}
@@ -280,14 +280,14 @@
         type="button"
         onclick={handleCustomUrlApply}
         disabled={!customArtUrl.trim() || isApplyingArt}
-        class="px-3.5 py-1 bg-surface-card hover:bg-surface-cardHover disabled:opacity-40 border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+        class="px-3.5 py-1 bg-surface-card hover:bg-surface-cardHover disabled:opacity-40 border border-surface-border text-neutral-200 hover:text-white text-xs font-bold rounded-lg transition-colors shrink-0 cursor-pointer"
       >
         {isApplyingArt ? 'Applying...' : 'Apply'}
       </button>
     </div>
 
     <!-- Quick File Picker & Reset -->
-    <div class="flex items-center space-x-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-border">
+    <div class="flex items-center space-x-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-border">
       <button
         type="button"
         onclick={handleBrowseLocalArt}
@@ -326,7 +326,7 @@
         {@const isActive = Boolean(currentActiveArtUrl && (currentActiveArtUrl === opt.url || currentActiveArtUrl.includes(opt.url) || opt.url.includes(currentActiveArtUrl)))}
         <div class="group relative rounded-2xl overflow-hidden bg-surface-card border transition-all duration-200 flex flex-col {isActive ? 'border-emerald-500 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/10' : 'border-surface-border hover:border-neutral-500'}">
           <!-- Image Container -->
-          <div class="relative w-full {assetType === 'cover' ? 'aspect-[2/3]' : assetType === 'banner' ? 'aspect-[460/215]' : assetType === 'hero' ? 'aspect-[16/9]' : 'aspect-video p-4 flex items-center justify-center'} bg-black/40 overflow-hidden">
+          <div class="relative w-full {assetType === 'cover' ? 'aspect-2/3' : assetType === 'banner' ? 'aspect-460/215' : assetType === 'hero' ? 'aspect-16/9' : 'aspect-video p-4 flex items-center justify-center'} bg-black/40 overflow-hidden">
             <img
               src={opt.thumb_url || opt.url}
               alt=""

@@ -153,7 +153,7 @@
             No official store metadata linked yet. Link Steam or GOG metadata to display store descriptions, release dates, genres, and community resources.
           </p>
         </div>
-        <div class="flex items-center space-x-2 flex-shrink-0">
+        <div class="flex items-center space-x-2 shrink-0">
           <button
             type="button"
             onclick={() => modalStore.open('metadata-link', { game })}

@@ -52,7 +52,7 @@
   data-testid="search-filter-bar"
 >
   <!-- Search Magnifier Icon -->
-  <Icon name="search" className="w-4 h-4 text-neutral-500 mr-2.5 flex-shrink-0" />
+  <Icon name="search" className="w-4 h-4 text-neutral-500 mr-2.5 shrink-0" />
 
   <!-- Input Field -->
   <input
@@ -66,7 +66,7 @@
   />
 
   <!-- Count Pill & Clear Button -->
-  <div class="flex items-center space-x-2 ml-2 flex-shrink-0">
+  <div class="flex items-center space-x-2 ml-2 shrink-0">
     {#if totalCount > 0}
       <span class="text-4xs font-mono text-neutral-500 bg-surface-card px-2 py-0.5 rounded-md border border-surface-border">
         {filteredCount !== undefined ? filteredCount : totalCount} / {totalCount}

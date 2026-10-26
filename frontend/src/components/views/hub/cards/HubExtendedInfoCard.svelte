@@ -158,13 +158,13 @@
   {#if game?.gameDir}
     <div class="pt-2 border-t border-surface-border flex items-center justify-between gap-3 text-2xs">
       <div class="flex items-center space-x-2 min-w-0 font-mono text-neutral-400">
-        <span class="text-neutral-500 uppercase font-bold text-3xs flex-shrink-0">Directory:</span>
+        <span class="text-neutral-500 uppercase font-bold text-3xs shrink-0">Directory:</span>
         <span class="truncate select-all text-neutral-300">{game.gameDir}</span>
       </div>
       <button
         type="button"
         onclick={copyGameDir}
-        class="px-2.5 py-1 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 flex-shrink-0 cursor-pointer text-3xs font-mono"
+        class="px-2.5 py-1 rounded-lg bg-surface-header hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white transition flex items-center space-x-1.5 shrink-0 cursor-pointer text-3xs font-mono"
         title="Copy path to clipboard"
       >
         {#if copiedPath}

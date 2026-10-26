@@ -89,7 +89,7 @@
   <div class="space-y-5">
     <!-- Game Header Snapshot -->
     <div class="flex items-center space-x-4 p-3.5 rounded-2xl bg-surface-header border border-surface-border">
-      <div class="w-14 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-black/40 shadow-md">
+      <div class="w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-black/40 shadow-md">
         <PosterArt
           appId={game?.appId}
           name={game?.name}

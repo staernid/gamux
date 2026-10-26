@@ -55,9 +55,9 @@
   ></div>
 
   <!-- Deep Atmospheric Vignette & Contrast Gradients (retained in both themes to preserve contrast over hero art) -->
-  <div class="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-transparent pointer-events-none"></div>
-  <div class="absolute inset-0 bg-gradient-to-r from-[#09090b]/80 via-transparent to-[#09090b]/60 pointer-events-none"></div>
-  <div class="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#09090b]/60 to-transparent pointer-events-none"></div>
+  <div class="absolute inset-0 bg-linear-to-t from-[#09090b] via-[#09090b]/60 to-transparent pointer-events-none"></div>
+  <div class="absolute inset-0 bg-linear-to-r from-[#09090b]/80 via-transparent to-[#09090b]/60 pointer-events-none"></div>
+  <div class="absolute inset-x-0 top-0 h-28 bg-linear-to-b from-[#09090b]/60 to-transparent pointer-events-none"></div>
 
   <!-- Foreground Slot Content (if any) -->
   <div class="relative z-10 w-full h-full">

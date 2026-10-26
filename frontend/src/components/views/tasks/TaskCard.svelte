@@ -74,7 +74,7 @@
 <div class="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 hover:border-surface-borderHighlight transition">
   <div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
     <!-- Hero Poster Artwork: True 2:3 uncropped ratio -->
-    <div class="w-24 sm:w-32 aspect-[2/3] rounded-xl overflow-hidden bg-surface-base border border-surface-border flex-shrink-0 shadow-lg">
+    <div class="w-24 sm:w-32 aspect-2/3 rounded-xl overflow-hidden bg-surface-base border border-surface-border shrink-0 shadow-lg">
       <PosterArt
         appId={task.appId}
         name={task.gameName}
@@ -111,7 +111,7 @@
         </div>
 
         <!-- Controls -->
-        <div class="flex items-center space-x-2 flex-shrink-0">
+        <div class="flex items-center space-x-2 shrink-0">
           {#if isDl}
             <button
               type="button"

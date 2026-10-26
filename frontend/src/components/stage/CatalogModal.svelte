@@ -202,7 +202,7 @@
 
 <ModalShell customHeader={true} padding="p-6 sm:p-10" onclose={handleClose}>
   <!-- Header Bar -->
-  <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-4 flex-shrink-0">
+  <div class="flex flex-col gap-3.5 max-w-5xl w-full mx-auto mb-4 shrink-0">
     <div class="flex items-center justify-between border-b border-surface-border pb-3">
       <div class="flex items-center space-x-3">
         <div class="w-8 h-8 rounded-xl bg-surface-card border border-surface-border flex items-center justify-center text-white shadow-sm">

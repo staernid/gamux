@@ -112,7 +112,7 @@
             class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all text-left cursor-pointer {p.id === active?.id ? 'bg-surface-cardHover text-white border border-surface-borderHighlight' : 'text-neutral-300 hover:text-white hover:bg-surface-input'}"
           >
             <div class="flex items-center space-x-2 min-w-0">
-              <div class="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 bg-surface-input border border-surface-border flex items-center justify-center text-4xs font-bold uppercase text-neutral-300">
+              <div class="w-5 h-5 rounded-full overflow-hidden shrink-0 bg-surface-input border border-surface-border flex items-center justify-center text-4xs font-bold uppercase text-neutral-300">
                 {#if p.avatarUrl}
                   <img src={p.avatarUrl} alt={p.name} class="w-full h-full object-cover" />
                 {:else}
@@ -128,7 +128,7 @@
             </div>
 
             {#if p.id === active?.id}
-              <Icon name="check" className="w-3.5 h-3.5 text-white flex-shrink-0 ml-1.5" />
+              <Icon name="check" className="w-3.5 h-3.5 text-white shrink-0 ml-1.5" />
             {/if}
           </button>
         {/each}
@@ -169,7 +169,7 @@
             onclick={() => { isAdding = true; }}
             class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-neutral-300 hover:text-white hover:bg-surface-input transition-all cursor-pointer text-xs"
           >
-            <Icon name="plus" className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+            <Icon name="plus" className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
             <span>Add New Profile</span>
           </button>
         {/if}
@@ -182,7 +182,7 @@
           onclick={handleOpenSettings}
           class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-surface-input transition-all cursor-pointer text-2xs"
         >
-          <Icon name="settings" className="w-3.5 h-3.5 flex-shrink-0" />
+          <Icon name="settings" className="w-3.5 h-3.5 shrink-0" />
           <span>Profile Settings</span>
         </button>
       </div>

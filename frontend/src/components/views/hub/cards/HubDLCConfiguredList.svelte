@@ -47,7 +47,7 @@
             <span class="font-bold text-neutral-200 text-xs block truncate">{dlc.name || `DLC ${dlc.appId}`}</span>
             <span class="text-3xs font-mono text-neutral-400">AppID #{dlc.appId}</span>
           </div>
-          <span class="px-2 py-0.5 rounded text-3xs font-bold bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 flex-shrink-0">
+          <span class="px-2 py-0.5 rounded text-3xs font-bold bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 shrink-0">
             Active
           </span>
         </div>

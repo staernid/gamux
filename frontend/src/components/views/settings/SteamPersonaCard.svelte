@@ -137,9 +137,9 @@
       <div class="flex items-center justify-between gap-3">
         <div class="flex items-center space-x-2.5 min-w-0">
           {#if avatarUrl}
-            <img src={avatarUrl} alt="Avatar" class="w-7 h-7 rounded-full border border-neutral-700 object-cover flex-shrink-0" />
+            <img src={avatarUrl} alt="Avatar" class="w-7 h-7 rounded-full border border-neutral-700 object-cover shrink-0" />
           {:else}
-            <div class="w-7 h-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center flex-shrink-0 text-neutral-400">
+            <div class="w-7 h-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0 text-neutral-400">
               <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
               </svg>
@@ -164,7 +164,7 @@
           type="button"
           onclick={handleImportSteamProfile}
           disabled={isResolvingProfile || !steamProfileInput.trim()}
-          class="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+          class="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shrink-0"
         >
           {#if isResolvingProfile}
             <div class="w-3.5 h-3.5 border-2 border-neutral-400/30 border-t-white rounded-full animate-spin"></div>
@@ -225,7 +225,7 @@
             
             type="button"
             onclick={handleRandomSteamID}
-            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+            class="px-3 py-1.5 bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-200 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shrink-0"
             title="Generate a new randomized Steam ID"
           >
             <svg class="w-3.5 h-3.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,7 +238,7 @@
 
       {#if accountSteamId && !isValidSteamId}
         <div class="flex items-center space-x-1.5 text-xs text-amber-400 font-mono px-1">
-          <svg class="w-3.5 h-3.5 flex-shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <span>Warning: Standard SteamID64 format should be exactly 17 digits.</span>
@@ -247,7 +247,7 @@
 
       {#if hasCollision}
         <div class="flex items-center space-x-1.5 text-xs text-rose-400 font-mono px-1">
-          <svg class="w-3.5 h-3.5 flex-shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 shrink-0 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>Collision: Player 1 and Player 2 have the same SteamID. Click "Random" to generate a unique ID.</span>

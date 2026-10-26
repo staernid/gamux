@@ -97,7 +97,7 @@
   </div>
 
   {#if availableLanguages.length > 0}
-    <div class="flex items-center space-x-2 text-2xs text-neutral-400 flex-shrink-0">
+    <div class="flex items-center space-x-2 text-2xs text-neutral-400 shrink-0">
       <span class="font-bold">Voice Pack:</span>
       <select
         value={configuredLanguage}

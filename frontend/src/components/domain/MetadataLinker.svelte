@@ -175,7 +175,7 @@
         <button
           type="button"
           onclick={() => handleStoreChange(prov.id)}
-          class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
+          class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer {isActive ? 'bg-white text-neutral-950 shadow-sm' : 'bg-surface-card border border-surface-border text-neutral-400 hover:text-white hover:bg-surface-cardHover'}"
         >
           <span>{prov.displayName}</span>
           <span class="text-3xs px-1.5 py-0.5 rounded font-mono {isActive ? 'bg-neutral-200 text-neutral-800' : 'bg-surface-input border border-surface-border text-neutral-500'}">
@@ -189,7 +189,7 @@
       type="button"
       onclick={handleUnlinkMeta}
       disabled={isLinkingMeta}
-      class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white text-xs font-bold transition-colors cursor-pointer flex-shrink-0"
+      class="px-3 py-1.5 rounded-xl bg-surface-card hover:bg-surface-cardHover border border-surface-border text-neutral-300 hover:text-white text-xs font-bold transition-colors cursor-pointer shrink-0"
       title="Reset metadata overrides to auto-detected origin"
     >
       Reset to Auto
@@ -200,7 +200,7 @@
     <!-- Standalone / DRM-Free Configuration Card -->
     <div class="bg-surface-card border border-surface-border p-6 rounded-2xl space-y-4">
       <div class="flex items-start space-x-3.5">
-        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
           <Icon name="check" className="w-5 h-5" />
         </div>
         <div class="space-y-1">
@@ -238,7 +238,7 @@
           type="button"
           onclick={() => handleSearchMeta()}
           disabled={isSearchingMeta}
-          class="w-full sm:w-auto px-5 py-2 bg-surface-card hover:bg-surface-cardHover text-white text-xs font-bold rounded-xl border border-surface-border transition-colors flex-shrink-0 cursor-pointer"
+          class="w-full sm:w-auto px-5 py-2 bg-surface-card hover:bg-surface-cardHover text-white text-xs font-bold rounded-xl border border-surface-border transition-colors shrink-0 cursor-pointer"
         >
           {isSearchingMeta ? 'Searching...' : 'Search'}
         </button>
@@ -246,7 +246,7 @@
 
       <!-- Manual ID Input & Apply Button -->
       <div class="flex items-center gap-3 pt-3 border-t border-surface-border">
-        <span class="text-2xs font-mono font-bold text-neutral-400 flex-shrink-0">
+        <span class="text-2xs font-mono font-bold text-neutral-400 shrink-0">
           {targetStore === 'steam' ? 'Steam AppID:' : targetStore === 'gog' ? 'GOG ID / Slug:' : 'RAWG Game ID / Slug:'}
         </span>
         <input
@@ -259,7 +259,7 @@
           type="button"
           onclick={() => handleApplyMetaLink()}
           disabled={!customId.trim() || isLinkingMeta}
-          class="px-5 py-1.5 bg-white hover:bg-neutral-200 disabled:opacity-40 text-neutral-950 text-xs font-bold rounded-lg transition-colors flex-shrink-0 shadow cursor-pointer"
+          class="px-5 py-1.5 bg-white hover:bg-neutral-200 disabled:opacity-40 text-neutral-950 text-xs font-bold rounded-lg transition-colors shrink-0 shadow cursor-pointer"
         >
           {isLinkingMeta ? 'Linking...' : 'Link Game'}
         </button>
@@ -283,7 +283,7 @@
             <div class="flex items-center justify-between p-3 rounded-xl bg-surface-card border transition-all duration-150 {isSelected ? 'border-neutral-300 ring-1 ring-white/20' : 'border-surface-border hover:border-neutral-500'}">
               <div class="flex items-center space-x-3 min-w-0">
                 {#if cand.poster_url}
-                  <img src={cand.poster_url} alt="" class="w-10 h-14 object-cover rounded-lg bg-black/40 flex-shrink-0 border border-white/5" />
+                  <img src={cand.poster_url} alt="" class="w-10 h-14 object-cover rounded-lg bg-black/40 shrink-0 border border-white/5" />
                 {/if}
                 <div class="min-w-0">
                   <h4 class="text-xs font-bold text-white truncate" title={cand.name}>{cand.name}</h4>
@@ -295,7 +295,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-center space-x-2 flex-shrink-0 pl-3">
+              <div class="flex items-center space-x-2 shrink-0 pl-3">
                 <button
                   type="button"
                   onclick={() => handleApplyMetaLink(cand)}

@@ -55,7 +55,7 @@
         <button
           type="button"
           onclick={confirmDeleteProfile}
-          class="px-3 py-1.5 text-2xs rounded-xl bg-surface-input hover:bg-red-500/10 hover:text-red-400 text-neutral-400 border border-surface-border hover:border-red-500/30 transition-all flex items-center space-x-1.5 cursor-pointer flex-shrink-0"
+          class="px-3 py-1.5 text-2xs rounded-xl bg-surface-input hover:bg-red-500/10 hover:text-red-400 text-neutral-400 border border-surface-border hover:border-red-500/30 transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
         >
           <Icon name="trash" className="w-3.5 h-3.5" />
           <span>Delete Profile</span>
@@ -64,7 +64,7 @@
     </div>
 
     <div class="flex items-center space-x-3.5 min-w-0 pt-1">
-      <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-surface-input border border-surface-borderHighlight flex items-center justify-center text-sm font-bold uppercase text-white shadow-md">
+      <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-surface-input border border-surface-borderHighlight flex items-center justify-center text-sm font-bold uppercase text-white shadow-md">
         {#if active?.avatarUrl}
           <img src={active.avatarUrl} alt={active.name} class="w-full h-full object-cover" />
         {:else}

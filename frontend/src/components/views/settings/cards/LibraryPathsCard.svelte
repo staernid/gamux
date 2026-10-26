@@ -58,7 +58,7 @@
       {#each libraryPaths as p}
         <div class="flex items-center justify-between p-2.5 bg-surface-input border {pendingRemovePath === p ? 'border-rose-500/50 bg-rose-950/10' : 'border-surface-border'} rounded-lg transition-colors">
           <div class="flex items-center space-x-2 min-w-0 flex-1">
-            <svg class="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
             <span class="font-mono text-xs text-neutral-200 truncate">{p}</span>
@@ -66,7 +66,7 @@
 
           {#if pendingRemovePath === p}
             <!-- Two-Step Inline Confirmation State -->
-            <div class="flex items-center space-x-1.5 flex-shrink-0 ml-2 animate-fade-in">
+            <div class="flex items-center space-x-1.5 shrink-0 ml-2 animate-fade-in">
               <span class="text-2xs font-bold text-rose-400 mr-1">Remove?</span>
               <button
                 type="button"
@@ -89,7 +89,7 @@
             <button
               type="button"
               onclick={() => requestRemoveLibraryPath(p)}
-              class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0 ml-2"
+              class="p-1 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer shrink-0 ml-2"
               title="Remove library directory"
               aria-label={`Remove library path ${p}`}
             >

@@ -77,9 +77,9 @@
             type="button"
             onclick={() => handleBadgeClick(ach)}
             title="{ach.name}: {ach.description || 'Achievement'}"
-            class="group flex items-center space-x-2 p-1.5 rounded-xl bg-surface-header hover:bg-surface-cardHover border border-surface-border hover:border-neutral-500 transition cursor-pointer flex-shrink-0"
+            class="group flex items-center space-x-2 p-1.5 rounded-xl bg-surface-header hover:bg-surface-cardHover border border-surface-border hover:border-neutral-500 transition cursor-pointer shrink-0"
           >
-            <div class="w-8 h-8 rounded-lg overflow-hidden bg-black/40 border border-surface-border relative flex-shrink-0">
+            <div class="w-8 h-8 rounded-lg overflow-hidden bg-black/40 border border-surface-border relative shrink-0">
               {#if ach.unlocked && (ach.icon_url || ach.icon)}
                 <img src={ach.icon_url || ach.icon} alt={ach.name} class="w-full h-full object-cover" />
               {:else if ach.icon_gray_url || ach.icon_url || ach.icon}

@@ -47,7 +47,7 @@
 >
   <!-- Card Poster Container -->
   <div
-    class="gpu-layer relative w-full aspect-[2/3] rounded-2xl overflow-hidden transition-colors duration-150 bg-surface-card border {isFocused ? 'border-white ring-2 ring-white/60 shadow-[0_8px_25px_-4px_rgba(255,255,255,0.25)]' : 'border-surface-border hover:border-surface-borderHighlight shadow-md'}"
+    class="gpu-layer relative w-full aspect-2/3 rounded-2xl overflow-hidden transition-colors duration-150 bg-surface-card border {isFocused ? 'border-white ring-2 ring-white/60 shadow-[0_8px_25px_-4px_rgba(255,255,255,0.25)]' : 'border-surface-border hover:border-surface-borderHighlight shadow-md'}"
   >
     {#if hasPoster}
       <img

@@ -401,7 +401,7 @@
                   </span>
                 </div>
                 {#if group.size > 0}
-                  <span class="text-3xs font-mono text-neutral-400 flex-shrink-0 ml-2">
+                  <span class="text-3xs font-mono text-neutral-400 shrink-0 ml-2">
                     {formatBytes(group.size)}
                   </span>
                 {/if}
