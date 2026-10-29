@@ -1,6 +1,6 @@
 # gamux
 
-A game manager for Linux that supports:
+An advanced game manager for Linux that supports:
 
 - **Library Management**: Filter and search through multiple libraries of games that you own
 - **Launching**: Native Linux games and Windows titles via Proton/Wine/UMU
