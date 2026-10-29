@@ -6,8 +6,9 @@ An advanced game manager for Linux that supports:
 - **Launching**: Native Linux games and Windows titles via Proton/Wine/UMU
 - **DRM Handling**: Play your games offline. Steam manifest scanning, depot downloading, SteamStub unpacking and gbe_fork emulator integration
 - **Profiles & Sandboxing**: Multi-profile prefix isolation using bwrap
-- **Local Multiseat / Split-Screen:** Sandboxed multi-instance gaming with dedicated audio routing (PipeWire) and controller/input assignments (evdev/Gamescope)
+- **Local Multiseat / Split-Screen (WIP):** Sandboxed multi-instance gaming with dedicated audio routing (PipeWire) and controller/input assignments (evdev/Gamescope). KDE Plasma is highly recommended for this for now.
 - **Save & Mod Management (WIP)**: Save management using the Ludusavi Manifest + Steam Workshop mod handling
+- **System Integration**: System tray, adaptive theme, notifications, etc.
 
 <img src="./.assets/game_hero.jpg" alt="Game Hero" width="100%" />
 
