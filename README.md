@@ -3,7 +3,7 @@
 Game manager for Linux
 
 
-<img src="./.assets/game-hero.jpg" alt="Game Hero" width="100%" />
+<img src="./.assets/game_hero.jpg" alt="Game Hero" width="100%" />
 
 <img src="./.assets/library.jpg" alt="Library" width="100%" />
 
